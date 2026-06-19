@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Check, X, Edit3, Eye, History, Sparkles, RefreshCw, AlertCircle } from "lucide-react";
+import { Check, X, Edit3, Eye, History, Sparkles, RefreshCw, AlertCircle, Calculator } from "lucide-react";
 import { REQUIRED_KEYS } from "@/lib/assumption-taxonomy";
 import { toast } from "sonner";
 
@@ -70,6 +70,10 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
   const [editOf, setEditOf] = useState<any | null>(null);
   const [historyOf, setHistoryOf] = useState<any | null>(null);
   const [report, setReport] = useState<any | null>(null);
+  // AI runs by default; the deterministic engine is always the backup. The
+  // toggle lets an analyst force the pure deterministic path on demand.
+  const [aiMode, setAiMode] = useState(true);
+  const mode = aiMode ? "ai" : ("deterministic" as const);
   const confidenceCounts = assumptions.reduce(
     (acc, a) => {
       const band = a.confidence_band === "high" || a.confidence_band === "medium" || a.confidence_band === "low" || a.confidence_band === "missing"
@@ -91,20 +95,22 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
   };
 
   const extract = useMutation({
-    mutationFn: () => extractFn({ data: { project_id: projectId } }),
-    onSuccess: (r) => {
+    mutationFn: () => extractFn({ data: { project_id: projectId, mode } }),
+    onSuccess: (r: any) => {
       invalidate();
       setReport(r);
-      toast.success(`Pipeline complete — ${r.found} found · ${r.conflicting} conflicting · ${r.missing} missing`);
+      toast.success(`Pipeline complete (${r.analysis_mode === "ai" ? "AI" : "deterministic"}) — ${r.found} found · ${r.conflicting} conflicting · ${r.missing} missing`);
+      if (r.ai_note) toast.message(r.ai_note);
     },
     onError: (e: Error) => toast.error(e.message),
   });
   const recompute = useMutation({
-    mutationFn: () => recomputeFn({ data: { project_id: projectId } }),
+    mutationFn: () => recomputeFn({ data: { project_id: projectId, mode } }),
     onSuccess: (r: any) => {
       invalidate();
       if (r.blocked) toast.error("Underwriting is blocked — resolve missing/conflicting inputs first.");
-      else toast.success("Deterministic underwriting recomputed");
+      else toast.success(`Underwriting recomputed (${r.analysis_mode === "ai" ? "AI" : "deterministic"})`);
+      if (r.ai_note) toast.message(r.ai_note);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -147,6 +153,25 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
             <div className="num text-lg mt-1">{readiness.avg_confidence}%</div>
           </div>
           <div className="flex flex-col gap-2">
+            {/* Analysis mode: AI by default, deterministic engine as backup. */}
+            <div className="inline-flex rounded-md border border-border p-0.5 text-[11px] font-medium" role="group" aria-label="Analysis mode">
+              <button
+                type="button"
+                onClick={() => setAiMode(true)}
+                aria-pressed={aiMode}
+                className={`inline-flex items-center gap-1 rounded px-2 py-1 transition-colors ${aiMode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Sparkles className="size-3" />AI
+              </button>
+              <button
+                type="button"
+                onClick={() => setAiMode(false)}
+                aria-pressed={!aiMode}
+                className={`inline-flex items-center gap-1 rounded px-2 py-1 transition-colors ${!aiMode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Calculator className="size-3" />Engine
+              </button>
+            </div>
             <Button size="sm" onClick={() => extract.mutate()} disabled={extract.isPending}>
               <Sparkles className="size-4 mr-1" />{extract.isPending ? "Extracting…" : "Run Extraction"}
             </Button>
@@ -375,12 +400,18 @@ function ExtractionReportCard({ report, onClose }: { report: any; onClose: () =>
     <Card className="p-5 border-primary/40">
       <div className="flex items-start justify-between">
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Extraction Audit Report · 3-stage pipeline</div>
+          <div className="flex items-center gap-2">
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Extraction Audit Report · 3-stage pipeline</div>
+            <ModeBadge mode={report.analysis_mode} />
+          </div>
           <div className="text-sm mt-1">
             Stage 1 parsed <strong className="font-mono">{report.stage1_candidates}</strong> candidates ·
             Stage 2 classified <strong className="font-mono">{report.stage2_classified}</strong> ·
             Stage 3 inferred <strong className="font-mono">{report.stage3_inferred_via_alias}</strong> via alias
           </div>
+          {report.ai_note && (
+            <div className="text-[11px] text-chart-5 mt-1">{report.ai_note}</div>
+          )}
         </div>
         <Button variant="ghost" size="sm" onClick={onClose}>Dismiss</Button>
       </div>
@@ -500,5 +531,21 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
       <div className="mt-1">{children}</div>
     </div>
+  );
+}
+
+// Shows which analysis path actually produced the result — AI or the
+// deterministic backup — so the run is never ambiguous.
+function ModeBadge({ mode }: { mode?: "ai" | "deterministic" }) {
+  if (!mode) return null;
+  const isAI = mode === "ai";
+  return (
+    <Badge
+      variant="outline"
+      className={`text-[9px] uppercase tracking-wider ${isAI ? "bg-primary/15 text-primary border-primary/30" : "bg-muted text-muted-foreground border-border"}`}
+    >
+      {isAI ? <Sparkles className="size-2.5 mr-1" /> : <Calculator className="size-2.5 mr-1" />}
+      {isAI ? "AI" : "Deterministic"}
+    </Badge>
   );
 }

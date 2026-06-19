@@ -19,7 +19,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertTriangle, ShieldAlert, Info, Calculator, Lock, Scale, FileText, Download } from "lucide-react";
+import { AlertTriangle, ShieldAlert, Info, Calculator, Lock, Scale, FileText, Download, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 const outputsQ = (pid: string) => queryOptions({ queryKey: ["outputs", pid], queryFn: () => listFinancialOutputs({ data: { project_id: pid } }) });
@@ -78,6 +78,13 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   const acceptDefaultsFn = useServerFn(acceptDefaults);
   const resolveFn = useServerFn(resolveConflict);
 
+  // AI runs by default (it only selects which consensual static defaults to
+  // accept — the engine still computes every number). Toggle off to force the
+  // pure deterministic path.
+  const [aiMode, setAiMode] = useState(true);
+  const mode = aiMode ? "ai" : ("deterministic" as const);
+  const [lastMode, setLastMode] = useState<"ai" | "deterministic" | null>(null);
+
   const invalidate = () => {
     for (const key of ["outputs", "risks", "uw-readiness", "recon-flags", "assumptions"]) {
       qc.invalidateQueries({ queryKey: [key, projectId] });
@@ -85,11 +92,16 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   };
 
   const run = useMutation({
-    mutationFn: () => runFn({ data: { project_id: projectId } }),
+    mutationFn: () => runFn({ data: { project_id: projectId, mode } }),
     onSuccess: (r: any) => {
       invalidate();
+      setLastMode(r.analysis_mode ?? null);
+      if (r.ai_note) toast.message(r.ai_note);
+      if (r.ai_accepted_defaults?.length) {
+        toast.message(`AI accepted ${r.ai_accepted_defaults.length} static default(s) to unblock the run.`);
+      }
       if (r.blocked) toast.error("Underwriting is blocked — resolve the listed inputs first.");
-      else toast.success(`Underwriting complete — verdict ${r.verdict.code}`);
+      else toast.success(`Underwriting complete (${r.analysis_mode === "ai" ? "AI" : "deterministic"}) — verdict ${r.verdict.code}`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -172,12 +184,19 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                   <ul className="mt-1 text-sm text-muted-foreground">
                     {readiness.defaults.map((d: any) => <li key={d.key}>{d.label}</li>)}
                   </ul>
-                  <Button size="sm" className="mt-2" disabled={acceptDefaultsMut.isPending}
-                    onClick={() => acceptDefaultsMut.mutate()}>
-                    Accept defaults
-                  </Button>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button size="sm" disabled={acceptDefaultsMut.isPending}
+                      onClick={() => acceptDefaultsMut.mutate()}>
+                      Accept defaults
+                    </Button>
+                    <Button size="sm" variant="outline" disabled={run.isPending}
+                      onClick={() => run.mutate()}>
+                      <Sparkles className="size-3.5 mr-1" />Let AI accept defaults & run
+                    </Button>
+                  </div>
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    Writes source=default, status=default_accepted rows. Defaults are never applied silently.
+                    Writes source=default, status=default_accepted rows. Defaults are never applied silently — AI only
+                    selects from these fixed values; it never invents a number, and the engine does all math.
                   </p>
                 </div>
               )}
@@ -205,11 +224,16 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
     <div className="space-y-4">
       <Card className="p-5">
         <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={() => run.mutate()} disabled={run.isPending}>Run Deterministic Underwriting</Button>
+          <ModeToggle aiMode={aiMode} setAiMode={setAiMode} />
+          <Button onClick={() => run.mutate()} disabled={run.isPending}>
+            {aiMode ? <Sparkles className="size-4 mr-1" /> : <Calculator className="size-4 mr-1" />}
+            {run.isPending ? "Running…" : aiMode ? "Run Underwriting (AI)" : "Run Deterministic Underwriting"}
+          </Button>
           <Button variant="outline" onClick={() => run.mutate()} disabled={run.isPending}>Refresh Base Case</Button>
           <Button variant="outline" onClick={() => run.mutate()} disabled={run.isPending}>Refresh Stress Runs</Button>
+          {lastMode && <ModeBadge mode={lastMode} />}
           <span className="text-[10px] text-muted-foreground font-mono ml-auto">
-            deterministic engine · no model-generated numbers
+            engine computes every number · AI only selects inputs
           </span>
         </div>
         {defaultedKeys.length > 0 && (
@@ -339,6 +363,44 @@ function UnderwritingMetric({ label, row, text, sub, highlight }: { label: strin
       <div className={`num text-2xl mt-1 ${highlight ?? "text-primary"}`}>{display}</div>
       <div className="text-[10px] text-muted-foreground mt-1 font-mono line-clamp-2">{sub ?? row?.formula_text ?? "Pending underwriting run"}</div>
     </Card>
+  );
+}
+
+// AI-by-default / deterministic-backup selector.
+function ModeToggle({ aiMode, setAiMode }: { aiMode: boolean; setAiMode: (v: boolean) => void }) {
+  return (
+    <div className="inline-flex rounded-md border border-border p-0.5 text-[11px] font-medium" role="group" aria-label="Analysis mode">
+      <button
+        type="button"
+        onClick={() => setAiMode(true)}
+        aria-pressed={aiMode}
+        className={`inline-flex items-center gap-1 rounded px-2 py-1 transition-colors ${aiMode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+      >
+        <Sparkles className="size-3" />AI
+      </button>
+      <button
+        type="button"
+        onClick={() => setAiMode(false)}
+        aria-pressed={!aiMode}
+        className={`inline-flex items-center gap-1 rounded px-2 py-1 transition-colors ${!aiMode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+      >
+        <Calculator className="size-3" />Engine
+      </button>
+    </div>
+  );
+}
+
+// Shows which path actually ran the most recent computation.
+function ModeBadge({ mode }: { mode: "ai" | "deterministic" }) {
+  const isAI = mode === "ai";
+  return (
+    <Badge
+      variant="outline"
+      className={`text-[9px] uppercase tracking-wider ${isAI ? "bg-primary/15 text-primary border-primary/30" : "bg-muted text-muted-foreground border-border"}`}
+    >
+      {isAI ? <Sparkles className="size-2.5 mr-1" /> : <Calculator className="size-2.5 mr-1" />}
+      {isAI ? "AI ran" : "Deterministic"}
+    </Badge>
   );
 }
 

@@ -269,17 +269,120 @@ export const resolveConflict = createServerFn({ method: "POST" })
     return { key: data.key, resolved, note };
   });
 
-// ---------- The deterministic underwriting run ----------
+// ---------- AI-assisted input selection (never invents a value) ----------
+//
+// "AI selects inputs, the engine computes." The ONLY thing AI may do here is
+// choose, from the consensual STATIC defaults in DEFAULTS, which defaultable
+// inputs are reasonable to accept on the analyst's behalf so a deal blocked
+// solely by defaultable gaps can run. It selects by index from a fixed list —
+// it cannot change a value or introduce a number that is not already a
+// pre-approved constant. Accepted rows are written as default_accepted with
+// provenance and remain fully visible and reversible by the analyst.
+async function aiSelectDefaults(ctx: any, projectId: string, defaultable: string[]): Promise<string[]> {
+  const keys = defaultable.filter((k) => DEFAULTS[k] != null);
+  if (!keys.length) return [];
+  const list = keys
+    .map((k, i) => `${i}. key=${k} static_default=${DEFAULTS[k].value} (${DEFAULTS[k].label})`)
+    .join("\n");
+  const { getAgirModel } = await import("./ai-gateway.server");
+  const { generateText } = await import("ai");
+  const { text } = await generateText({
+    model: getAgirModel(),
+    temperature: 0,
+    system:
+      "You are an institutional real estate underwriter deciding which STATIC, pre-approved default assumptions are reasonable to accept for a development pro forma. You may ONLY accept or skip the listed defaults — you cannot change a value or introduce a new one. Accept a default only when its fixed value is a standard, defensible market convention for that missing input.",
+    prompt: `Missing defaultable inputs and their fixed default values:\n${list}\n\nReturn ONLY a JSON array of the integer indices you accept (e.g. [0,2]). Return [] to accept none.`,
+  });
+  const m = text.match(/\[[\s\S]*?\]/);
+  let indices: unknown = [];
+  try {
+    indices = m ? JSON.parse(m[0]) : [];
+  } catch {
+    indices = [];
+  }
+  const accepted: string[] = [];
+  for (const raw of Array.isArray(indices) ? indices : []) {
+    const key = keys[Number(raw)];
+    if (!key) continue;
+    const def = DEFAULTS[key];
+    const { error } = await ctx.supabase.from("underwriting_inputs").upsert(
+      {
+        project_id: projectId,
+        owner_id: ctx.userId,
+        key,
+        value_numeric: def.value,
+        source: "default",
+        status: "default_accepted",
+        formula_text: `AI accepted the consensual static default: ${def.label}`,
+        approved_by: ctx.userId,
+        approved_at: new Date().toISOString(),
+      },
+      { onConflict: "project_id,key" },
+    );
+    if (error) throw new Error(error.message);
+    accepted.push(key);
+  }
+  if (accepted.length) {
+    await ctx.supabase.from("audit_logs").insert({
+      project_id: projectId, owner_id: ctx.userId, user_id: ctx.userId,
+      entity_type: "underwriting_inputs", entity_id: null, action: "ai_accept_defaults",
+      payload: { accepted, defaults: accepted.map((k) => ({ key: k, value: DEFAULTS[k].value })) },
+    });
+  }
+  return accepted;
+}
+
+// ---------- The underwriting run (engine math is always deterministic) ----------
 
 export const runFullUnderwriting = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) => ProjectIdSchema.parse(d))
+  .inputValidator((d: { project_id: string; mode?: "ai" | "deterministic" }) =>
+    z.object({
+      project_id: z.string().uuid(),
+      // AI is the default. It only selects inputs (which consensual static
+      // defaults to accept); the deterministic engine performs every
+      // calculation in BOTH modes. "deterministic" disables the AI step.
+      mode: z.enum(["ai", "deterministic"]).default("ai"),
+    }).parse(d),
+  )
   .handler(async ({ data, context }) => {
-    const rows = await loadProjectRows(context.supabase, data.project_id);
-    const readiness = computeReadiness(rows);
+    const aiAvailable = Boolean(process.env.ANTHROPIC_API_KEY);
+    const wantsAI = data.mode === "ai";
+    const useAI = wantsAI && aiAvailable;
+    let aiFailureReason: string | null =
+      wantsAI && !aiAvailable ? "ANTHROPIC_API_KEY not configured — used the deterministic engine." : null;
+    const aiAcceptedDefaults: string[] = [];
+
+    let rows = await loadProjectRows(context.supabase, data.project_id);
+    let readiness = computeReadiness(rows);
+
+    // AI input selection: if defaultable gaps are all that block the run, let AI
+    // accept the consensual static defaults so the engine can compute. Falls
+    // back silently to the deterministic path (analyst's manual "Accept
+    // defaults") on any failure.
+    if (useAI && readiness.status === "blocked" && readiness.defaultable.length) {
+      try {
+        const accepted = await aiSelectDefaults(context, data.project_id, readiness.defaultable);
+        aiAcceptedDefaults.push(...accepted);
+        if (accepted.length) {
+          rows = await loadProjectRows(context.supabase, data.project_id);
+          readiness = computeReadiness(rows);
+        }
+      } catch (error) {
+        aiFailureReason = `AI input selection failed; fell back to the deterministic engine (${error instanceof Error ? error.message : "unavailable"}).`;
+      }
+    }
+    const analysisMode: "ai" | "deterministic" = useAI && !aiFailureReason ? "ai" : "deterministic";
+    const aiMeta = {
+      analysis_mode: analysisMode,
+      ai_used: analysisMode === "ai",
+      ai_note: aiFailureReason,
+      ai_accepted_defaults: aiAcceptedDefaults,
+    };
+
     if (readiness.status === "blocked") {
       // Fail closed: zero metrics, zero charts, no partial numbers.
-      return { blocked: true as const, readiness };
+      return { blocked: true as const, readiness, ...aiMeta };
     }
 
     const input = assembleEngineInput(rows);
@@ -397,6 +500,7 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
         scenarios: scenarioOutputs.map((s) => s.key),
         verdict: verdict.code, risk_score: riskScore,
         error_flags: errorFlags.length, equity_wipeout: base.equityWipeout,
+        analysis_mode: analysisMode, ai_accepted_defaults: aiAcceptedDefaults,
       },
     });
 
@@ -409,6 +513,7 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
       irrStatus: base.irrStatus,
       flags,
       values: base.values,
+      ...aiMeta,
     };
   });
 

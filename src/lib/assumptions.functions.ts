@@ -159,8 +159,27 @@ const ClassificationSchema = z.object({
 
 export const extractAssumptions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
+  .inputValidator((d: { project_id: string; mode?: "ai" | "deterministic" }) =>
+    z.object({
+      project_id: z.string().uuid(),
+      // AI-assisted classification is the DEFAULT. It is structurally incapable
+      // of inventing a value — it only assigns regex-extracted candidates (Stage
+      // 1 tokens lifted verbatim from documents) to canonical keys, and it can
+      // never override a deterministic alias hit. "deterministic" forces the
+      // pure alias-mapping path with no model call.
+      mode: z.enum(["ai", "deterministic"]).default("ai"),
+    }).parse(d),
+  )
   .handler(async ({ data, context }) => {
+    // AI is the default analysis path; the deterministic alias mapper is the
+    // always-present backup. We fall back automatically (and record why) when no
+    // key is configured or the model call fails.
+    const aiAvailable = Boolean(process.env.ANTHROPIC_API_KEY);
+    const wantsAI = data.mode === "ai";
+    const useAI = wantsAI && aiAvailable;
+    let aiFailureReason: string | null =
+      wantsAI && !aiAvailable ? "ANTHROPIC_API_KEY not configured — used the deterministic engine." : null;
+
     const { data: docs, error: dErr } = await context.supabase
       .from("documents").select("*").eq("project_id", data.project_id);
     if (dErr) throw new Error(dErr.message);
@@ -256,11 +275,14 @@ export const extractAssumptions = createServerFn({ method: "POST" })
       if (mapCandidateToKey(allCandidates[i])) mappedIndices.add(i);
     }
 
-    // ===== Stage 2b — OPTIONAL AI classification of unresolved candidates =====
+    // ===== Stage 2b — AI classification of unresolved candidates (DEFAULT) =====
+    // Primary interpreter for everything the authoritative alias mapper left
+    // unresolved. It only ever assigns a regex-extracted candidate to a key —
+    // the numeric value always comes from the document token, never the model.
     let classifiedCount = 0;
     const aiMapped: MappedCandidate[] = [];
     const unresolved = allCandidates.map((c, i) => ({ c, i })).filter(({ i }) => !mappedIndices.has(i));
-    if (unresolved.length && process.env.ANTHROPIC_API_KEY) {
+    if (unresolved.length && useAI) {
       try {
         const rankedSet = new Set(rankCandidates(unresolved.map((u) => u.c), { cap: 160 }));
         const subset = unresolved.filter((u) => rankedSet.has(u.c));
@@ -305,9 +327,15 @@ export const extractAssumptions = createServerFn({ method: "POST" })
           }
         }
       } catch (error) {
-        warnings.push(`AI classification skipped: ${error instanceof Error ? error.message : "unavailable"}`);
+        // The deterministic mapping already ran and stands on its own — an AI
+        // failure degrades gracefully to it instead of failing the run.
+        aiFailureReason = `AI classification failed; fell back to the deterministic engine (${error instanceof Error ? error.message : "unavailable"}).`;
+        warnings.push(aiFailureReason);
       }
     }
+    // The mode actually used: "ai" only when AI ran without fault and produced a
+    // result; otherwise the deterministic backup carried the run.
+    const analysisMode: "ai" | "deterministic" = useAI && !aiFailureReason ? "ai" : "deterministic";
 
     const mapped = [...deterministic, ...structuredBudgetMappings, ...structuredRevenueMappings, ...aiMapped];
 
@@ -458,6 +486,9 @@ export const extractAssumptions = createServerFn({ method: "POST" })
 
     const debug = {
       project_id: data.project_id,
+      analysis_mode: analysisMode,
+      ai_used: analysisMode === "ai",
+      ai_note: aiFailureReason,
       documents_seen: docs.length,
       documents_attempted: perDocument.length,
       documents_downloaded: documentsDownloaded,
@@ -477,6 +508,9 @@ export const extractAssumptions = createServerFn({ method: "POST" })
     };
 
     const report = {
+      analysis_mode: analysisMode,
+      ai_used: analysisMode === "ai",
+      ai_note: aiFailureReason,
       stage1_candidates: allCandidates.length,
       stage2_classified: deterministic.length + classifiedCount,
       stage3_inferred_via_alias: deterministic.length,
