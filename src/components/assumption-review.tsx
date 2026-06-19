@@ -44,6 +44,20 @@ function fmt(a: any) {
   return `${n.toLocaleString()} ${a.unit ?? ""}`.trim();
 }
 
+// Conservative pick per field (taxonomy key). Mirrors the engine's
+// conservativePick direction so the UI and the deterministic resolver agree.
+const CONSERVATIVE_MAX_KEYS = new Set(["exit_cap_rate", "opex_ratio", "interest_rate", "disposition_cost_pct", "equity_amount", "land_cost", "hard_costs", "soft_costs", "contingency", "financing_costs", "total_project_cost"]);
+const CONSERVATIVE_MIN_KEYS = new Set(["debt_amount", "stabilized_occupancy", "residential_occupancy", "retail_occupancy", "office_occupancy", "dry_warehouse_occupancy", "cold_storage_occupancy", "last_mile_flex_occupancy", "residential_rent_monthly", "retail_rent_psf", "office_rent_psf", "dry_warehouse_rent_psf", "cold_storage_rent_psf", "last_mile_flex_rent_psf", "rent_growth", "other_income_annual"]);
+function conservativeValue(fieldKey: string, values: number[]): number | null {
+  if (!values.length) return null;
+  if (CONSERVATIVE_MAX_KEYS.has(fieldKey)) return Math.max(...values);
+  if (CONSERVATIVE_MIN_KEYS.has(fieldKey)) return Math.min(...values);
+  return null; // no defined conservative direction — analyst must pick
+}
+const isInterestKey = (k: string) => k === "interest_rate";
+const supersedingSource = (source?: string | null) =>
+  !!source && /rate[\s_-]?lock|rate[\s_-]?update|financing[\s_-]?update|addendum/i.test(source);
+
 export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
   const { data: assumptions } = useSuspenseQuery(assumptionsQ(projectId));
   const { data: readiness } = useSuspenseQuery(readinessQ(projectId));
@@ -171,25 +185,42 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
           </div>
           <p className="text-xs text-muted-foreground mt-1">These inputs have conflicting documented values and block underwriting. Pick one — values are never averaged.</p>
           <div className="mt-3 grid md:grid-cols-2 gap-3">
-            {conflicts.map((a) => (
-              <div key={a.id} className="rounded-lg border border-destructive/30 bg-background p-3">
-                <div className="text-sm font-medium">{a.field_label}</div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {(Array.isArray(a.conflict_values) ? a.conflict_values : []).map((cv: any, i: number) => {
-                    const val = typeof cv === "object" ? cv.value : cv;
-                    const src = typeof cv === "object" ? cv.source : null;
-                    return (
-                      <Button key={i} size="sm" variant="outline" disabled={review.isPending}
-                        onClick={() => review.mutate({ id: a.id, action: "modify", value_numeric: Number(val), change_reason: `Resolved conflict → ${val}` })}>
-                        <span className="num">{typeof val === "number" ? val.toLocaleString() : String(val)}</span>
-                        {src && <span className="text-[10px] text-muted-foreground ml-1.5 max-w-[120px] truncate">{src}</span>}
+            {conflicts.map((a) => {
+              const values = (Array.isArray(a.conflict_values) ? a.conflict_values : [])
+                .map((cv: any) => ({ value: typeof cv === "object" ? cv.value : cv, source: typeof cv === "object" ? cv.source : null }))
+                .filter((cv: any) => Number.isFinite(Number(cv.value)));
+              const conservative = conservativeValue(a.field_key, values.map((v: any) => Number(v.value)));
+              return (
+                <div key={a.id} className="rounded-lg border border-destructive/30 bg-background p-3">
+                  <div className="text-sm font-medium">{a.field_label}</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {values.map((cv: any, i: number) => {
+                      const supersede = isInterestKey(a.field_key) && supersedingSource(cv.source);
+                      return (
+                        <Button key={i} size="sm" variant="outline" disabled={review.isPending}
+                          className={supersede ? "border-warning/50" : ""}
+                          title={supersede ? "Likely supersedes earlier term sheet" : cv.source || ""}
+                          onClick={() => review.mutate({ id: a.id, action: "modify", value_numeric: Number(cv.value), change_reason: `Resolved conflict → ${cv.value}` })}>
+                          <span className="num">{Number(cv.value).toLocaleString()}</span>
+                          {cv.source && <span className="text-[10px] text-muted-foreground ml-1.5 max-w-[110px] truncate">{cv.source}</span>}
+                          {supersede && <span className="text-[9px] text-warning ml-1 uppercase tracking-wider">supersedes</span>}
+                        </Button>
+                      );
+                    })}
+                    {conservative != null && (
+                      <Button size="sm" disabled={review.isPending}
+                        onClick={() => review.mutate({ id: a.id, action: "modify", value_numeric: conservative, change_reason: `Resolved conflict → conservative ${conservative}` })}>
+                        Use conservative ({conservative.toLocaleString()})
                       </Button>
-                    );
-                  })}
-                  <Button size="sm" variant="ghost" onClick={() => setEditOf(a)}>Enter value…</Button>
+                    )}
+                    <Button size="sm" variant="ghost" onClick={() => setEditOf(a)}>Enter value…</Button>
+                  </div>
+                  {isInterestKey(a.field_key) && values.some((cv: any) => supersedingSource(cv.source)) && (
+                    <p className="text-[10px] text-warning mt-2">A rate lock / addendum value is present and likely supersedes the earlier term sheet rate. Confirm before resolving — not auto-applied.</p>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       )}

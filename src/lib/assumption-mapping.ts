@@ -73,6 +73,49 @@ export type CandidateMapping = {
 // debt — it must never be read as a stated total project cost.
 const LOAN_DEBT_LABEL_RE = /(senior\s+(construction\s+)?(loan|debt)|loan amount|loan facility|facility size|debt amount|mortgage|preferred equity|common equity|senior debt)/i;
 
+// Context + range guards for keys that are easily contaminated by lookalike
+// rates (the classic failure: an exit-cap value of 5.75% mapping to the
+// operating expense ratio). A guarded key requires matching context AND, where
+// relevant, a disqualifying context must be ABSENT, AND the value must fall in a
+// plausible range. Range alone is never sufficient — context must match.
+type Guard = { need: RegExp; deny?: RegExp; min?: number; max?: number };
+const SENSITIVE_GUARDS: Record<string, Guard> = {
+  opex_ratio: {
+    need: /operating expense|opex|expense ratio|expense load|operating cost ratio|normalized expense|expense assumption|expense %/,
+    deny: /exit cap|terminal cap|cap rate|capitalization rate|valuation cap|yield on cost|interest rate|debt yield/,
+    min: 10, max: 65,
+  },
+  exit_cap_rate: {
+    need: /exit cap|terminal cap|cap rate|capitalization|valuation|appraisal|sale cap|reversion|disposition cap/,
+    min: 3, max: 12,
+  },
+  interest_rate: {
+    need: /interest rate|loan rate|all-in rate|sofr|spread|rate lock|financing rate|coupon|note rate/,
+    deny: /exit cap|terminal cap|cap rate|debt yield|expense ratio/,
+    min: 1, max: 20,
+  },
+  min_debt_yield: { need: /debt yield/, min: 4, max: 20 },
+  stabilized_occupancy: {
+    need: /stabilized occupancy|overall occupancy|portfolio occupancy|blended occupancy|average occupancy/,
+    min: 40, max: 100,
+  },
+  tenant_concentration_pct: { need: /tenant concentration|revenue concentration|tenant share|largest tenant/, min: 1, max: 100 },
+};
+
+function passesSensitiveGuard(cand: Candidate, key: string): boolean {
+  const guard = SENSITIVE_GUARDS[key];
+  if (!guard) return true;
+  const text = `${cand.label_hint || ""} ${cand.context || ""}`.toLowerCase();
+  if (!guard.need.test(text)) return false;
+  if (guard.deny && guard.deny.test(text)) return false;
+  const v = cand.value_numeric;
+  if (v != null && Number.isFinite(v)) {
+    if (guard.min != null && v < guard.min) return false;
+    if (guard.max != null && v > guard.max) return false;
+  }
+  return true;
+}
+
 export function mapCandidateToKey(cand: Candidate, exclude: Set<string> = new Set()): CandidateMapping | null {
   const hint = (cand.label_hint || "").toLowerCase();
 
@@ -106,8 +149,30 @@ export function mapCandidateToKey(cand: Candidate, exclude: Set<string> = new Se
       return mapCandidateToKey(cand, new Set([...exclude, "total_project_cost"]));
     }
   }
+
+  // Sensitive-key contamination guard: if the best match is a rate/ratio/
+  // occupancy key whose context doesn't support it (or whose value is out of
+  // range), reject it and re-pick excluding that key. This stops an exit-cap
+  // value from landing on the operating expense ratio, an interest rate from a
+  // cap-rate context, or a component occupancy from the stabilized field.
+  if (best && SENSITIVE_GUARDS[best.field_key] && !passesSensitiveGuard(cand, best.field_key)) {
+    return mapCandidateToKey(cand, new Set([...exclude, best.field_key]));
+  }
   return best;
 }
+
+// Role decides whether multiple values aggregate or conflict. Structured roles
+// (category_total, rent_row) come from typed spreadsheet parsing and take
+// precedence over loose scalar text candidates for the same key.
+export type CandidateRole =
+  | "line_item"
+  | "category_total"
+  | "stated_total"
+  | "scalar_assumption"
+  | "ratio"
+  | "rent_row";
+
+const STRUCTURED_ROLES: ReadonlySet<CandidateRole> = new Set(["category_total", "rent_row"]);
 
 export type MappedCandidate = {
   field_key: string;
@@ -120,6 +185,7 @@ export type MappedCandidate = {
   source_location: string | null;
   matched_alias: string;
   via: "alias";
+  candidate_role?: CandidateRole;
 };
 
 // Map every candidate deterministically; unmapped candidates are dropped.
@@ -142,6 +208,7 @@ export function mapCandidates(candidates: Candidate[]): MappedCandidate[] {
       source_location: c.source_location,
       matched_alias: m.matched_alias,
       via: m.via,
+      candidate_role: def.key === "total_project_cost" ? "stated_total" : def.unit === "x" ? "ratio" : "scalar_assumption",
     });
   }
   return out;
@@ -173,7 +240,13 @@ export function groupAndResolve(mapped: MappedCandidate[]): Map<string, GroupRes
   }
 
   const out = new Map<string, GroupResolution>();
-  for (const [field_key, members] of groups.entries()) {
+  for (const [field_key, allMembers] of groups.entries()) {
+    // If any structured candidates (aggregated category totals or typed rent-roll
+    // rows) exist for this key, they are authoritative: loose scalar text
+    // candidates are ignored so a stray line-item mention can't manufacture a
+    // false conflict against an aggregated total.
+    const structured = allMembers.filter((m) => m.candidate_role && STRUCTURED_ROLES.has(m.candidate_role));
+    const members = structured.length > 0 ? structured : allMembers;
     members.sort((a, b) => b.confidence - a.confidence);
     const distinct = Array.from(new Set(members.map(roundKey)));
     const isConflict = distinct.length > 1;

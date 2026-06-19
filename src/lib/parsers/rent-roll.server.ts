@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 
 export type ParsedRentRollRow = {
   unitType: string;
+  tenant: string | null;
   unitCount: number;
   avgSf: number | null;
   // per_unit: $/unit/month; per_sf: ANNUAL $/SF.
@@ -24,12 +25,16 @@ export function parseRentRollWorkbook(buffer: ArrayBuffer) {
   const header = rows[0]?.map((cell) => String(cell ?? "").toLowerCase()) ?? [];
   const foundTypeIndex = header.findIndex((h) => /unit type|type|plan|component/.test(h));
   const foundCountIndex = header.findIndex((h) => /count|units|qty/.test(h));
-  const foundRentIndex = header.findIndex((h) => /rent|rate/.test(h));
+  // Match the rent/rate column but NOT lookalike headers such as "Rentable SF"
+  // (contains "rent"), "Rent Basis", or count columns.
+  const isRentHeader = (h: string) => /rent|rate/.test(h) && !/\bsf\b|square|basis|count|units|qty|gpr|egi/.test(h);
+  const foundRentIndex = header.findIndex(isRentHeader);
   if (foundTypeIndex < 0 || foundCountIndex < 0 || foundRentIndex < 0) {
     return { inserted, rejected };
   }
   const typeIndex = foundTypeIndex;
   const countIndex = foundCountIndex;
+  const tenantIndex = header.findIndex((h) => /tenant|lessee|occupant/.test(h));
   const sfIndex = header.findIndex((h) => /sf|square/.test(h));
   const rentIndex = foundRentIndex;
   const rentBasisIndex = header.findIndex((h) => /basis|rent basis|billing/.test(h));
@@ -43,6 +48,7 @@ export function parseRentRollWorkbook(buffer: ArrayBuffer) {
   rows.slice(1).forEach((row, i) => {
     const rowNumber = i + 2;
     const unitType = String(row[typeIndex] ?? "").trim();
+    const tenant = tenantIndex >= 0 ? String(row[tenantIndex] ?? "").trim() || null : null;
     const unitCount = parseNumeric(row[countIndex] ?? 0);
     const avgSf = sfIndex >= 0 ? parseNumeric(row[sfIndex] ?? 0) || null : null;
     const rent = parseNumeric(row[rentIndex]);
@@ -62,6 +68,7 @@ export function parseRentRollWorkbook(buffer: ArrayBuffer) {
       : perSfRent && avgSf ? "per_sf" : "per_unit";
     inserted.push({
       unitType,
+      tenant,
       unitCount: rentBasis === "per_sf" && unitCount <= 0 ? 1 : unitCount,
       avgSf,
       rent,

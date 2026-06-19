@@ -34,10 +34,15 @@ export const TAXONOMY_TO_BUDGET_CATEGORY: Record<string, string> = {
   financing_costs: "financing_interest",
   environmental_reserve: "other",
   tax_reassessment: "other",
+  offsite_improvements: "other",
+  leasing_reserve: "soft",
 };
 
 export type RevenueComponentMap = {
-  unitType: "Residential" | "Retail" | "Office";
+  // unitType is an arbitrary component label — the engine's revenue program is
+  // generic, so industrial/logistics components flow through the same path as
+  // residential/retail/office.
+  unitType: string;
   basis: "per_unit" | "per_sf";
   field: "unit_count" | "avg_sf" | "rent" | "occupancy_pct";
 };
@@ -52,4 +57,30 @@ export const TAXONOMY_TO_REVENUE_FIELD: Record<string, RevenueComponentMap> = {
   office_sf: { unitType: "Office", basis: "per_sf", field: "avg_sf" },
   office_rent_psf: { unitType: "Office", basis: "per_sf", field: "rent" },
   office_occupancy: { unitType: "Office", basis: "per_sf", field: "occupancy_pct" },
+
+  // Industrial / logistics components (per_sf): size -> avg_sf, $/SF/yr -> rent.
+  dry_warehouse_sf: { unitType: "Dry Warehouse", basis: "per_sf", field: "avg_sf" },
+  dry_warehouse_rent_psf: { unitType: "Dry Warehouse", basis: "per_sf", field: "rent" },
+  dry_warehouse_occupancy: { unitType: "Dry Warehouse", basis: "per_sf", field: "occupancy_pct" },
+  cold_storage_sf: { unitType: "Cold Storage", basis: "per_sf", field: "avg_sf" },
+  cold_storage_rent_psf: { unitType: "Cold Storage", basis: "per_sf", field: "rent" },
+  cold_storage_occupancy: { unitType: "Cold Storage", basis: "per_sf", field: "occupancy_pct" },
+  last_mile_flex_sf: { unitType: "Last-Mile Flex", basis: "per_sf", field: "avg_sf" },
+  last_mile_flex_rent_psf: { unitType: "Last-Mile Flex", basis: "per_sf", field: "rent" },
+  last_mile_flex_occupancy: { unitType: "Last-Mile Flex", basis: "per_sf", field: "occupancy_pct" },
 };
+
+// Component classification used by the row-aware rent-roll mapper to turn an
+// arbitrary component label into the canonical industrial key set.
+export type IndustrialComponentKeys = { sf: string; rent: string; occupancy: string };
+
+export function classifyRevenueComponent(label: string): IndustrialComponentKeys | null {
+  const t = (label || "").toLowerCase();
+  if (/\bcold[\s-]?storage|cold[\s-]?chain|refrigerat|temperature[\s-]?controlled\b/.test(t))
+    return { sf: "cold_storage_sf", rent: "cold_storage_rent_psf", occupancy: "cold_storage_occupancy" };
+  if (/last[\s-]?mile|flex|urban logistics|delivery/.test(t))
+    return { sf: "last_mile_flex_sf", rent: "last_mile_flex_rent_psf", occupancy: "last_mile_flex_occupancy" };
+  if (/dry[\s-]?warehouse|warehouse|distribution|bulk|industrial|logistics/.test(t))
+    return { sf: "dry_warehouse_sf", rent: "dry_warehouse_rent_psf", occupancy: "dry_warehouse_occupancy" };
+  return null;
+}

@@ -172,7 +172,7 @@ export const extractAssumptions = createServerFn({ method: "POST" })
     const { parseRentRollWorkbook } = await import("./parsers/rent-roll.server");
     const { mapRevenueProgramRowToAssumptions } = await import("./revenue-assumption-mapper");
     const { parseBudgetWorkbook } = await import("./parsers/budget.server");
-    const { mapBudgetRowToAssumption } = await import("./budget-assumption-mapper");
+    const { aggregateBudgetRows } = await import("./budget-assumption-mapper");
     type Cand = Awaited<ReturnType<typeof extractCandidates>>[number];
 
     const warnings: string[] = [];
@@ -229,9 +229,10 @@ export const extractAssumptions = createServerFn({ method: "POST" })
             ...parsedRevenue.inserted.flatMap((revRow) => mapRevenueProgramRowToAssumptions(revRow, { name: d.name })),
           );
           const parsedBudget = parseBudgetWorkbook(buf);
-          structuredBudgetMappings.push(
-            ...(parsedBudget.inserted.map((budgetRow) => mapBudgetRowToAssumption(budgetRow, { name: d.name })).filter(Boolean) as MappedCandidate[]),
-          );
+          // Aggregate line items by category within this document — multiple
+          // rows in one category are summed into a single category total, not
+          // treated as competing conflicts.
+          structuredBudgetMappings.push(...aggregateBudgetRows(parsedBudget.inserted, { name: d.name }));
         }
       } catch (error) {
         row.error = error instanceof Error ? error.message : "unreadable document";

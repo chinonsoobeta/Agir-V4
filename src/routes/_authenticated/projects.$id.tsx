@@ -14,6 +14,7 @@ import { CommitteePanel } from "@/components/committee-panel";
 import { AnalysisPanel } from "@/components/analysis-panel";
 import { DealOverview } from "@/components/deal-overview";
 import { buildDecision, pipelineStageFor, RECOMMENDATION_TONE } from "@/lib/decision";
+import { assetTypeLabel } from "@/lib/asset-types";
 import { ScoreDial, RecommendationPill, RiskPill } from "@/components/decision-ui";
 
 const projectQ = (id: string) => queryOptions({ queryKey: ["project", id], queryFn: () => getProject({ data: { id } }) });
@@ -66,7 +67,7 @@ function DealDetail() {
               <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
                 <MapPin className="size-3.5" />{project.location || "—"}
                 <span className="text-border">·</span>
-                <span className="capitalize">{project.type.replace("_", " ")}</span>
+                <span>{assetTypeLabel(project.type)}</span>
               </div>
               {decision.hasUnderwriting && (
                 <div className="flex items-center gap-2.5 mt-4">

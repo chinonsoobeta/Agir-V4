@@ -13,14 +13,18 @@ export type BudgetParseResult = {
   rejected: { row: number; reason: string; values: unknown[] }[];
 };
 
-function categoryFor(label: string): ParsedBudgetRow["category"] {
+export function categoryFor(label: string): ParsedBudgetRow["category"] {
   const normalized = label.toLowerCase();
   if (/^other\b/.test(normalized)) return "other";
-  if (/land|acquisition|site/.test(normalized)) return "land";
-  if (/hard|construction|gmp|sitework|building/.test(normalized)) return "hard";
-  if (/soft|design|architect|permit|legal/.test(normalized)) return "soft";
+  // Reserves and offsite/infrastructure go to "other" — checked BEFORE land so
+  // "offsite" (contains "site") and "environmental" are not miscategorised.
+  if (/environmental|remediation|pfas|\besa\b/.test(normalized)) return "other";
+  if (/off[\s-]?site|public road|infrastructure|municipal|substation|stormwater/.test(normalized)) return "other";
   if (/contingenc/.test(normalized)) return "contingency";
-  if (/interest|financing|loan fee|lender/.test(normalized)) return "financing_interest";
+  if (/interest|financing|loan fee|lender|capitalized interest/.test(normalized)) return "financing_interest";
+  if (/hard|construction|gmp|sitework|building|shell/.test(normalized)) return "hard";
+  if (/soft|design|architect|engineering|permit|legal|consulting|developer fee|leasing|tenant improvement|\bti\b|\blc\b/.test(normalized)) return "soft";
+  if (/land|acquisition/.test(normalized)) return "land";
   return "other";
 }
 

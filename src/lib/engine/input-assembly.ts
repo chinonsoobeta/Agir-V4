@@ -165,13 +165,15 @@ const CONSERVATIVE_PICKS_MAX = new Set([
   "vacancy_pct",
   "expense_growth_pct",
   "io_months",
+  // Higher equity required = more capital at risk = more conservative.
+  "equity_amount",
 ]);
 const CONSERVATIVE_PICKS_MIN = new Set([
   "stabilized_occupancy_pct",
   "rent_growth_pct",
   "other_income_annual",
+  // Lower loan proceeds = less supportable debt = more conservative.
   "loan_amount",
-  "equity_amount",
   "hold_years",
   "amort_years",
 ]);

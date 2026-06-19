@@ -5,7 +5,7 @@ import { z } from "zod";
 const ProjectSchema = z.object({
   name: z.string().min(1).max(200),
   location: z.string().max(200).optional().nullable(),
-  type: z.enum(["multifamily","commercial","mixed_use","land","industrial","retail","office","other"]).default("multifamily"),
+  type: z.enum(["industrial","mixed_use","multifamily","office","retail","hospitality","self_storage","data_center","life_science","commercial","land","other"]).default("industrial"),
   status: z.enum(["pipeline","underwriting","approved","active","completed","cancelled"]).default("pipeline"),
   acquisition_cost: z.number().min(0).default(0),
   construction_cost: z.number().min(0).default(0),

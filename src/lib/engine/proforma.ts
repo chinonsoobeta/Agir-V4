@@ -121,7 +121,7 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
       : "IRR not meaningful: equity cash flows do not include both negative and positive values.";
 
   const metrics: MetricOutput[] = [
-    { key: "total_project_cost", label: "Total Project Cost", value: tdc, unit: "$", formula: `TDC = land ${money(input.budget.land)} + hard ${money(input.budget.hard)} + soft ${money(input.budget.soft)} + contingency ${money(input.budget.contingency)} + financing ${money(interestReserve)} = ${money(tdc)}` },
+    { key: "total_project_cost", label: "Total Project Cost", value: tdc, unit: "$", formula: `TDC = land ${money(input.budget.land)} + hard ${money(input.budget.hard)} + soft ${money(input.budget.soft)} + contingency ${money(input.budget.contingency)}${input.budget.other ? ` + reserves ${money(num(input.budget.other))}` : ""} + financing ${money(interestReserve)} = ${money(tdc)}` },
     { key: "gpr", label: "Gross Potential Rent", value: gpr, unit: "$", formula: `GPR = ${input.revenueProgram.map((r) => `${r.unitType} ${money(componentGpr(r))}`).join(" + ")} = ${money(gpr)}` },
     { key: "projected_revenue", label: "Effective Gross Income", value: egi, unit: "$", formula: `EGI = ${input.revenueProgram.map((r) => `${r.unitType} ${money(componentGpr(r))} x ${(r.occupancyPct ?? input.stabilizedOccupancyPct).toFixed(0)}%`).join(" + ")} + other income ${money(input.otherIncomeAnnual)} = ${money(egi)}` },
     { key: "stabilized_noi", label: "Stabilized NOI", value: noi, unit: "$", formula: `NOI = EGI ${money(egi)} - OpEx ${money(opex)} (${input.expenseRatioPct}%) = ${money(noi)}` },

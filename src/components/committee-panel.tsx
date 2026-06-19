@@ -43,6 +43,22 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
   const decision = buildDecision(outputs as any, assumptions as any);
   const recTone = RECOMMENDATION_TONE[decision.recommendation];
 
+  // Do not present any recommendation, score, or condition before deterministic
+  // underwriting and findings exist — that would be a recommendation-like output
+  // with no basis. Show workflow state instead.
+  if (!decision.hasUnderwriting || !decision.findings) {
+    return (
+      <Card className="p-12 text-center elevated">
+        <Gavel className="size-8 mx-auto text-muted-foreground" />
+        <h3 className="display text-xl mt-4">Underwriting not run</h3>
+        <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
+          No investment recommendation available yet. Resolve the required assumptions and run deterministic
+          underwriting in <strong>Analysis</strong>. The recommendation, Investment Score, conditions and findings will appear here once outputs exist.
+        </p>
+      </Card>
+    );
+  }
+
   const [action, setAction] = useState<ICAction>(
     decision.recommendation === "APPROVE" ? "approve"
     : decision.recommendation === "REJECT" ? "reject"

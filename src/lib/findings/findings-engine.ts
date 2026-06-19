@@ -1,6 +1,7 @@
 import type { EngineOutput } from "../engine";
 import { capitalStackFindings } from "./modules/capital-stack";
 import { debtFindings } from "./modules/debt";
+import { industrialFindings } from "./modules/industrial";
 import { operationsFindings } from "./modules/operations";
 import { reconciliationFindings } from "./modules/reconciliation";
 import { approvalConditionFindings, recommendationFromFindings, rootCauseFindings } from "./modules/recommendation";
@@ -87,6 +88,7 @@ export function generateFindings(
     ...capitalStackFindings(normalized),
     ...debtFindings(normalized),
     ...returnFindings(normalized),
+    ...industrialFindings(normalized),
     ...scenarioResult.findings,
     ...reconciliationFindings(normalized),
   ]);

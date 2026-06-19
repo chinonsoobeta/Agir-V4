@@ -73,6 +73,7 @@ export type AssumptionRow = {
   status?: string | null;
   source_document_id?: string | null;
   source_text?: string | null;
+  source_location?: string | null;
   confidence_score?: number | null;
 };
 

@@ -16,6 +16,7 @@ import { Plus, Trash2, Sparkles, MapPin, ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { fmtCompact } from "@/lib/finance";
+import { ASSET_TYPES, assetTypeLabel } from "@/lib/asset-types";
 import { PIPELINE_STAGES, RECOMMENDATION_TONE } from "@/lib/decision";
 import { RecommendationPill, RiskPill, TONE_TEXT } from "@/components/decision-ui";
 
@@ -113,7 +114,7 @@ function DealCard({ d }: { d: DealSummary }) {
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{d.stage}</div>
           <Link to="/projects/$id" params={{ id: d.id }} className="display text-lg font-semibold leading-tight hover:text-primary block truncate mt-0.5">{d.name}</Link>
           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-            <MapPin className="size-3" />{d.location || "—"} · <span className="capitalize">{d.type.replace("_", " ")}</span>
+            <MapPin className="size-3" />{d.location || "—"} · <span>{assetTypeLabel(d.type)}</span>
           </div>
         </div>
         <Button variant="ghost" size="icon" className="size-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
@@ -161,7 +162,7 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
 function NewDealDialog({ onClose, createFn }: { onClose: () => void; createFn: any }) {
   const qc = useQueryClient();
   const [form, setForm] = useState({
-    name: "", location: "", type: "multifamily", status: "pipeline",
+    name: "", location: "", type: "industrial", status: "pipeline",
     acquisition_cost: 0, construction_cost: 0, revenue_forecast: 0,
     debt_amount: 0, equity_amount: 0, interest_rate: 0, notes: "",
   });
@@ -182,8 +183,8 @@ function NewDealDialog({ onClose, createFn }: { onClose: () => void; createFn: a
             <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {["multifamily", "commercial", "mixed_use", "land", "industrial", "retail", "office", "other"].map((t) =>
-                  <SelectItem key={t} value={t} className="capitalize">{t.replace("_", " ")}</SelectItem>)}
+                {ASSET_TYPES.map((t) =>
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

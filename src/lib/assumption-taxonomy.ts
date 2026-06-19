@@ -56,8 +56,46 @@ export const ASSUMPTION_DEFS: AssumptionDef[] = [
     aliases: ["office sf","office square feet","office area","rentable office area"] },
   { key: "office_rent_psf", label: "Office Rent ($/SF)", category: "Revenue", unit: "$/SF", numeric: true, required: false,
     aliases: ["office rent","office rent psf","office $/sf"] },
+
+  // Industrial / logistics revenue components. Authoritative population is the
+  // row-aware rent-roll parser; aliases here only help the free-text sweep.
+  { key: "dry_warehouse_sf", label: "Dry Warehouse SF", category: "Revenue", unit: "SF", numeric: true, required: false,
+    aliases: ["dry warehouse sf","dry warehouse square feet","warehouse sf","distribution sf","bulk distribution sf","industrial warehouse sf"] },
+  { key: "dry_warehouse_rent_psf", label: "Dry Warehouse Rent ($/SF)", category: "Revenue", unit: "$/SF", numeric: true, required: false,
+    aliases: ["dry warehouse rent","warehouse rent psf","distribution rent","bulk distribution rent"] },
+  { key: "dry_warehouse_occupancy", label: "Dry Warehouse Occupancy", category: "Revenue", unit: "%", numeric: true, required: false,
+    aliases: ["dry warehouse occupancy","warehouse occupancy","distribution occupancy"] },
+  { key: "cold_storage_sf", label: "Cold Storage SF", category: "Revenue", unit: "SF", numeric: true, required: false,
+    aliases: ["cold storage sf","cold-chain sf","refrigerated warehouse sf","temperature-controlled sf"] },
+  { key: "cold_storage_rent_psf", label: "Cold Storage Rent ($/SF)", category: "Revenue", unit: "$/SF", numeric: true, required: false,
+    aliases: ["cold storage rent","cold-chain rent","refrigerated warehouse rent","temperature-controlled rent"] },
+  { key: "cold_storage_occupancy", label: "Cold Storage Occupancy", category: "Revenue", unit: "%", numeric: true, required: false,
+    aliases: ["cold storage occupancy","cold-chain occupancy","refrigerated occupancy"] },
+  { key: "last_mile_flex_sf", label: "Last-Mile Flex SF", category: "Revenue", unit: "SF", numeric: true, required: false,
+    aliases: ["last-mile flex sf","last mile sf","flex logistics sf","urban logistics sf"] },
+  { key: "last_mile_flex_rent_psf", label: "Last-Mile Flex Rent ($/SF)", category: "Revenue", unit: "$/SF", numeric: true, required: false,
+    aliases: ["last-mile flex rent","last mile rent","flex logistics rent","delivery rent"] },
+  { key: "last_mile_flex_occupancy", label: "Last-Mile Flex Occupancy", category: "Revenue", unit: "%", numeric: true, required: false,
+    aliases: ["last-mile flex occupancy","last mile occupancy","flex logistics occupancy"] },
+
+  // Industrial risk / structure fields (informational; surfaced by findings).
+  { key: "tenant_concentration_pct", label: "Tenant Concentration", category: "Operations", unit: "%", numeric: true, required: false,
+    aliases: ["tenant concentration","revenue concentration","single tenant concentration","largest tenant share","anchor tenant concentration"] },
+  { key: "anchor_tenant_name", label: "Anchor Tenant", category: "Operations", unit: "text", numeric: false, required: false,
+    aliases: ["anchor tenant","largest tenant","primary tenant","single tenant"] },
+  { key: "tenant_termination_option_year", label: "Tenant Termination Option (year)", category: "Operations", unit: "yr", numeric: true, required: false,
+    aliases: ["termination option","early termination","kick-out","kick out","termination year"] },
+  { key: "min_debt_yield", label: "Minimum Debt Yield Covenant", category: "Capital Stack", unit: "%", numeric: true, required: false,
+    aliases: ["minimum debt yield","debt yield covenant","required debt yield","debt yield"] },
+  { key: "leasing_reserve", label: "Leasing Reserve", category: "Costs", unit: "$", numeric: true, required: false,
+    aliases: ["leasing reserve","leasing commissions reserve","ti/lc reserve"] },
+  { key: "offsite_improvements", label: "Offsite Improvements", category: "Costs", unit: "$", numeric: true, required: false,
+    aliases: ["offsite improvements","off-site improvements","public road improvements","municipal improvements","infrastructure improvements"] },
+  { key: "utility_substation_completion", label: "Utility / Substation Completion", category: "Schedule", unit: "text", numeric: false, required: false,
+    aliases: ["substation completion","power delivery","utility completion","electrical substation"] },
+
   { key: "stabilized_occupancy", label: "Stabilized Occupancy", category: "Operations", unit: "%", numeric: true, required: true,
-    aliases: ["stabilized occupancy","occupancy","economic occupancy","physical occupancy"] },
+    aliases: ["stabilized occupancy","economic occupancy","physical occupancy","overall occupancy","portfolio occupancy","blended occupancy","average occupancy"] },
   // Component-level occupancies: when present they are NEVER collapsed into a
   // flat blended number — each revenue component carries its own occupancy.
   { key: "residential_occupancy", label: "Residential Occupancy", category: "Revenue", unit: "%", numeric: true, required: false,

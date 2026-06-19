@@ -69,7 +69,7 @@ describe("Rivergate revenue extraction", () => {
     expect(num("office_occupancy")).toBe(90);
 
     for (const source of mapped.map((m) => m.source_text)) {
-      expect(source).toContain("Unit Type=");
+      expect(source).toContain("Component=");
       expect(source).toContain("Market Rent=");
     }
   });
