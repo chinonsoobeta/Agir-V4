@@ -1,183 +1,127 @@
-import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import { getProject } from "@/lib/projects.functions";
 import { listDocuments } from "@/lib/documents.functions";
-import { listAssumptions, listFinancialOutputs } from "@/lib/assumptions.functions";
-import { PageHeader } from "@/components/app-shell";
+import { listAssumptions, listFinancialOutputs, listDecisions } from "@/lib/assumptions.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeft, FileText } from "lucide-react";
-import { deriveQuickStartMetrics, fmtCompact, fmtPct } from "@/lib/finance";
+import { ArrowLeft, FileText, MapPin } from "lucide-react";
 import { useState } from "react";
 import { AssumptionReviewCenter } from "@/components/assumption-review";
-import { UnderwritingPanel, ICPanel, AuditPanel } from "@/components/underwriting-panel";
+import { AuditPanel } from "@/components/underwriting-panel";
+import { CommitteePanel } from "@/components/committee-panel";
+import { AnalysisPanel } from "@/components/analysis-panel";
+import { DealOverview } from "@/components/deal-overview";
+import { buildDecision, pipelineStageFor, RECOMMENDATION_TONE } from "@/lib/decision";
+import { ScoreDial, RecommendationPill, RiskPill } from "@/components/decision-ui";
 
 const projectQ = (id: string) => queryOptions({ queryKey: ["project", id], queryFn: () => getProject({ data: { id } }) });
 const docsQ = (id: string) => queryOptions({ queryKey: ["docs", id], queryFn: () => listDocuments({ data: { project_id: id } }) });
 const assumptionsQ = (id: string) => queryOptions({ queryKey: ["assumptions", id], queryFn: () => listAssumptions({ data: { project_id: id } }) });
 const outputsQ = (id: string) => queryOptions({ queryKey: ["outputs", id], queryFn: () => listFinancialOutputs({ data: { project_id: id } }) });
+const decisionsQ = (id: string) => queryOptions({ queryKey: ["decisions", id], queryFn: () => listDecisions({ data: { project_id: id } }) });
 
-const PROJECT_TABS = [
-  { value: "overview", label: "Overview" },
-  { value: "documents", label: "Documents" },
+const TABS = [
+  { value: "decision", label: "Decision" },
   { value: "assumptions", label: "Assumptions" },
-  { value: "underwriting", label: "Underwriting" },
-  { value: "ic_decision", label: "IC Decision" },
+  { value: "analysis", label: "Analysis" },
+  { value: "committee", label: "Investment Committee" },
+  { value: "documents", label: "Documents" },
   { value: "audit", label: "Audit" },
 ] as const;
 
 export const Route = createFileRoute("/_authenticated/projects/$id")({
-  head: () => ({ meta: [{ title: "Project — Agir" }] }),
+  head: () => ({ meta: [{ title: "Deal — Agir" }] }),
   loader: ({ context, params }) => context.queryClient.ensureQueryData(projectQ(params.id)),
-  component: ProjectDetail,
+  component: DealDetail,
 });
 
-function ProjectDetail() {
+function DealDetail() {
   const { id } = Route.useParams();
-  const currentRoute = useRouterState({ select: (s) => s.location.pathname });
-  const [currentTab, setCurrentTab] = useState<(typeof PROJECT_TABS)[number]["value"]>("overview");
-  const [visitedTabs, setVisitedTabs] = useState<Set<(typeof PROJECT_TABS)[number]["value"]>>(() => new Set(["overview"]));
+  const [tab, setTab] = useState<(typeof TABS)[number]["value"]>("decision");
+  const [visited, setVisited] = useState<Set<string>>(() => new Set(["decision"]));
   const { data: project } = useSuspenseQuery(projectQ(id));
   const { data: documents = [] } = useSuspenseQuery(docsQ(id));
   const { data: assumptions = [] } = useSuspenseQuery(assumptionsQ(id));
   const { data: outputs = [] } = useSuspenseQuery(outputsQ(id));
-  const m = deriveQuickStartMetrics(project);
-  const underwritingStatus = outputs.length > 0 ? "Generated" : "Not started";
+  const { data: decisions = [] } = useSuspenseQuery(decisionsQ(id));
+
+  const decision = buildDecision(outputs as any, assumptions as any);
+  const stage = pipelineStageFor({ status: project.status, docCount: documents.length, hasUnderwriting: decision.hasUnderwriting, decisions: decisions as any });
+  const recTone = RECOMMENDATION_TONE[decision.recommendation];
 
   return (
     <>
-      <PageHeader
-        title={project.name}
-        subtitle={`${project.location || "—"} · ${project.type.replace("_"," ")} · ${project.status}`}
-        actions={
-          <Link to="/projects"><Button variant="ghost" size="sm"><ArrowLeft className="size-4 mr-1" />Back</Button></Link>
-        } />
-      <div className="p-6">
-        <ProjectNavigationDebugPanel
-          projectId={id}
-          currentRoute={currentRoute}
-          currentTab={currentTab}
-          documentsCount={documents.length}
-          assumptionsCount={assumptions.length}
-          underwritingStatus={underwritingStatus}
-        />
-        <Tabs
-          value={currentTab}
-          onValueChange={(value) => {
-            const next = value as typeof currentTab;
-            setCurrentTab(next);
-            setVisitedTabs((prev) => new Set(prev).add(next));
-          }}
-        >
-          <TabsList className="flex flex-wrap h-auto w-full justify-start gap-1">
-            {PROJECT_TABS.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value}>{tab.label}</TabsTrigger>
+      {/* Deal banner */}
+      <header className="border-b border-border bg-card/40 backdrop-blur sticky top-0 z-10">
+        <div className="px-8 pt-5 pb-6">
+          <div className="flex items-center justify-between">
+            <Link to="/deals"><Button variant="ghost" size="sm" className="text-muted-foreground -ml-2"><ArrowLeft className="size-4 mr-1" />All deals</Button></Link>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-semibold">{stage}</div>
+          </div>
+          <div className="mt-3 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="min-w-0">
+              <h1 className="display text-3xl font-semibold tracking-tight">{project.name}</h1>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
+                <MapPin className="size-3.5" />{project.location || "—"}
+                <span className="text-border">·</span>
+                <span className="capitalize">{project.type.replace("_", " ")}</span>
+              </div>
+              {decision.hasUnderwriting && (
+                <div className="flex items-center gap-2.5 mt-4">
+                  <RecommendationPill rec={decision.recommendation} />
+                  <RiskPill rating={decision.riskRating} />
+                </div>
+              )}
+            </div>
+            {decision.hasUnderwriting && (
+              <div className="flex gap-8 shrink-0">
+                <ScoreDial value={decision.investmentScore} label="Investment Score" tone={recTone} size={116} />
+                <ScoreDial value={decision.confidenceScore} label="Confidence" tone="return" size={116} />
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <div className="p-8">
+        <Tabs value={tab} onValueChange={(v) => { setTab(v as any); setVisited((p) => new Set(p).add(v)); }}>
+          <TabsList className="flex flex-wrap h-auto w-full justify-start gap-1 bg-transparent border-b border-border rounded-none p-0">
+            {TABS.map((t) => (
+              <TabsTrigger key={t.value} value={t.value}
+                className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground rounded-none px-4 py-2.5 text-muted-foreground">
+                {t.label}
+              </TabsTrigger>
             ))}
           </TabsList>
 
-          <TabsContent value="overview" forceMount className="mt-4 space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Metric label="Total Cost" value={fmtCompact(m.totalCost)} />
-              <Metric label="Revenue" value={fmtCompact(m.projectedRevenue)} />
-              <Metric label="Profit" value={fmtCompact(m.projectedProfit)} accent={m.projectedProfit >= 0 ? "success" : "destructive"} />
-              <Metric label="Margin" value={fmtPct(m.profitMargin)} accent="primary" />
-              <Metric label="Equity Req." value={fmtCompact(m.equityRequirement)} />
-              <Metric label="LTC" value={fmtPct(m.ltc)} />
-              <Metric label="DSCR" value={m.dscr.toFixed(2) + "x"} />
-              <Metric label="IRR Est." value={fmtPct(m.irr)} accent="primary" />
-            </div>
-            <Card className="p-5">
-              <SectionLabel>Notes</SectionLabel>
-              <p className="text-sm mt-2 whitespace-pre-wrap">{project.notes || "No notes."}</p>
-            </Card>
+          <TabsContent value="decision" forceMount className={tab === "decision" ? "mt-6" : "hidden"}>
+            <DealOverview decision={decision} />
           </TabsContent>
-
-          <TabsContent value="assumptions" forceMount className="mt-4">
-            {visitedTabs.has("assumptions") ? <AssumptionReviewCenter projectId={id} /> : null}
-          </TabsContent>
-          <TabsContent value="underwriting" forceMount className="mt-4">
-            {visitedTabs.has("underwriting") ? <UnderwritingPanel projectId={id} /> : null}
-          </TabsContent>
-          <TabsContent value="ic_decision" forceMount className="mt-4">
-            {visitedTabs.has("ic_decision") ? <ICPanel projectId={id} /> : null}
-          </TabsContent>
-          <TabsContent value="audit" forceMount className="mt-4">
-            {visitedTabs.has("audit") ? <AuditPanel projectId={id} /> : null}
-          </TabsContent>
-          <TabsContent value="documents" forceMount className="mt-4">
-            {visitedTabs.has("documents") ? <DocumentsTab projectId={id} /> : null}
-          </TabsContent>
+          <TabsContent value="assumptions" className="mt-6">{visited.has("assumptions") && <AssumptionReviewCenter projectId={id} />}</TabsContent>
+          <TabsContent value="analysis" className="mt-6">{visited.has("analysis") && <AnalysisPanel projectId={id} />}</TabsContent>
+          <TabsContent value="committee" className="mt-6">{visited.has("committee") && <CommitteePanel projectId={id} />}</TabsContent>
+          <TabsContent value="documents" className="mt-6">{visited.has("documents") && <DocumentsTab projectId={id} />}</TabsContent>
+          <TabsContent value="audit" className="mt-6">{visited.has("audit") && <AuditPanel projectId={id} />}</TabsContent>
         </Tabs>
       </div>
     </>
   );
 }
 
-function ProjectNavigationDebugPanel({
-  projectId,
-  currentRoute,
-  currentTab,
-  documentsCount,
-  assumptionsCount,
-  underwritingStatus,
-}: {
-  projectId: string;
-  currentRoute: string;
-  currentTab: string;
-  documentsCount: number;
-  assumptionsCount: number;
-  underwritingStatus: string;
-}) {
-  return (
-    <Card className="p-4 mb-4">
-      <SectionLabel>Project Navigation Debug</SectionLabel>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3 text-sm">
-        <DebugItem label="Current Project ID" value={projectId} />
-        <DebugItem label="Current Route" value={currentRoute} />
-        <DebugItem label="Current Tab" value={currentTab} />
-        <DebugItem label="Documents Count" value={String(documentsCount)} />
-        <DebugItem label="Assumptions Count" value={String(assumptionsCount)} />
-        <DebugItem label="Underwriting Status" value={underwritingStatus} />
-      </div>
-    </Card>
-  );
-}
-
-function DebugItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className="font-mono text-xs mt-1 break-all">{value}</div>
-    </div>
-  );
-}
-
-function Metric({ label, value, accent }: { label: string; value: string; accent?: "primary"|"success"|"destructive" }) {
-  const color = accent === "primary" ? "text-primary" : accent === "success" ? "text-success" : accent === "destructive" ? "text-destructive" : "";
-  return (
-    <Card className="p-4">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className={`num text-xl mt-1 ${color}`}>{value}</div>
-    </Card>
-  );
-}
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">{children}</div>;
-}
-
 function DocumentsTab({ projectId }: { projectId: string }) {
   const { data: docs = [] } = useSuspenseQuery(docsQ(projectId));
   return (
-    <Card className="p-5">
-      <SectionLabel>Documents</SectionLabel>
+    <Card className="p-6 elevated">
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Deal Documents</div>
       {docs.length === 0 ? (
-        <p className="text-sm text-muted-foreground mt-3">No documents. Upload from the Documents tab.</p>
+        <p className="text-sm text-muted-foreground mt-3">No documents linked to this deal. Upload from the Documents page.</p>
       ) : (
-        <ul className="mt-3 space-y-2">
+        <ul className="mt-4 space-y-2">
           {docs.map((d) => (
-            <li key={d.id} className="flex items-center justify-between text-sm border-b border-border pb-2">
-              <span className="flex items-center gap-2"><FileText className="size-4 text-primary" />{d.name}</span>
+            <li key={d.id} className="flex items-center justify-between text-sm border-b border-border pb-2.5">
+              <span className="flex items-center gap-2.5"><FileText className="size-4 text-primary" />{d.name}</span>
               <span className="text-xs text-muted-foreground">{d.category || "—"}</span>
             </li>
           ))}

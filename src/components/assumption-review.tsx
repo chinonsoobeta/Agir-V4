@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Check, X, Edit3, Eye, History, Sparkles, RefreshCw, AlertCircle } from "lucide-react";
+import { REQUIRED_KEYS } from "@/lib/assumption-taxonomy";
 import { toast } from "sonner";
 
 const assumptionsQ = (pid: string) => queryOptions({ queryKey: ["assumptions", pid], queryFn: () => listAssumptions({ data: { project_id: pid } }) });
@@ -104,6 +105,10 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
     (acc[a.category || "Other"] ||= []).push(a); return acc;
   }, {});
 
+  // Conflicts get a dedicated resolution center; required inputs are surfaced as critical.
+  const conflicts = assumptions.filter((a) => a.status === "conflicting");
+  const critical = assumptions.filter((a) => REQUIRED_KEYS.includes(a.field_key));
+
   return (
     <div className="space-y-4">
       {/* Readiness header */}
@@ -157,55 +162,78 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
       {report && <ExtractionReportCard report={report} onClose={() => setReport(null)} />}
       {report?.debug && <ExtractionDebugCard debug={report.debug} />}
 
+      {/* Conflict Resolution Center — conflicts are first-class, not buried */}
+      {conflicts.length > 0 && (
+        <Card className="p-5 border-destructive/40 bg-destructive/5">
+          <div className="flex items-center gap-2 text-destructive">
+            <AlertCircle className="size-4" />
+            <span className="text-[10px] uppercase tracking-widest font-semibold">Conflict Resolution Center · {conflicts.length}</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">These inputs have conflicting documented values and block underwriting. Pick one — values are never averaged.</p>
+          <div className="mt-3 grid md:grid-cols-2 gap-3">
+            {conflicts.map((a) => (
+              <div key={a.id} className="rounded-lg border border-destructive/30 bg-background p-3">
+                <div className="text-sm font-medium">{a.field_label}</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(Array.isArray(a.conflict_values) ? a.conflict_values : []).map((cv: any, i: number) => {
+                    const val = typeof cv === "object" ? cv.value : cv;
+                    const src = typeof cv === "object" ? cv.source : null;
+                    return (
+                      <Button key={i} size="sm" variant="outline" disabled={review.isPending}
+                        onClick={() => review.mutate({ id: a.id, action: "modify", value_numeric: Number(val), change_reason: `Resolved conflict → ${val}` })}>
+                        <span className="num">{typeof val === "number" ? val.toLocaleString() : String(val)}</span>
+                        {src && <span className="text-[10px] text-muted-foreground ml-1.5 max-w-[120px] truncate">{src}</span>}
+                      </Button>
+                    );
+                  })}
+                  <Button size="sm" variant="ghost" onClick={() => setEditOf(a)}>Enter value…</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Critical Assumptions — required fields driving the recommendation */}
+      {critical.length > 0 && (
+        <Card className="p-5 elevated">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Critical Assumptions</div>
+          <p className="text-xs text-muted-foreground mt-1">Required inputs the recommendation hinges on.</p>
+          <div className="mt-3 grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {critical.map((a) => (
+              <div key={a.id} className="rounded-lg border border-border p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium truncate">{a.field_label}</span>
+                  <Badge variant="outline" className={`${STATUS_STYLES[a.status]} text-[9px] capitalize shrink-0`}>{a.status.replace("_", " ")}</Badge>
+                </div>
+                <div className="num text-lg mt-1">{fmt(a)}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {assumptions.length === 0 ? (
         <Card className="p-12 text-center text-sm text-muted-foreground">
-          No assumptions yet. Upload documents to this project, then click <strong>Run Extraction</strong>.
+          No assumptions yet. Upload documents to this deal, then click <strong>Run Extraction</strong>.
         </Card>
       ) : (
         Object.entries(grouped).map(([cat, rows]) => (
-          <Card key={cat} className="overflow-hidden">
-            <div className="px-4 py-2 border-b border-border bg-muted/20 text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">{cat}</div>
-            <table className="data-grid w-full">
-              <thead><tr className="bg-muted/10">
-                <th className="text-left">Assumption</th>
-                <th className="text-right">Value</th>
-                <th className="text-left">Source</th>
-                <th className="text-center">Confidence</th>
-                <th className="text-center">Status</th>
-                <th className="text-right">Impact</th>
-                <th></th>
-              </tr></thead>
-              <tbody>
-                {rows.map((a) => (
-                  <tr key={a.id} className="hover:bg-accent/30">
-                    <td className="font-medium">{a.field_label}</td>
-                    <td className="text-right num">{fmt(a)}</td>
-                    <td className="text-xs text-muted-foreground max-w-[200px] truncate">{a.source_location || "—"}</td>
-                    <td className="text-center">
-                      <span className={`text-xs font-mono ${BAND_STYLES[a.confidence_band]}`}>{a.confidence_score}% · {a.confidence_band}</span>
-                    </td>
-                    <td className="text-center">
-                      <Badge variant="outline" className={`${STATUS_STYLES[a.status]} text-[10px] capitalize`}>{a.status.replace("_"," ")}</Badge>
-                    </td>
-                    <td className="text-right num text-xs text-muted-foreground">
-                      {a.impact_rank ? `#${a.impact_rank}` : "—"}
-                    </td>
-                    <td className="text-right">
-                      <div className="flex justify-end gap-0.5">
-                        <Button variant="ghost" size="icon" className="size-7" title="View source" onClick={() => setSourceOf(a)}><Eye className="size-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="size-7" title="Modify" onClick={() => setEditOf(a)}><Edit3 className="size-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="size-7 text-success" title="Approve" disabled={a.status === "missing"}
-                          onClick={() => review.mutate({ id: a.id, action: "approve", change_reason: "Approved as extracted" })}><Check className="size-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="size-7 text-destructive" title="Reject"
-                          onClick={() => review.mutate({ id: a.id, action: "reject", change_reason: "Rejected" })}><X className="size-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="size-7" title="Version history" onClick={() => setHistoryOf(a)}><History className="size-3.5" /></Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
+          <div key={cat}>
+            <div className="flex items-baseline justify-between mb-2 px-1">
+              <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">{cat}</span>
+              <span className="num text-xs text-muted-foreground">{rows.length}</span>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {rows.map((a) => (
+                <AssumptionCard key={a.id} a={a}
+                  onSource={() => setSourceOf(a)} onEdit={() => setEditOf(a)} onHistory={() => setHistoryOf(a)}
+                  onApprove={() => review.mutate({ id: a.id, action: "approve", change_reason: "Approved as extracted" })}
+                  onReject={() => review.mutate({ id: a.id, action: "reject", change_reason: "Rejected" })}
+                  pending={review.isPending} />
+              ))}
+            </div>
+          </div>
         ))
       )}
 
@@ -401,6 +429,36 @@ function ExtractionDebugCard({ debug }: { debug: any }) {
           <span className="text-muted-foreground">{debug.warnings.join(" · ")}</span>
         </div>
       )}
+    </Card>
+  );
+}
+
+function AssumptionCard({ a, onSource, onEdit, onHistory, onApprove, onReject, pending }: {
+  a: any; onSource: () => void; onEdit: () => void; onHistory: () => void; onApprove: () => void; onReject: () => void; pending: boolean;
+}) {
+  const band = a.confidence_band as keyof typeof BAND_STYLES;
+  return (
+    <Card className="p-4 flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-medium leading-tight">{a.field_label}</div>
+          <div className="num text-xl mt-1">{fmt(a)}</div>
+        </div>
+        <Badge variant="outline" className={`${STATUS_STYLES[a.status]} text-[9px] capitalize shrink-0`}>{a.status.replace("_", " ")}</Badge>
+      </div>
+      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+        <span className={`font-mono ${BAND_STYLES[band] ?? ""}`}>{a.confidence_score}% · {a.confidence_band}</span>
+        <span className="truncate max-w-[130px]" title={a.source_location || ""}>{a.source_location || "no source"}</span>
+      </div>
+      <div className="flex items-center gap-0.5 border-t border-border pt-2 -mb-1">
+        <Button variant="ghost" size="icon" className="size-7" title="View source" onClick={onSource}><Eye className="size-3.5" /></Button>
+        <Button variant="ghost" size="icon" className="size-7" title="Modify" onClick={onEdit}><Edit3 className="size-3.5" /></Button>
+        <Button variant="ghost" size="icon" className="size-7" title="Version history" onClick={onHistory}><History className="size-3.5" /></Button>
+        <div className="ml-auto flex gap-0.5">
+          <Button variant="ghost" size="icon" className="size-7 text-success" title="Approve" disabled={a.status === "missing" || a.status === "conflicting" || pending} onClick={onApprove}><Check className="size-3.5" /></Button>
+          <Button variant="ghost" size="icon" className="size-7 text-destructive" title="Reject" disabled={pending} onClick={onReject}><X className="size-3.5" /></Button>
+        </div>
+      </div>
     </Card>
   );
 }

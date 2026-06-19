@@ -641,7 +641,7 @@ export const recordDecision = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({
     project_id: z.string().uuid(),
-    decision: z.enum(["approve", "approve_with_conditions", "reject"]),
+    decision: z.enum(["approve", "approve_with_conditions", "return_to_underwriting", "reject"]),
     rationale: z.string().max(5000),
     conditions: z.string().max(5000).optional(),
   }).parse(d))

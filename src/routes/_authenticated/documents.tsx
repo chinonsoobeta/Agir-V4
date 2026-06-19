@@ -3,17 +3,20 @@ import { useSuspenseQuery, queryOptions, useMutation, useQueryClient } from "@ta
 import { useServerFn } from "@tanstack/react-start";
 import { listDocuments, createDocument, deleteDocument, analyzeDocument, getDocumentUrl } from "@/lib/documents.functions";
 import { listProjects } from "@/lib/projects.functions";
+import { listAssumptionsAcrossProjects } from "@/lib/assumptions.functions";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { FileText, Upload, Trash2, Sparkles, Download } from "lucide-react";
+import { FileText, Upload, Trash2, Sparkles, Download, Link2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 const docsQ = queryOptions({ queryKey: ["documents", "all"], queryFn: () => listDocuments({ data: {} }) });
 const projectsQ = queryOptions({ queryKey: ["projects"], queryFn: () => listProjects() });
+const allAssumptionsQ = queryOptions({ queryKey: ["assumptions", "all"], queryFn: () => listAssumptionsAcrossProjects() });
 
 const CATEGORIES = ["Appraisal","Budget","Site Plan","Financial Model","Market Study","Loan Package","Legal","Other"];
 
@@ -22,6 +25,7 @@ export const Route = createFileRoute("/_authenticated/documents")({
   loader: ({ context }) => Promise.all([
     context.queryClient.ensureQueryData(docsQ),
     context.queryClient.ensureQueryData(projectsQ),
+    context.queryClient.ensureQueryData(allAssumptionsQ),
   ]),
   component: DocumentsPage,
 });
@@ -29,6 +33,19 @@ export const Route = createFileRoute("/_authenticated/documents")({
 function DocumentsPage() {
   const { data: docs } = useSuspenseQuery(docsQ);
   const { data: projects } = useSuspenseQuery(projectsQ);
+  const { data: allAssumptions } = useSuspenseQuery(allAssumptionsQ);
+
+  // Which document contributed which assumptions — the provenance link.
+  const contributions = new Map<string, string[]>();
+  for (const a of allAssumptions as any[]) {
+    if (!a.source_document_id) continue;
+    const arr = contributions.get(a.source_document_id) ?? [];
+    arr.push(a.field_label);
+    contributions.set(a.source_document_id, arr);
+  }
+  const analysed = docs.filter((d: any) => d.ai_summary).length;
+  const contributing = docs.filter((d: any) => contributions.has(d.id)).length;
+  const totalContribued = (allAssumptions as any[]).filter((a) => a.source_document_id).length;
   const qc = useQueryClient();
   const createFn = useServerFn(createDocument);
   const delFn = useServerFn(deleteDocument);
@@ -76,8 +93,14 @@ function DocumentsPage() {
 
   return (
     <>
-      <PageHeader title="Documents" subtitle={`${docs.length} documents in vault`} />
-      <div className="p-6 space-y-4">
+      <PageHeader eyebrow="Data Room" title="Documents" subtitle={`${docs.length} documents · ${totalContribued} assumptions extracted`} />
+      <div className="p-8 space-y-5">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Cov label="Documents" value={String(docs.length)} />
+          <Cov label="Analysed" value={`${analysed} / ${docs.length}`} />
+          <Cov label="Contributing Data" value={`${contributing} / ${docs.length}`} />
+          <Cov label="Assumptions Extracted" value={String(totalContribued)} />
+        </div>
         <Card className="p-5">
           <div className="grid md:grid-cols-4 gap-3 items-end">
             <div>
@@ -118,6 +141,13 @@ function DocumentsPage() {
                     <div className="min-w-0">
                       <div className="font-medium text-sm truncate">{d.name}</div>
                       <div className="text-[11px] text-muted-foreground mt-0.5">{d.category || "—"} · {new Date(d.upload_date).toLocaleDateString()}</div>
+                      {contributions.has(d.id) ? (
+                        <Badge variant="outline" className="mt-1.5 text-[10px] bg-success/10 text-success border-success/30">
+                          <Link2 className="size-3 mr-1" />{contributions.get(d.id)!.length} assumptions
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="mt-1.5 text-[10px] text-muted-foreground">No data extracted</Badge>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-1">
@@ -141,5 +171,14 @@ function DocumentsPage() {
         )}
       </div>
     </>
+  );
+}
+
+function Cov({ label, value }: { label: string; value: string }) {
+  return (
+    <Card className="p-4">
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="num text-2xl mt-1.5">{value}</div>
+    </Card>
   );
 }

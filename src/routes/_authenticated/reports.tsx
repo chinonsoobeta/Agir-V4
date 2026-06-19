@@ -59,7 +59,7 @@ function ReportsPage() {
   if (!projects.length) {
     return (
       <>
-        <PageHeader title="Reports" subtitle="Generate stakeholder-ready PDF, DOCX, and Excel reports from deterministic underwriting outputs." />
+        <PageHeader eyebrow="Distribution" title="Reports" subtitle="Committee-ready packages built from deterministic underwriting — every figure traceable to source." />
         <div className="p-6">
           <Card className="p-12 text-center text-sm text-muted-foreground">
             No projects yet. Create or seed a project before generating reports.
