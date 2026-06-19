@@ -55,6 +55,8 @@ export const listPortfolio = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<DealSummary[]> => {
     const { data: projects, error } = await context.supabase
       .from("projects").select("*").order("created_at", { ascending: false });
+    // If table doesn't exist (schema not migrated), return empty array instead of error
+    if (error && error.message?.includes("Could not find the table")) return [];
     if (error) throw new Error(error.message);
     if (!projects?.length) return [];
 
