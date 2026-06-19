@@ -346,11 +346,12 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const aiAvailable = Boolean(process.env.ANTHROPIC_API_KEY);
+    const { hasAnthropicKey } = await import("./ai-gateway.server");
+    const aiAvailable = hasAnthropicKey();
     const wantsAI = data.mode === "ai";
     const useAI = wantsAI && aiAvailable;
     let aiFailureReason: string | null =
-      wantsAI && !aiAvailable ? "ANTHROPIC_API_KEY not configured — used the deterministic engine." : null;
+      wantsAI && !aiAvailable ? "AI unavailable (ANTHROPIC_API_KEY missing or malformed) — used the deterministic engine." : null;
     const aiAcceptedDefaults: string[] = [];
 
     let rows = await loadProjectRows(context.supabase, data.project_id);
