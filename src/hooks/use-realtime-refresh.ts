@@ -8,6 +8,7 @@ const LIVE_TABLES = [
   "assumptions",
   "decision_logs",
   "documents",
+  "activities",
   "deal_milestones",
   "market_signals",
   "integration_connections",
