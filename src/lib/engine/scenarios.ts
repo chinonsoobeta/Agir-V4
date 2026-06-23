@@ -26,12 +26,16 @@ export const STRESS_PRESETS: StressPreset[] = [
   { key: "occupancy_down", label: "Occupancy Downside (-500 bps)", occupancyDeltaPts: -5 },
   { key: "expense_inflation", label: "Expense Inflation (+500 bps ratio)", expenseRatioDeltaPts: 5 },
   {
+    // The true downside: every shock at once, including the occupancy and
+    // expense slippage that the verdict's stress gate reads from this preset.
     key: "combined",
     label: "Combined Stress",
     capRateDeltaBps: 75,
     costDeltaPct: 10,
     rateDeltaBps: 150,
     revenueDeltaPct: -10,
+    occupancyDeltaPts: -5,
+    expenseRatioDeltaPts: 5,
   },
 ];
 

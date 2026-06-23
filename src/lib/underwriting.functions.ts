@@ -32,7 +32,7 @@ import { computeInvestmentVerdict } from "./verdict";
 // Taxonomy (review queue) → engine key mapping. Conflicting review-queue rows
 // are surfaced to readiness through this mapping so a conflicted key blocks
 // underwriting even before approval.
-import { ENGINE_SCALAR_TO_TAXONOMY, TAXONOMY_TO_ENGINE_SCALAR } from "./taxonomy-engine-map";
+import { ENGINE_SCALAR_TO_TAXONOMY, TAXONOMY_TO_ENGINE_SCALAR, TAXONOMY_TO_BUDGET_CATEGORY, TAXONOMY_TO_REVENUE_FIELD } from "./taxonomy-engine-map";
 
 const ProjectIdSchema = z.object({ project_id: z.string().uuid() });
 
@@ -72,17 +72,38 @@ async function loadProjectRows(supabase: any, projectId: string): Promise<Projec
     })),
   };
 
-  // Unresolved review-queue conflicts block readiness for their engine key.
+  // Unresolved review-queue conflicts block readiness for their engine target —
+  // scalar, budget category, OR revenue component. Previously only scalar
+  // conflicts blocked, so a conflicting budget/revenue key (land_cost,
+  // residential_units, …) slipped past the fail-closed gate.
   for (const a of conflictingAssumptions ?? []) {
     const engineKey = TAXONOMY_TO_ENGINE_SCALAR[a.field_key];
-    if (!engineKey) continue;
-    const existing = rows.scalars.find((r) => r.key === engineKey);
-    if (existing && (existing.status === "approved" || existing.status === "default_accepted")) continue;
-    if (existing) {
-      existing.status = "conflicting";
-      existing.conflict_values = a.conflict_values ?? existing.conflict_values;
-    } else {
-      rows.scalars.push({ key: engineKey, value_numeric: null, status: "conflicting", conflict_values: a.conflict_values ?? null });
+    if (engineKey) {
+      const existing = rows.scalars.find((r) => r.key === engineKey);
+      if (existing && (existing.status === "approved" || existing.status === "default_accepted")) continue;
+      if (existing) {
+        existing.status = "conflicting";
+        existing.conflict_values = a.conflict_values ?? existing.conflict_values;
+      } else {
+        rows.scalars.push({ key: engineKey, value_numeric: null, status: "conflicting", conflict_values: a.conflict_values ?? null });
+      }
+      continue;
+    }
+    const budgetCategory = TAXONOMY_TO_BUDGET_CATEGORY[a.field_key];
+    if (budgetCategory) {
+      const existing = rows.budget.find((b) => b.category === budgetCategory);
+      if (existing && (existing.status === "approved" || existing.status === "default_accepted")) continue;
+      if (existing) existing.status = "conflicting";
+      else rows.budget.push({ category: budgetCategory as any, amount: 0, status: "conflicting" });
+      continue;
+    }
+    const rev = TAXONOMY_TO_REVENUE_FIELD[a.field_key];
+    if (rev) {
+      const existing = rows.revenue.find((r) => r.unit_type === rev.unitType);
+      if (existing && (existing.status === "approved" || existing.status === "default_accepted")) continue;
+      if (existing) existing.status = "conflicting";
+      else rows.revenue.push({ unit_type: rev.unitType, unit_count: 0, rent: 0, rent_basis: rev.basis, status: "conflicting" } as any);
+      continue;
     }
   }
 
@@ -129,6 +150,8 @@ function buildReconciliationContext(rows: ProjectInputRows, input: UnderwritingI
     ioCoversHold: (input.ioMonths ?? 0) >= input.holdYears * 12,
     statedLtcPct: scalarValue(rows, "stated_ltc_pct"),
     minDscr: scalarValue(rows, "min_dscr"),
+    minDebtYield: scalarValue(rows, "min_debt_yield"),
+    debtYieldPct: output.values.debtYieldPct,
     lenderStabilizedOccupancyPct: scalarValue(rows, "lender_stabilized_occupancy_pct"),
     componentOccupancies: input.revenueProgram.map((r) => ({
       unitType: r.unitType,

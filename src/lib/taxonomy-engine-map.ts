@@ -20,6 +20,10 @@ export const TAXONOMY_TO_ENGINE_SCALAR: Record<string, string> = {
   total_project_cost: "stated_total_project_cost",
   lender_stabilized_occupancy: "lender_stabilized_occupancy_pct",
   other_income_annual: "other_income_annual",
+  // Debt-yield covenant: now reaches the engine so approving it is enforced
+  // (reconciliation flags a debt yield below the covenant). Previously absent,
+  // so approving this covenant silently no-op'd.
+  min_debt_yield: "min_debt_yield",
 };
 
 export const ENGINE_SCALAR_TO_TAXONOMY: Record<string, string> = Object.fromEntries(

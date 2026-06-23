@@ -39,7 +39,7 @@ const MONEY_LABEL_RE =
 function scaleMultiplier(suffix?: string): number {
   if (!suffix) return 1;
   const s = suffix.toLowerCase();
-  if (s === "bn" || s.startsWith("bil")) return 1_000_000_000;
+  if (s === "bn" || s === "b" || s.startsWith("bil")) return 1_000_000_000;
   if (s === "mm" || s === "m" || s.startsWith("mil")) return 1_000_000;
   if (s === "k" || s.startsWith("thou")) return 1_000;
   return 1;

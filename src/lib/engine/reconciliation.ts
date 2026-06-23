@@ -27,6 +27,9 @@ export type ReconciliationContext = {
   ioCoversHold?: boolean | null;
   statedLtcPct?: number | null;
   minDscr?: number | null;
+  // Debt-yield covenant (NOI / loan) and the engine's computed debt yield.
+  minDebtYield?: number | null;
+  debtYieldPct?: number | null;
   lenderStabilizedOccupancyPct?: number | null;
   componentOccupancies?: { unitType: string; occupancyPct: number | null }[];
   statedTotalProjectCost?: number | null;
@@ -90,6 +93,22 @@ export function runReconciliationChecks(ctx: ReconciliationContext): Reconciliat
         actual: ctx.noi,
       });
     }
+  }
+
+  // 3b. Debt-yield covenant: NOI / loan must clear the lender's minimum debt
+  // yield. Like the DSCR covenant, a breach is a hard (error) feasibility flag.
+  if (
+    ctx.minDebtYield != null && ctx.minDebtYield > 0 &&
+    ctx.debtYieldPct != null && ctx.debtYieldPct > 0 &&
+    ctx.debtYieldPct < ctx.minDebtYield
+  ) {
+    flags.push({
+      check_key: "debt_yield_covenant",
+      severity: "error",
+      message: `Debt yield ${ctx.debtYieldPct.toFixed(2)}% (NOI / loan) is below the ${ctx.minDebtYield.toFixed(2)}% lender covenant.`,
+      expected: ctx.minDebtYield,
+      actual: ctx.debtYieldPct,
+    });
   }
 
   // 4. Component occupancy vs lender stabilization requirement.

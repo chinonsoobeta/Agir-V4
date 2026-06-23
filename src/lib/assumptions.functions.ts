@@ -554,8 +554,11 @@ async function propagateApprovedToEngine(ctx: any, a: any) {
   }
   const budgetCategory = TAXONOMY_TO_BUDGET_CATEGORY[a.field_key];
   if (budgetCategory && value != null) {
+    // Scope the replace to THIS line (category + label) so multiple distinct
+    // taxonomy keys that share a category (e.g. environmental reserve and tax
+    // reassessment both map to "other") do not delete one another.
     await ctx.supabase.from("development_budget").delete()
-      .eq("project_id", a.project_id).eq("category", budgetCategory);
+      .eq("project_id", a.project_id).eq("category", budgetCategory).eq("label", a.field_label);
     const { error } = await ctx.supabase.from("development_budget").insert({
       project_id: a.project_id, owner_id: ctx.userId, category: budgetCategory,
       label: a.field_label, amount: value, source: "analyst", status: "approved",
@@ -567,13 +570,22 @@ async function propagateApprovedToEngine(ctx: any, a: any) {
   const rev = TAXONOMY_TO_REVENUE_FIELD[a.field_key];
   if (rev && value != null) {
     const fieldCol = rev.field === "rent" ? "market_rent_monthly" : rev.field;
-    const { data: existing } = await ctx.supabase.from("revenue_program").select("*")
-      .eq("project_id", a.project_id).eq("unit_type", rev.unitType).maybeSingle();
+    // A project may transiently hold >1 row for a unit_type (re-parsed or
+    // re-uploaded rent roll); .maybeSingle() would THROW on that. Fold any
+    // duplicates into one engine-visible component instead of crashing or
+    // silently forking a third zero-count row.
+    const { data: existingRows } = await ctx.supabase.from("revenue_program").select("*")
+      .eq("project_id", a.project_id).eq("unit_type", rev.unitType);
+    const existing = existingRows?.[0] ?? null;
     if (existing) {
       const { error } = await ctx.supabase.from("revenue_program").update({
         [fieldCol]: value, status: "approved", source: "analyst",
       }).eq("id", existing.id);
       if (error) throw new Error(`Failed to propagate ${a.field_key}: ${error.message}`);
+      if (existingRows && existingRows.length > 1) {
+        await ctx.supabase.from("revenue_program").delete()
+          .in("id", existingRows.slice(1).map((r: any) => r.id));
+      }
     } else {
       // Partial components (rent or count still 0) are never engine-usable:
       // readiness requires count/SF AND rent before the row counts.
@@ -600,7 +612,17 @@ async function demoteEngineRows(ctx: any, a: any) {
   const budgetCategory = TAXONOMY_TO_BUDGET_CATEGORY[a.field_key];
   if (budgetCategory) {
     await ctx.supabase.from("development_budget").update({ status: "rejected" })
-      .eq("project_id", a.project_id).eq("category", budgetCategory);
+      .eq("project_id", a.project_id).eq("category", budgetCategory).eq("label", a.field_label);
+  }
+  const rev = TAXONOMY_TO_REVENUE_FIELD[a.field_key];
+  if (rev) {
+    // Clear the specific field rather than nuking the whole component on a
+    // single-field rejection: zeroed count/rent make the component
+    // engine-incomplete (readiness drops it); occupancy reverts to fallback.
+    const fieldCol = rev.field === "rent" ? "market_rent_monthly" : rev.field;
+    const cleared = rev.field === "occupancy_pct" ? null : 0;
+    await ctx.supabase.from("revenue_program").update({ [fieldCol]: cleared })
+      .eq("project_id", a.project_id).eq("unit_type", rev.unitType);
   }
 }
 
@@ -632,6 +654,18 @@ export const reviewAssumption = createServerFn({ method: "POST" })
       patch.approved_by = context.userId;
       patch.approved_at = new Date().toISOString();
     } else if (data.action === "modify") {
+      // A conflicting key may only be modified to one of the documented
+      // candidate values — never an invented number (mirrors resolveConflict).
+      if (cur.status === "conflicting") {
+        const candidates = ((cur as any).conflict_values ?? [])
+          .map((c: any) => Number(c.value))
+          .filter((v: number) => Number.isFinite(v));
+        if (data.value_numeric == null || !candidates.some((c: number) => Math.abs(c - (data.value_numeric as number)) < 1e-9)) {
+          throw new Error(
+            `This key has conflicting extracted values. A modification must equal one of the documented candidates (${candidates.join(", ")}); use "resolve conflict" for a conservative value instead of inventing one.`,
+          );
+        }
+      }
       patch.status = "modified";
       patch.value_numeric = data.value_numeric ?? cur.value_numeric;
       patch.value_text = data.value_text ?? cur.value_text;

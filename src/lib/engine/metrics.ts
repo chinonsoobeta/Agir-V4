@@ -27,7 +27,13 @@ export function irr(cashFlows: number[]) {
     high *= 2;
     fHigh = npv(high);
   }
-  if (Math.sign(fLow) === Math.sign(fHigh)) return Number.NaN;
+  if (Math.sign(fLow) === Math.sign(fHigh)) {
+    // No sign change was bracketed. The only root may sit at the -99% lower
+    // bound (a near-total loss that recovers a sliver of equity): return it
+    // when NPV there is ~0. Otherwise the flows truly have no finite IRR
+    // (e.g. a loss exceeding 100%).
+    return Math.abs(fLow) < 1e-6 ? low * 100 : Number.NaN;
+  }
 
   for (let i = 0; i < 200; i++) {
     const mid = (low + high) / 2;

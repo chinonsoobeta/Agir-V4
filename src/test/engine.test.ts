@@ -29,18 +29,18 @@ describe("development underwriting engine", () => {
     closeToDollars(output.values.equity, 14_875_000);
     closeToPct(output.values.ltcPct, 65.0);
     expect(output.values.interestOnlyDscr).toBeCloseTo(1.31, 2);
-    // Equity multiple now includes the sale-year operating cash flow — a real
-    // distribution to equity — alongside net sale proceeds. On the 1-year Maple
-    // hold this restores the year-1 levered CF the prior model dropped (1.07 →
-    // 1.08).
-    expect(output.values.equityMultiple).toBeCloseTo(1.08, 2);
+    // Equity multiple includes the sale-year operating cash flow (a real
+    // distribution), and the hold cash flow uses the debt service actually due —
+    // interest-only for the full 1-year Maple hold (ioMonths = 12). Together
+    // those fixes moved the prior 1.07 to 1.107.
+    expect(output.values.equityMultiple).toBeCloseTo(1.107, 2);
     expect(output.equityWipeout).toBe(false);
     // Debt yield (NOI / loan) and break-even occupancy are now first-class
-    // engine outputs.
+    // engine outputs. Break-even uses the in-force (interest-only) debt service.
     expect(output.values.debtYieldPct).toBeCloseTo((2_178_540 / 27_625_000) * 100, 4);
-    const adsForBreakEven = annualDebtService(27_625_000, 6, 30);
+    const mapleYear1DebtService = 27_625_000 * 0.06; // interest-only: ioMonths=12 covers the 1-year hold
     expect(output.values.breakEvenOccupancyPct).toBeCloseTo(
-      (adsForBreakEven / (1 - 0.35) / 3_528_000) * 100,
+      (mapleYear1DebtService / (1 - 0.35) / 3_528_000) * 100,
       4,
     );
     // Headline DSCR is amortizing whenever an amortization term exists; the
@@ -104,6 +104,19 @@ describe("development underwriting engine", () => {
     expect(out.metrics.some((m) => m.key === "debt_yield")).toBe(true);
     expect(out.metrics.some((m) => m.key === "break_even_occupancy")).toBe(true);
   });
+
+  test("hold cash flow uses the interest-only payment while the loan is IO for the whole hold", () => {
+    // 3-year hold, interest-only for 36 months -> every hold year is IO.
+    const io = runUnderwriting({ ...mapleHeightsInput(), holdYears: 3, ioMonths: 36 });
+    const amortizing = annualDebtService(27_625_000, 6, 30);
+    const ioPayment = 27_625_000 * 0.06;
+    const ds = io.cashFlows.find((c) => c.periodYear === 1 && c.lineKey === "debt_service");
+    // The ledger bills the interest-only payment actually due, not amortizing P&I.
+    expect(Math.round(-(ds?.amount ?? 0))).toBe(Math.round(ioPayment));
+    expect(ioPayment).toBeLessThan(amortizing);
+    // ...and the headline DSCR metric stays on the (conservative) amortizing basis.
+    expect(io.values.dscr).toBeCloseTo(io.values.noi / amortizing, 4);
+  });
 });
 
 describe("reconciliation gates", () => {
@@ -132,5 +145,12 @@ describe("reconciliation gates", () => {
     // IO-for-the-hold basis: 1.2 × 3,906,250 = 4,687,500 < NOI → passes.
     const io = runReconciliationChecks({ ...base, ioCoversHold: true });
     expect(io.some((f) => f.check_key === "covenant_feasibility")).toBe(false);
+  });
+
+  test("debt-yield covenant flags a deal whose debt yield is below the minimum", () => {
+    const pass = runReconciliationChecks({ ...ctxBase, minDebtYield: 8, debtYieldPct: 9 });
+    expect(pass.some((f) => f.check_key === "debt_yield_covenant")).toBe(false);
+    const fail = runReconciliationChecks({ ...ctxBase, minDebtYield: 9, debtYieldPct: 8 });
+    expect(fail.some((f) => f.check_key === "debt_yield_covenant" && f.severity === "error")).toBe(true);
   });
 });

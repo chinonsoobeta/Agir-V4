@@ -39,7 +39,25 @@ export function parseBudgetWorkbook(buffer: ArrayBuffer): BudgetParseResult {
   const categoryIndex = header.findIndex((h) => /category/.test(h));
   const itemIndex = header.findIndex((h) => /item|description|label/.test(h));
   const labelIndex = itemIndex >= 0 ? itemIndex : Math.max(0, categoryIndex);
-  const amountIndex = Math.max(1, header.findIndex((h) => /amount|cost|budget|total/.test(h)));
+  // Amount column: among money-named headers, prefer one whose DATA cells are
+  // actually numeric — a *label* column named "Total Project Cost" or "Cost
+  // Item" must never be mistaken for the dollar column. Fall back to the last
+  // money-named header, then the first numeric column.
+  const dataRows = rows.slice(1);
+  const numericShare = (i: number) => {
+    const vals = dataRows.map((r) => r[i]).filter((c) => c != null && String(c).trim() !== "");
+    if (!vals.length) return 0;
+    const n = vals.filter((c) => Number.isFinite(typeof c === "number" ? c : Number(String(c).replace(/[$,%\s]/g, "")))).length;
+    return n / vals.length;
+  };
+  const moneyCols = header
+    .map((h, i) => ({ h, i }))
+    .filter(({ h, i }) => i !== labelIndex && i !== categoryIndex && /amount|cost|budget|total|value|\$/.test(h));
+  let amountIndex =
+    moneyCols.find(({ i }) => numericShare(i) >= 0.6)?.i ??
+    (moneyCols.length ? moneyCols[moneyCols.length - 1].i : -1);
+  if (amountIndex < 0) amountIndex = header.findIndex((_, i) => i !== labelIndex && i !== categoryIndex && numericShare(i) >= 0.6);
+  if (amountIndex < 0) amountIndex = Math.max(1, header.findIndex((h) => /amount|cost|budget|total/.test(h)));
 
   rows.slice(1).forEach((row, i) => {
     const rowNumber = i + 2;

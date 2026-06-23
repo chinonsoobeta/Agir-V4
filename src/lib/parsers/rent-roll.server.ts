@@ -35,7 +35,9 @@ export function parseRentRollWorkbook(buffer: ArrayBuffer) {
   const typeIndex = foundTypeIndex;
   const countIndex = foundCountIndex;
   const tenantIndex = header.findIndex((h) => /tenant|lessee|occupant/.test(h));
-  const sfIndex = header.findIndex((h) => /sf|square/.test(h));
+  // Word-boundary \bsf\b so a rent column like "Rent PSF" (the "sf" inside
+  // "psf") is NOT taken as the square-footage column; also exclude rent headers.
+  const sfIndex = header.findIndex((h) => /\bsf\b|square/.test(h) && !isRentHeader(h));
   const rentIndex = foundRentIndex;
   const rentBasisIndex = header.findIndex((h) => /basis|rent basis|billing/.test(h));
   const occupancyIndex = header.findIndex((h) => /occupanc|occ\.?\s|occ%|occ$/.test(h));

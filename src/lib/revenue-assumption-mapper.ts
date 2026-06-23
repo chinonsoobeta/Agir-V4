@@ -54,9 +54,15 @@ export function mapRevenueProgramRowToAssumptions(row: ParsedRentRollRow, source
     }];
   };
 
-  // Other Income is a scalar, not a leasable component.
+  // Other Income is a scalar, not a leasable component, and is reported ANNUAL.
+  // A single aggregate line (count <= 1) is taken as-is; a multi-unit line
+  // (e.g. 50 parking stalls @ $X/MONTH) is annualized per the parser's
+  // $/unit/month convention (count × rent × 12). Previously both branches
+  // returned the raw figure, silently understating multi-unit other income 12x.
   if (isOtherIncome(row.unitType)) {
-    const annual = row.rentBasis === "per_unit" && row.unitCount <= 1 ? row.rent : row.rent;
+    const annual = row.rentBasis === "per_unit" && row.unitCount > 1
+      ? row.unitCount * row.rent * 12
+      : row.rent;
     return emit("other_income_annual", annual, "Other income rent-roll row");
   }
 
