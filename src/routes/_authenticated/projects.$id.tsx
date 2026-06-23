@@ -1,13 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
+import { useSuspenseQuery, queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { getProject } from "@/lib/projects.functions";
-import { listDocuments } from "@/lib/documents.functions";
+import { listDocuments, createDocument } from "@/lib/documents.functions";
 import { listAssumptions, listFinancialOutputs, listDecisions } from "@/lib/assumptions.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeft, FileText, MapPin } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, FileText, MapPin, Upload } from "lucide-react";
+import { useState, useRef } from "react";
 import { AssumptionReviewCenter } from "@/components/assumption-review";
 import { AuditPanel } from "@/components/underwriting-panel";
 import { CommitteePanel } from "@/components/committee-panel";
@@ -16,6 +18,8 @@ import { DealOverview } from "@/components/deal-overview";
 import { buildDecision, pipelineStageFor, RECOMMENDATION_TONE } from "@/lib/decision";
 import { assetTypeLabel } from "@/lib/asset-types";
 import { ScoreDial, RecommendationPill, RiskPill } from "@/components/decision-ui";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const projectQ = (id: string) => queryOptions({ queryKey: ["project", id], queryFn: () => getProject({ data: { id } }) });
 const docsQ = (id: string) => queryOptions({ queryKey: ["docs", id], queryFn: () => listDocuments({ data: { project_id: id } }) });
@@ -111,23 +115,78 @@ function DealDetail() {
   );
 }
 
+const CATEGORIES = ["Appraisal","Budget","Site Plan","Financial Model","Market Study","Loan Package","Legal","Other"];
+
 function DocumentsTab({ projectId }: { projectId: string }) {
   const { data: docs = [] } = useSuspenseQuery(docsQ(projectId));
+  const qc = useQueryClient();
+  const createFn = useServerFn(createDocument);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [category, setCategory] = useState<string>("Other");
+  const [uploading, setUploading] = useState(false);
+
+  async function upload(file: File) {
+    setUploading(true);
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) throw new Error("Not authenticated");
+      const path = `${u.user.id}/${Date.now()}-${file.name}`;
+      const { error } = await supabase.storage.from("documents").upload(path, file);
+      if (error) throw error;
+      await createFn({ data: {
+        project_id: projectId,
+        name: file.name,
+        file_type: file.type,
+        category,
+        storage_path: path,
+        size_bytes: file.size,
+      } });
+      qc.invalidateQueries({ queryKey: ["docs", projectId] });
+      toast.success("Document uploaded");
+      setCategory("Other");
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
   return (
-    <Card className="p-6 elevated">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Deal Documents</div>
-      {docs.length === 0 ? (
-        <p className="text-sm text-muted-foreground mt-3">No documents linked to this deal. Upload from the Documents page.</p>
-      ) : (
-        <ul className="mt-4 space-y-2">
-          {docs.map((d) => (
-            <li key={d.id} className="flex items-center justify-between text-sm border-b border-border pb-2.5">
-              <span className="flex items-center gap-2.5"><FileText className="size-4 text-primary" />{d.name}</span>
-              <span className="text-xs text-muted-foreground">{d.category || "—"}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
+    <div className="space-y-5">
+      <Card className="p-5">
+        <div className="grid md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="text-[10px] uppercase tracking-widest text-muted-foreground">Category</label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <input ref={fileRef} type="file" className="hidden"
+            accept=".pdf,.xlsx,.xls,.doc,.docx,.png,.jpg,.jpeg"
+            onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+          <Button onClick={() => fileRef.current?.click()} disabled={uploading} className="md:col-span-3">
+            <Upload className="size-4 mr-2" />{uploading ? "Uploading…" : "Upload document"}
+          </Button>
+        </div>
+      </Card>
+
+      <Card className="p-6 elevated">
+        <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Deal Documents</div>
+        {docs.length === 0 ? (
+          <p className="text-sm text-muted-foreground mt-3">No documents linked to this deal yet.</p>
+        ) : (
+          <ul className="mt-4 space-y-2">
+            {docs.map((d) => (
+              <li key={d.id} className="flex items-center justify-between text-sm border-b border-border pb-2.5">
+                <span className="flex items-center gap-2.5"><FileText className="size-4 text-primary" />{d.name}</span>
+                <span className="text-xs text-muted-foreground">{d.category || "—"}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </div>
   );
 }
