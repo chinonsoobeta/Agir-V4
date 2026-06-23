@@ -186,6 +186,19 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
   const minDscr = aVal("min_dscr") ?? eVal("min_dscr");
   const errorFlags = flags.filter((f) => f.severity === "error" && !f.resolved);
   const narrativeBits: string[] = [];
+  // Lead with the deterministic Insight Layer read (thesis + IC narrative) when
+  // the underwriting run persisted it; its numbers are admitted via derived.
+  // (Inlined lookup to avoid a circular import with report-common.)
+  const memoInsightRow = outputs.find((o: any) => o.metric_key === "insight" && o.scenario_key === "base");
+  const memoInsightInputs = (memoInsightRow?.inputs ?? null) as Record<string, any> | null;
+  if (memoInsightRow && memoInsightInputs) {
+    for (const n of Array.isArray(memoInsightInputs.derivedValues) ? memoInsightInputs.derivedValues : []) {
+      if (Number.isFinite(Number(n))) derived.push(Number(n));
+    }
+    if (memoInsightRow.formula_text) narrativeBits.push(String(memoInsightRow.formula_text));
+    const icNarrative = memoInsightInputs.narratives?.ic;
+    if (icNarrative) narrativeBits.push(String(icNarrative));
+  }
   if (exitCap != null && noi != null && exitValue != null && tdc) {
     narrativeBits.push(`At the ${pct(exitCap)} exit cap, stabilized NOI of ${money(noi)} implies an exit value of ${money(exitValue)} against TDC of ${money(tdc)}.`);
   }
@@ -599,6 +612,12 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
     defaultCount > 0 ? `Default-accepted inputs: ${defaultNames.join(", ")}.` : "Default-accepted inputs: none.",
     `PREPARED: Agir Pro Finance — Deterministic Underwriting Engine — ${ctx.generatedLabel}.`,
   ];
+
+  // What-if levers from the Insight Layer (input changes that clear each gate).
+  const memoFailingLevers = ((memoInsightInputs?.levers ?? []) as any[]).filter((l) => l && !l.passing);
+  if (memoFailingLevers.length) {
+    sections.push({ heading: "What Would Move the Needle", body: memoFailingLevers.map((l) => `- ${l.lever}`).join("\n") });
+  }
 
   return {
     header_band: "Agir Pro Finance — Deterministic Underwriting Engine — CONFIDENTIAL DRAFT",

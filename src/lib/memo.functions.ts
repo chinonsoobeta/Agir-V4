@@ -61,7 +61,7 @@ export const generateMemo = createServerFn({ method: "POST" })
 
     const outputsRes = await context.supabase
       .from("financial_outputs")
-      .select("scenario_key,metric_key,metric_label,value_numeric,unit,formula_text")
+      .select("scenario_key,metric_key,metric_label,value_numeric,unit,formula_text,inputs")
       .eq("project_id", data.project_id);
     if (outputsRes.error) throw new Error(`Memo generation failed loading financial_outputs: ${outputsRes.error.message}`);
 

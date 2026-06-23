@@ -28,6 +28,7 @@ import {
   type UnderwritingInput,
 } from "./engine";
 import { computeInvestmentVerdict } from "./verdict";
+import { buildInsight, writeNarrative, computePortfolioNorms } from "./context";
 
 // Taxonomy (review queue) → engine key mapping. Conflicting review-queue rows
 // are surfaced to readiness through this mapping so a conflicted key blocks
@@ -468,6 +469,25 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
     const riskScore = computeRiskScore(base, flags);
     const risks = deriveRiskRegister(base, flags);
 
+    // ---- Deterministic Insight Layer (context, benchmarks, attribution, NLG) ----
+    // Portfolio-derived norms (the firm's own deals) blend with curated defaults
+    // for context-aware judgment. Pure read of other projects' base metrics.
+    const { data: portfolioRows } = await context.supabase
+      .from("financial_outputs")
+      .select("project_id, metric_key, value_numeric")
+      .eq("owner_id", context.userId)
+      .eq("scenario_key", "base")
+      .neq("project_id", data.project_id);
+    const portfolioNorms = computePortfolioNorms((portfolioRows ?? []) as any);
+    const { data: projectRow } = await context.supabase
+      .from("projects").select("name, type, location").eq("id", data.project_id).maybeSingle();
+    const insight = buildInsight(base, input, {
+      meta: { name: projectRow?.name ?? null, type: projectRow?.type ?? null, location: projectRow?.location ?? null },
+      benchInputs: { portfolioNorms, portfolioMinSample: 6 },
+      covenants: { minDscr: scalarValue(rows, "min_dscr"), minDebtYield: scalarValue(rows, "min_debt_yield") },
+      verdictCode: verdict.code,
+    });
+
     // Persist everything in one sweep.
     await Promise.all([
       context.supabase.from("financial_outputs").delete().eq("project_id", data.project_id),
@@ -499,6 +519,28 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
       metric_key: "verdict", metric_label: "Deterministic Verdict", value_numeric: null, unit: "count",
       formula_text: `${verdict.code} — ${verdict.gates.filter((g) => !g.pass).length} of ${verdict.gates.length} gates failed${verdict.hardFail ? "; hard fail (equity wipeout or error-severity reconciliation flag)" : ""}`,
       inputs: { code: verdict.code, gates: verdict.gates, hardFail: verdict.hardFail },
+    });
+    // The deterministic "analyst read": thesis, contextual interpretations,
+    // what-if levers, and audience-adapted narratives (all provenance-clean).
+    outputInserts.push({
+      project_id: data.project_id, owner_id: context.userId, scenario_key: "base",
+      metric_key: "insight", metric_label: "Deterministic Read", value_numeric: null, unit: "count",
+      formula_text: insight.thesis,
+      inputs: {
+        context: insight.context,
+        interpretations: insight.interpretations,
+        levers: insight.attribution.levers,
+        drivers: insight.attribution.drivers,
+        bullets: insight.bullets,
+        narratives: {
+          ic: writeNarrative(insight, "ic"),
+          lender: writeNarrative(insight, "lender"),
+          investor: writeNarrative(insight, "investor"),
+          internal: writeNarrative(insight, "internal"),
+        },
+        derivedValues: insight.derivedValues,
+        portfolioSample: portfolioNorms.sampleSize,
+      },
     });
     const { error: outErr } = await context.supabase.from("financial_outputs").insert(outputInserts);
     if (outErr) throw new Error(outErr.message);

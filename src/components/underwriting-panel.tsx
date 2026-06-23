@@ -211,12 +211,13 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   const byScenario = outputs.reduce<Record<string, any[]>>((acc, o) => {
     (acc[o.scenario_key] ||= []).push(o); return acc;
   }, {});
-  const base = (byScenario.base ?? []).filter((m) => m.metric_key !== "verdict" && m.metric_key !== "risk_score");
+  const base = (byScenario.base ?? []).filter((m) => m.metric_key !== "verdict" && m.metric_key !== "risk_score" && m.metric_key !== "insight");
   const metricKeys = base.map((m) => m.metric_key);
   const scenarioKeys = SCENARIO_ORDER.filter((k) => byScenario[k]?.length);
   const metric = (key: string) => base.find((b) => b.metric_key === key);
   const verdictRow = (byScenario.base ?? []).find((m) => m.metric_key === "verdict");
   const riskScoreRow = (byScenario.base ?? []).find((m) => m.metric_key === "risk_score");
+  const insightRow = (byScenario.base ?? []).find((m) => m.metric_key === "insight");
   const irrRow = metric("irr_estimate");
   const equityWipeout = Boolean(metric("equity_multiple")?.formula_text?.includes("Equity wipeout"));
   const defaultedKeys: string[] = readiness.defaultedKeys ?? [];
@@ -280,6 +281,8 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
           Equity wipeout: net sale proceeds are below the loan payoff at exit. EM ≈ 0.0x; IRR is not meaningful.
         </div>
       )}
+
+      <DeterministicRead row={insightRow} />
 
       {!outputs.length && (
         <Card className="p-12 text-center text-sm text-muted-foreground">
@@ -365,6 +368,63 @@ function UnderwritingMetric({ label, row, text, sub, highlight }: { label: strin
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
       <div className={`num text-2xl mt-1 ${highlight ?? "text-primary"}`}>{display}</div>
       <div className="text-[10px] text-muted-foreground mt-1 font-mono line-clamp-2">{sub ?? row?.formula_text ?? "Pending underwriting run"}</div>
+    </Card>
+  );
+}
+
+function bandClass(band: string): string {
+  if (band === "strong" || band === "exceptional") return "text-primary border-primary/40 bg-primary/5";
+  if (band === "weak" || band === "critical") return "text-destructive border-destructive/40 bg-destructive/5";
+  if (band === "soft") return "text-chart-5 border-chart-5/40 bg-chart-5/5";
+  return "text-muted-foreground border-border";
+}
+
+// The deterministic "analyst read": context chips, a synthesized thesis,
+// metric-by-metric contextual interpretation, and what-if levers. Every word is
+// rule-derived from the engine output + the curated/portfolio benchmark norms.
+function DeterministicRead({ row }: { row?: any }) {
+  if (!row) return null;
+  const ctx = row.inputs?.context;
+  const interps: any[] = row.inputs?.interpretations ?? [];
+  const levers: any[] = row.inputs?.levers ?? [];
+  const failing = levers.filter((l) => !l.passing);
+  const sample = Number(row.inputs?.portfolioSample ?? 0);
+  const chips = ctx ? [ctx.marketLabel, String(ctx.stage ?? "").replace(/_/g, " "), String(ctx.loanStructure ?? "").replace(/_/g, " ")].filter(Boolean) : [];
+  return (
+    <Card className="p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <Info className="size-4 text-primary" />
+        <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Deterministic Read · Contextual Analysis</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {chips.map((c, i) => (<Badge key={i} variant="outline" className="text-[10px] capitalize">{c}</Badge>))}
+        {sample > 0 && <Badge variant="outline" className="text-[10px]">benchmarked vs {sample} portfolio deal{sample === 1 ? "" : "s"}</Badge>}
+      </div>
+      {row.formula_text && <p className="text-sm leading-relaxed">{row.formula_text}</p>}
+      {interps.length > 0 && (
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2">How it reads in context</div>
+          <ul className="space-y-1.5">
+            {interps.filter((i) => i.band !== "neutral").slice(0, 7).map((i) => (
+              <li key={i.metricKey} className="text-xs flex items-start gap-2">
+                <Badge variant="outline" className={`text-[9px] uppercase shrink-0 ${bandClass(i.band)}`}>{String(i.band).replace(/_/g, " ")}</Badge>
+                <span>
+                  <span className="font-medium">{i.label}</span> {i.comparativePhrase}.
+                  {i.contextNote ? <span className="text-muted-foreground"> {i.contextNote}</span> : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {failing.length > 0 && (
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2">What would move the needle</div>
+          <ul className="space-y-1 list-disc pl-4">
+            {failing.map((l, idx) => (<li key={idx} className="text-xs text-muted-foreground">{l.lever}</li>))}
+          </ul>
+        </div>
+      )}
     </Card>
   );
 }

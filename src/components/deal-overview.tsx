@@ -54,6 +54,23 @@ export function DealOverview({ decision }: { decision: DecisionSummary }) {
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Findings Engine</span>
         </div>
         <p className="mt-3 text-lg leading-relaxed text-foreground/90 max-w-3xl">{primaryReason}</p>
+        {decision.insight && (
+          <div className="mt-4 rounded-md border border-primary/20 bg-primary/5 p-4 max-w-3xl">
+            <div className="flex flex-wrap items-center gap-1.5 mb-2">
+              <span className="text-[10px] uppercase tracking-widest text-primary font-semibold">Deterministic Read · Contextual</span>
+              {decision.insight.context?.marketLabel && <span className="text-[10px] capitalize border border-border rounded px-1.5 py-0.5 text-muted-foreground">{decision.insight.context.marketLabel}</span>}
+              {decision.insight.context?.loanStructure && <span className="text-[10px] capitalize border border-border rounded px-1.5 py-0.5 text-muted-foreground">{String(decision.insight.context.loanStructure).replace(/_/g, " ")}</span>}
+            </div>
+            <p className="text-sm leading-relaxed text-foreground/90">{decision.insight.thesis}</p>
+            {decision.insight.interpretations?.length > 0 && (
+              <ul className="mt-3 space-y-1">
+                {decision.insight.interpretations.filter((i: any) => i.band !== "neutral").slice(0, 4).map((i: any) => (
+                  <li key={i.metricKey} className="text-xs text-muted-foreground"><span className="font-medium text-foreground/80">{i.label}</span> — {i.comparativePhrase}.</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
         <div className="grid md:grid-cols-2 gap-3 mt-5">
           <SummaryBox icon={AlertTriangle} tone="reject" label="Top Risk"
             title={topRisk?.title ?? "No material risk identified"} body={topRisk?.rationale} />

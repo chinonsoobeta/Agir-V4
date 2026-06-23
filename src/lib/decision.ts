@@ -239,6 +239,9 @@ export const RISK_TONE: Record<RiskRating, "approve" | "condition" | "return" | 
 };
 
 // ---------- The unified decision summary ----------
+// The deterministic Insight Layer read, surfaced on the decision/findings tab.
+export type DecisionInsight = { thesis: string; interpretations: any[]; levers: any[]; context: any };
+
 export type DecisionSummary = {
   hasUnderwriting: boolean;
   recommendation: DecisionRecommendation;
@@ -249,6 +252,7 @@ export type DecisionSummary = {
   investmentComponents: ScoreComponent[];
   confidenceComponents: ScoreComponent[];
   findings: FindingsReport | null;
+  insight: DecisionInsight | null;
   norm: NormalizedOutputs;
 };
 
@@ -270,6 +274,16 @@ export function buildDecision(outputs: OutputRow[], assumptions: AssumptionRow[]
     recommendation = "RETURN_TO_UNDERWRITING";
   }
 
+  const insightRow = outputs.find((o: any) => o.metric_key === "insight" && o.scenario_key === "base");
+  const insight: DecisionInsight | null = insightRow
+    ? {
+        thesis: String((insightRow as any).formula_text ?? ""),
+        interpretations: (insightRow as any).inputs?.interpretations ?? [],
+        levers: (insightRow as any).inputs?.levers ?? [],
+        context: (insightRow as any).inputs?.context ?? null,
+      }
+    : null;
+
   return {
     hasUnderwriting: norm.hasUnderwriting && Object.keys(norm.base).length > 0,
     recommendation,
@@ -280,6 +294,7 @@ export function buildDecision(outputs: OutputRow[], assumptions: AssumptionRow[]
     investmentComponents,
     confidenceComponents,
     findings,
+    insight,
     norm,
   };
 }

@@ -178,6 +178,26 @@ export function requiredActions(data: ReportData, core: DerivedCore): string[] {
   return actions;
 }
 
+// The deterministic Insight Layer read for this project, persisted by the
+// underwriting run. Audience-adapted narrative + thesis + what-if levers, plus
+// the `derived` numbers the prose uses (so the provenance verifier admits them).
+// Null-safe: deals underwritten before the Insight Layer simply return null and
+// the report falls back to its templated prose.
+export type ReportInsight = { thesis: string; narrative: string; bullets: string[]; levers: any[]; interpretations: any[]; derived: number[] };
+export function insightFor(data: ReportData, audience: "ic" | "lender" | "investor" | "internal"): ReportInsight | null {
+  const row = data.outputs.find((o) => o.metric_key === "insight" && o.scenario_key === "base");
+  if (!row) return null;
+  const i = (row.inputs ?? {}) as Record<string, any>;
+  return {
+    thesis: String(row.formula_text ?? ""),
+    narrative: String(i.narratives?.[audience] ?? i.narratives?.ic ?? ""),
+    bullets: Array.isArray(i.bullets) ? i.bullets : [],
+    levers: Array.isArray(i.levers) ? i.levers : [],
+    interpretations: Array.isArray(i.interpretations) ? i.interpretations : [],
+    derived: Array.isArray(i.derivedValues) ? i.derivedValues.map(Number).filter((n: number) => Number.isFinite(n)) : [],
+  };
+}
+
 // Numbers a report may reference (for provenance), gathered from every
 // deterministic source plus simple pure-function derivations.
 export function reportAllowedValues(data: ReportData, core: DerivedCore, extra: number[] = []): number[] {

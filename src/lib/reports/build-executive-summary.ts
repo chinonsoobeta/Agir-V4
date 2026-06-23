@@ -5,7 +5,7 @@ import type { MemoReport, ReportSection, ReportStat } from "../memo-report";
 import type { ReportData } from "./report-data.server";
 import {
   makeAccessors, deriveCore, reportVerdict, irrStatusText, requiredActions,
-  disclosureFootnotes, defaultAcceptedFields, inputCounts, VERDICT_BANNER,
+  disclosureFootnotes, defaultAcceptedFields, inputCounts, VERDICT_BANNER, insightFor,
   money, pct, x, bps,
 } from "./report-common";
 
@@ -13,7 +13,9 @@ export function buildExecutiveSummary(data: ReportData, opts: { generatedLabel: 
   const { oVal } = makeAccessors(data);
   const core = deriveCore(data);
   const verdict = reportVerdict(data);
+  const ins = insightFor(data, "ic");
   const derived: number[] = [];
+  if (ins) derived.push(...ins.derived);
 
   const card = (label: string, key: string, unit: string): ReportStat => {
     const v = oVal("base", key);
@@ -42,7 +44,17 @@ export function buildExecutiveSummary(data: ReportData, opts: { generatedLabel: 
   if (core.noi != null && core.exitCap != null) summaryBits.push(`Stabilized NOI is ${money(core.noi)} at a ${pct(core.exitCap)} exit cap.`);
   if (core.dscr != null && core.minDscr != null) summaryBits.push(`Underwritten DSCR is ${x(core.dscr)} against a ${x(core.minDscr)} covenant.`);
   if (!summaryBits.length) summaryBits.push("Insufficient approved data to summarize this deal.");
-  sections.push({ heading: "Deal Summary", body: summaryBits.join(" ") });
+  // Prefer the deterministic analyst read (thesis + contextual narrative) when
+  // the Insight Layer has run; fall back to the templated summary otherwise.
+  const dealSummaryBody = ins?.narrative ? `${ins.thesis} ${ins.narrative}` : summaryBits.join(" ");
+  sections.push({ heading: "Deal Summary", body: dealSummaryBody });
+
+  // "What would move the needle" — the binding levers, with the input change
+  // each one requires (magnitudes are provenance-backed via ins.derived).
+  const failingLevers = (ins?.levers ?? []).filter((l: any) => !l.passing);
+  if (failingLevers.length) {
+    sections.push({ heading: "What Would Move the Needle", body: failingLevers.map((l: any) => `- ${l.lever}`).join("\n") });
+  }
 
   // Top reasons for the recommendation (3-5, derived from flags/metrics).
   const reasons: string[] = [];
@@ -92,7 +104,7 @@ export function buildExecutiveSummary(data: ReportData, opts: { generatedLabel: 
     prepared: `Prepared ${opts.generatedLabel} · CONFIDENTIAL DRAFT`,
     verdict_code: verdict.code,
     verdict_banner: VERDICT_BANNER[verdict.code] ?? verdict.code,
-    verdict_narrative: summaryBits.join(" "),
+    verdict_narrative: ins?.thesis || summaryBits.join(" "),
     summary_stats: [],
     metric_cards,
     sections,
