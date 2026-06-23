@@ -12,7 +12,8 @@ export const Route = createFileRoute("/api/chat")({
 
         const SUPABASE_URL = process.env.SUPABASE_URL!;
         const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-        if (!process.env.ANTHROPIC_API_KEY) return new Response("Missing ANTHROPIC_API_KEY", { status: 500 });
+        const { hasAnthropicKey } = await import("@/lib/ai-gateway.server");
+        if (!hasAnthropicKey()) return new Response("Missing or malformed ANTHROPIC_API_KEY", { status: 500 });
         if (!SUPABASE_ANON_KEY) return new Response("Missing SUPABASE_ANON_KEY", { status: 500 });
 
         const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {

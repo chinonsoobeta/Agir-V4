@@ -174,11 +174,12 @@ export const extractAssumptions = createServerFn({ method: "POST" })
     // AI is the default analysis path; the deterministic alias mapper is the
     // always-present backup. We fall back automatically (and record why) when no
     // key is configured or the model call fails.
-    const aiAvailable = Boolean(process.env.ANTHROPIC_API_KEY);
+    const { hasAnthropicKey } = await import("./ai-gateway.server");
+    const aiAvailable = hasAnthropicKey();
     const wantsAI = data.mode === "ai";
     const useAI = wantsAI && aiAvailable;
     let aiFailureReason: string | null =
-      wantsAI && !aiAvailable ? "ANTHROPIC_API_KEY not configured — used the deterministic engine." : null;
+      wantsAI && !aiAvailable ? "AI unavailable (ANTHROPIC_API_KEY missing or malformed) — used the deterministic engine." : null;
 
     const { data: docs, error: dErr } = await context.supabase
       .from("documents").select("*").eq("project_id", data.project_id);

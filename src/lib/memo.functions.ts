@@ -117,7 +117,8 @@ export const generateMemo = createServerFn({ method: "POST" })
 
     // ---- AI is OPTIONAL. With a key we use the AI-assisted flow; without one we
     // fall back to a deterministic template. Never throw for a missing key. ----
-    const aiAvailable = Boolean(process.env.ANTHROPIC_API_KEY);
+    const { hasAnthropicKey } = await import("./ai-gateway.server");
+    const aiAvailable = hasAnthropicKey();
     const generation_mode: "ai" | "deterministic" = aiAvailable ? "ai" : "deterministic";
 
     // Structured IC-memorandum report — deterministic in BOTH modes (the AI only
@@ -314,7 +315,8 @@ export const debugMemoReadiness = createServerFn({ method: "GET" })
     if (base_outputs_count === 0) blocking_reasons.push("Run deterministic underwriting before generating a memo.");
     if (financial_outputs_count === 0) blocking_reasons.push("No financial outputs — run deterministic underwriting first.");
 
-    const has_anthropic_key = Boolean(process.env.ANTHROPIC_API_KEY);
+    const { hasAnthropicKey } = await import("./ai-gateway.server");
+    const has_anthropic_key = hasAnthropicKey();
 
     return {
       project_id: data.project_id,
