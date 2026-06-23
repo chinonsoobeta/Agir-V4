@@ -6,17 +6,18 @@ export const DEFAULT_AI_MODEL = "claude-sonnet-4-6";
 // The key is sent as the `x-api-key` HTTP header, which must be a ByteString
 // (every char code <= 255). A pasted placeholder, prose, or a key containing
 // smart quotes / em-dashes (e.g. code 8212) would otherwise crash fetch with
-// "Cannot convert argument to a ByteString". Real Anthropic keys are ASCII and
-// start with "sk-ant-", so we validate shape here and treat anything else as
+// "Cannot convert argument to a ByteString". Anthropic keys are ASCII and
+// start with "sk-", so we validate shape here and treat anything else as
 // "no key" → clean deterministic fallback instead of a runtime error.
 export function getValidatedAnthropicKey(): string | null {
-  const raw = process.env.ANTHROPIC_API_KEY;
+  // Try API_KEY first (user-provided), then fall back to ANTHROPIC_API_KEY (integration).
+  const raw = process.env.API_KEY || process.env.ANTHROPIC_API_KEY;
   if (!raw) return null;
   const key = raw.trim();
   if (!key) return null;
   // Must be header-safe (no code point > 255) and look like an Anthropic key.
   if (!/^[\x21-\x7E]+$/.test(key)) return null; // printable ASCII, no spaces
-  if (!key.startsWith("sk-ant-")) return null;
+  if (!key.startsWith("sk-")) return null; // sk-ant-..., sk-abcdef1..., etc.
   return key;
 }
 
@@ -29,7 +30,7 @@ export function hasAnthropicKey(): boolean {
 
 export function getAgirModel(modelName = process.env.AGIR_AI_MODEL || DEFAULT_AI_MODEL) {
   const apiKey = getValidatedAnthropicKey();
-  if (!apiKey) throw new Error("Missing or malformed ANTHROPIC_API_KEY (expected an ASCII key starting with 'sk-ant-')");
+  if (!apiKey) throw new Error("Missing or malformed API_KEY/ANTHROPIC_API_KEY (expected an ASCII key starting with 'sk-')");
   return createAnthropic({ apiKey })(modelName);
 }
 
