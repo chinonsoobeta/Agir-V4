@@ -7,6 +7,7 @@ import {
   resolveBenchmark,
   interpretMetric,
 } from "@/lib/context";
+import { reconcileRecommendation } from "@/lib/decision";
 
 // A partial-IO mixed-use deal (echoes the Confluence Yards sample).
 function mixedUseInput(): UnderwritingInput {
@@ -91,5 +92,24 @@ describe("insight layer — synthesis", () => {
     );
     const report = verifyNumericProvenance(text, allowed);
     expect(report.orphans, `orphans: ${JSON.stringify(report.orphans)}`).toEqual([]);
+  });
+});
+
+describe("unified recommendation reconciler", () => {
+  test("a hard fail is terminal (REJECT) regardless of the lenses", () => {
+    expect(reconcileRecommendation({ verdictCode: "APPROVE", findingsRec: "APPROVE", hardFail: true }).code).toBe("REJECT");
+  });
+  test("takes the more conservative of the gate verdict and the findings lens", () => {
+    // Gate set flags conditions, findings clear -> conditions (the Confluence case).
+    expect(reconcileRecommendation({ verdictCode: "APPROVE_WITH_CONDITIONS", findingsRec: "APPROVE" }).code).toBe("APPROVE_WITH_CONDITIONS");
+    // Findings send it back, gates clear -> return to underwriting.
+    expect(reconcileRecommendation({ verdictCode: "APPROVE", findingsRec: "RETURN_TO_UNDERWRITING" }).code).toBe("RETURN_TO_UNDERWRITING");
+  });
+  test("a non-hard-fail gate REJECT is a returnable no", () => {
+    expect(reconcileRecommendation({ verdictCode: "REJECT", findingsRec: "APPROVE", hardFail: false }).code).toBe("RETURN_TO_UNDERWRITING");
+  });
+  test("context can escalate a clean approve to conditions, never loosen", () => {
+    expect(reconcileRecommendation({ verdictCode: "APPROVE", findingsRec: "APPROVE", weakContext: true }).code).toBe("APPROVE_WITH_CONDITIONS");
+    expect(reconcileRecommendation({ verdictCode: "APPROVE", findingsRec: "APPROVE", weakContext: false }).code).toBe("APPROVE");
   });
 });

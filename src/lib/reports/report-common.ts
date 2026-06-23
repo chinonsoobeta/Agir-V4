@@ -44,6 +44,7 @@ export function computeReportStatus(
 
 export const VERDICT_BANNER: Record<string, string> = {
   REJECT: "DOES NOT MEET INVESTMENT HURDLES — RETURN TO UNDERWRITING",
+  RETURN_TO_UNDERWRITING: "DOES NOT MEET INVESTMENT HURDLES — RETURN TO UNDERWRITING",
   APPROVE_WITH_CONDITIONS: "MEETS INVESTMENT HURDLES WITH CONDITIONS",
   APPROVE: "MEETS INVESTMENT HURDLES — RECOMMEND PROCEED",
 };
@@ -183,7 +184,7 @@ export function requiredActions(data: ReportData, core: DerivedCore): string[] {
 // the `derived` numbers the prose uses (so the provenance verifier admits them).
 // Null-safe: deals underwritten before the Insight Layer simply return null and
 // the report falls back to its templated prose.
-export type ReportInsight = { thesis: string; narrative: string; bullets: string[]; levers: any[]; interpretations: any[]; derived: number[] };
+export type ReportInsight = { thesis: string; narrative: string; bullets: string[]; levers: any[]; interpretations: any[]; derived: number[]; recommendation: string | null };
 export function insightFor(data: ReportData, audience: "ic" | "lender" | "investor" | "internal"): ReportInsight | null {
   const row = data.outputs.find((o) => o.metric_key === "insight" && o.scenario_key === "base");
   if (!row) return null;
@@ -195,6 +196,7 @@ export function insightFor(data: ReportData, audience: "ic" | "lender" | "invest
     levers: Array.isArray(i.levers) ? i.levers : [],
     interpretations: Array.isArray(i.interpretations) ? i.interpretations : [],
     derived: Array.isArray(i.derivedValues) ? i.derivedValues.map(Number).filter((n: number) => Number.isFinite(n)) : [],
+    recommendation: i.recommendation ? String(i.recommendation) : null,
   };
 }
 

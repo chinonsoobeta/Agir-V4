@@ -175,6 +175,7 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
   // ---- Verdict banner ----
   const VERDICT_BANNER: Record<string, string> = {
     REJECT: "DOES NOT MEET INVESTMENT HURDLES — RETURN TO UNDERWRITING",
+    RETURN_TO_UNDERWRITING: "DOES NOT MEET INVESTMENT HURDLES — RETURN TO UNDERWRITING",
     APPROVE_WITH_CONDITIONS: "MEETS INVESTMENT HURDLES WITH CONDITIONS",
     APPROVE: "MEETS INVESTMENT HURDLES — RECOMMEND PROCEED",
   };
@@ -199,6 +200,9 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
     const icNarrative = memoInsightInputs.narratives?.ic;
     if (icNarrative) narrativeBits.push(String(icNarrative));
   }
+  // ONE recommendation: the reconciled value (gate verdict + findings + context)
+  // headlines the memo; the raw gate verdict remains the verdict_narrative detail.
+  const unifiedRec = (memoInsightInputs?.recommendation as string | undefined) ?? verdict.code;
   if (exitCap != null && noi != null && exitValue != null && tdc) {
     narrativeBits.push(`At the ${pct(exitCap)} exit cap, stabilized NOI of ${money(noi)} implies an exit value of ${money(exitValue)} against TDC of ${money(tdc)}.`);
   }
@@ -626,8 +630,8 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
     subtitle: `${project.type ? String(project.type).replace(/_/g, "-") : "Development"}${project.location ? ` · ${project.location}` : ""}`,
     mode_label: ctx.generationMode === "ai" ? "AI-assisted" : "Deterministic template",
     prepared: `Prepared ${ctx.generatedLabel} · CONFIDENTIAL DRAFT`,
-    verdict_code: verdict.code,
-    verdict_banner: VERDICT_BANNER[verdict.code] ?? verdict.code,
+    verdict_code: unifiedRec,
+    verdict_banner: VERDICT_BANNER[unifiedRec] ?? unifiedRec,
     verdict_narrative: sanitizeSymbols(narrativeBits.join(" ")),
     summary_stats,
     metric_cards,

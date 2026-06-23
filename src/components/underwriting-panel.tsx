@@ -218,6 +218,10 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   const verdictRow = (byScenario.base ?? []).find((m) => m.metric_key === "verdict");
   const riskScoreRow = (byScenario.base ?? []).find((m) => m.metric_key === "risk_score");
   const insightRow = (byScenario.base ?? []).find((m) => m.metric_key === "insight");
+  // ONE reconciled recommendation (gate verdict + findings + context); falls back
+  // to the raw gate verdict for deals underwritten before reconciliation existed.
+  const recommendation = insightRow?.inputs?.recommendation ?? verdictRow?.inputs?.code ?? "—";
+  const recRationale = (insightRow?.inputs?.recommendationRationale as string | undefined) ?? verdictRow?.formula_text;
   const irrRow = metric("irr_estimate");
   const equityWipeout = Boolean(metric("equity_multiple")?.formula_text?.includes("Equity wipeout"));
   const defaultedKeys: string[] = readiness.defaultedKeys ?? [];
@@ -265,7 +269,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
 
       {/* Headline metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <UnderwritingMetric label="Verdict" text={verdictRow?.inputs?.code ?? "—"} sub={verdictRow?.formula_text} highlight={verdictRow?.inputs?.code === "REJECT" ? "text-destructive" : "text-primary"} />
+        <UnderwritingMetric label="Recommendation" text={recommendation} sub={recRationale} highlight={recommendation === "REJECT" || recommendation === "RETURN_TO_UNDERWRITING" ? "text-destructive" : "text-primary"} />
         <UnderwritingMetric label="Exit Value" row={metric("exit_value")} />
         <UnderwritingMetric label="IRR" row={irrRow} text={equityWipeout ? "not meaningful" : undefined} sub={equityWipeout ? "Equity loss — IRR not meaningful" : undefined} highlight={equityWipeout ? "text-destructive" : undefined} />
         <UnderwritingMetric label="DSCR (amortizing)" row={metric("dscr")} />

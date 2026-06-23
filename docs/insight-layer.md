@@ -42,6 +42,31 @@ other deals at run time.
   and the insight's `derivedValues` are threaded into `reportAllowedValues` so the
   numeric-provenance verifier still passes (verified: 0 orphans).
 
+## One reconciled recommendation
+
+Two lenses independently produce a recommendation: the **gate verdict**
+(`computeInvestmentVerdict` — return/stress hurdles + hard-fail) and the
+**findings engine** (severity of prioritized findings). They can legitimately
+disagree (e.g. a deal that clears every finding but trips a stress gate, as the
+Confluence Yards sample does). `reconcileRecommendation()` (in `decision.ts`)
+folds them — plus the contextual read — into ONE recommendation:
+
+- A hard fail (equity wipeout / unresolved error flag) is terminal → **REJECT**.
+- Otherwise take the **more conservative** of the two lenses; a non-hard-fail
+  gate REJECT is treated as a returnable **RETURN_TO_UNDERWRITING**.
+- A below-norm **contextual** read can escalate an otherwise-clean approve to
+  *with conditions* (context tightens, never loosens).
+- The result carries a plain-language rationale naming the binding lens.
+
+The run computes it once (calling the findings engine exactly as the decision
+tab does — same assumptions/scenarios, no engine `input` — so the persisted
+value matches what the tab would compute) and persists it on the `insight` row.
+Every surface then reads that single value: the deal header and Decision tab
+(via `buildDecision`, which prefers the persisted value), the Analysis
+*Recommendation* card, the memo banner, and the thesis. The raw gate verdict
+remains visible as supporting detail (gate count / rationale), never as a
+competing headline.
+
 ## Guarantees preserved
 
 - **No LLM touches a number or a decision.** The calculator and the hard verdict

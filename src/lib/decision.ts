@@ -60,6 +60,53 @@ export const RECOMMENDATION_TONE: Record<DecisionRecommendation, "approve" | "co
   REJECT: "reject",
 };
 
+// ---------- The unified, context-aware recommendation ----------
+// Two lenses produce a recommendation: the gate verdict (computeInvestmentVerdict
+// — return/stress hurdles + hard-fail) and the findings engine (severity of
+// prioritized findings). They can legitimately disagree (e.g. a deal that clears
+// every finding but trips a stress gate). This reconciler folds them — plus the
+// contextual interpretation — into ONE recommendation every surface shows.
+// Policy: conservative. A hard fail is terminal (REJECT). Otherwise take the more
+// cautious of the two lenses, and let a below-norm CONTEXTUAL read escalate an
+// otherwise-clean approve to "with conditions" (context tightens, never loosens).
+const REC_RANK: Record<string, number> = {
+  APPROVE: 0,
+  APPROVE_WITH_CONDITIONS: 1,
+  RETURN_TO_UNDERWRITING: 2,
+  REJECT: 2, // a non-hard-fail REJECT is a returnable "no"
+};
+
+export function reconcileRecommendation(args: {
+  verdictCode?: string | null;
+  hardFail?: boolean;
+  findingsRec?: string | null;
+  weakContext?: boolean;
+}): { code: DecisionRecommendation; rationale: string } {
+  if (args.hardFail) {
+    return { code: "REJECT", rationale: "Hard fail (equity wipeout or an unresolved error-severity reconciliation flag) overrides the gate and findings lenses." };
+  }
+  const vr = REC_RANK[args.verdictCode ?? "APPROVE"] ?? 0;
+  const fr = REC_RANK[args.findingsRec ?? "APPROVE"] ?? 0;
+  let rank = Math.max(vr, fr);
+  let ctxEscalated = false;
+  if (rank === 0 && args.weakContext) {
+    rank = 1;
+    ctxEscalated = true;
+  }
+  const code: DecisionRecommendation = rank === 0 ? "APPROVE" : rank === 1 ? "APPROVE_WITH_CONDITIONS" : "RETURN_TO_UNDERWRITING";
+  const lens = ctxEscalated
+    ? "context-aware interpretation flags a below-norm metric the fixed gates cleared"
+    : vr > fr
+      ? "the gate set (return/stress hurdles) is the binding lens"
+      : fr > vr
+        ? "the prioritized findings are the binding lens"
+        : "the gate and findings lenses agree";
+  return {
+    code,
+    rationale: `Reconciled from the gate verdict (${args.verdictCode ?? "n/a"}) and the findings recommendation (${args.findingsRec ?? "n/a"}) — ${lens}.`,
+  };
+}
+
 const PRESENT_STATUSES = new Set(["extracted", "approved", "modified", "default_accepted", "calculated"]);
 const APPROVED_STATUSES = new Set(["approved", "modified", "default_accepted", "calculated"]);
 
@@ -283,6 +330,25 @@ export function buildDecision(outputs: OutputRow[], assumptions: AssumptionRow[]
         context: (insightRow as any).inputs?.context ?? null,
       }
     : null;
+
+  // ONE recommendation: prefer the reconciled value the run already persisted
+  // (single source of truth); otherwise fold the gate verdict + findings +
+  // contextual read together here. Keeps the deal header, Decision tab, Analysis
+  // thesis and memo from ever disagreeing.
+  if (norm.hasUnderwriting && Object.keys(norm.base).length > 0) {
+    const persisted = (insightRow as any)?.inputs?.recommendation as DecisionRecommendation | undefined;
+    if (persisted) {
+      recommendation = persisted;
+    } else {
+      const verdictRow = outputs.find((o: any) => o.metric_key === "verdict" && o.scenario_key === "base");
+      recommendation = reconcileRecommendation({
+        verdictCode: (verdictRow as any)?.inputs?.code ?? null,
+        hardFail: Boolean((verdictRow as any)?.inputs?.hardFail),
+        findingsRec: findings?.recommendation ?? null,
+        weakContext: (insight?.interpretations ?? []).some((i: any) => i.band === "weak" || i.band === "critical"),
+      }).code;
+    }
+  }
 
   return {
     hasUnderwriting: norm.hasUnderwriting && Object.keys(norm.base).length > 0,

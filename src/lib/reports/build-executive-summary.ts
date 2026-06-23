@@ -14,6 +14,7 @@ export function buildExecutiveSummary(data: ReportData, opts: { generatedLabel: 
   const core = deriveCore(data);
   const verdict = reportVerdict(data);
   const ins = insightFor(data, "ic");
+  const unifiedRec = ins?.recommendation ?? verdict.code;
   const derived: number[] = [];
   if (ins) derived.push(...ins.derived);
 
@@ -102,8 +103,8 @@ export function buildExecutiveSummary(data: ReportData, opts: { generatedLabel: 
     subtitle: `${data.project?.type ? String(data.project.type).replace(/_/g, " ") : "Development"}${data.project?.location ? ` · ${data.project.location}` : ""}`,
     mode_label: "Deterministic template",
     prepared: `Prepared ${opts.generatedLabel} · CONFIDENTIAL DRAFT`,
-    verdict_code: verdict.code,
-    verdict_banner: VERDICT_BANNER[verdict.code] ?? verdict.code,
+    verdict_code: unifiedRec,
+    verdict_banner: VERDICT_BANNER[unifiedRec] ?? unifiedRec,
     verdict_narrative: ins?.thesis || summaryBits.join(" "),
     summary_stats: [],
     metric_cards,

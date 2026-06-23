@@ -28,7 +28,9 @@ import {
   type UnderwritingInput,
 } from "./engine";
 import { computeInvestmentVerdict } from "./verdict";
-import { buildInsight, writeNarrative, computePortfolioNorms } from "./context";
+import { buildInsight, writeNarrative, computePortfolioNorms, deriveDealContext, interpretDeal } from "./context";
+import { generateFindings } from "./findings";
+import { reconcileRecommendation } from "./decision";
 
 // Taxonomy (review queue) → engine key mapping. Conflicting review-queue rows
 // are surfaced to readiness through this mapping so a conflicted key blocks
@@ -481,11 +483,35 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
     const portfolioNorms = computePortfolioNorms((portfolioRows ?? []) as any);
     const { data: projectRow } = await context.supabase
       .from("projects").select("name, type, location").eq("id", data.project_id).maybeSingle();
+
+    // ONE recommendation: reconcile the gate verdict with the findings engine and
+    // the contextual read so every surface (Analysis, Decision, memo) agrees.
+    // Call generateFindings EXACTLY as buildDecision (the decision/findings tab)
+    // does — real assumptions, scenarios, and NO engine `input` — so the
+    // persisted recommendation matches what the Decision tab would compute.
+    const { data: findingsAssumptions } = await context.supabase
+      .from("assumptions").select("field_key,value_numeric,status,confidence_score").eq("project_id", data.project_id);
+    let findingsRec: string | null = null;
+    try {
+      const scenarios = scenarioOutputs.filter((s) => s.key !== "base").map((s) => ({ key: s.key, label: s.key, output: s.output }));
+      findingsRec = generateFindings(base, (findingsAssumptions ?? []) as any, scenarios as any).recommendation;
+    } catch {
+      findingsRec = null;
+    }
+    const dealContext = deriveDealContext(input, { type: projectRow?.type ?? null, location: projectRow?.location ?? null });
+    const interpretationsForRec = interpretDeal(base, dealContext, { portfolioNorms, portfolioMinSample: 6 });
+    const reconciled = reconcileRecommendation({
+      verdictCode: verdict.code,
+      hardFail: verdict.hardFail,
+      findingsRec,
+      weakContext: interpretationsForRec.some((i) => i.band === "weak" || i.band === "critical"),
+    });
+
     const insight = buildInsight(base, input, {
       meta: { name: projectRow?.name ?? null, type: projectRow?.type ?? null, location: projectRow?.location ?? null },
       benchInputs: { portfolioNorms, portfolioMinSample: 6 },
       covenants: { minDscr: scalarValue(rows, "min_dscr"), minDebtYield: scalarValue(rows, "min_debt_yield") },
-      verdictCode: verdict.code,
+      verdictCode: reconciled.code,
     });
 
     // Persist everything in one sweep.
@@ -527,6 +553,9 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
       metric_key: "insight", metric_label: "Deterministic Read", value_numeric: null, unit: "count",
       formula_text: insight.thesis,
       inputs: {
+        recommendation: reconciled.code,
+        recommendationRationale: reconciled.rationale,
+        gateVerdict: verdict.code,
         context: insight.context,
         interpretations: insight.interpretations,
         levers: insight.attribution.levers,
