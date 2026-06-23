@@ -18,6 +18,13 @@ export type ReconciliationContext = {
   loan: number;
   noi: number;
   amortizingAnnualDebtService: number;
+  // Debt service actually in force during the hold. When the loan is
+  // interest-only for the entire hold, covenant feasibility is tested against
+  // the interest-only payment (what is actually due), not the amortizing
+  // constant — otherwise a fully-IO deal that comfortably covers its real debt
+  // service is false-failed.
+  interestOnlyAnnualDebtService?: number | null;
+  ioCoversHold?: boolean | null;
   statedLtcPct?: number | null;
   minDscr?: number | null;
   lenderStabilizedOccupancyPct?: number | null;
@@ -63,15 +70,22 @@ export function runReconciliationChecks(ctx: ReconciliationContext): Reconciliat
     }
   }
 
-  // 3. Covenant feasibility: required NOI = min DSCR x amortizing debt service.
-  if (ctx.minDscr != null && ctx.minDscr > 0 && ctx.amortizingAnnualDebtService > 0) {
-    const requiredNoi = ctx.minDscr * ctx.amortizingAnnualDebtService;
+  // 3. Covenant feasibility: required NOI = min DSCR x the debt service in force
+  // during the hold. A loan that is interest-only for the entire hold is tested
+  // against the interest-only payment (the payment actually due); only when the
+  // loan amortizes within the hold is it tested against the amortizing constant.
+  const ioCoversHold =
+    ctx.ioCoversHold === true && ctx.interestOnlyAnnualDebtService != null && ctx.interestOnlyAnnualDebtService > 0;
+  const covenantDebtService = ioCoversHold ? ctx.interestOnlyAnnualDebtService! : ctx.amortizingAnnualDebtService;
+  const covenantBasis = ioCoversHold ? "interest-only payment" : "amortizing ADS";
+  if (ctx.minDscr != null && ctx.minDscr > 0 && covenantDebtService > 0) {
+    const requiredNoi = ctx.minDscr * covenantDebtService;
     if (ctx.noi < requiredNoi) {
       const shortfallRatio = ctx.noi > 0 ? requiredNoi / ctx.noi : Number.POSITIVE_INFINITY;
       flags.push({
         check_key: "covenant_feasibility",
         severity: "error",
-        message: `Debt unsupportable: covenant requires NOI ${fmt(requiredNoi)} (${ctx.minDscr.toFixed(2)}x × ADS ${fmt(ctx.amortizingAnnualDebtService)}) vs engine NOI ${fmt(ctx.noi)} — fails covenant by ${Number.isFinite(shortfallRatio) ? shortfallRatio.toFixed(1) : "∞"}×.`,
+        message: `Debt unsupportable: covenant requires NOI ${fmt(requiredNoi)} (${ctx.minDscr.toFixed(2)}x × ${covenantBasis} ${fmt(covenantDebtService)}) vs engine NOI ${fmt(ctx.noi)} — fails covenant by ${Number.isFinite(shortfallRatio) ? shortfallRatio.toFixed(1) : "∞"}×.`,
         expected: requiredNoi,
         actual: ctx.noi,
       });
@@ -146,6 +160,10 @@ export function computeRiskScore(output: EngineOutput, flags: ReconciliationFlag
   if (v.developmentSpreadBps < 50) score += 15;
   else if (v.developmentSpreadBps < 100) score += 10;
   if (v.profitOnCostPct < 15) score += 10;
+  if (v.debtYieldPct > 0 && v.debtYieldPct < 8) score += 10;
+  else if (v.debtYieldPct > 0 && v.debtYieldPct < 9) score += 5;
+  if (v.breakEvenOccupancyPct >= 90) score += 10;
+  else if (v.breakEvenOccupancyPct >= 85) score += 5;
   for (const flag of flags) {
     if (flag.severity === "error") score += 15;
     else if (flag.severity === "warning") score += 5;
@@ -211,6 +229,22 @@ export function deriveRiskRegister(output: EngineOutput, flags: ReconciliationFl
       risk_type: "returns",
       title: "Low Equity Multiple",
       description: `Equity multiple is ${fmtX(v.equityMultiple)}x (target >= 1.50x).`,
+    });
+  }
+  if (v.debtYieldPct > 0 && v.debtYieldPct < 9) {
+    risks.push({
+      severity: v.debtYieldPct < 8 ? "red" : "yellow",
+      risk_type: "credit",
+      title: "Thin Debt Yield",
+      description: `Debt yield is ${v.debtYieldPct.toFixed(2)}% (NOI / loan), thin relative to the sizing floor a lender typically requires for this profile.`,
+    });
+  }
+  if (v.breakEvenOccupancyPct >= 85) {
+    risks.push({
+      severity: v.breakEvenOccupancyPct >= 90 ? "red" : "yellow",
+      risk_type: "operations",
+      title: "High Break-even Occupancy",
+      description: `Break-even occupancy is ${v.breakEvenOccupancyPct.toFixed(1)}% — limited cushion before stabilized levered cash flow turns negative.`,
     });
   }
   for (const flag of flags) {

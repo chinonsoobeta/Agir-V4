@@ -6,6 +6,8 @@ const SCENARIO_DRIVER_NAMES: Record<string, string> = {
   cost_overrun: "Construction Cost",
   rate_shock: "Interest Rate",
   revenue_down: "NOI",
+  occupancy_down: "Occupancy",
+  expense_inflation: "Operating Expenses",
   combined: "Combined Stress",
 };
 

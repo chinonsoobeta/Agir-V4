@@ -110,5 +110,7 @@ export type EngineOutput = {
     cumulativeCashShortfall: number;
     equityMultiple: number;
     irrPct: number;
+    debtYieldPct: number;
+    breakEvenOccupancyPct: number;
   };
 };

@@ -10,6 +10,12 @@ export type StressPreset = {
   costDeltaPct?: number;
   capRateDeltaBps?: number;
   rateDeltaBps?: number;
+  // Occupancy slippage (percentage POINTS, applied to every component) and
+  // operating-expense-ratio inflation (percentage POINTS) — the two shocks that
+  // most often sink a lease-up-heavy development and that a rent-only revenue
+  // haircut cannot express.
+  occupancyDeltaPts?: number;
+  expenseRatioDeltaPts?: number;
 };
 
 export const STRESS_PRESETS: StressPreset[] = [
@@ -17,6 +23,8 @@ export const STRESS_PRESETS: StressPreset[] = [
   { key: "cost_overrun", label: "Cost Overrun (+10%)", costDeltaPct: 10 },
   { key: "rate_shock", label: "Rate Shock (+150 bps)", rateDeltaBps: 150 },
   { key: "revenue_down", label: "Revenue Downside (-10%)", revenueDeltaPct: -10 },
+  { key: "occupancy_down", label: "Occupancy Downside (-500 bps)", occupancyDeltaPts: -5 },
+  { key: "expense_inflation", label: "Expense Inflation (+500 bps ratio)", expenseRatioDeltaPts: 5 },
   {
     key: "combined",
     label: "Combined Stress",
@@ -30,6 +38,8 @@ export const STRESS_PRESETS: StressPreset[] = [
 export function applyStress(input: UnderwritingInput, preset: StressPreset): UnderwritingInput {
   const revenueMultiplier = 1 + (preset.revenueDeltaPct ?? 0) / 100;
   const costMultiplier = 1 + (preset.costDeltaPct ?? 0) / 100;
+  const occupancyDeltaPts = preset.occupancyDeltaPts ?? 0;
+  const expenseRatioDeltaPts = preset.expenseRatioDeltaPts ?? 0;
   return {
     ...input,
     budget: {
@@ -45,8 +55,12 @@ export function applyStress(input: UnderwritingInput, preset: StressPreset): Und
     revenueProgram: input.revenueProgram.map((row) => ({
       ...row,
       rent: row.rent * revenueMultiplier,
+      occupancyPct:
+        row.occupancyPct == null ? row.occupancyPct : Math.max(0, row.occupancyPct + occupancyDeltaPts),
     })),
     otherIncomeAnnual: input.otherIncomeAnnual * revenueMultiplier,
+    stabilizedOccupancyPct: Math.max(0, input.stabilizedOccupancyPct + occupancyDeltaPts),
+    expenseRatioPct: Math.max(0, input.expenseRatioPct + expenseRatioDeltaPts),
     exitCapRatePct: input.exitCapRatePct + (preset.capRateDeltaBps ?? 0) / 100,
     interestRatePct: input.interestRatePct + (preset.rateDeltaBps ?? 0) / 100,
   };

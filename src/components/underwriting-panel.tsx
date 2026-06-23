@@ -35,8 +35,9 @@ const SCENARIO_LABELS: Record<string, string> = {
   base: "Base Case", revenue_down: "Revenue Downside (−10%)",
   cost_overrun: "Cost Overrun (+10%)", rate_shock: "Rate Shock (+150 bps)",
   cap_expansion: "Cap Expansion (+75 bps)", combined: "Combined Stress",
+  occupancy_down: "Occupancy Downside (−500 bps)", expense_inflation: "Expense Inflation (+500 bps)",
 };
-const SCENARIO_ORDER = ["cap_expansion", "cost_overrun", "rate_shock", "revenue_down", "combined"];
+const SCENARIO_ORDER = ["cap_expansion", "cost_overrun", "rate_shock", "revenue_down", "occupancy_down", "expense_inflation", "combined"];
 const SEV_STYLES: Record<string, string> = {
   info: "bg-muted text-muted-foreground border-border",
   warning: "bg-chart-5/20 text-chart-5 border-chart-5/30",
@@ -262,12 +263,14 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
       )}
 
       {/* Headline metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <UnderwritingMetric label="Verdict" text={verdictRow?.inputs?.code ?? "—"} sub={verdictRow?.formula_text} highlight={verdictRow?.inputs?.code === "REJECT" ? "text-destructive" : "text-primary"} />
         <UnderwritingMetric label="Exit Value" row={metric("exit_value")} />
         <UnderwritingMetric label="IRR" row={irrRow} text={equityWipeout ? "not meaningful" : undefined} sub={equityWipeout ? "Equity loss — IRR not meaningful" : undefined} highlight={equityWipeout ? "text-destructive" : undefined} />
         <UnderwritingMetric label="DSCR (amortizing)" row={metric("dscr")} />
         <UnderwritingMetric label="Equity Multiple" row={metric("equity_multiple")} highlight={equityWipeout ? "text-destructive" : undefined} />
+        <UnderwritingMetric label="Debt Yield" row={metric("debt_yield")} />
+        <UnderwritingMetric label="Break-even Occ." row={metric("break_even_occupancy")} />
         <UnderwritingMetric label="Risk Score" text={riskScoreRow ? String(Math.round(Number(riskScoreRow.value_numeric))) : "—"} sub={riskScoreRow?.formula_text} />
       </div>
 

@@ -104,6 +104,11 @@ function buildReconciliationContext(rows: ProjectInputRows, input: UnderwritingI
   const perUnitCounts = rows.revenue
     .filter((r) => r.rent_basis === "per_unit" && Number(r.unit_count) > 0)
     .map((r) => Number(r.unit_count));
+  // The building's unit total is the SUM of the per-unit-type counts (1BR + 2BR
+  // + ...). Treating each unit-type count as a competing building total
+  // false-fails every multi-unit-type deal; cross-check the summed total
+  // against any document-stated total instead.
+  const buildingUnitTotal = perUnitCounts.reduce((sum, n) => sum + n, 0);
   const statedUnits = scalarValue(rows, "stated_unit_count");
   const budgetSum = rows.budget
     .filter((b) => b.status === "approved" || b.status === "default_accepted")
@@ -120,6 +125,8 @@ function buildReconciliationContext(rows: ProjectInputRows, input: UnderwritingI
     loan: input.loanAmount,
     noi: output.values.noi,
     amortizingAnnualDebtService: output.values.annualDebtService,
+    interestOnlyAnnualDebtService: input.loanAmount * (input.interestRatePct / 100),
+    ioCoversHold: (input.ioMonths ?? 0) >= input.holdYears * 12,
     statedLtcPct: scalarValue(rows, "stated_ltc_pct"),
     minDscr: scalarValue(rows, "min_dscr"),
     lenderStabilizedOccupancyPct: scalarValue(rows, "lender_stabilized_occupancy_pct"),
@@ -130,7 +137,10 @@ function buildReconciliationContext(rows: ProjectInputRows, input: UnderwritingI
     statedTotalProjectCost: scalarValue(rows, "stated_total_project_cost"),
     statedTotalSource,
     budgetSum,
-    unitCounts: [...perUnitCounts, ...(statedUnits != null ? [statedUnits] : [])],
+    unitCounts: [
+      ...(buildingUnitTotal > 0 ? [buildingUnitTotal] : []),
+      ...(statedUnits != null ? [statedUnits] : []),
+    ],
   };
 }
 

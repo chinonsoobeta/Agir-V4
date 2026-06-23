@@ -67,6 +67,19 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   const stabilizedLeveredCf = noi - annualDs;
   const cashOnCashPct = pct(stabilizedLeveredCf, equity);
 
+  // Debt yield = NOI / loan: the lender's primary sizing metric, independent of
+  // rate and amortization (which DSCR and the loan constant conflate).
+  const debtYieldPct = input.loanAmount > 0 ? pct(noi, input.loanAmount) : 0;
+
+  // Break-even occupancy: the blended physical occupancy at which NOI just
+  // covers annual debt service (levered CF = 0), holding the expense ratio and
+  // other income fixed. Uses the same opex-on-EGI convention as the engine, so
+  // it is exactly the occupancy where the headline pro forma stops carrying.
+  const breakEvenOccupancyPct =
+    gpr > 0 && input.expenseRatioPct < 100
+      ? ((annualDs / (1 - input.expenseRatioPct / 100) - input.otherIncomeAnnual) / gpr) * 100
+      : 0;
+
   const exitYear = Math.max(1, Math.round(input.holdYears));
   const holdLevered = Array.from({ length: exitYear }, (_, i) => {
     const revenueGrowth = Math.pow(1 + input.rentGrowthPct / 100, i);
@@ -77,12 +90,16 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   });
   const interimLevered = holdLevered.slice(0, Math.max(0, exitYear - 1));
   const interimSum = interimLevered.reduce((a, b) => a + b, 0);
+  // The operating cash flow in the sale year itself is distributed to equity in
+  // ADDITION to net sale proceeds; it must not be dropped from the return.
+  const exitYearOperatingCf = holdLevered[exitYear - 1] ?? 0;
   const cumulativeCashShortfall = holdLevered.reduce((sum, cf) => sum + (cf < 0 ? -cf : 0), 0);
 
-  // Equity is non-recourse at exit: the final equity flow floors at zero. On a
-  // wipeout the equity multiple is ~0.0x and IRR is not meaningful -- never a
-  // positive IRR, never 0% as a placeholder.
-  const finalEquityFlow = equityWipeout ? 0 : saleProceedsToEquity;
+  // Equity is non-recourse at exit: the sale recovery floors at zero on a
+  // wipeout (equity multiple ~0.0x, IRR not meaningful -- never a positive IRR,
+  // never 0% as a placeholder). The sale-year operating cash flow is added to
+  // the final flow whenever the sale itself does not wipe equity out.
+  const finalEquityFlow = equityWipeout ? 0 : saleProceedsToEquity + exitYearOperatingCf;
   const equityMultiple = equity > 0
     ? Math.max(0, (finalEquityFlow + interimSum) / equity)
     : 0;
@@ -100,6 +117,11 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
     { periodYear: 1, lineKey: "noi", amount: noi },
     { periodYear: 1, lineKey: "debt_service", amount: -annualDs },
     { periodYear: 1, lineKey: "levered_cf", amount: stabilizedLeveredCf },
+    // Sale-year operating cash flow (distinct from year 1) so the ledger shows
+    // the full distribution that equity receives in the exit year.
+    ...(exitYear > 1
+      ? [{ periodYear: exitYear, lineKey: "levered_cf" as const, amount: exitYearOperatingCf }]
+      : []),
     { periodYear: exitYear, lineKey: "sale_proceeds", amount: netSaleBeforeDebt },
     { periodYear: exitYear, lineKey: "loan_payoff", amount: -loanPayoffAtExit },
   ];
@@ -134,6 +156,8 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
     { key: "interest_only_dscr", label: "DSCR (interest-only, secondary)", value: interestOnlyDscr, unit: "x", formula: `Interest-only DSCR (secondary) = NOI ${money(noi)} / interest ${money(ioDebtService)} = ${interestOnlyDscr.toFixed(2)}x` },
     { key: "irr_estimate", label: "Levered IRR", value: irrPct, unit: "%", formula: irrFormula },
     { key: "cash_on_cash", label: "Cash-on-Cash", value: cashOnCashPct, unit: "%", formula: `Cash-on-cash = stabilized levered CF ${money(stabilizedLeveredCf)} / committed equity ${money(equity)} = ${cashOnCashPct.toFixed(2)}%` },
+    { key: "debt_yield", label: "Debt Yield", value: debtYieldPct, unit: "%", formula: `Debt yield = NOI ${money(noi)} / loan ${money(input.loanAmount)} = ${debtYieldPct.toFixed(2)}%` },
+    { key: "break_even_occupancy", label: "Break-even Occupancy", value: breakEvenOccupancyPct, unit: "%", formula: `Break-even occupancy = (ADS ${money(annualDs)} / (1 - opex ${input.expenseRatioPct}%) - other income ${money(input.otherIncomeAnnual)}) / GPR ${money(gpr)} = ${breakEvenOccupancyPct.toFixed(1)}%` },
     { key: "cumulative_cash_shortfall", label: "Cumulative Cash Shortfall", value: cumulativeCashShortfall, unit: "$", formula: `Cumulative cash shortfall during hold = sum of negative annual levered cash flow over ${exitYear} years = ${money(cumulativeCashShortfall)}` },
     { key: "yield_on_cost", label: "Going-in Yield on Cost", value: yieldOnCostPct, unit: "%", formula: `Yield on cost = NOI ${money(noi)} / TDC ${money(tdc)} = ${yieldOnCostPct.toFixed(2)}%` },
     { key: "development_spread", label: "Development Spread", value: developmentSpreadBps, unit: "bps", formula: `Development spread = yield ${yieldOnCostPct.toFixed(2)}% - exit cap ${input.exitCapRatePct.toFixed(2)}% = ${developmentSpreadBps.toFixed(0)} bps` },
@@ -178,6 +202,8 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
       cumulativeCashShortfall,
       equityMultiple,
       irrPct,
+      debtYieldPct,
+      breakEvenOccupancyPct,
     },
   };
 }

@@ -5,6 +5,7 @@ import {
   irr,
   loanBalanceAfterYears,
   mapleHeightsInput,
+  runReconciliationChecks,
   runUnderwriting,
   STRESS_PRESETS,
 } from "@/lib/engine";
@@ -28,8 +29,20 @@ describe("development underwriting engine", () => {
     closeToDollars(output.values.equity, 14_875_000);
     closeToPct(output.values.ltcPct, 65.0);
     expect(output.values.interestOnlyDscr).toBeCloseTo(1.31, 2);
-    expect(output.values.equityMultiple).toBeCloseTo(1.07, 2);
+    // Equity multiple now includes the sale-year operating cash flow — a real
+    // distribution to equity — alongside net sale proceeds. On the 1-year Maple
+    // hold this restores the year-1 levered CF the prior model dropped (1.07 →
+    // 1.08).
+    expect(output.values.equityMultiple).toBeCloseTo(1.08, 2);
     expect(output.equityWipeout).toBe(false);
+    // Debt yield (NOI / loan) and break-even occupancy are now first-class
+    // engine outputs.
+    expect(output.values.debtYieldPct).toBeCloseTo((2_178_540 / 27_625_000) * 100, 4);
+    const adsForBreakEven = annualDebtService(27_625_000, 6, 30);
+    expect(output.values.breakEvenOccupancyPct).toBeCloseTo(
+      (adsForBreakEven / (1 - 0.35) / 3_528_000) * 100,
+      4,
+    );
     // Headline DSCR is amortizing whenever an amortization term exists; the
     // IO DSCR is secondary and always lower coverage than IO at same rate.
     const ads = annualDebtService(27_625_000, 6, 30);
@@ -59,6 +72,8 @@ describe("development underwriting engine", () => {
       "cost_overrun",
       "rate_shock",
       "revenue_down",
+      "occupancy_down",
+      "expense_inflation",
       "combined",
     ]);
   });
@@ -80,5 +95,42 @@ describe("development underwriting engine", () => {
   test("IRR returns NaN when cash flows have no sign change", () => {
     expect(Number.isNaN(irr([100, 50, 25]))).toBe(true);
     expect(Number.isNaN(irr([-100, -50, -25]))).toBe(true);
+  });
+
+  test("debt yield and break-even occupancy are computed and exposed", () => {
+    const out = runUnderwriting(mapleHeightsInput());
+    expect(out.values.debtYieldPct).toBeGreaterThan(0);
+    expect(out.values.breakEvenOccupancyPct).toBeGreaterThan(0);
+    expect(out.metrics.some((m) => m.key === "debt_yield")).toBe(true);
+    expect(out.metrics.some((m) => m.key === "break_even_occupancy")).toBe(true);
+  });
+});
+
+describe("reconciliation gates", () => {
+  const ctxBase = {
+    tdc: 91_500_000,
+    equity: 29_000_000,
+    loan: 62_500_000,
+    noi: 5_195_203,
+    amortizingAnnualDebtService: 4_617_879,
+  };
+
+  test("unit-count consistency compares the building total, not each unit type", () => {
+    // 120 + 80 + 20 = 220 building total, matching the stated 220 — no flag.
+    const ok = runReconciliationChecks({ ...ctxBase, unitCounts: [220, 220] });
+    expect(ok.some((f) => f.check_key === "unit_count_consistency")).toBe(false);
+    // A genuine disagreement (rent roll 218 vs stated 220) still flags.
+    const bad = runReconciliationChecks({ ...ctxBase, unitCounts: [218, 220] });
+    expect(bad.some((f) => f.check_key === "unit_count_consistency" && f.severity === "error")).toBe(true);
+  });
+
+  test("covenant feasibility uses the interest-only payment when the loan is IO for the whole hold", () => {
+    const base = { ...ctxBase, minDscr: 1.2, interestOnlyAnnualDebtService: 3_906_250 };
+    // Amortizing basis: 1.2 × 4,617,879 = 5,541,455 > NOI → would false-fail.
+    const amortizing = runReconciliationChecks({ ...base, ioCoversHold: false });
+    expect(amortizing.some((f) => f.check_key === "covenant_feasibility")).toBe(true);
+    // IO-for-the-hold basis: 1.2 × 3,906,250 = 4,687,500 < NOI → passes.
+    const io = runReconciliationChecks({ ...base, ioCoversHold: true });
+    expect(io.some((f) => f.check_key === "covenant_feasibility")).toBe(false);
   });
 });
