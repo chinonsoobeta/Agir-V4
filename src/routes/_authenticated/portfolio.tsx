@@ -5,9 +5,16 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { fmtCompact } from "@/lib/finance";
-import { PIPELINE_STAGES, type PipelineStage, type RiskRating, RECOMMENDATION_TONE } from "@/lib/decision";
+import {
+  PIPELINE_STAGES,
+  type PipelineStage,
+  type RiskRating,
+  RECOMMENDATION_TONE,
+} from "@/lib/decision";
 import { Eyebrow, TONE_TEXT } from "@/components/decision-ui";
-import { ArrowRight, Plus } from "lucide-react";
+import { ArrowRight, Plus, Sparkles } from "lucide-react";
+import { buildPortfolioInsights } from "@/lib/platform-insights";
+import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 
 const portfolioQ = queryOptions({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
 
@@ -21,6 +28,7 @@ const RISK_ORDER: RiskRating[] = ["Low", "Moderate", "High", "Critical"];
 
 function PortfolioPage() {
   const { data: deals } = useSuspenseQuery(portfolioQ);
+  useRealtimeRefresh();
 
   const active = deals.filter((d) => d.stage !== "Approved" && d.stage !== "Rejected");
   const approved = deals.filter((d) => d.stage === "Approved");
@@ -28,8 +36,11 @@ function PortfolioPage() {
   const underReview = deals.filter((d) => !["Approved", "Rejected"].includes(d.stage));
 
   const cap = (xs: DealSummary[]) => xs.reduce((s, d) => s + d.capital, 0);
-  const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 0);
-  const avgRisk = avg(deals.filter((d) => d.investmentScore != null).map((d) => 100 - (d.investmentScore ?? 0)));
+  const avg = (xs: number[]) =>
+    xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 0;
+  const avgRisk = avg(
+    deals.filter((d) => d.investmentScore != null).map((d) => 100 - (d.investmentScore ?? 0)),
+  );
   const avgConf = avg(deals.map((d) => d.confidenceScore));
 
   // Investment queue: deals that need a human action, most urgent first.
@@ -37,17 +48,38 @@ function PortfolioPage() {
     .filter((d) => d.nextAction && d.stage !== "Approved" && d.stage !== "Rejected")
     .sort((a, b) => (a.investmentScore ?? 50) - (b.investmentScore ?? 50));
 
-  const riskCounts = RISK_ORDER.map((r) => ({ rating: r, count: deals.filter((d) => d.hasUnderwriting && d.riskRating === r).length }));
+  const riskCounts = RISK_ORDER.map((r) => ({
+    rating: r,
+    count: deals.filter((d) => d.hasUnderwriting && d.riskRating === r).length,
+  }));
   const ratedTotal = riskCounts.reduce((s, r) => s + r.count, 0) || 1;
+  const insights = buildPortfolioInsights(deals);
 
   if (!deals.length) {
     return (
       <>
-        <PageHeader eyebrow="Portfolio" title="Investment Portfolio" subtitle="Every deal, every decision — at a glance."
-          actions={<Link to="/deals"><Button size="sm"><Plus className="size-4 mr-1.5" />New deal</Button></Link>} />
+        <PageHeader
+          eyebrow="Portfolio"
+          title="Investment Portfolio"
+          subtitle="Every deal, every decision — at a glance."
+          actions={
+            <Link to="/deals">
+              <Button size="sm">
+                <Plus className="size-4 mr-1.5" />
+                New deal
+              </Button>
+            </Link>
+          }
+        />
         <div className="p-8">
           <Card className="p-16 text-center elevated">
-            <p className="text-sm text-muted-foreground">No deals yet. Open <Link to="/deals" className="text-primary underline">Deals</Link> and seed the Harbour Centre demo to see the platform in action.</p>
+            <p className="text-sm text-muted-foreground">
+              No deals yet. Open{" "}
+              <Link to="/deals" className="text-primary underline">
+                Deals
+              </Link>{" "}
+              and seed the Harbour Centre demo to see the platform in action.
+            </p>
           </Card>
         </div>
       </>
@@ -56,9 +88,19 @@ function PortfolioPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Portfolio" title="Investment Portfolio"
+      <PageHeader
+        eyebrow="Portfolio"
+        title="Investment Portfolio"
         subtitle={`${deals.length} deals under management · ${fmtCompact(cap(deals))} aggregate capital`}
-        actions={<Link to="/deals"><Button size="sm"><Plus className="size-4 mr-1.5" />New deal</Button></Link>} />
+        actions={
+          <Link to="/deals">
+            <Button size="sm">
+              <Plus className="size-4 mr-1.5" />
+              New deal
+            </Button>
+          </Link>
+        }
+      />
 
       <div className="p-8 space-y-8">
         {/* Overview band */}
@@ -69,8 +111,38 @@ function PortfolioPage() {
           <Kpi label="Rejected Capital" value={fmtCompact(cap(rejected))} tone="reject" />
           <Kpi label="Avg Risk Score" value={String(avgRisk)} sub="/ 100" />
           <Kpi label="Avg Confidence" value={String(avgConf)} sub="/ 100" tone="return" />
-          <Kpi label="In IC" value={String(deals.filter((d) => d.stage === "Investment Committee").length)} />
+          <Kpi
+            label="In IC"
+            value={String(deals.filter((d) => d.stage === "Investment Committee").length)}
+          />
         </div>
+
+        <section>
+          <div className="flex items-baseline justify-between mb-3">
+            <Eyebrow>Portfolio insights · mitigation & returns</Eyebrow>
+            <span className="text-xs text-muted-foreground">
+              {insights.length} current signal{insights.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {insights.map((insight) => (
+              <Card key={insight.id} className="p-4 elevated">
+                <div className="flex gap-3">
+                  <div
+                    className={`size-8 rounded-md flex items-center justify-center shrink-0 ${insight.severity === "critical" ? "bg-destructive/10 text-destructive" : insight.severity === "watch" ? "bg-warning/10 text-warning" : "bg-success/10 text-success"}`}
+                  >
+                    <Sparkles className="size-4" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold">{insight.title}</div>
+                    <p className="text-xs text-muted-foreground mt-1">{insight.detail}</p>
+                    <p className="text-xs mt-2">{insight.action}</p>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </section>
 
         {/* Investment Queue — the most important widget */}
         <section>
@@ -80,28 +152,50 @@ function PortfolioPage() {
           </div>
           <Card className="divide-y divide-border overflow-hidden elevated">
             {queue.length === 0 ? (
-              <div className="p-8 text-center text-sm text-muted-foreground">Nothing in the queue. Every active deal is up to date.</div>
-            ) : queue.map((d) => {
-              const tone = RECOMMENDATION_TONE[d.recommendation as keyof typeof RECOMMENDATION_TONE] ?? "neutral";
-              return (
-                <Link key={d.id} to="/projects/$id" params={{ id: d.id }}
-                  className="flex items-center gap-4 px-5 py-4 hover:bg-accent/30 transition-colors group">
-                  <div className={`w-1 self-stretch rounded-full ${tone === "approve" ? "bg-success" : tone === "condition" ? "bg-warning" : tone === "reject" ? "bg-destructive" : "bg-chart-2"}`} />
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium truncate">{d.name}</div>
-                    <div className="text-xs text-muted-foreground truncate">{d.location || "—"} · {d.stage}{d.topRisk ? ` · ${d.topRisk}` : ""}</div>
-                  </div>
-                  <div className="hidden sm:block text-right">
-                    <div className="num text-sm">{d.investmentScore ?? "—"}<span className="text-muted-foreground text-xs"> / 100</span></div>
-                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Score</div>
-                  </div>
-                  <div className={`text-[11px] font-semibold uppercase tracking-wider ${TONE_TEXT[tone]} text-right min-w-[150px]`}>
-                    {(d.nextAction ?? "").toUpperCase()}
-                  </div>
-                  <ArrowRight className="size-4 text-muted-foreground group-hover:text-foreground shrink-0" />
-                </Link>
-              );
-            })}
+              <div className="p-8 text-center text-sm text-muted-foreground">
+                Nothing in the queue. Every active deal is up to date.
+              </div>
+            ) : (
+              queue.map((d) => {
+                const tone =
+                  RECOMMENDATION_TONE[d.recommendation as keyof typeof RECOMMENDATION_TONE] ??
+                  "neutral";
+                return (
+                  <Link
+                    key={d.id}
+                    to="/projects/$id"
+                    params={{ id: d.id }}
+                    className="flex items-center gap-4 px-5 py-4 hover:bg-accent/30 transition-colors group"
+                  >
+                    <div
+                      className={`w-1 self-stretch rounded-full ${tone === "approve" ? "bg-success" : tone === "condition" ? "bg-warning" : tone === "reject" ? "bg-destructive" : "bg-chart-2"}`}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium truncate">{d.name}</div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {d.location || "—"} · {d.stage}
+                        {d.topRisk ? ` · ${d.topRisk}` : ""}
+                      </div>
+                    </div>
+                    <div className="hidden sm:block text-right">
+                      <div className="num text-sm">
+                        {d.investmentScore ?? "—"}
+                        <span className="text-muted-foreground text-xs"> / 100</span>
+                      </div>
+                      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                        Score
+                      </div>
+                    </div>
+                    <div
+                      className={`text-[11px] font-semibold uppercase tracking-wider ${TONE_TEXT[tone]} text-right min-w-[150px]`}
+                    >
+                      {(d.nextAction ?? "").toUpperCase()}
+                    </div>
+                    <ArrowRight className="size-4 text-muted-foreground group-hover:text-foreground shrink-0" />
+                  </Link>
+                );
+              })
+            )}
           </Card>
         </section>
 
@@ -110,7 +204,11 @@ function PortfolioPage() {
           <Eyebrow>Deal Pipeline</Eyebrow>
           <div className="mt-3 grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-3">
             {PIPELINE_STAGES.map((stage) => (
-              <PipelineColumn key={stage} stage={stage} deals={deals.filter((d) => d.stage === stage)} />
+              <PipelineColumn
+                key={stage}
+                stage={stage}
+                deals={deals.filter((d) => d.stage === stage)}
+              />
             ))}
           </div>
         </section>
@@ -120,25 +218,45 @@ function PortfolioPage() {
           <Eyebrow>Risk Distribution</Eyebrow>
           <Card className="p-5 mt-3 elevated">
             <div className="flex h-3 rounded-full overflow-hidden bg-muted">
-              {riskCounts.map((r) => r.count > 0 && (
-                <div key={r.rating}
-                  className={r.rating === "Low" ? "bg-success" : r.rating === "Moderate" ? "bg-warning" : r.rating === "High" ? "bg-chart-2" : "bg-destructive"}
-                  style={{ width: `${(r.count / ratedTotal) * 100}%` }} title={`${r.rating}: ${r.count}`} />
-              ))}
+              {riskCounts.map(
+                (r) =>
+                  r.count > 0 && (
+                    <div
+                      key={r.rating}
+                      className={
+                        r.rating === "Low"
+                          ? "bg-success"
+                          : r.rating === "Moderate"
+                            ? "bg-warning"
+                            : r.rating === "High"
+                              ? "bg-chart-2"
+                              : "bg-destructive"
+                      }
+                      style={{ width: `${(r.count / ratedTotal) * 100}%` }}
+                      title={`${r.rating}: ${r.count}`}
+                    />
+                  ),
+              )}
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
               {riskCounts.map((r) => (
                 <div key={r.rating} className="flex items-center gap-2.5">
-                  <span className={`size-2.5 rounded-sm ${r.rating === "Low" ? "bg-success" : r.rating === "Moderate" ? "bg-warning" : r.rating === "High" ? "bg-chart-2" : "bg-destructive"}`} />
+                  <span
+                    className={`size-2.5 rounded-sm ${r.rating === "Low" ? "bg-success" : r.rating === "Moderate" ? "bg-warning" : r.rating === "High" ? "bg-chart-2" : "bg-destructive"}`}
+                  />
                   <div>
                     <div className="num text-lg leading-none">{r.count}</div>
-                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">{r.rating} Risk</div>
+                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
+                      {r.rating} Risk
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
             {ratedTotal === 1 && deals.every((d) => !d.hasUnderwriting) && (
-              <p className="text-xs text-muted-foreground mt-3">Risk ratings populate once deals are underwritten.</p>
+              <p className="text-xs text-muted-foreground mt-3">
+                Risk ratings populate once deals are underwritten.
+              </p>
             )}
           </Card>
         </section>
@@ -147,37 +265,80 @@ function PortfolioPage() {
   );
 }
 
-function Kpi({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "approve" | "reject" | "return" }) {
-  const color = tone === "approve" ? "text-success" : tone === "reject" ? "text-destructive" : tone === "return" ? "text-chart-2" : "";
+function Kpi({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: "approve" | "reject" | "return";
+}) {
+  const color =
+    tone === "approve"
+      ? "text-success"
+      : tone === "reject"
+        ? "text-destructive"
+        : tone === "return"
+          ? "text-chart-2"
+          : "";
   return (
     <Card className="p-4">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground leading-tight">{label}</div>
-      <div className={`num text-2xl mt-2 ${color}`}>{value}<span className="text-muted-foreground text-sm">{sub}</span></div>
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground leading-tight">
+        {label}
+      </div>
+      <div className={`num text-2xl mt-2 ${color}`}>
+        {value}
+        <span className="text-muted-foreground text-sm">{sub}</span>
+      </div>
     </Card>
   );
 }
 
 function PipelineColumn({ stage, deals }: { stage: PipelineStage; deals: DealSummary[] }) {
-  const accent = stage === "Approved" ? "text-success" : stage === "Rejected" ? "text-destructive" : "text-muted-foreground";
+  const accent =
+    stage === "Approved"
+      ? "text-success"
+      : stage === "Rejected"
+        ? "text-destructive"
+        : "text-muted-foreground";
   return (
     <div className="flex flex-col">
       <div className="flex items-center justify-between px-1 mb-2">
-        <span className={`text-[10px] uppercase tracking-widest font-semibold ${accent}`}>{stage}</span>
+        <span className={`text-[10px] uppercase tracking-widest font-semibold ${accent}`}>
+          {stage}
+        </span>
         <span className="num text-xs text-muted-foreground">{deals.length}</span>
       </div>
       <div className="flex-1 space-y-2 min-h-[60px] rounded-lg bg-muted/30 p-2">
-        {deals.length === 0 && <div className="text-[11px] text-muted-foreground/60 text-center py-3">—</div>}
+        {deals.length === 0 && (
+          <div className="text-[11px] text-muted-foreground/60 text-center py-3">—</div>
+        )}
         {deals.map((d) => (
-          <Link key={d.id} to="/projects/$id" params={{ id: d.id }}
-            className="block rounded-md border border-border bg-card p-3 hover:border-primary/50 transition-colors">
+          <Link
+            key={d.id}
+            to="/projects/$id"
+            params={{ id: d.id }}
+            className="block rounded-md border border-border bg-card p-3 hover:border-primary/50 transition-colors"
+          >
             <div className="text-sm font-medium leading-tight truncate">{d.name}</div>
-            <div className="text-[11px] text-muted-foreground truncate mt-0.5">{d.location || d.type.replace("_", " ")}</div>
+            <div className="text-[11px] text-muted-foreground truncate mt-0.5">
+              {d.location || d.type.replace("_", " ")}
+            </div>
             <div className="flex items-center justify-between mt-2.5">
               <span className="num text-xs">{fmtCompact(d.capital)}</span>
               {d.hasUnderwriting && d.investmentScore != null ? (
-                <span className={`num text-xs font-semibold ${d.investmentScore >= 60 ? "text-success" : d.investmentScore >= 40 ? "text-warning" : "text-destructive"}`}>{d.investmentScore}</span>
+                <span
+                  className={`num text-xs font-semibold ${d.investmentScore >= 60 ? "text-success" : d.investmentScore >= 40 ? "text-warning" : "text-destructive"}`}
+                >
+                  {d.investmentScore}
+                </span>
               ) : (
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">No UW</span>
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  No UW
+                </span>
               )}
             </div>
           </Link>

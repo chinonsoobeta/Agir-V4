@@ -45,6 +45,15 @@ Four stakeholder reports generated from deterministic outputs only, each with a 
 
 Reports fail closed (e.g. "Run deterministic underwriting before generating this report"), surface unresolved reconciliation errors prominently, and disclose default-accepted inputs.
 
+### 5. Investment operating console
+- A live executive overview for pipeline capital, weighted opportunity value, decision scores, risk exceptions, velocity, and upcoming close dates.
+- Searchable deal flow with source, probability, target-close tracking, status management, and realtime refresh.
+- Deal-execution milestones for diligence, financing, legal, and closing work, including blockers and overdue items.
+- Market-signal tracking for cap rates, rents, vacancy, construction costs, financing benchmarks, and other decision context.
+- Integration connection registry for CRM, data warehouse, document, spreadsheet, webhook, and internal API workflows.
+- Portfolio-level concentration, confidence, risk, and pipeline-velocity insights derived from deterministic decision outputs.
+- Persistent light/dark/system themes and English/French workspace navigation.
+
 ---
 
 ## Core formulas

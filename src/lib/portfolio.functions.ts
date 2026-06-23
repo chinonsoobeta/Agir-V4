@@ -25,6 +25,13 @@ export type DealSummary = {
   nextAction: string | null;
   decisionCount: number;
   docCount: number;
+  startDate: string | null;
+  targetCloseDate: string | null;
+  updatedAt: string;
+  source: string | null;
+  probability: number;
+  irr: number | null;
+  dscr: number | null;
 };
 
 function capitalFor(project: any, base: Record<string, number>): number {
@@ -38,15 +45,22 @@ function capitalFor(project: any, base: Record<string, number>): number {
 // What the deal is waiting on — surfaced in the Investment Queue.
 function nextActionFor(stage: PipelineStage, dec: any): string | null {
   switch (stage) {
-    case "Screening": return "Begin Document Review";
-    case "Document Review": return "Awaiting Document Review";
-    case "Underwriting": return "Complete Underwriting";
+    case "Screening":
+      return "Begin Document Review";
+    case "Document Review":
+      return "Awaiting Document Review";
+    case "Underwriting":
+      return "Complete Underwriting";
     case "Investment Committee":
-      return dec.recommendation === "REJECT" ? "Return to Underwriting"
-        : dec.recommendation === "APPROVE_WITH_CONDITIONS" ? "Approve with Conditions"
-        : dec.recommendation === "RETURN_TO_UNDERWRITING" ? "Return to Underwriting"
-        : "Present to Committee";
-    default: return null;
+      return dec.recommendation === "REJECT"
+        ? "Return to Underwriting"
+        : dec.recommendation === "APPROVE_WITH_CONDITIONS"
+          ? "Approve with Conditions"
+          : dec.recommendation === "RETURN_TO_UNDERWRITING"
+            ? "Return to Underwriting"
+            : "Present to Committee";
+    default:
+      return null;
   }
 }
 
@@ -54,19 +68,36 @@ export const listPortfolio = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<DealSummary[]> => {
     const { data: projects, error } = await context.supabase
-      .from("projects").select("*").order("created_at", { ascending: false });
+      .from("projects")
+      .select("*")
+      .order("created_at", { ascending: false });
     // If table doesn't exist (schema not migrated), return empty array instead of error
     if (error && error.message?.includes("Could not find the table")) return [];
     if (error) throw new Error(error.message);
     if (!projects?.length) return [];
 
     const ids = projects.map((p: any) => p.id);
-    const [{ data: outputs }, { data: assumptions }, { data: decisions }, { data: docs }] = await Promise.all([
-      context.supabase.from("financial_outputs").select("project_id,scenario_key,metric_key,metric_label,value_numeric,unit,formula_text,inputs").in("project_id", ids),
-      context.supabase.from("assumptions").select("project_id,field_key,field_label,category,value_numeric,value_text,unit,status,source_document_id,source_text,source_location,confidence_score,conflict_values").in("project_id", ids),
-      context.supabase.from("decision_logs").select("project_id,decision,created_at").in("project_id", ids).order("created_at", { ascending: false }),
-      context.supabase.from("documents").select("project_id").in("project_id", ids),
-    ]);
+    const [{ data: outputs }, { data: assumptions }, { data: decisions }, { data: docs }] =
+      await Promise.all([
+        context.supabase
+          .from("financial_outputs")
+          .select(
+            "project_id,scenario_key,metric_key,metric_label,value_numeric,unit,formula_text,inputs",
+          )
+          .in("project_id", ids),
+        context.supabase
+          .from("assumptions")
+          .select(
+            "project_id,field_key,field_label,category,value_numeric,value_text,unit,status,source_document_id,source_text,source_location,confidence_score,conflict_values",
+          )
+          .in("project_id", ids),
+        context.supabase
+          .from("decision_logs")
+          .select("project_id,decision,created_at")
+          .in("project_id", ids)
+          .order("created_at", { ascending: false }),
+        context.supabase.from("documents").select("project_id").in("project_id", ids),
+      ]);
 
     const byProject = <T extends { project_id: string }>(rows: T[] | null) => {
       const m = new Map<string, T[]>();
@@ -89,10 +120,13 @@ export const listPortfolio = createServerFn({ method: "GET" })
       const docCount = (docMap.get(p.id) ?? []).length;
       const dec = buildDecision(o as any, a as any);
       const stage = pipelineStageFor({
-        status: p.status, docCount, hasUnderwriting: dec.hasUnderwriting,
+        status: p.status,
+        docCount,
+        hasUnderwriting: dec.hasUnderwriting,
         decisions: d as any,
       });
-      const topRisk = dec.findings?.risks?.[0]?.title ?? dec.findings?.weaknesses?.[0]?.title ?? null;
+      const topRisk =
+        dec.findings?.risks?.[0]?.title ?? dec.findings?.weaknesses?.[0]?.title ?? null;
       return {
         id: p.id,
         name: p.name,
@@ -111,6 +145,22 @@ export const listPortfolio = createServerFn({ method: "GET" })
         nextAction: nextActionFor(stage, dec),
         decisionCount: d.length,
         docCount,
+        startDate: p.start_date ?? null,
+        targetCloseDate: p.target_close_date ?? p.completion_date ?? null,
+        updatedAt: p.updated_at,
+        source: p.source ?? null,
+        probability: Number(
+          p.probability ??
+            (stage === "Approved"
+              ? 100
+              : stage === "Investment Committee"
+                ? 75
+                : stage === "Underwriting"
+                  ? 50
+                  : 25),
+        ),
+        irr: dec.norm.base.irr_estimate ?? null,
+        dscr: dec.norm.base.dscr ?? null,
       };
     });
   });

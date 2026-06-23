@@ -57,6 +57,43 @@
 :root {
   --radius: 0.625rem;
 
+  --background: oklch(0.985 0.003 255);
+  --foreground: oklch(0.20 0.018 255);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.20 0.018 255);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.20 0.018 255);
+  --primary: oklch(0.47 0.105 238);
+  --primary-foreground: oklch(0.99 0.002 255);
+  --secondary: oklch(0.955 0.008 250);
+  --secondary-foreground: oklch(0.24 0.018 255);
+  --muted: oklch(0.955 0.007 250);
+  --muted-foreground: oklch(0.51 0.018 255);
+  --accent: oklch(0.93 0.025 240);
+  --accent-foreground: oklch(0.25 0.035 245);
+  --destructive: oklch(0.55 0.205 25);
+  --destructive-foreground: oklch(0.99 0.002 255);
+  --success: oklch(0.53 0.13 158);
+  --warning: oklch(0.67 0.14 72);
+  --border: oklch(0.89 0.009 250);
+  --input: oklch(0.92 0.008 250);
+  --ring: oklch(0.47 0.105 238);
+  --chart-1: oklch(0.47 0.105 238);
+  --chart-2: oklch(0.55 0.12 250);
+  --chart-3: oklch(0.53 0.13 158);
+  --chart-4: oklch(0.53 0.12 300);
+  --chart-5: oklch(0.67 0.14 72);
+  --sidebar: oklch(0.965 0.008 250);
+  --sidebar-foreground: oklch(0.28 0.018 255);
+  --sidebar-primary: oklch(0.47 0.105 238);
+  --sidebar-primary-foreground: oklch(0.99 0.002 255);
+  --sidebar-accent: oklch(0.91 0.025 240);
+  --sidebar-accent-foreground: oklch(0.22 0.025 250);
+  --sidebar-border: oklch(0.88 0.009 250);
+  --sidebar-ring: oklch(0.47 0.105 238);
+}
+
+.dark {
   --background: oklch(0.17 0.012 255);        /* near-black ink */
   --foreground: oklch(0.96 0.004 255);
 
@@ -101,9 +138,10 @@
   --sidebar-accent-foreground: oklch(0.97 0.004 255);
   --sidebar-border: oklch(0.255 0.013 255);
   --sidebar-ring: oklch(0.74 0.075 235);
+  color-scheme: dark;
 }
 
-.dark { color-scheme: dark; }
+.light { color-scheme: light; }
 
 @layer base {
   html, body { background-color: var(--color-background); color: var(--color-foreground); }
@@ -124,7 +162,7 @@
   .display { font-family: var(--font-display); letter-spacing: -0.01em; }
 
   ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-thumb { background: oklch(0.32 0.013 255); border-radius: 6px; }
+  ::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--muted-foreground) 45%, transparent); border-radius: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
 }
 
@@ -137,5 +175,5 @@
 .data-grid th { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.6875rem; color: var(--color-muted-foreground); font-weight: 600; }
 
 /* subtle elevation for institutional cards */
-.elevated { box-shadow: 0 1px 0 0 oklch(0.30 0.013 255 / 0.6), 0 12px 30px -18px rgb(0 0 0 / 0.6); }
+.elevated { box-shadow: 0 1px 0 0 color-mix(in oklab, var(--border) 75%, transparent), 0 14px 35px -24px rgb(0 0 0 / 0.38); }
 .hairline { border: 1px solid var(--color-border); }

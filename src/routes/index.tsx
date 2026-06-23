@@ -22,7 +22,7 @@ function IndexRedirect() {
         return;
       }
 
-      navigate({ to: data.session ? "/portfolio" : "/auth", replace: true });
+      navigate({ to: data.session ? "/dashboard" : "/auth", replace: true });
     }
 
     redirectToApp();
