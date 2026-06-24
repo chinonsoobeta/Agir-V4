@@ -83,18 +83,25 @@ export const analyzeDocument = createServerFn({ method: "POST" })
 
     const { getAgirModel } = await import("./ai-gateway.server");
     const { generateText } = await import("ai");
-    const result = await generateText({
-      model: getAgirModel(),
-      temperature: 0,
-      system: "Summarize only the supplied document text. Do not infer missing financial values.",
-      prompt: `Document: ${data.name}
+    let result: { text: string };
+    try {
+      result = await generateText({
+        model: getAgirModel(),
+        temperature: 0,
+        system: "Summarize only the supplied document text. Do not infer missing financial values.",
+        prompt: `Document: ${data.name}
 Category: ${data.category || "uncategorized"}
 
 TEXT:
 ${text.slice(0, 30000)}
 
 Respond as compact JSON only with keys: summary, key_assumptions, risks, important_dates, financial_highlights. If a value is absent, write "Not found in document."`,
-    });
+      });
+    } catch (e: any) {
+      // AI gateway / key failures must persist a clear, retryable failed status.
+      await failExtraction(e?.message ?? "AI extraction is unavailable. Check the model configuration.");
+      return { summary: "", assumptions: "", risks: "" }; // unreachable: failExtraction throws
+    }
     let parsed: { summary?: string; key_assumptions?: string; risks?: string; important_dates?: string; financial_highlights?: string } = {};
     try {
       const m = result.text.match(/\{[\s\S]*\}/);

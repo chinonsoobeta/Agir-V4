@@ -6,7 +6,13 @@ import { isMissingColumn } from "./db-compat";
 // Columns added by the operating-platform migration. If that migration has not
 // been applied to the target database yet, writes including these must degrade
 // gracefully (strip + retry) rather than fail the whole deal create/update.
-const OPERATING_COLUMNS = ["source", "probability", "target_close_date", "lead_owner"] as const;
+const OPERATING_COLUMNS = [
+  "source",
+  "probability",
+  "target_close_date",
+  "lead_owner",
+  "workspace_id",
+] as const;
 
 function stripOperatingColumns<T extends Record<string, any>>(row: T): Partial<T> {
   const copy: Record<string, any> = { ...row };
@@ -49,6 +55,7 @@ const ProjectSchema = z.object({
   probability: z.number().min(0).max(100).default(25),
   lead_owner: z.string().max(200).optional().nullable(),
   notes: z.string().max(5000).optional().nullable(),
+  workspace_id: z.string().uuid().optional().nullable(),
 });
 
 export const listProjects = createServerFn({ method: "GET" })
@@ -82,7 +89,7 @@ export const createProject = createServerFn({ method: "POST" })
     const payload = { ...data, owner_id: context.userId };
     let { data: proj, error } = await context.supabase
       .from("projects")
-      .insert(payload)
+      .insert(payload as any)
       .select()
       .single();
     // Older schema without the operating-platform columns: retry with base fields.
@@ -113,7 +120,7 @@ export const updateProject = createServerFn({ method: "POST" })
     const { id, ...patch } = data;
     let { data: proj, error } = await context.supabase
       .from("projects")
-      .update(patch)
+      .update(patch as any)
       .eq("id", id)
       .select()
       .single();
@@ -129,7 +136,7 @@ export const updateProject = createServerFn({ method: "POST" })
       } else {
         ({ data: proj, error } = await context.supabase
           .from("projects")
-          .update(base)
+          .update(base as any)
           .eq("id", id)
           .select()
           .single());

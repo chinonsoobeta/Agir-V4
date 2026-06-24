@@ -30,6 +30,7 @@ import { Route as AuthenticatedCompareRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedCommitteeRouteImport } from './routes/_authenticated/committee'
 import { Route as AuthenticatedAssumptionsRouteImport } from './routes/_authenticated/assumptions'
 import { Route as AuthenticatedAnalysisRouteImport } from './routes/_authenticated/analysis'
+import { Route as AuthenticatedAcceptInviteRouteImport } from './routes/_authenticated/accept-invite'
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects.index'
 import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects.$id'
 
@@ -139,6 +140,12 @@ const AuthenticatedAnalysisRoute = AuthenticatedAnalysisRouteImport.update({
   path: '/analysis',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAcceptInviteRoute =
+  AuthenticatedAcceptInviteRouteImport.update({
+    id: '/accept-invite',
+    path: '/accept-invite',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedProjectsIndexRoute =
   AuthenticatedProjectsIndexRouteImport.update({
     id: '/',
@@ -155,6 +162,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/accept-invite': typeof AuthenticatedAcceptInviteRoute
   '/analysis': typeof AuthenticatedAnalysisRoute
   '/assumptions': typeof AuthenticatedAssumptionsRoute
   '/committee': typeof AuthenticatedCommitteeRoute
@@ -179,6 +187,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/accept-invite': typeof AuthenticatedAcceptInviteRoute
   '/analysis': typeof AuthenticatedAnalysisRoute
   '/assumptions': typeof AuthenticatedAssumptionsRoute
   '/committee': typeof AuthenticatedCommitteeRoute
@@ -204,6 +213,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_authenticated/accept-invite': typeof AuthenticatedAcceptInviteRoute
   '/_authenticated/analysis': typeof AuthenticatedAnalysisRoute
   '/_authenticated/assumptions': typeof AuthenticatedAssumptionsRoute
   '/_authenticated/committee': typeof AuthenticatedCommitteeRoute
@@ -230,6 +240,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/reset-password'
+    | '/accept-invite'
     | '/analysis'
     | '/assumptions'
     | '/committee'
@@ -254,6 +265,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/reset-password'
+    | '/accept-invite'
     | '/analysis'
     | '/assumptions'
     | '/committee'
@@ -278,6 +290,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/reset-password'
+    | '/_authenticated/accept-invite'
     | '/_authenticated/analysis'
     | '/_authenticated/assumptions'
     | '/_authenticated/committee'
@@ -456,6 +469,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAnalysisRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/accept-invite': {
+      id: '/_authenticated/accept-invite'
+      path: '/accept-invite'
+      fullPath: '/accept-invite'
+      preLoaderRoute: typeof AuthenticatedAcceptInviteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/projects/': {
       id: '/_authenticated/projects/'
       path: '/'
@@ -489,6 +509,7 @@ const AuthenticatedProjectsRouteWithChildren =
   )
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAcceptInviteRoute: typeof AuthenticatedAcceptInviteRoute
   AuthenticatedAnalysisRoute: typeof AuthenticatedAnalysisRoute
   AuthenticatedAssumptionsRoute: typeof AuthenticatedAssumptionsRoute
   AuthenticatedCommitteeRoute: typeof AuthenticatedCommitteeRoute
@@ -508,6 +529,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAcceptInviteRoute: AuthenticatedAcceptInviteRoute,
   AuthenticatedAnalysisRoute: AuthenticatedAnalysisRoute,
   AuthenticatedAssumptionsRoute: AuthenticatedAssumptionsRoute,
   AuthenticatedCommitteeRoute: AuthenticatedCommitteeRoute,

@@ -7,11 +7,11 @@
 export function isMissingRelation(error: { code?: string; message?: string } | null | undefined) {
   return Boolean(
     error &&
-      (error.code === "PGRST205" ||
-        error.code === "PGRST202" ||
-        error.message?.includes("Could not find the table") ||
-        error.message?.includes("does not exist") ||
-        error.message?.includes("schema cache")),
+    (error.code === "PGRST205" ||
+      error.code === "PGRST202" ||
+      error.message?.includes("Could not find the table") ||
+      error.message?.includes("does not exist") ||
+      error.message?.includes("schema cache")),
   );
 }
 
@@ -22,6 +22,6 @@ export function isMissingRelation(error: { code?: string; message?: string } | n
 export function isMissingColumn(error: { code?: string; message?: string } | null | undefined) {
   return Boolean(
     error &&
-      (error.code === "PGRST204" || /could not find the '.*' column/i.test(error.message ?? "")),
+    (error.code === "PGRST204" || /could not find the '.*' column/i.test(error.message ?? "")),
   );
 }

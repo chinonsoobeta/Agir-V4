@@ -13,19 +13,46 @@ import {
   Workflow,
   Radar,
   Plug,
-  Sun,
-  Moon,
-  Languages,
   Menu,
   Radio,
   GitCompareArrows,
+  ChevronsUpDown,
+  Check,
+  Plus,
+  Building2,
+  Users,
+  Sun,
+  Moon,
+  Languages,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { usePreferences, type TranslationKey } from "@/lib/preferences";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { useWorkspace } from "@/lib/workspace-context";
+import { createWorkspace } from "@/lib/workspaces.functions";
 
 const nav = [
   { to: "/dashboard", label: "nav.home", icon: LayoutDashboard },
@@ -41,6 +68,99 @@ const nav = [
   { to: "/integrations", label: "nav.integrations", icon: Plug },
   { to: "/copilot", label: "nav.copilot", icon: Bot },
 ] as const;
+
+function WorkspaceSwitcher() {
+  const { workspaces, activeWorkspace, setActiveWorkspace, refetch } = useWorkspace();
+  const qc = useQueryClient();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [name, setName] = useState("");
+  const createFn = useServerFn(createWorkspace);
+  const create = useMutation({
+    mutationFn: () => createFn({ data: { name: name.trim() } }),
+    onSuccess: (ws: any) => {
+      setCreateOpen(false);
+      setName("");
+      qc.invalidateQueries({ queryKey: ["workspaces"] });
+      refetch();
+      if (ws?.id) setActiveWorkspace(ws.id);
+      toast.success(`Created “${ws?.name ?? "workspace"}”`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="mt-3 flex w-full items-center gap-2 rounded-md border border-sidebar-border bg-sidebar-accent/40 px-2.5 py-2 text-left transition-colors hover:bg-sidebar-accent">
+            <div className="size-6 rounded bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0">
+              <Building2 className="size-3.5 text-primary" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-medium truncate text-sidebar-foreground">
+                {activeWorkspace?.name ?? "Personal workspace"}
+              </div>
+              <div className="text-[9px] uppercase tracking-widest text-muted-foreground">
+                {activeWorkspace?.role ?? "owner"}
+              </div>
+            </div>
+            <ChevronsUpDown className="size-3.5 text-muted-foreground shrink-0" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-60">
+          <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+          {workspaces.map((w) => (
+            <DropdownMenuItem key={w.id} onClick={() => setActiveWorkspace(w.id)}>
+              <Building2 className="size-3.5 mr-2 text-muted-foreground" />
+              <span className="flex-1 truncate">{w.name}</span>
+              {activeWorkspace?.id === w.id && <Check className="size-3.5 text-primary" />}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => setCreateOpen(true)}>
+            <Plus className="size-3.5 mr-2" /> Create workspace
+          </DropdownMenuItem>
+          <Link to="/settings" search={{ section: "team" }}>
+            <DropdownMenuItem>
+              <Users className="size-3.5 mr-2" /> Manage team
+            </DropdownMenuItem>
+          </Link>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Create workspace</DialogTitle>
+          </DialogHeader>
+          <div>
+            <Label>Workspace name</Label>
+            <Input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Acme Capital Partners"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && name.trim()) create.mutate();
+              }}
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              Workspaces let your team share deals, assignments and decisions. You'll be the owner.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setCreateOpen(false)}>
+              Cancel
+            </Button>
+            <Button disabled={!name.trim() || create.isPending} onClick={() => create.mutate()}>
+              {create.isPending ? "Creating…" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -106,6 +226,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <Link
           to="/settings"
+          search={{ section: undefined }}
           className={cn(
             "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors",
             pathname.startsWith("/settings")
@@ -151,6 +272,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Radio className="size-2.5" />
             {t("shell.live")}
           </div>
+          <WorkspaceSwitcher />
         </div>
         {navigation}
       </aside>
@@ -169,6 +291,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <div className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground mt-1">
                   {t("shell.workspace")}
                 </div>
+                <WorkspaceSwitcher />
               </div>
               {navigation}
             </SheetContent>

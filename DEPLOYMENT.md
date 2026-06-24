@@ -44,11 +44,38 @@ Supabase Dashboard -> Authentication -> URL Configuration
 
 If you use Google sign-in, configure Google as a Supabase OAuth provider and add the Supabase callback URL shown in the Supabase provider screen to Google Cloud Console.
 
+## Migrations & schema discipline
+
+Apply every migration in `supabase/migrations` to the target Supabase project **before** deploying new code. Two ways:
+
+```bash
+# Option A — connection string (idempotent; runs every file in order)
+POSTGRES_URL="postgresql://…supabase.co:5432/postgres" npm run migrate
+
+# Option B — paste each new .sql into the Supabase dashboard SQL editor
+```
+
+The app is written **migration-safe** (`src/lib/db-compat.ts`): if a newer build runs against an
+older schema, list endpoints return empty, writes fail closed, and deal create/update strip
+not-yet-applied columns and retry. So a staged deploy degrades gracefully — but features that need
+the new tables (workspaces/teams, milestones, market signals, integration persistence,
+preferences) stay inert until their migration is applied.
+
+CI should gate on schema + types staying in sync:
+
+```bash
+npm run migrate        # apply migrations
+npx supabase gen types typescript --linked > src/integrations/supabase/types.ts   # regenerate types
+npm run typecheck      # tsc --noEmit must pass
+npm run test
+npm run build
+```
+
 ## Database and storage
 
 Before testing production:
 
-1. Make sure all migrations in `supabase/migrations` have been applied to the Supabase project.
+1. Make sure all migrations in `supabase/migrations` have been applied to the Supabase project (see above).
 2. Make sure the `documents` storage bucket exists.
 3. Upload the shared Harbour demo files if you want the seeded Harbour demo to work for every account:
 

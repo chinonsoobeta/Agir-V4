@@ -52,6 +52,7 @@ import { PIPELINE_STAGES, RECOMMENDATION_TONE } from "@/lib/decision";
 import { RecommendationPill, RiskPill, TONE_TEXT } from "@/components/decision-ui";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { daysUntil } from "@/lib/platform-insights";
+import { useWorkspace } from "@/lib/workspace-context";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -662,6 +663,7 @@ function Stat({
 
 function NewDealDialog({ onClose, createFn }: { onClose: () => void; createFn: any }) {
   const qc = useQueryClient();
+  const { activeWorkspaceId } = useWorkspace();
   const [templateId, setTemplateId] = useState("blank");
   const [showFinancials, setShowFinancials] = useState(false);
   const [form, setForm] = useState({
@@ -689,6 +691,8 @@ function NewDealDialog({ onClose, createFn }: { onClose: () => void; createFn: a
           source: data.source || null,
           lead_owner: data.lead_owner || null,
           target_close_date: data.target_close_date || null,
+          // Tag the deal with the active workspace (null for personal / unmigrated).
+          workspace_id: activeWorkspaceId !== "personal" ? activeWorkspaceId : null,
         },
       }),
     onSuccess: () => {

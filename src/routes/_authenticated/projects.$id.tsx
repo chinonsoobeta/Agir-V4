@@ -1,8 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+import { useSuspenseQuery, queryOptions, useQueryClient } from "@tanstack/react-query";
 import { getProject } from "@/lib/projects.functions";
-import { listDocuments, createDocument } from "@/lib/documents.functions";
+import { listDocuments } from "@/lib/documents.functions";
 import { listAssumptions, listFinancialOutputs, listDecisions } from "@/lib/assumptions.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,8 +13,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeft, FileText, MapPin, Upload } from "lucide-react";
-import { useState, useRef } from "react";
+import { ArrowLeft, FileText, MapPin } from "lucide-react";
+import { useState } from "react";
+import { cn } from "@/lib/utils";
+import { DocumentDropzone } from "@/components/document-dropzone";
 import { AssumptionReviewCenter } from "@/components/assumption-review";
 import { AuditPanel } from "@/components/underwriting-panel";
 import { CommitteePanel } from "@/components/committee-panel";
@@ -25,8 +26,6 @@ import { DealTimeline } from "@/components/deal-timeline";
 import { buildDecision, pipelineStageFor, RECOMMENDATION_TONE } from "@/lib/decision";
 import { assetTypeLabel } from "@/lib/asset-types";
 import { ScoreDial, RecommendationPill, RiskPill } from "@/components/decision-ui";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
 
 const projectQ = (id: string) =>
   queryOptions({ queryKey: ["project", id], queryFn: () => getProject({ data: { id } }) });
@@ -203,77 +202,49 @@ const CATEGORIES = [
 function DocumentsTab({ projectId }: { projectId: string }) {
   const { data: docs = [] } = useSuspenseQuery(docsQ(projectId));
   const qc = useQueryClient();
-  const createFn = useServerFn(createDocument);
-  const fileRef = useRef<HTMLInputElement>(null);
   const [category, setCategory] = useState<string>("Other");
-  const [uploading, setUploading] = useState(false);
 
-  async function upload(file: File) {
-    setUploading(true);
-    try {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) throw new Error("Not authenticated");
-      const path = `${u.user.id}/${Date.now()}-${file.name}`;
-      const { error } = await supabase.storage.from("documents").upload(path, file);
-      if (error) throw error;
-      await createFn({
-        data: {
-          project_id: projectId,
-          name: file.name,
-          file_type: file.type,
-          category,
-          storage_path: path,
-          size_bytes: file.size,
-        },
-      });
-      qc.invalidateQueries({ queryKey: ["docs", projectId] });
-      toast.success("Document uploaded");
-      setCategory("Other");
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
-    }
+  function extractionBadge(d: any) {
+    if (d.ai_summary)
+      return { cls: "bg-success/10 text-success border-success/30", label: "Extracted" };
+    if (d.status === "extraction_failed")
+      return {
+        cls: "bg-destructive/10 text-destructive border-destructive/30",
+        label: "Extraction failed",
+      };
+    return { cls: "text-muted-foreground", label: "Pending extraction" };
   }
 
   return (
     <div className="space-y-5">
-      <Card className="p-5">
-        <div className="grid md:grid-cols-4 gap-3 items-end">
-          <div>
-            <label className="text-[10px] uppercase tracking-widest text-muted-foreground">
-              Category
-            </label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CATEGORIES.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <input
-            ref={fileRef}
-            type="file"
-            className="hidden"
-            accept=".pdf,.xlsx,.xls,.doc,.docx,.png,.jpg,.jpeg"
-            onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
-          />
-          <Button
-            onClick={() => fileRef.current?.click()}
-            disabled={uploading}
-            className="md:col-span-3"
-          >
-            <Upload className="size-4 mr-2" />
-            {uploading ? "Uploading…" : "Upload document"}
-          </Button>
+      <Card className="p-5 space-y-4">
+        <div className="max-w-xs">
+          <label className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Category
+          </label>
+          <Select value={category} onValueChange={setCategory}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CATEGORIES.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+        <DocumentDropzone
+          projectId={projectId}
+          category={category}
+          existingNames={docs.map((d: any) => d.name)}
+          onChanged={() => {
+            qc.invalidateQueries({ queryKey: ["docs", projectId] });
+            qc.invalidateQueries({ queryKey: ["assumptions", projectId] });
+            qc.invalidateQueries({ queryKey: ["timeline", projectId] });
+          }}
+        />
       </Card>
 
       <Card className="p-6 elevated">
@@ -282,23 +253,48 @@ function DocumentsTab({ projectId }: { projectId: string }) {
         </div>
         {docs.length === 0 ? (
           <p className="text-sm text-muted-foreground mt-3">
-            No documents linked to this deal yet.
+            No documents linked to this deal yet. Drop an offering memo, rent roll or budget above —
+            assumptions are extracted automatically.
           </p>
         ) : (
           <ul className="mt-4 space-y-2">
-            {docs.map((d) => (
-              <li
-                key={d.id}
-                className="flex items-center justify-between text-sm border-b border-border pb-2.5"
-              >
-                <span className="flex items-center gap-2.5">
-                  <FileText className="size-4 text-primary" />
-                  {d.name}
-                </span>
-                <span className="text-xs text-muted-foreground">{d.category || "—"}</span>
-              </li>
-            ))}
+            {docs.map((d) => {
+              const badge = extractionBadge(d);
+              return (
+                <li
+                  key={d.id}
+                  className="flex items-center justify-between gap-3 text-sm border-b border-border pb-2.5"
+                >
+                  <span className="flex items-center gap-2.5 min-w-0">
+                    <FileText className="size-4 text-primary shrink-0" />
+                    <span className="truncate">{d.name}</span>
+                  </span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    <span className={cn("text-[10px] rounded-full border px-2 py-0.5", badge.cls)}>
+                      {badge.label}
+                    </span>
+                    <span className="text-xs text-muted-foreground hidden sm:inline">
+                      {d.category || "—"}
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
           </ul>
+        )}
+        {docs.some((d: any) => d.ai_summary) && (
+          <Link
+            to="/projects/$id"
+            params={{ id: projectId }}
+            className="mt-4 inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+            onClick={(e) => {
+              e.preventDefault();
+              const tab = document.querySelector<HTMLElement>('[role="tab"][id*="assumptions"]');
+              tab?.click();
+            }}
+          >
+            Review extracted assumptions →
+          </Link>
         )}
       </Card>
     </div>
