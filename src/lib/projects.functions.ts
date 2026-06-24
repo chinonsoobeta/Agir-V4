@@ -1,6 +1,18 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { isMissingColumn } from "./db-compat";
+
+// Columns added by the operating-platform migration. If that migration has not
+// been applied to the target database yet, writes including these must degrade
+// gracefully (strip + retry) rather than fail the whole deal create/update.
+const OPERATING_COLUMNS = ["source", "probability", "target_close_date", "lead_owner"] as const;
+
+function stripOperatingColumns<T extends Record<string, any>>(row: T): Partial<T> {
+  const copy: Record<string, any> = { ...row };
+  for (const c of OPERATING_COLUMNS) delete copy[c];
+  return copy as Partial<T>;
+}
 
 const ProjectSchema = z.object({
   name: z.string().min(1).max(200),
@@ -67,12 +79,22 @@ export const createProject = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => ProjectSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const { data: proj, error } = await context.supabase
+    const payload = { ...data, owner_id: context.userId };
+    let { data: proj, error } = await context.supabase
       .from("projects")
-      .insert({ ...data, owner_id: context.userId })
+      .insert(payload)
       .select()
       .single();
+    // Older schema without the operating-platform columns: retry with base fields.
+    if (isMissingColumn(error)) {
+      ({ data: proj, error } = await context.supabase
+        .from("projects")
+        .insert(stripOperatingColumns(payload) as any)
+        .select()
+        .single());
+    }
     if (error) throw new Error(error.message);
+    if (!proj) throw new Error("Project insert returned no row");
     await context.supabase.from("activities").insert({
       project_id: proj.id,
       user_id: context.userId,
@@ -89,12 +111,30 @@ export const updateProject = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { id, ...patch } = data;
-    const { data: proj, error } = await context.supabase
+    let { data: proj, error } = await context.supabase
       .from("projects")
       .update(patch)
       .eq("id", id)
       .select()
       .single();
+    if (isMissingColumn(error)) {
+      const base = stripOperatingColumns(patch);
+      // Nothing left to update once operating columns are stripped → re-read the row.
+      if (Object.keys(base).length === 0) {
+        ({ data: proj, error } = await context.supabase
+          .from("projects")
+          .select()
+          .eq("id", id)
+          .single());
+      } else {
+        ({ data: proj, error } = await context.supabase
+          .from("projects")
+          .update(base)
+          .eq("id", id)
+          .select()
+          .single());
+      }
+    }
     if (error) throw new Error(error.message);
     return proj;
   });

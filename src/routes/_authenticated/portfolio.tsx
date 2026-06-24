@@ -13,7 +13,7 @@ import {
 } from "@/lib/decision";
 import { Eyebrow, TONE_TEXT } from "@/components/decision-ui";
 import { ArrowRight, Plus, Sparkles } from "lucide-react";
-import { buildPortfolioInsights } from "@/lib/platform-insights";
+import { buildPortfolioInsights, summarizePortfolio } from "@/lib/platform-insights";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 
 const portfolioQ = queryOptions({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
@@ -30,18 +30,16 @@ function PortfolioPage() {
   const { data: deals } = useSuspenseQuery(portfolioQ);
   useRealtimeRefresh();
 
+  // Shared deterministic rollup — keeps these numbers identical to the dashboard.
+  const summary = summarizePortfolio(deals);
   const active = deals.filter((d) => d.stage !== "Approved" && d.stage !== "Rejected");
   const approved = deals.filter((d) => d.stage === "Approved");
   const rejected = deals.filter((d) => d.stage === "Rejected");
   const underReview = deals.filter((d) => !["Approved", "Rejected"].includes(d.stage));
 
   const cap = (xs: DealSummary[]) => xs.reduce((s, d) => s + d.capital, 0);
-  const avg = (xs: number[]) =>
-    xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 0;
-  const avgRisk = avg(
-    deals.filter((d) => d.investmentScore != null).map((d) => 100 - (d.investmentScore ?? 0)),
-  );
-  const avgConf = avg(deals.map((d) => d.confidenceScore));
+  const avgRisk = summary.avgRiskScore ?? 0;
+  const avgConf = summary.avgConfidence;
 
   // Investment queue: deals that need a human action, most urgent first.
   const queue = [...deals]

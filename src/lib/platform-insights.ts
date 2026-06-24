@@ -1,4 +1,55 @@
 import type { DealSummary } from "./portfolio.functions";
+import { PIPELINE_STAGES, type PipelineStage } from "./decision";
+
+// One deterministic aggregation of the portfolio, shared by the dashboard,
+// portfolio page and the server summary endpoint so the same number is never
+// recomputed two different ways in two components. Pure (no Date) and testable.
+export type PortfolioSummary = {
+  count: number;
+  activeCount: number;
+  grossCapital: number;
+  weightedCapital: number;
+  avgInvestmentScore: number | null;
+  avgConfidence: number;
+  avgRiskScore: number | null;
+  elevatedRiskCount: number;
+  riskCounts: Record<"Low" | "Moderate" | "High" | "Critical", number>;
+  stages: { stage: PipelineStage; count: number; capital: number; weighted: number }[];
+};
+
+export function summarizePortfolio(deals: DealSummary[]): PortfolioSummary {
+  const active = deals.filter((d) => !["Approved", "Rejected"].includes(d.stage));
+  const scored = deals.map((d) => d.investmentScore).filter((v): v is number => v != null);
+  const round = (n: number) => Math.round(n);
+  const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+
+  const riskCounts = { Low: 0, Moderate: 0, High: 0, Critical: 0 };
+  for (const d of deals) {
+    if (d.riskRating in riskCounts) riskCounts[d.riskRating as keyof typeof riskCounts] += 1;
+  }
+
+  return {
+    count: deals.length,
+    activeCount: active.length,
+    grossCapital: deals.reduce((s, d) => s + d.capital, 0),
+    weightedCapital: deals.reduce((s, d) => s + d.capital * (d.probability / 100), 0),
+    avgInvestmentScore: scored.length ? round(mean(scored)) : null,
+    avgConfidence: round(mean(deals.map((d) => d.confidenceScore))),
+    avgRiskScore: scored.length ? round(mean(scored.map((v) => 100 - v))) : null,
+    elevatedRiskCount: deals.filter((d) => d.riskRating === "High" || d.riskRating === "Critical")
+      .length,
+    riskCounts,
+    stages: PIPELINE_STAGES.map((stage) => {
+      const inStage = deals.filter((d) => d.stage === stage);
+      return {
+        stage,
+        count: inStage.length,
+        capital: inStage.reduce((s, d) => s + d.capital, 0),
+        weighted: inStage.reduce((s, d) => s + d.capital * (d.probability / 100), 0),
+      };
+    }),
+  };
+}
 
 export type PortfolioInsight = {
   id: string;

@@ -26,10 +26,10 @@ export const TONE_CHIP: Record<Tone, string> = {
 };
 
 export const TONE_SOLID: Record<Tone, string> = {
-  approve: "bg-success text-white",
-  condition: "bg-warning text-black",
-  return: "bg-chart-2 text-white",
-  reject: "bg-destructive text-white",
+  approve: "bg-success text-success-foreground",
+  condition: "bg-warning text-warning-foreground",
+  return: "bg-chart-2 text-primary-foreground",
+  reject: "bg-destructive text-destructive-foreground",
   neutral: "bg-muted text-foreground",
 };
 

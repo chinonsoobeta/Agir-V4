@@ -4,8 +4,12 @@
 // deterministic engine outputs the deal page uses.
 
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { buildDecision, pipelineStageFor, type PipelineStage } from "./decision";
+import type { ComparisonDeal } from "./reports/comparison-model";
+import type { DecisionHistoryRow } from "./reports/portfolio-analytics";
+import { isMissingRelation } from "./db-compat";
 
 export type DealSummary = {
   id: string;
@@ -163,4 +167,110 @@ export const listPortfolio = createServerFn({ method: "GET" })
         dscr: dec.norm.base.dscr ?? null,
       };
     });
+  });
+
+// Side-by-side comparison for a chosen set of deals. Reuses the SAME
+// deterministic decision layer as the portfolio + deal page — no metric is
+// recomputed here, only selected from norm.base / norm.worstStress / findings.
+export const compareDeals = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ ids: z.array(z.string().uuid()).min(1).max(6) }).parse(d),
+  )
+  .handler(async ({ data, context }): Promise<ComparisonDeal[]> => {
+    const ids = data.ids;
+    const { data: projects, error } = await context.supabase
+      .from("projects")
+      .select("*")
+      .in("id", ids);
+    if (error) throw new Error(error.message);
+    if (!projects?.length) return [];
+
+    const [{ data: outputs }, { data: assumptions }] = await Promise.all([
+      context.supabase
+        .from("financial_outputs")
+        .select(
+          "project_id,scenario_key,metric_key,metric_label,value_numeric,unit,formula_text,inputs",
+        )
+        .in("project_id", ids),
+      context.supabase
+        .from("assumptions")
+        .select(
+          "project_id,field_key,field_label,category,value_numeric,value_text,unit,status,source_document_id,source_text,source_location,confidence_score,conflict_values",
+        )
+        .in("project_id", ids),
+    ]);
+
+    const out = new Map<string, any[]>();
+    const asm = new Map<string, any[]>();
+    for (const r of (outputs ?? []) as any[])
+      (out.get(r.project_id) ?? out.set(r.project_id, []).get(r.project_id)!).push(r);
+    for (const r of (assumptions ?? []) as any[])
+      (asm.get(r.project_id) ?? asm.set(r.project_id, []).get(r.project_id)!).push(r);
+
+    // Preserve the requested order so the grid is stable.
+    const byId = new Map(projects.map((p: any) => [p.id, p]));
+    return ids
+      .map((id) => byId.get(id))
+      .filter(Boolean)
+      .map((p: any) => {
+        const o = out.get(p.id) ?? [];
+        const a = asm.get(p.id) ?? [];
+        const dec = buildDecision(o as any, a as any);
+        const findings = dec.findings;
+        const keyFindings = [
+          ...(findings?.criticalFindings ?? []),
+          ...(findings?.highPriorityFindings ?? []),
+        ]
+          .slice(0, 3)
+          .map((f: any) => f.title);
+        const dataGaps = a.filter(
+          (x) => x.status === "missing" || x.status === "conflicting",
+        ).length;
+        return {
+          id: p.id,
+          name: p.name,
+          type: p.type,
+          location: p.location ?? null,
+          hasUnderwriting: dec.hasUnderwriting,
+          recommendation: dec.recommendation,
+          recommendationLabel: dec.recommendationLabel,
+          riskRating: dec.riskRating,
+          investmentScore: dec.investmentScore,
+          confidenceScore: dec.confidenceScore,
+          capital: capitalFor(p, dec.norm.base),
+          irr: dec.norm.base.irr_estimate ?? null,
+          equityMultiple: dec.norm.base.equity_multiple ?? null,
+          dscr: dec.norm.base.dscr ?? null,
+          yieldOnCost: dec.norm.base.yield_on_cost ?? null,
+          exitCap: dec.norm.base.exit_cap_rate_pct ?? null,
+          worstStressDscr: dec.norm.worstStress.dscr ?? null,
+          worstStressEm: dec.norm.worstStress.equity_multiple ?? null,
+          keyFindings,
+          dataGaps,
+          targetClose: p.target_close_date ?? p.completion_date ?? null,
+        };
+      });
+  });
+
+// Recorded IC decisions across all deals — feeds the Decision History report.
+export const listDecisionHistory = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<DecisionHistoryRow[]> => {
+    const { data, error } = await context.supabase
+      .from("decision_logs")
+      .select("project_id,decision,rationale,conditions,user_name,created_at,projects(name)")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (isMissingRelation(error)) return [];
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((d: any) => ({
+      project_id: d.project_id,
+      deal_name: d.projects?.name ?? "—",
+      decision: d.decision,
+      rationale: d.rationale ?? null,
+      conditions: d.conditions ?? null,
+      user_name: d.user_name ?? null,
+      created_at: d.created_at,
+    }));
   });

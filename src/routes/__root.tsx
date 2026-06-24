@@ -87,11 +87,24 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
+// Applied synchronously in <head> before first paint so the stored theme +
+// language are in place with no flash of the wrong palette. Mirrors the
+// resolution logic in preferences.tsx (default dark, honour "system").
+const NO_FLASH_THEME = `(function(){try{
+  var t=localStorage.getItem('agir-theme')||'dark';
+  var sysDark=window.matchMedia('(prefers-color-scheme: dark)').matches;
+  var r=t==='system'?(sysDark?'dark':'light'):t;
+  var el=document.documentElement;
+  el.classList.add(r);el.style.colorScheme=r;
+  var l=localStorage.getItem('agir-language');if(l==='fr'||l==='en')el.lang=l;
+}catch(e){}})();`;
+
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
+        <script dangerouslySetInnerHTML={{ __html: NO_FLASH_THEME }} />
       </head>
       <body>
         {children}

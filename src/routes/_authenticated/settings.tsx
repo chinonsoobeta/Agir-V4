@@ -1,11 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { usePreferences, type AppLanguage, type AppTheme } from "@/lib/preferences";
+import { setOnboardingDismissed } from "@/lib/preferences.functions";
 import { Button } from "@/components/ui/button";
-import { Moon, Sun, Monitor, Languages } from "lucide-react";
+import { Moon, Sun, Monitor, Languages, Rocket } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Settings — Agir" }] }),
@@ -16,6 +20,21 @@ function SettingsPage() {
   const [email, setEmail] = useState("");
   const [roles, setRoles] = useState<string[]>([]);
   const { t, theme, setTheme, language, setLanguage } = usePreferences();
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const resumeFn = useServerFn(setOnboardingDismissed);
+
+  async function resumeOnboarding() {
+    if (typeof window !== "undefined") window.localStorage.removeItem("agir-onboarding-dismissed");
+    try {
+      await resumeFn({ data: { dismissed: false } });
+    } catch {
+      /* table may be unavailable — localStorage clear still brings it back */
+    }
+    qc.invalidateQueries({ queryKey: ["onboarding"] });
+    toast.success(t("onb.resume"));
+    navigate({ to: "/dashboard" });
+  }
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       setEmail(data.user?.email ?? "");
@@ -90,6 +109,18 @@ function SettingsPage() {
                 </Button>
               ))}
             </PreferenceRow>
+          </div>
+        </Card>
+        <Card className="p-5">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+            {t("onb.title")}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground max-w-md">{t("onb.subtitle")}</p>
+            <Button size="sm" variant="outline" onClick={resumeOnboarding}>
+              <Rocket className="size-3.5 mr-1.5" />
+              {t("onb.resume")}
+            </Button>
           </div>
         </Card>
       </div>

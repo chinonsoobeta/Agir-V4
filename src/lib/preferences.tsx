@@ -1,89 +1,43 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  type AppLanguage,
+  type Formatters,
+  type TranslationKey,
+  localeFor,
+  makeFormatters,
+  translate,
+  translateWith,
+} from "./i18n";
 
 export type AppTheme = "light" | "dark" | "system";
-export type AppLanguage = "en" | "fr";
+export type { AppLanguage, TranslationKey } from "./i18n";
 
 type PreferencesContextValue = {
   theme: AppTheme;
   resolvedTheme: "light" | "dark";
   language: AppLanguage;
+  locale: string;
   setTheme: (theme: AppTheme) => void;
   setLanguage: (language: AppLanguage) => void;
   t: (key: TranslationKey) => string;
+  tx: (key: TranslationKey, vars: Record<string, string | number>) => string;
+  fmt: Formatters;
 };
-
-const copy = {
-  en: {
-    "nav.home": "Overview",
-    "nav.portfolio": "Portfolio",
-    "nav.deals": "Deal flow",
-    "nav.execution": "Execution",
-    "nav.markets": "Markets",
-    "nav.committee": "Investment Committee",
-    "nav.documents": "Documents",
-    "nav.analysis": "Analysis",
-    "nav.reports": "Reports",
-    "nav.integrations": "Integrations",
-    "nav.copilot": "Copilot",
-    "nav.settings": "Settings",
-    "nav.signOut": "Sign out",
-    "shell.workspace": "Investment OS",
-    "shell.live": "Live",
-    "settings.title": "Settings",
-    "settings.subtitle": "Account, appearance and workspace preferences",
-    "settings.account": "Account",
-    "settings.appearance": "Appearance",
-    "settings.theme": "Theme",
-    "settings.language": "Language",
-    "settings.dark": "Dark",
-    "settings.light": "Light",
-    "settings.system": "System",
-    "settings.english": "English",
-    "settings.french": "French",
-  },
-  fr: {
-    "nav.home": "Vue d’ensemble",
-    "nav.portfolio": "Portefeuille",
-    "nav.deals": "Flux d’affaires",
-    "nav.execution": "Exécution",
-    "nav.markets": "Marchés",
-    "nav.committee": "Comité d’investissement",
-    "nav.documents": "Documents",
-    "nav.analysis": "Analyse",
-    "nav.reports": "Rapports",
-    "nav.integrations": "Intégrations",
-    "nav.copilot": "Copilote",
-    "nav.settings": "Paramètres",
-    "nav.signOut": "Déconnexion",
-    "shell.workspace": "Système d’investissement",
-    "shell.live": "En direct",
-    "settings.title": "Paramètres",
-    "settings.subtitle": "Compte, apparence et préférences de l’espace de travail",
-    "settings.account": "Compte",
-    "settings.appearance": "Apparence",
-    "settings.theme": "Thème",
-    "settings.language": "Langue",
-    "settings.dark": "Sombre",
-    "settings.light": "Clair",
-    "settings.system": "Système",
-    "settings.english": "Anglais",
-    "settings.french": "Français",
-  },
-} as const;
-
-export type TranslationKey = keyof typeof copy.en;
 
 const PreferencesContext = createContext<PreferencesContextValue | null>(null);
 
+const THEME_KEY = "agir-theme";
+const LANG_KEY = "agir-language";
+
 function storedTheme(): AppTheme {
   if (typeof window === "undefined") return "dark";
-  const value = window.localStorage.getItem("agir-theme");
+  const value = window.localStorage.getItem(THEME_KEY);
   return value === "light" || value === "dark" || value === "system" ? value : "dark";
 }
 
 function storedLanguage(): AppLanguage {
   if (typeof window === "undefined") return "en";
-  return window.localStorage.getItem("agir-language") === "fr" ? "fr" : "en";
+  return window.localStorage.getItem(LANG_KEY) === "fr" ? "fr" : "en";
 }
 
 export function PreferencesProvider({ children }: { children: ReactNode }) {
@@ -106,8 +60,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     root.classList.toggle("light", resolvedTheme === "light");
     root.style.colorScheme = resolvedTheme;
     root.lang = language;
-    window.localStorage.setItem("agir-theme", theme);
-    window.localStorage.setItem("agir-language", language);
+    window.localStorage.setItem(THEME_KEY, theme);
+    window.localStorage.setItem(LANG_KEY, language);
   }, [theme, resolvedTheme, language]);
 
   const value = useMemo<PreferencesContextValue>(
@@ -115,9 +69,12 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       theme,
       resolvedTheme,
       language,
+      locale: localeFor(language),
       setTheme: setThemeState,
       setLanguage: setLanguageState,
-      t: (key) => copy[language][key] ?? copy.en[key],
+      t: (key) => translate(language, key),
+      tx: (key, vars) => translateWith(language, key, vars),
+      fmt: makeFormatters(language),
     }),
     [theme, resolvedTheme, language],
   );

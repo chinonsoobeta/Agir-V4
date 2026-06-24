@@ -35,15 +35,42 @@ import {
   Rows3,
   LayoutGrid,
   CalendarClock,
+  ChevronDown,
+  ChevronRight,
+  Columns3,
+  Bookmark,
+  ArrowUpDown,
+  X,
+  Check,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { fmtCompact } from "@/lib/finance";
 import { ASSET_TYPES, assetTypeLabel } from "@/lib/asset-types";
+import { DEAL_TEMPLATES, dealTemplate } from "@/lib/deal-templates";
 import { PIPELINE_STAGES, RECOMMENDATION_TONE } from "@/lib/decision";
 import { RecommendationPill, RiskPill, TONE_TEXT } from "@/components/decision-ui";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { daysUntil } from "@/lib/platform-insights";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
+  useSavedDealViews,
+  sortDeals,
+  DEAL_COLUMNS,
+  DEAL_SORTS,
+  DEFAULT_COLUMNS,
+  type DealSort,
+  type DealColumnKey,
+} from "@/lib/deal-views";
 
 const portfolioQ = queryOptions({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
 
@@ -59,10 +86,15 @@ function DealsPage() {
   const [filter, setFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"grid" | "list">("list");
+  const [sort, setSort] = useState<DealSort>("updated");
+  const [columns, setColumns] = useState<DealColumnKey[]>(DEFAULT_COLUMNS);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const qc = useQueryClient();
   const navigate = useNavigate();
   const createFn = useServerFn(createProject);
   const seedFn = useServerFn(seedHarbourCentre);
+  const updateFn = useServerFn(updateProject);
+  const { views, save, remove } = useSavedDealViews();
   useRealtimeRefresh();
 
   const seed = useMutation({
@@ -76,11 +108,27 @@ function DealsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Bulk stage update across the selected deals — invalidates once at the end.
+  const bulkUpdate = useMutation({
+    mutationFn: async (status: string) => {
+      const ids = [...selected];
+      await Promise.all(ids.map((id) => updateFn({ data: { id, status: status as any } })));
+      return ids.length;
+    },
+    onSuccess: (n) => {
+      qc.invalidateQueries({ queryKey: ["portfolio"] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      setSelected(new Set());
+      toast.success(`Updated ${n} deal${n === 1 ? "" : "s"}`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const stageCounts = PIPELINE_STAGES.map((s) => ({
     stage: s,
     count: deals.filter((d) => d.stage === s).length,
   }));
-  const visible = deals.filter((deal) => {
+  const filtered = deals.filter((deal) => {
     if (filter !== "all" && deal.stage !== filter) return false;
     const term = search.trim().toLowerCase();
     return (
@@ -90,6 +138,47 @@ function DealsPage() {
       )
     );
   });
+  const visible = sortDeals(filtered, sort);
+
+  function applyView(v: {
+    filter: string;
+    search: string;
+    sort: DealSort;
+    view: "grid" | "list";
+    columns: DealColumnKey[];
+  }) {
+    setFilter(v.filter);
+    setSearch(v.search);
+    setSort(v.sort);
+    setView(v.view);
+    setColumns(v.columns?.length ? v.columns : DEFAULT_COLUMNS);
+    setSelected(new Set());
+  }
+  function saveCurrentView() {
+    const name = window.prompt("Name this view");
+    if (!name?.trim()) return;
+    save(name.trim(), { filter, search, sort, view, columns });
+    toast.success(`Saved view "${name.trim()}"`);
+  }
+  function resetView() {
+    applyView({
+      filter: "all",
+      search: "",
+      sort: "updated",
+      view: "list",
+      columns: DEFAULT_COLUMNS,
+    });
+  }
+  const toggleSelected = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  const toggleAll = () =>
+    setSelected((prev) =>
+      prev.size === visible.length ? new Set() : new Set(visible.map((d) => d.id)),
+    );
 
   return (
     <>
@@ -136,8 +225,8 @@ function DealsPage() {
               />
             ))}
           </div>
-          <div className="flex items-center gap-2">
-            <div className="relative w-full sm:w-64">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full sm:w-56">
               <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
@@ -146,6 +235,96 @@ function DealsPage() {
                 className="pl-9"
               />
             </div>
+
+            {/* Sort */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9">
+                  <ArrowUpDown className="size-3.5 mr-1.5" />
+                  {DEAL_SORTS.find((s) => s.value === sort)?.label ?? "Sort"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                {DEAL_SORTS.map((s) => (
+                  <DropdownMenuItem key={s.value} onClick={() => setSort(s.value)}>
+                    {sort === s.value && <Check className="size-3.5 mr-1.5" />}
+                    <span className={sort === s.value ? "" : "ml-[22px]"}>{s.label}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Column visibility (list view) */}
+            {view === "list" && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9">
+                    <Columns3 className="size-3.5 mr-1.5" />
+                    Columns
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Visible columns</DropdownMenuLabel>
+                  {DEAL_COLUMNS.map((c) => (
+                    <DropdownMenuCheckboxItem
+                      key={c.key}
+                      checked={columns.includes(c.key)}
+                      onCheckedChange={(on) =>
+                        setColumns((prev) =>
+                          on ? [...new Set([...prev, c.key])] : prev.filter((k) => k !== c.key),
+                        )
+                      }
+                    >
+                      {c.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setColumns(DEFAULT_COLUMNS)}>
+                    Reset columns
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            {/* Saved views */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9">
+                  <Bookmark className="size-3.5 mr-1.5" />
+                  Views
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Saved views</DropdownMenuLabel>
+                {views.length === 0 && (
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                    No saved views yet
+                  </div>
+                )}
+                {views.map((v) => (
+                  <div key={v.id} className="flex items-center">
+                    <DropdownMenuItem className="flex-1" onClick={() => applyView(v)}>
+                      {v.name}
+                    </DropdownMenuItem>
+                    <button
+                      className="px-2 text-muted-foreground hover:text-destructive"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        remove(v.id);
+                      }}
+                      aria-label={`Delete ${v.name}`}
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={saveCurrentView}>Save current view…</DropdownMenuItem>
+                <DropdownMenuItem onClick={resetView}>Reset to default</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <div className="flex rounded-md border border-border p-0.5">
               <Button
                 variant={view === "list" ? "secondary" : "ghost"}
@@ -167,6 +346,28 @@ function DealsPage() {
           </div>
         </div>
 
+        {/* Bulk action bar (list view) */}
+        {selected.size > 0 && (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/40 bg-primary/5 px-4 py-2.5">
+            <span className="text-sm font-medium">{selected.size} selected</span>
+            <Select onValueChange={(v) => bulkUpdate.mutate(v)}>
+              <SelectTrigger className="h-8 w-48 text-xs" disabled={bulkUpdate.isPending}>
+                <SelectValue placeholder="Set pipeline status…" />
+              </SelectTrigger>
+              <SelectContent>
+                {PROJECT_STATUSES.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
+              <X className="size-3.5 mr-1" /> Clear
+            </Button>
+          </div>
+        )}
+
         {visible.length === 0 ? (
           <Card className="p-16 text-center elevated">
             <p className="text-sm text-muted-foreground">
@@ -180,7 +381,13 @@ function DealsPage() {
             ))}
           </div>
         ) : (
-          <DealTable deals={visible} />
+          <DealTable
+            deals={visible}
+            columns={columns}
+            selected={selected}
+            onToggle={toggleSelected}
+            onToggleAll={toggleAll}
+          />
         )}
       </div>
     </>
@@ -336,28 +543,58 @@ const PROJECT_STATUSES = [
   { value: "cancelled", label: "Cancelled" },
 ] as const;
 
-function DealTable({ deals }: { deals: DealSummary[] }) {
+function DealTable({
+  deals,
+  columns,
+  selected,
+  onToggle,
+  onToggleAll,
+}: {
+  deals: DealSummary[];
+  columns: DealColumnKey[];
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+  onToggleAll: () => void;
+}) {
+  const show = (k: DealColumnKey) => columns.includes(k);
+  const allSelected = deals.length > 0 && deals.every((d) => selected.has(d.id));
   return (
     <Card className="overflow-x-auto elevated">
-      <table className="data-grid w-full min-w-[980px]">
+      <table className="data-grid w-full min-w-[720px]">
         <thead>
           <tr>
+            <th className="w-9">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={onToggleAll}
+                aria-label="Select all"
+              />
+            </th>
             <th className="text-left">Deal</th>
-            <th className="text-left">Stage</th>
-            <th className="text-left">Source</th>
-            <th className="text-right">Capital</th>
-            <th className="text-right">Probability</th>
-            <th className="text-right">Investment</th>
-            <th className="text-right">Confidence</th>
-            <th className="text-left">Target close</th>
+            {show("stage") && <th className="text-left">Stage</th>}
+            {show("source") && <th className="text-left">Source</th>}
+            {show("capital") && <th className="text-right">Capital</th>}
+            {show("probability") && <th className="text-right">Probability</th>}
+            {show("investment") && <th className="text-right">Investment</th>}
+            {show("confidence") && <th className="text-right">Confidence</th>}
+            {show("close") && <th className="text-left">Target close</th>}
             <th />
           </tr>
         </thead>
         <tbody>
           {deals.map((deal) => {
             const days = daysUntil(deal.targetCloseDate);
+            const overdue = days != null && days < 0;
+            const isSelected = selected.has(deal.id);
             return (
-              <tr key={deal.id}>
+              <tr key={deal.id} className={isSelected ? "bg-primary/5" : ""}>
+                <td>
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={() => onToggle(deal.id)}
+                    aria-label={`Select ${deal.name}`}
+                  />
+                </td>
                 <td>
                   <Link
                     to="/projects/$id"
@@ -368,19 +605,28 @@ function DealTable({ deals }: { deals: DealSummary[] }) {
                   </Link>
                   <div className="text-[11px] text-muted-foreground">{deal.location || "—"}</div>
                 </td>
-                <td>
-                  <span className="text-xs">{deal.stage}</span>
-                </td>
-                <td className="text-muted-foreground">{deal.source || "Direct"}</td>
-                <td className="num text-right">{fmtCompact(deal.capital)}</td>
-                <td className="num text-right">{deal.probability}%</td>
-                <td className="num text-right">{deal.investmentScore ?? "—"}</td>
-                <td className="num text-right">{deal.confidenceScore}</td>
-                <td>
-                  <span className={days != null && days < 0 ? "text-destructive" : ""}>
-                    {deal.targetCloseDate || "—"}
-                  </span>
-                </td>
+                {show("stage") && (
+                  <td>
+                    <span className="text-xs">{deal.stage}</span>
+                  </td>
+                )}
+                {show("source") && (
+                  <td className="text-muted-foreground">{deal.source || "Direct"}</td>
+                )}
+                {show("capital") && <td className="num text-right">{fmtCompact(deal.capital)}</td>}
+                {show("probability") && <td className="num text-right">{deal.probability}%</td>}
+                {show("investment") && (
+                  <td className="num text-right">{deal.investmentScore ?? "—"}</td>
+                )}
+                {show("confidence") && <td className="num text-right">{deal.confidenceScore}</td>}
+                {show("close") && (
+                  <td>
+                    <span className={overdue ? "text-destructive font-medium" : ""}>
+                      {deal.targetCloseDate || "—"}
+                      {overdue && ` · ${Math.abs(days!)}d overdue`}
+                    </span>
+                  </td>
+                )}
                 <td>
                   <Link to="/projects/$id" params={{ id: deal.id }}>
                     <Button variant="ghost" size="icon">
@@ -416,6 +662,8 @@ function Stat({
 
 function NewDealDialog({ onClose, createFn }: { onClose: () => void; createFn: any }) {
   const qc = useQueryClient();
+  const [templateId, setTemplateId] = useState("blank");
+  const [showFinancials, setShowFinancials] = useState(false);
   const [form, setForm] = useState({
     name: "",
     location: "",
@@ -446,14 +694,33 @@ function NewDealDialog({ onClose, createFn }: { onClose: () => void; createFn: a
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["portfolio"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["onboarding"] });
       toast.success("Deal created");
       onClose();
     },
     onError: (e: Error) => toast.error(e.message),
   });
   const num = (v: string) => Number(v) || 0;
+
+  // Templates pre-fill DEAL METADATA only (type, source, probability, a name
+  // prefix). They never seed underwriting numbers — those still come from
+  // documents the user reviews. Every default is shown in the picker.
+  function applyTemplate(id: string) {
+    setTemplateId(id);
+    const tpl = dealTemplate(id);
+    if (!tpl) return;
+    setForm((f) => ({
+      ...f,
+      type: tpl.type,
+      source: tpl.source,
+      probability: tpl.probability,
+      name: tpl.namePrefix && !f.name ? tpl.namePrefix : f.name,
+    }));
+  }
+  const selected = dealTemplate(templateId);
+
   return (
-    <DialogContent className="max-w-2xl">
+    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle className="display text-xl">New deal</DialogTitle>
       </DialogHeader>
@@ -463,123 +730,190 @@ function NewDealDialog({ onClose, createFn }: { onClose: () => void; createFn: a
           create.mutate(form);
         }}
       >
-        <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2">
-            <Label>Deal name</Label>
-            <Input
-              required
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-          </div>
+        <div className="space-y-4">
           <div>
-            <Label>Location</Label>
-            <Input
-              value={form.location}
-              onChange={(e) => setForm({ ...form, location: e.target.value })}
-            />
+            <Label className="text-xs text-muted-foreground">Start from a template</Label>
+            <div className="mt-1.5 grid sm:grid-cols-2 gap-2">
+              {DEAL_TEMPLATES.map((tpl) => (
+                <button
+                  type="button"
+                  key={tpl.id}
+                  onClick={() => applyTemplate(tpl.id)}
+                  className={`text-left rounded-lg border p-3 transition-colors ${
+                    templateId === tpl.id
+                      ? "border-primary/50 bg-primary/5"
+                      : "border-border hover:bg-accent/40"
+                  }`}
+                >
+                  <div className="text-sm font-medium">{tpl.name}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{tpl.description}</div>
+                </button>
+              ))}
+            </div>
           </div>
-          <div>
-            <Label>Type</Label>
-            <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ASSET_TYPES.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>
-                    {t.label}
-                  </SelectItem>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <Label>Deal name</Label>
+              <Input
+                required
+                autoFocus
+                placeholder="e.g. Harbour Centre"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Location</Label>
+              <Input
+                value={form.location}
+                onChange={(e) => setForm({ ...form, location: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Type</Label>
+              <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ASSET_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Source</Label>
+              <Input
+                placeholder="Broker, direct, partner…"
+                value={form.source}
+                onChange={(e) => setForm({ ...form, source: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Deal lead</Label>
+              <Input
+                value={form.lead_owner}
+                onChange={(e) => setForm({ ...form, lead_owner: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Probability %</Label>
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                value={form.probability}
+                onChange={(e) => setForm({ ...form, probability: num(e.target.value) })}
+              />
+            </div>
+            <div>
+              <Label>Target close</Label>
+              <Input
+                type="date"
+                value={form.target_close_date}
+                onChange={(e) => setForm({ ...form, target_close_date: e.target.value })}
+              />
+            </div>
+          </div>
+
+          {selected && selected.suggestedDocs.length > 0 && (
+            <div className="rounded-lg border border-border bg-muted/30 p-3">
+              <div className="text-xs font-medium text-muted-foreground">
+                Suggested documents to gather next
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {selected.suggestedDocs.map((doc) => (
+                  <span
+                    key={doc}
+                    className="text-[11px] rounded-full border border-border bg-card px-2 py-0.5"
+                  >
+                    {doc}
+                  </span>
                 ))}
-              </SelectContent>
-            </Select>
-          </div>
+              </div>
+            </div>
+          )}
+
           <div>
-            <Label>Source</Label>
-            <Input
-              placeholder="Broker, direct, partner…"
-              value={form.source}
-              onChange={(e) => setForm({ ...form, source: e.target.value })}
-            />
+            <button
+              type="button"
+              onClick={() => setShowFinancials((v) => !v)}
+              className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+            >
+              {showFinancials ? (
+                <ChevronDown className="size-3.5" />
+              ) : (
+                <ChevronRight className="size-3.5" />
+              )}
+              Optional quick financial summary
+            </button>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              For reference only — underwriting always runs on the documents and approved
+              assumptions, never these figures.
+            </p>
+            {showFinancials && (
+              <div className="mt-2 grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Acquisition cost</Label>
+                  <Input
+                    type="number"
+                    value={form.acquisition_cost}
+                    onChange={(e) => setForm({ ...form, acquisition_cost: num(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <Label>Construction cost</Label>
+                  <Input
+                    type="number"
+                    value={form.construction_cost}
+                    onChange={(e) => setForm({ ...form, construction_cost: num(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <Label>Revenue forecast</Label>
+                  <Input
+                    type="number"
+                    value={form.revenue_forecast}
+                    onChange={(e) => setForm({ ...form, revenue_forecast: num(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <Label>Debt amount</Label>
+                  <Input
+                    type="number"
+                    value={form.debt_amount}
+                    onChange={(e) => setForm({ ...form, debt_amount: num(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <Label>Equity amount</Label>
+                  <Input
+                    type="number"
+                    value={form.equity_amount}
+                    onChange={(e) => setForm({ ...form, equity_amount: num(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <Label>Interest rate %</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={form.interest_rate}
+                    onChange={(e) => setForm({ ...form, interest_rate: num(e.target.value) })}
+                  />
+                </div>
+              </div>
+            )}
           </div>
+
           <div>
-            <Label>Deal lead</Label>
-            <Input
-              value={form.lead_owner}
-              onChange={(e) => setForm({ ...form, lead_owner: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label>Probability %</Label>
-            <Input
-              type="number"
-              min="0"
-              max="100"
-              value={form.probability}
-              onChange={(e) => setForm({ ...form, probability: num(e.target.value) })}
-            />
-          </div>
-          <div>
-            <Label>Target close</Label>
-            <Input
-              type="date"
-              value={form.target_close_date}
-              onChange={(e) => setForm({ ...form, target_close_date: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label>Acquisition Cost</Label>
-            <Input
-              type="number"
-              value={form.acquisition_cost}
-              onChange={(e) => setForm({ ...form, acquisition_cost: num(e.target.value) })}
-            />
-          </div>
-          <div>
-            <Label>Construction Cost</Label>
-            <Input
-              type="number"
-              value={form.construction_cost}
-              onChange={(e) => setForm({ ...form, construction_cost: num(e.target.value) })}
-            />
-          </div>
-          <div>
-            <Label>Revenue Forecast</Label>
-            <Input
-              type="number"
-              value={form.revenue_forecast}
-              onChange={(e) => setForm({ ...form, revenue_forecast: num(e.target.value) })}
-            />
-          </div>
-          <div>
-            <Label>Debt Amount</Label>
-            <Input
-              type="number"
-              value={form.debt_amount}
-              onChange={(e) => setForm({ ...form, debt_amount: num(e.target.value) })}
-            />
-          </div>
-          <div>
-            <Label>Equity Amount</Label>
-            <Input
-              type="number"
-              value={form.equity_amount}
-              onChange={(e) => setForm({ ...form, equity_amount: num(e.target.value) })}
-            />
-          </div>
-          <div>
-            <Label>Interest Rate %</Label>
-            <Input
-              type="number"
-              step="0.01"
-              value={form.interest_rate}
-              onChange={(e) => setForm({ ...form, interest_rate: num(e.target.value) })}
-            />
-          </div>
-          <div className="col-span-2">
             <Label>Notes</Label>
             <Textarea
-              rows={3}
+              rows={2}
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />

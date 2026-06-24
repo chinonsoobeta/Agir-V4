@@ -46,6 +46,7 @@ export const updateMilestone = createServerFn({ method: "POST" })
         status: z.enum(["not_started", "in_progress", "blocked", "complete"]).optional(),
         due_date: z.string().nullable().optional(),
         priority: z.enum(["low", "medium", "high", "critical"]).optional(),
+        notes: z.string().max(4000).nullable().optional(),
       })
       .parse(value),
   )

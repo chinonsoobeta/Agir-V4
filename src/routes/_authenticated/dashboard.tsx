@@ -6,9 +6,15 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { fmtCompact } from "@/lib/finance";
-import { buildPortfolioInsights, daysUntil, dealVelocityScore } from "@/lib/platform-insights";
+import {
+  buildPortfolioInsights,
+  daysUntil,
+  dealVelocityScore,
+  summarizePortfolio,
+} from "@/lib/platform-insights";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { usePreferences } from "@/lib/preferences";
+import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import {
   ArrowRight,
   BriefcaseBusiness,
@@ -20,7 +26,7 @@ import {
   Sparkles,
   TrendingUp,
 } from "lucide-react";
-import { PIPELINE_STAGES, RECOMMENDATION_TONE } from "@/lib/decision";
+import { RECOMMENDATION_TONE } from "@/lib/decision";
 import { TONE_TEXT } from "@/components/decision-ui";
 
 const portfolioQ = queryOptions({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
@@ -37,12 +43,12 @@ function ExecutiveOverview() {
   useRealtimeRefresh();
   const fr = language === "fr";
 
+  // One shared, deterministic rollup — no per-component ad-hoc reductions.
+  const summary = summarizePortfolio(deals);
   const active = deals.filter((deal) => !["Approved", "Rejected"].includes(deal.stage));
-  const capital = deals.reduce((sum, deal) => sum + deal.capital, 0);
-  const weighted = deals.reduce((sum, deal) => sum + deal.capital * (deal.probability / 100), 0);
-  const averageScore = average(
-    deals.map((deal) => deal.investmentScore).filter((value): value is number => value != null),
-  );
+  const capital = summary.grossCapital;
+  const weighted = summary.weightedCapital;
+  const averageScore = summary.avgInvestmentScore ?? 0;
   const averageVelocity = average(active.map(dealVelocityScore));
   const upcoming = deals
     .map((deal) => ({ deal, days: daysUntil(deal.targetCloseDate) }))
@@ -77,6 +83,7 @@ function ExecutiveOverview() {
         }
       />
       <div className="p-5 md:p-8 space-y-7">
+        <OnboardingChecklist />
         <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-success">
           <Radio className="size-3" />
           {fr ? "Données opérationnelles en direct" : "Live operating data"}
@@ -110,9 +117,7 @@ function ExecutiveOverview() {
           <Metric
             icon={ShieldAlert}
             label={fr ? "Risque élevé" : "Elevated risk"}
-            value={String(
-              deals.filter((deal) => ["High", "Critical"].includes(deal.riskRating)).length,
-            )}
+            value={String(summary.elevatedRiskCount)}
             detail={fr ? "à examiner" : "need review"}
           />
         </div>
@@ -129,25 +134,21 @@ function ExecutiveOverview() {
             />
             <Card className="p-5 elevated">
               <div className="space-y-4">
-                {PIPELINE_STAGES.map((stage) => {
-                  const stageDeals = deals.filter((deal) => deal.stage === stage);
-                  const stageCapital = stageDeals.reduce((sum, deal) => sum + deal.capital, 0);
-                  const width = deals.length ? (stageDeals.length / deals.length) * 100 : 0;
+                {summary.stages.map(({ stage, count, capital: stageCapital }) => {
+                  const width = deals.length ? (count / deals.length) * 100 : 0;
                   return (
                     <div key={stage}>
                       <div className="flex items-center justify-between gap-4 text-sm">
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{stage}</span>
-                          <span className="num text-xs text-muted-foreground">
-                            {stageDeals.length}
-                          </span>
+                          <span className="num text-xs text-muted-foreground">{count}</span>
                         </div>
                         <span className="num text-xs">{fmtCompact(stageCapital)}</span>
                       </div>
                       <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
                         <div
                           className="h-full rounded-full bg-primary transition-all"
-                          style={{ width: `${Math.max(width, stageDeals.length ? 4 : 0)}%` }}
+                          style={{ width: `${Math.max(width, count ? 4 : 0)}%` }}
                         />
                       </div>
                     </div>
