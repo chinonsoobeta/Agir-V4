@@ -26,6 +26,7 @@ import { Route as AuthenticatedDocumentsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedDealsRouteImport } from './routes/_authenticated/deals'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCopilotRouteImport } from './routes/_authenticated/copilot'
+import { Route as AuthenticatedCompareRouteImport } from './routes/_authenticated/compare'
 import { Route as AuthenticatedCommitteeRouteImport } from './routes/_authenticated/committee'
 import { Route as AuthenticatedAssumptionsRouteImport } from './routes/_authenticated/assumptions'
 import { Route as AuthenticatedAnalysisRouteImport } from './routes/_authenticated/analysis'
@@ -117,6 +118,11 @@ const AuthenticatedCopilotRoute = AuthenticatedCopilotRouteImport.update({
   path: '/copilot',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedCompareRoute = AuthenticatedCompareRouteImport.update({
+  id: '/compare',
+  path: '/compare',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedCommitteeRoute = AuthenticatedCommitteeRouteImport.update({
   id: '/committee',
   path: '/committee',
@@ -152,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/analysis': typeof AuthenticatedAnalysisRoute
   '/assumptions': typeof AuthenticatedAssumptionsRoute
   '/committee': typeof AuthenticatedCommitteeRoute
+  '/compare': typeof AuthenticatedCompareRoute
   '/copilot': typeof AuthenticatedCopilotRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/deals': typeof AuthenticatedDealsRoute
@@ -175,6 +182,7 @@ export interface FileRoutesByTo {
   '/analysis': typeof AuthenticatedAnalysisRoute
   '/assumptions': typeof AuthenticatedAssumptionsRoute
   '/committee': typeof AuthenticatedCommitteeRoute
+  '/compare': typeof AuthenticatedCompareRoute
   '/copilot': typeof AuthenticatedCopilotRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/deals': typeof AuthenticatedDealsRoute
@@ -199,6 +207,7 @@ export interface FileRoutesById {
   '/_authenticated/analysis': typeof AuthenticatedAnalysisRoute
   '/_authenticated/assumptions': typeof AuthenticatedAssumptionsRoute
   '/_authenticated/committee': typeof AuthenticatedCommitteeRoute
+  '/_authenticated/compare': typeof AuthenticatedCompareRoute
   '/_authenticated/copilot': typeof AuthenticatedCopilotRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/deals': typeof AuthenticatedDealsRoute
@@ -224,6 +233,7 @@ export interface FileRouteTypes {
     | '/analysis'
     | '/assumptions'
     | '/committee'
+    | '/compare'
     | '/copilot'
     | '/dashboard'
     | '/deals'
@@ -247,6 +257,7 @@ export interface FileRouteTypes {
     | '/analysis'
     | '/assumptions'
     | '/committee'
+    | '/compare'
     | '/copilot'
     | '/dashboard'
     | '/deals'
@@ -270,6 +281,7 @@ export interface FileRouteTypes {
     | '/_authenticated/analysis'
     | '/_authenticated/assumptions'
     | '/_authenticated/committee'
+    | '/_authenticated/compare'
     | '/_authenticated/copilot'
     | '/_authenticated/dashboard'
     | '/_authenticated/deals'
@@ -416,6 +428,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCopilotRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/compare': {
+      id: '/_authenticated/compare'
+      path: '/compare'
+      fullPath: '/compare'
+      preLoaderRoute: typeof AuthenticatedCompareRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/committee': {
       id: '/_authenticated/committee'
       path: '/committee'
@@ -473,6 +492,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAnalysisRoute: typeof AuthenticatedAnalysisRoute
   AuthenticatedAssumptionsRoute: typeof AuthenticatedAssumptionsRoute
   AuthenticatedCommitteeRoute: typeof AuthenticatedCommitteeRoute
+  AuthenticatedCompareRoute: typeof AuthenticatedCompareRoute
   AuthenticatedCopilotRoute: typeof AuthenticatedCopilotRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDealsRoute: typeof AuthenticatedDealsRoute
@@ -491,6 +511,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAnalysisRoute: AuthenticatedAnalysisRoute,
   AuthenticatedAssumptionsRoute: AuthenticatedAssumptionsRoute,
   AuthenticatedCommitteeRoute: AuthenticatedCommitteeRoute,
+  AuthenticatedCompareRoute: AuthenticatedCompareRoute,
   AuthenticatedCopilotRoute: AuthenticatedCopilotRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDealsRoute: AuthenticatedDealsRoute,

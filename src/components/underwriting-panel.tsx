@@ -764,7 +764,7 @@ function MemoReportView({ report }: { report: any }) {
         </div>
       )}
 
-      <div className={`rounded px-3 py-2 text-sm font-semibold text-white ${isReject ? "bg-destructive" : report.verdict_code === "APPROVE" ? "bg-success" : "bg-chart-5"}`}>
+      <div className={`rounded px-3 py-2 text-sm font-semibold ${isReject ? "bg-destructive text-destructive-foreground" : report.verdict_code === "APPROVE" ? "bg-success text-success-foreground" : "bg-chart-5 text-warning-foreground"}`}>
         {report.verdict_banner}
       </div>
       {report.verdict_narrative && <p className="text-sm text-muted-foreground">{report.verdict_narrative}</p>}

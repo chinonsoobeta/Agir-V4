@@ -18,6 +18,7 @@ import {
   Languages,
   Menu,
   Radio,
+  GitCompareArrows,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -30,6 +31,7 @@ const nav = [
   { to: "/dashboard", label: "nav.home", icon: LayoutDashboard },
   { to: "/portfolio", label: "nav.portfolio", icon: LayoutGrid },
   { to: "/deals", label: "nav.deals", icon: Layers },
+  { to: "/compare", label: "nav.compare", icon: GitCompareArrows },
   { to: "/execution", label: "nav.execution", icon: Workflow },
   { to: "/markets", label: "nav.markets", icon: Radar },
   { to: "/committee", label: "nav.committee", icon: Gavel },
