@@ -1,6 +1,6 @@
 // Server-only: render the synthetic Harbour demo documents (defined in
-// harbour-demo-docs.ts) into real, downloadable file bytes — text-bearing PDFs
-// via jsPDF and real spreadsheets via xlsx — so the extraction pipeline reads
+// harbour-demo-docs.ts) into real, downloadable file bytes: text-bearing PDFs
+// via jsPDF and real spreadsheets via xlsx: so the extraction pipeline reads
 // them exactly as it would real uploads. Deterministic: identical bytes-by-
 // content every run (no timestamps embedded in the text layer).
 

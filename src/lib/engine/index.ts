@@ -35,7 +35,7 @@ export {
   type ProvenanceReport,
 } from "./provenance";
 
-// Golden fixture 1: Maple Heights — marginal deal, correct math.
+// Golden fixture 1: Maple Heights: marginal deal, correct math.
 export function mapleHeightsInput() {
   return {
     budget: {

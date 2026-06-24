@@ -1,4 +1,4 @@
-// Memo download renderers — proves the PDF and DOCX renderers produce
+// Memo download renderers: proves the PDF and DOCX renderers produce
 // well-formed files from a real report model (PDF magic bytes; DOCX is a valid
 // ZIP / OOXML package). Runs in Node, so it guards the download feature without
 // a browser.

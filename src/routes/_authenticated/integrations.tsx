@@ -63,7 +63,7 @@ const CATALOG = [
 ] as const;
 
 export const Route = createFileRoute("/_authenticated/integrations")({
-  head: () => ({ meta: [{ title: "Integrations — Agir" }] }),
+  head: () => ({ meta: [{ title: "Integrations | Agir" }] }),
   loader: ({ context }) => context.queryClient.ensureQueryData(integrationsQ),
   component: IntegrationsPage,
 });
@@ -88,19 +88,19 @@ function IntegrationsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Connected workspace"
+        eyebrow="Connected systems"
         title="Integrations"
-        subtitle="Connect the systems your team already uses and keep decision data synchronized."
+        subtitle="See what is connected, when it last synced, and whether it needs attention."
       />
       <div className="p-5 md:p-8 space-y-6">
         <Card className="p-5 elevated bg-primary/[0.04]">
           <div className="flex items-start gap-3">
             <Plug className="size-5 text-primary mt-0.5" />
             <div>
-              <div className="font-semibold">A governed integration layer</div>
+              <div className="font-semibold">Financial logic stays inside Agir</div>
               <p className="text-sm text-muted-foreground mt-1">
-                Connections store status and sync metadata only. Financial decisions still run
-                through Agir’s deterministic engine and approved assumptions.
+                Connected tools can supply records and documents. Agir still calculates every
+                financial result from approved assumptions.
               </p>
             </div>
           </div>

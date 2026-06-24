@@ -155,7 +155,7 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   }
 
   const irrFormula = equityWipeout
-    ? `Equity loss — IRR not meaningful: sale proceeds ${money(netSaleBeforeDebt)} < loan payoff ${money(loanPayoffAtExit)}; EM ≈ 0.0x`
+    ? `Equity loss: IRR not meaningful: sale proceeds ${money(netSaleBeforeDebt)} < loan payoff ${money(loanPayoffAtExit)}; EM ≈ 0.0x`
     : Number.isFinite(irrPct)
       ? `IRR from equity cash flows [${irrFlows.map((v) => money(v)).join(", ")}] = ${irrPct.toFixed(2)}%`
       : "IRR not meaningful: equity cash flows do not include both negative and positive values.";

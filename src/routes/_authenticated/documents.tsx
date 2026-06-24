@@ -47,7 +47,7 @@ const CATEGORIES = [
 ];
 
 export const Route = createFileRoute("/_authenticated/documents")({
-  head: () => ({ meta: [{ title: "Documents — Agir" }] }),
+  head: () => ({ meta: [{ title: "Documents | Agir" }] }),
   loader: ({ context }) =>
     Promise.all([
       context.queryClient.ensureQueryData(docsQ),
@@ -62,7 +62,7 @@ function DocumentsPage() {
   const { data: projects } = useSuspenseQuery(projectsQ);
   const { data: allAssumptions } = useSuspenseQuery(allAssumptionsQ);
 
-  // Which document contributed which assumptions — the provenance link.
+  // Which document contributed which assumptions: the provenance link.
   const contributions = new Map<string, string[]>();
   for (const a of allAssumptions as any[]) {
     if (!a.source_document_id) continue;
@@ -127,7 +127,7 @@ function DocumentsPage() {
                   <SelectValue placeholder="Unassigned" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={UNASSIGNED}>— Unassigned —</SelectItem>
+                  <SelectItem value={UNASSIGNED}>:  Unassigned : </SelectItem>
                   {validProjects.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name}
@@ -179,7 +179,7 @@ function DocumentsPage() {
                     <div className="min-w-0">
                       <div className="font-medium text-sm truncate">{d.name}</div>
                       <div className="text-[11px] text-muted-foreground mt-0.5">
-                        {d.category || "—"} · {new Date(d.upload_date).toLocaleDateString()}
+                        {d.category || "Not available"} · {new Date(d.upload_date).toLocaleDateString()}
                       </div>
                       {contributions.has(d.id) ? (
                         <Badge

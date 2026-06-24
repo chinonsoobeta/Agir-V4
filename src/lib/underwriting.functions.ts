@@ -1,6 +1,6 @@
 // Fail-closed underwriting server functions.
 //
-// THE ONE ARCHITECTURAL LAW: the engine reads from exactly ONE place — the
+// THE ONE ARCHITECTURAL LAW: the engine reads from exactly ONE place: the
 // typed EngineInput assembled by loadEngineInput() from underwriting_inputs,
 // development_budget and revenue_program rows where status ∈
 // {approved, default_accepted}. No LLM call exists anywhere in the path from
@@ -75,7 +75,7 @@ async function loadProjectRows(supabase: any, projectId: string): Promise<Projec
     })),
   };
 
-  // Unresolved review-queue conflicts block readiness for their engine target —
+  // Unresolved review-queue conflicts block readiness for their engine target.
   // scalar, budget category, OR revenue component. Previously only scalar
   // conflicts blocked, so a conflicting budget/revenue key (land_cost,
   // residential_units, …) slipped past the fail-closed gate.
@@ -141,7 +141,7 @@ function buildReconciliationContext(rows: ProjectInputRows, input: UnderwritingI
     (r) => r.key === "stated_total_project_cost" && (r.status === "approved" || r.status === "default_accepted"),
   );
   const statedTotalSource = statedTotalRow
-    ? [statedTotalRow.source_location, statedTotalRow.source_text].filter(Boolean).join(" — ").slice(0, 240) || null
+    ? [statedTotalRow.source_location, statedTotalRow.source_text].filter(Boolean).join(": ").slice(0, 240) || null
     : null;
   return {
     tdc: output.values.tdc,
@@ -251,7 +251,7 @@ export const resolveConflict = createServerFn({ method: "POST" })
       resolved = conservativePick(data.key, candidates);
     } else {
       if (data.value == null) throw new Error("mode=pick requires a value.");
-      // Picking is constrained to one of the documented candidates — no code
+      // Picking is constrained to one of the documented candidates: no code
       // path may average, blend, or invent a third value.
       if (!candidates.some((c) => Math.abs(c - data.value!) < 1e-9)) {
         throw new Error(`Value ${data.value} is not one of the documented candidates (${candidates.join(", ")}).`);
@@ -310,7 +310,7 @@ export const resolveConflict = createServerFn({ method: "POST" })
 // "AI selects inputs, the engine computes." The ONLY thing AI may do here is
 // choose, from the consensual STATIC defaults in DEFAULTS, which defaultable
 // inputs are reasonable to accept on the analyst's behalf so a deal blocked
-// solely by defaultable gaps can run. It selects by index from a fixed list —
+// solely by defaultable gaps can run. It selects by index from a fixed list.
 // it cannot change a value or introduce a number that is not already a
 // pre-approved constant. Accepted rows are written as default_accepted with
 // provenance and remain fully visible and reversible by the analyst.
@@ -326,7 +326,7 @@ async function aiSelectDefaults(ctx: any, projectId: string, defaultable: string
     model: getAgirModel(),
     temperature: 0,
     system:
-      "You are an institutional real estate underwriter deciding which STATIC, pre-approved default assumptions are reasonable to accept for a development pro forma. You may ONLY accept or skip the listed defaults — you cannot change a value or introduce a new one. Accept a default only when its fixed value is a standard, defensible market convention for that missing input.",
+      "You are an institutional real estate underwriter deciding which STATIC, pre-approved default assumptions are reasonable to accept for a development pro forma. You may ONLY accept or skip the listed defaults: you cannot change a value or introduce a new one. Accept a default only when its fixed value is a standard, defensible market convention for that missing input.",
     prompt: `Missing defaultable inputs and their fixed default values:\n${list}\n\nReturn ONLY a JSON array of the integer indices you accept (e.g. [0,2]). Return [] to accept none.`,
   });
   const m = text.match(/\[[\s\S]*?\]/);
@@ -387,7 +387,7 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
     const wantsAI = data.mode === "ai";
     const useAI = wantsAI && aiAvailable;
     let aiFailureReason: string | null =
-      wantsAI && !aiAvailable ? "AI unavailable (ANTHROPIC_API_KEY missing or malformed) — used the deterministic engine." : null;
+      wantsAI && !aiAvailable ? "AI unavailable (ANTHROPIC_API_KEY missing or malformed): used the deterministic engine." : null;
     const aiAcceptedDefaults: string[] = [];
 
     let rows = await loadProjectRows(context.supabase, data.project_id);
@@ -487,7 +487,7 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
     // ONE recommendation: reconcile the gate verdict with the findings engine and
     // the contextual read so every surface (Analysis, Decision, memo) agrees.
     // Call generateFindings EXACTLY as buildDecision (the decision/findings tab)
-    // does — real assumptions, scenarios, and NO engine `input` — so the
+    // does: real assumptions, scenarios, and NO engine `input`: so the
     // persisted recommendation matches what the Decision tab would compute.
     const { data: findingsAssumptions } = await context.supabase
       .from("assumptions").select("field_key,value_numeric,status,confidence_score").eq("project_id", data.project_id);
@@ -543,7 +543,7 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
     outputInserts.push({
       project_id: data.project_id, owner_id: context.userId, scenario_key: "base",
       metric_key: "verdict", metric_label: "Deterministic Verdict", value_numeric: null, unit: "count",
-      formula_text: `${verdict.code} — ${verdict.gates.filter((g) => !g.pass).length} of ${verdict.gates.length} gates failed${verdict.hardFail ? "; hard fail (equity wipeout or error-severity reconciliation flag)" : ""}`,
+      formula_text: `${verdict.code}: ${verdict.gates.filter((g) => !g.pass).length} of ${verdict.gates.length} gates failed${verdict.hardFail ? "; hard fail (equity wipeout or error-severity reconciliation flag)" : ""}`,
       inputs: { code: verdict.code, gates: verdict.gates, hardFail: verdict.hardFail },
     });
     // The deterministic "analyst read": thesis, contextual interpretations,

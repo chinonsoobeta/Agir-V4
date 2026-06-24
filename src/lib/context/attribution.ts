@@ -1,5 +1,5 @@
 // Deterministic causal attribution + "what would make this a yes". Closed-form
-// levers only — every number is derived from engine outputs/inputs, never
+// levers only: every number is derived from engine outputs/inputs, never
 // invented, so the prose that uses them stays provenance-clean.
 
 import type { EngineOutput, UnderwritingInput } from "../engine/types";

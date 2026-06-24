@@ -1,6 +1,6 @@
 // Staged-deployment safety: newer code may briefly run against an older schema
 // (a migration not yet applied). PostgREST surfaces a missing table/relation as
-// a schema-cache error rather than throwing — we detect it so callers can fall
+// a schema-cache error rather than throwing: we detect it so callers can fall
 // back to defaults instead of crashing the page. Shared by every server
 // function that reads a table introduced after the base schema.
 

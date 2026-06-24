@@ -1,6 +1,6 @@
 // Pure mapping from review-queue taxonomy keys to engine-readable rows.
 // Approving an assumption propagates it through this map into
-// underwriting_inputs / development_budget / revenue_program — the ONLY tables
+// underwriting_inputs / development_budget / revenue_program: the ONLY tables
 // the engine loader reads.
 
 export const TAXONOMY_TO_ENGINE_SCALAR: Record<string, string> = {
@@ -43,7 +43,7 @@ export const TAXONOMY_TO_BUDGET_CATEGORY: Record<string, string> = {
 };
 
 export type RevenueComponentMap = {
-  // unitType is an arbitrary component label — the engine's revenue program is
+  // unitType is an arbitrary component label: the engine's revenue program is
   // generic, so industrial/logistics components flow through the same path as
   // residential/retail/office.
   unitType: string;

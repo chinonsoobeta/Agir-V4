@@ -1,4 +1,4 @@
-// Harbour Centre extraction pipeline — proves the deterministic pipeline turns
+// Harbour Centre extraction pipeline: proves the deterministic pipeline turns
 // the synthetic demo documents into the verified assumption set: real text out
 // of every file, candidates for every Harbour field, canonical mappings, the
 // documented exit-cap conflict, and a readiness gate that stays blocked until
@@ -148,7 +148,7 @@ describe("Harbour Centre extraction pipeline", () => {
   });
 
   // ---- Guard: no value maps to the wrong unit family ----
-  test("unit/kind guard holds — interest rate and loan amount never collide", () => {
+  test("unit/kind guard holds: interest rate and loan amount never collide", () => {
     // 6.25% (percent) must map to interest_rate, never debt_amount (a $ field).
     const interest = allCandidates.find((c) => c.kind === "percent" && c.value_numeric === 6.25)!;
     expect(mapCandidateToKey(interest)?.field_key).toBe("interest_rate");

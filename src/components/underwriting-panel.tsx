@@ -1,5 +1,5 @@
 // Underwriting tab: fail-closed. When readiness is blocked it renders the
-// blocked state listing exactly what is missing/unresolved — zero metrics,
+// blocked state listing exactly what is missing/unresolved: zero metrics,
 // zero charts, no partial numbers. When ready, every figure shown is a
 // deterministic engine output with its formula and provenance.
 
@@ -48,19 +48,19 @@ const SEV_STYLES: Record<string, string> = {
 };
 
 const INPUT_LABELS: Record<string, string> = {
-  "budget:land": "Budget — land", "budget:hard": "Budget — hard costs",
-  "budget:soft": "Budget — soft costs", "budget:contingency": "Budget — contingency",
-  "budget:financing_interest": "Budget — financing", revenue_program: "Revenue program (≥1 component)",
+  "budget:land": "Budget: land", "budget:hard": "Budget: hard costs",
+  "budget:soft": "Budget: soft costs", "budget:contingency": "Budget: contingency",
+  "budget:financing_interest": "Budget: financing", revenue_program: "Revenue program (≥1 component)",
   loan_amount: "Loan amount", interest_rate_pct: "Interest rate", amort_years: "Amortization term",
   equity_amount: "Equity amount", exit_cap_rate_pct: "Exit cap rate", expense_ratio_pct: "Expense ratio",
   hold_years: "Hold period", selling_costs_pct: "Selling costs",
 };
 const inputLabel = (key: string) =>
-  INPUT_LABELS[key] ?? (key.startsWith("occupancy:") ? `Stabilized occupancy — ${key.slice(10)}` : key);
+  INPUT_LABELS[key] ?? (key.startsWith("occupancy:") ? `Stabilized occupancy: ${key.slice(10)}` : key);
 
 function fmtValue(v: number | null, unit: string, formula?: string | null) {
   if (v == null || !isFinite(v)) {
-    return formula?.includes("not meaningful") ? "not meaningful" : "—";
+    return formula?.includes("not meaningful") ? "not meaningful" : "Not available";
   }
   if (unit === "$") return new Intl.NumberFormat("en-US", { notation: "compact", style: "currency", currency: "USD", maximumFractionDigits: 1 }).format(v);
   if (unit === "%") return `${v.toFixed(2)}%`;
@@ -80,7 +80,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   const resolveFn = useServerFn(resolveConflict);
 
   // AI runs by default (it only selects which consensual static defaults to
-  // accept — the engine still computes every number). Toggle off to force the
+  // accept: the engine still computes every number). Toggle off to force the
   // pure deterministic path.
   const [aiMode, setAiMode] = useState(true);
   const mode = aiMode ? "ai" : ("deterministic" as const);
@@ -101,8 +101,8 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
       if (r.ai_accepted_defaults?.length) {
         toast.message(`AI accepted ${r.ai_accepted_defaults.length} static default(s) to unblock the run.`);
       }
-      if (r.blocked) toast.error("Underwriting is blocked — resolve the listed inputs first.");
-      else toast.success(`Underwriting complete (${r.analysis_mode === "ai" ? "AI" : "deterministic"}) — verdict ${r.verdict.code}`);
+      if (r.blocked) toast.error("Underwriting is blocked: resolve the listed inputs first.");
+      else toast.success(`Underwriting complete (${r.analysis_mode === "ai" ? "AI" : "deterministic"}): verdict ${r.verdict.code}`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -130,8 +130,8 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
             <div className="min-w-0 flex-1">
               <div className="text-sm font-semibold uppercase tracking-widest text-destructive">Underwriting blocked</div>
               <p className="text-sm text-muted-foreground mt-1">
-                The engine runs only on approved or default-accepted inputs. It never fills gaps on its own —
-                resolve the items below, then run underwriting.
+                The engine runs only on approved or default-accepted inputs. It never fills gaps
+                on its own. Resolve the items below, then run underwriting.
               </p>
               {readiness.missing.length > 0 && (
                 <div className="mt-4">
@@ -151,7 +151,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
               )}
               {readiness.conflicts.length > 0 && (
                 <div className="mt-4">
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Conflicting inputs — resolve explicitly</div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Conflicting inputs: resolve explicitly</div>
                   {readiness.conflicts.map((c: any) => (
                     <div key={c.key} className="mt-2 p-3 rounded border border-destructive/30 bg-destructive/5">
                       <div className="text-sm font-medium">{inputLabel(c.key)}</div>
@@ -196,7 +196,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                     </Button>
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    Writes source=default, status=default_accepted rows. Defaults are never applied silently — AI only
+                    Writes source=default, status=default_accepted rows. Defaults are never applied silently: AI only
                     selects from these fixed values; it never invents a number, and the engine does all math.
                   </p>
                 </div>
@@ -220,7 +220,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   const insightRow = (byScenario.base ?? []).find((m) => m.metric_key === "insight");
   // ONE reconciled recommendation (gate verdict + findings + context); falls back
   // to the raw gate verdict for deals underwritten before reconciliation existed.
-  const recommendation = insightRow?.inputs?.recommendation ?? verdictRow?.inputs?.code ?? "—";
+  const recommendation = insightRow?.inputs?.recommendation ?? verdictRow?.inputs?.code ?? "Not available";
   const recRationale = (insightRow?.inputs?.recommendationRationale as string | undefined) ?? verdictRow?.formula_text;
   const irrRow = metric("irr_estimate");
   const equityWipeout = Boolean(metric("equity_multiple")?.formula_text?.includes("Equity wipeout"));
@@ -252,7 +252,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
         )}
       </Card>
 
-      {/* Reconciliation banners — error flags cannot be silently dropped */}
+      {/* Reconciliation banners: error flags cannot be silently dropped */}
       {flags.length > 0 && (
         <div className="space-y-2">
           {flags.map((f: any) => (
@@ -271,12 +271,12 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <UnderwritingMetric label="Recommendation" text={recommendation} sub={recRationale} highlight={recommendation === "REJECT" || recommendation === "RETURN_TO_UNDERWRITING" ? "text-destructive" : "text-primary"} />
         <UnderwritingMetric label="Exit Value" row={metric("exit_value")} />
-        <UnderwritingMetric label="IRR" row={irrRow} text={equityWipeout ? "not meaningful" : undefined} sub={equityWipeout ? "Equity loss — IRR not meaningful" : undefined} highlight={equityWipeout ? "text-destructive" : undefined} />
+        <UnderwritingMetric label="IRR" row={irrRow} text={equityWipeout ? "not meaningful" : undefined} sub={equityWipeout ? "Equity loss: IRR not meaningful" : undefined} highlight={equityWipeout ? "text-destructive" : undefined} />
         <UnderwritingMetric label="DSCR (amortizing)" row={metric("dscr")} />
         <UnderwritingMetric label="Equity Multiple" row={metric("equity_multiple")} highlight={equityWipeout ? "text-destructive" : undefined} />
         <UnderwritingMetric label="Debt Yield" row={metric("debt_yield")} />
         <UnderwritingMetric label="Break-even Occ." row={metric("break_even_occupancy")} />
-        <UnderwritingMetric label="Risk Score" text={riskScoreRow ? String(Math.round(Number(riskScoreRow.value_numeric))) : "—"} sub={riskScoreRow?.formula_text} />
+        <UnderwritingMetric label="Risk Score" text={riskScoreRow ? String(Math.round(Number(riskScoreRow.value_numeric))) : "Not available"} sub={riskScoreRow?.formula_text} />
       </div>
 
       {equityWipeout && (
@@ -297,7 +297,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
       {/* Full metric table with the five stress scenarios */}
       {outputs.length > 0 && <Card className="overflow-hidden">
         <div className="px-4 py-2 border-b border-border bg-muted/20 text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
-          Pro Forma — Base & Stress (every cell is an engine re-run)
+          Pro Forma: Base & Stress (every cell is an engine re-run)
         </div>
         <div className="overflow-x-auto">
           <table className="data-grid w-full">
@@ -318,7 +318,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                       const r = byScenario[sk].find((b) => b.metric_key === mk);
                       return (
                         <td key={sk} className="text-right align-top">
-                          <div className="num">{r ? fmtValue(r.value_numeric == null ? null : Number(r.value_numeric), r.unit, r.formula_text) : "—"}</div>
+                          <div className="num">{r ? fmtValue(r.value_numeric == null ? null : Number(r.value_numeric), r.unit, r.formula_text) : "Not available"}</div>
                           {r?.formula_text && (
                             <div className="mt-1 text-[10px] leading-snug text-muted-foreground font-mono max-w-56 ml-auto">
                               {r.formula_text}
@@ -336,7 +336,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
         </div>
       </Card>}
 
-      {/* Risk register — fixed thresholds over engine outputs + flags */}
+      {/* Risk register: fixed thresholds over engine outputs + flags */}
       <Card className="p-5">
         <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-3">Risk Register</div>
         {risks.length === 0 ? (
@@ -366,7 +366,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
 }
 
 function UnderwritingMetric({ label, row, text, sub, highlight }: { label: string; row?: any; text?: string; sub?: string | null; highlight?: string }) {
-  const display = text ?? (row ? fmtValue(row.value_numeric == null ? null : Number(row.value_numeric), row.unit, row.formula_text) : "—");
+  const display = text ?? (row ? fmtValue(row.value_numeric == null ? null : Number(row.value_numeric), row.unit, row.formula_text) : "Not available");
   return (
     <Card className="p-4">
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
@@ -593,10 +593,10 @@ export function MemoSection({ projectId }: { projectId: string }) {
         : "AI-assisted investment memo generated");
     },
     onError: (e: Error) => {
-      // Never swallow the error behind a generic toast — surface it in the UI.
+      // Never swallow the error behind a generic toast: surface it in the UI.
       console.error("[generateMemo] failed:", e);
       setError(e.message);
-      toast.error("Memo generation failed — see diagnostics");
+      toast.error("Memo generation failed: see diagnostics");
     },
   });
 
@@ -632,11 +632,11 @@ export function MemoSection({ projectId }: { projectId: string }) {
       {debug.can_generate && !debug.env.has_anthropic_key && (
         <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/20 border border-border rounded p-3">
           <Info className="size-4 shrink-0 mt-0.5" />
-          <span>No AI key configured — the memo will be generated from the <strong>deterministic template</strong> (engine outputs + approved assumptions only).</span>
+          <span>No AI key configured: the memo will be generated from the <strong>deterministic template</strong> (engine outputs + approved assumptions only).</span>
         </div>
       )}
 
-      {/* Visible error diagnostics — not swallowed behind a toast */}
+      {/* Visible error diagnostics: not swallowed behind a toast */}
       {error && (
         <div className="text-xs bg-destructive/5 border border-destructive/30 rounded p-3 space-y-2">
           <div className="font-semibold uppercase tracking-widest text-destructive">Memo generation error</div>
@@ -742,7 +742,7 @@ async function downloadMemo(kind: "pdf" | "docx", report: any) {
   }
 }
 
-// On-screen rendering of the structured memo report — mirrors the PDF/DOCX.
+// On-screen rendering of the structured memo report: mirrors the PDF/DOCX.
 function MemoReportView({ report }: { report: any }) {
   const isReject = report.verdict_code === "REJECT";
   return (

@@ -85,7 +85,7 @@ function buildSeedAssumptions(): SeedAssumption[] {
     { key: "rent_growth", status: "approved", value: scalar("rent_growth_pct"), source_doc: MARKET_DOC, source_text: `Annual rent growth: ${scalar("rent_growth_pct")}%` },
   );
 
-  // Exit cap is a documented conflict — never resolved silently.
+  // Exit cap is a documented conflict: never resolved silently.
   list.push({
     key: "exit_cap_rate", status: "conflicting", value: null,
     source_doc: BROKER_DOC,
@@ -96,14 +96,14 @@ function buildSeedAssumptions(): SeedAssumption[] {
     })),
   });
 
-  // Derivable total — never "missing".
+  // Derivable total: never "missing".
   list.push({
     key: "total_project_cost", status: "calculated", value: tdc,
     formula_text: `total_project_cost = ${HARBOUR_BUDGET_LINES.map((b) => `${budgetKeyByCategory[b.category]} ${fmtMoney(b.amount)}`).join(" + ")} = ${fmtMoney(tdc)}`,
     source_text: "Calculated deterministically from the five extracted budget lines.",
   });
 
-  // Genuinely absent from every document — must stay missing/defaultable.
+  // Genuinely absent from every document: must stay missing/defaultable.
   for (const key of ["opex_ratio", "hold_period_years", "disposition_cost_pct"]) {
     list.push({ key, status: "missing", value: null,
       source_text: "Not stated in any Harbour Centre document; accept a default to proceed." });

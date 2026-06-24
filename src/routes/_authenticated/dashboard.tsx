@@ -32,7 +32,7 @@ import { TONE_TEXT } from "@/components/decision-ui";
 const portfolioQ = queryOptions({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
-  head: () => ({ meta: [{ title: "Overview — Agir" }] }),
+  head: () => ({ meta: [{ title: "Overview | Agir" }] }),
   loader: ({ context }) => context.queryClient.ensureQueryData(portfolioQ),
   component: ExecutiveOverview,
 });
@@ -43,7 +43,7 @@ function ExecutiveOverview() {
   useRealtimeRefresh();
   const fr = language === "fr";
 
-  // One shared, deterministic rollup — no per-component ad-hoc reductions.
+  // One shared, deterministic rollup: no per-component ad-hoc reductions.
   const summary = summarizePortfolio(deals);
   const active = deals.filter((deal) => !["Approved", "Rejected"].includes(deal.stage));
   const capital = summary.grossCapital;
@@ -70,8 +70,8 @@ function ExecutiveOverview() {
         title={fr ? "Vue d’ensemble des investissements" : "Investment overview"}
         subtitle={
           fr
-            ? "Pipeline, décisions, risques et exécution — mis à jour en direct."
-            : "Pipeline, decisions, risk and execution—updated live."
+            ? "Pipeline, décisions, risques et exécution: mis à jour en direct."
+            : "Pipeline, decisions, risk and execution: updated live."
         }
         actions={
           <Link to="/deals">
@@ -105,7 +105,7 @@ function ExecutiveOverview() {
           <Metric
             icon={TrendingUp}
             label={fr ? "Score moyen" : "Avg investment score"}
-            value={averageScore ? String(averageScore) : "—"}
+            value={averageScore ? String(averageScore) : "Not available"}
             detail="/ 100"
           />
           <Metric

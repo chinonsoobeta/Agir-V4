@@ -61,7 +61,7 @@ const TABS = [
 ] as const;
 
 export const Route = createFileRoute("/_authenticated/projects/$id")({
-  head: () => ({ meta: [{ title: "Deal — Agir" }] }),
+  head: () => ({ meta: [{ title: "Deal | Agir" }] }),
   loader: ({ context, params }) => context.queryClient.ensureQueryData(projectQ(params.id)),
   component: DealDetail,
 });
@@ -106,7 +106,7 @@ function DealDetail() {
               <h1 className="display text-3xl font-semibold tracking-tight">{project.name}</h1>
               <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
                 <MapPin className="size-3.5" />
-                {project.location || "—"}
+                {project.location || "Not available"}
                 <span className="text-border">·</span>
                 <span>{assetTypeLabel(project.type)}</span>
               </div>
@@ -253,8 +253,8 @@ function DocumentsTab({ projectId }: { projectId: string }) {
         </div>
         {docs.length === 0 ? (
           <p className="text-sm text-muted-foreground mt-3">
-            No documents linked to this deal yet. Drop an offering memo, rent roll or budget above —
-            assumptions are extracted automatically.
+            No documents are linked to this deal yet. Drop an offering memo, rent roll, or budget
+            above. Agir will extract the assumptions automatically.
           </p>
         ) : (
           <ul className="mt-4 space-y-2">
@@ -274,7 +274,7 @@ function DocumentsTab({ projectId }: { projectId: string }) {
                       {badge.label}
                     </span>
                     <span className="text-xs text-muted-foreground hidden sm:inline">
-                      {d.category || "—"}
+                      {d.category || "Not available"}
                     </span>
                   </span>
                 </li>

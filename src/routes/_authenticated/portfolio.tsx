@@ -19,7 +19,7 @@ import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 const portfolioQ = queryOptions({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
 
 export const Route = createFileRoute("/_authenticated/portfolio")({
-  head: () => ({ meta: [{ title: "Portfolio — Agir" }] }),
+  head: () => ({ meta: [{ title: "Portfolio | Agir" }] }),
   loader: ({ context }) => context.queryClient.ensureQueryData(portfolioQ),
   component: PortfolioPage,
 });
@@ -30,7 +30,7 @@ function PortfolioPage() {
   const { data: deals } = useSuspenseQuery(portfolioQ);
   useRealtimeRefresh();
 
-  // Shared deterministic rollup — keeps these numbers identical to the dashboard.
+  // Shared deterministic rollup: keeps these numbers identical to the dashboard.
   const summary = summarizePortfolio(deals);
   const active = deals.filter((d) => d.stage !== "Approved" && d.stage !== "Rejected");
   const approved = deals.filter((d) => d.stage === "Approved");
@@ -59,7 +59,7 @@ function PortfolioPage() {
         <PageHeader
           eyebrow="Portfolio"
           title="Investment Portfolio"
-          subtitle="Every deal, every decision — at a glance."
+          subtitle="Review active deals, capital, risk, and decisions in one view."
           actions={
             <Link to="/deals">
               <Button size="sm">
@@ -142,7 +142,7 @@ function PortfolioPage() {
           </div>
         </section>
 
-        {/* Investment Queue — the most important widget */}
+        {/* Investment Queue: the most important widget */}
         <section>
           <div className="flex items-baseline justify-between mb-3">
             <Eyebrow>Investment Queue · requires attention</Eyebrow>
@@ -171,13 +171,13 @@ function PortfolioPage() {
                     <div className="min-w-0 flex-1">
                       <div className="font-medium truncate">{d.name}</div>
                       <div className="text-xs text-muted-foreground truncate">
-                        {d.location || "—"} · {d.stage}
+                        {d.location || "Not available"} · {d.stage}
                         {d.topRisk ? ` · ${d.topRisk}` : ""}
                       </div>
                     </div>
                     <div className="hidden sm:block text-right">
                       <div className="num text-sm">
-                        {d.investmentScore ?? "—"}
+                        {d.investmentScore ?? "Not available"}
                         <span className="text-muted-foreground text-xs"> / 100</span>
                       </div>
                       <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -312,7 +312,7 @@ function PipelineColumn({ stage, deals }: { stage: PipelineStage; deals: DealSum
       </div>
       <div className="flex-1 space-y-2 min-h-[60px] rounded-lg bg-muted/30 p-2">
         {deals.length === 0 && (
-          <div className="text-[11px] text-muted-foreground/60 text-center py-3">—</div>
+          <div className="text-[11px] text-muted-foreground/60 text-center py-3">None</div>
         )}
         {deals.map((d) => (
           <Link

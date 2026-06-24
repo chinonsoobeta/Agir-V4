@@ -178,7 +178,7 @@ export const en = {
 
   // ---- Onboarding ----
   "onb.title": "Get set up",
-  "onb.subtitle": "Reach a real underwriting result in about 15 minutes — no admin required.",
+  "onb.subtitle": "Reach a real underwriting result in about 15 minutes. No admin is required.",
   "onb.progress": "{done} of {total} done",
   "onb.complete": "You're set up",
   "onb.completeBody": "Every step is done. You can always revisit this from Settings.",
@@ -192,7 +192,7 @@ export const en = {
     "Drop in an offering memo, rent roll or budget. Agir extracts assumptions with provenance.",
   "onb.step.reviewAssumptions.title": "Review extracted assumptions",
   "onb.step.reviewAssumptions.body":
-    "Approve, correct or resolve conflicts. Nothing is invented — every value is traceable.",
+    "Approve, correct, or resolve conflicts. Agir keeps every value tied to its source.",
   "onb.step.runUnderwriting.title": "Run underwriting",
   "onb.step.runUnderwriting.body":
     "The deterministic engine produces returns, debt metrics and stress cases.",
@@ -219,7 +219,7 @@ export const en = {
 
 export type TranslationKey = keyof typeof en;
 
-// French — Canadian. Missing keys fall back to English at lookup time.
+// French: Canadian. Missing keys fall back to English at lookup time.
 export const fr: Partial<Record<TranslationKey, string>> = {
   "nav.home": "Vue d’ensemble",
   "nav.portfolio": "Portefeuille",
@@ -374,7 +374,8 @@ export const fr: Partial<Record<TranslationKey, string>> = {
   "empty.compare.body": "Sélectionnez deux affaires analysées ou plus pour les voir côte à côte.",
 
   "onb.title": "Configuration",
-  "onb.subtitle": "Obtenez un vrai résultat d’analyse en environ 15 minutes — sans administrateur.",
+  "onb.subtitle":
+    "Obtenez un vrai résultat d’analyse en environ 15 minutes. Aucun administrateur n’est requis.",
   "onb.progress": "{done} sur {total} terminés",
   "onb.complete": "Tout est prêt",
   "onb.completeBody": "Chaque étape est terminée. Vous pouvez revenir ici depuis les Paramètres.",
@@ -388,7 +389,7 @@ export const fr: Partial<Record<TranslationKey, string>> = {
     "Déposez un mémorandum, un état locatif ou un budget. Agir en extrait les hypothèses avec provenance.",
   "onb.step.reviewAssumptions.title": "Révisez les hypothèses extraites",
   "onb.step.reviewAssumptions.body":
-    "Approuvez, corrigez ou résolvez les conflits. Rien n’est inventé — chaque valeur est traçable.",
+    "Approuvez, corrigez ou résolvez les conflits. Agir relie chaque valeur à sa source.",
   "onb.step.runUnderwriting.title": "Lancez l’analyse",
   "onb.step.runUnderwriting.body":
     "Le moteur déterministe produit rendements, ratios de dette et scénarios de stress.",
@@ -469,7 +470,7 @@ export function makeFormatters(language: AppLanguage): Formatters {
       `${new Intl.NumberFormat(locale, {
         minimumFractionDigits: digits,
         maximumFractionDigits: digits,
-      }).format(Number.isFinite(value) ? value : 0)} %`,
+      }).format(Number.isFinite(value) ? value : 0)} %`,
     multiple: (value, digits = 2) =>
       `${new Intl.NumberFormat(locale, {
         minimumFractionDigits: digits,

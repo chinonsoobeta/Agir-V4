@@ -1,10 +1,10 @@
-// Decision layer — the institutional scoring + findings surface.
+// Decision layer: the institutional scoring + findings surface.
 //
 // Every page in Agir answers "what decision should be made?" rather than
 // "what numbers exist?". This module turns the deterministic engine outputs
 // (financial_outputs rows) and the approved assumption set into the two scores
-// the platform is organised around — the Investment Score and the Confidence
-// Score — plus a risk rating and a findings report. It is framework-free so it
+// the platform is organised around: the Investment Score and the Confidence
+// Score: plus a risk rating and a findings report. It is framework-free so it
 // can run on the client (deal page, committee) or the server (copilot context).
 
 import { generateFindings, type FindingsReport, type FindingsRecommendation } from "./findings";
@@ -62,10 +62,10 @@ export const RECOMMENDATION_TONE: Record<DecisionRecommendation, "approve" | "co
 
 // ---------- The unified, context-aware recommendation ----------
 // Two lenses produce a recommendation: the gate verdict (computeInvestmentVerdict
-// — return/stress hurdles + hard-fail) and the findings engine (severity of
+//: return/stress hurdles + hard-fail) and the findings engine (severity of
 // prioritized findings). They can legitimately disagree (e.g. a deal that clears
-// every finding but trips a stress gate). This reconciler folds them — plus the
-// contextual interpretation — into ONE recommendation every surface shows.
+// every finding but trips a stress gate). This reconciler folds them: plus the
+// contextual interpretation: into ONE recommendation every surface shows.
 // Policy: conservative. A hard fail is terminal (REJECT). Otherwise take the more
 // cautious of the two lenses, and let a below-norm CONTEXTUAL read escalate an
 // otherwise-clean approve to "with conditions" (context tightens, never loosens).
@@ -103,7 +103,7 @@ export function reconcileRecommendation(args: {
         : "the gate and findings lenses agree";
   return {
     code,
-    rationale: `Reconciled from the gate verdict (${args.verdictCode ?? "n/a"}) and the findings recommendation (${args.findingsRec ?? "n/a"}) — ${lens}.`,
+    rationale: `Reconciled from the gate verdict (${args.verdictCode ?? "n/a"}) and the findings recommendation (${args.findingsRec ?? "n/a"}): ${lens}.`,
   };
 }
 
@@ -179,21 +179,21 @@ export function computeConfidenceScore(assumptions: AssumptionRow[]): { score: n
   const missing = assumptions.filter((a) => a.status === "missing");
   const total = assumptions.length || 1;
 
-  // Extraction confidence — mean confidence of present assumptions.
+  // Extraction confidence: mean confidence of present assumptions.
   const extractionConf = present.length
     ? present.reduce((s, a) => s + (Number(a.confidence_score) || 0), 0) / present.length
     : 0;
 
-  // Approved coverage — share of the register that is analyst-blessed.
+  // Approved coverage: share of the register that is analyst-blessed.
   const approvedRatio = (approved.length / total) * 100;
 
-  // Conflict resolution — every unresolved conflict is a sharp penalty.
+  // Conflict resolution: every unresolved conflict is a sharp penalty.
   const conflictScore = clamp(100 - conflicting.length * 25);
 
-  // Completeness — penalty for missing assumptions.
+  // Completeness: penalty for missing assumptions.
   const completeness = clamp(100 - (missing.length / total) * 100 * 1.2);
 
-  // Source quality — share of present assumptions traceable to a document.
+  // Source quality: share of present assumptions traceable to a document.
   const sourced = present.filter((a) => a.source_document_id || a.source_text);
   const sourceQuality = present.length ? (sourced.length / present.length) * 100 : 0;
 
@@ -210,7 +210,7 @@ export function computeConfidenceScore(assumptions: AssumptionRow[]): { score: n
 }
 
 // ---------- Investment Score ----------
-// 0-100, the primary score the platform is organised around — NOT IRR, NOT DSCR.
+// 0-100, the primary score the platform is organised around: NOT IRR, NOT DSCR.
 export function computeInvestmentScore(
   norm: NormalizedOutputs,
   confidenceScore: number,
@@ -220,19 +220,19 @@ export function computeInvestmentScore(
   }
   const b = norm.base;
 
-  // Returns — blend equity multiple, profit margin, levered IRR.
+  // Returns: blend equity multiple, profit margin, levered IRR.
   const emScore = band(b.equity_multiple, 1.0, 2.2);
   const marginScore = band(b.profit_margin, 0, 25);
   const irrScore = band(b.irr_estimate, 6, 22);
   const returns = avg([emScore, marginScore, irrScore]);
 
-  // Risk — invert the engine risk score (higher risk score = worse).
+  // Risk: invert the engine risk score (higher risk score = worse).
   const riskScore = norm.riskScore == null ? null : clamp(100 - norm.riskScore);
 
-  // Debt support — DSCR.
+  // Debt support: DSCR.
   const debt = band(b.dscr, 1.0, 1.6);
 
-  // Sensitivity — does the deal survive the worst stress run?
+  // Sensitivity: does the deal survive the worst stress run?
   const sens = avg([band(norm.worstStress.dscr, 1.0, 1.4), band(norm.worstStress.equity_multiple, 0.8, 1.4)]);
 
   // Data quality / confidence feeds directly.

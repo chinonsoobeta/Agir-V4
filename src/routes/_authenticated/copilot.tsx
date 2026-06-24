@@ -15,7 +15,7 @@ import ReactMarkdown from "react-markdown";
 const projectsQ = queryOptions({ queryKey: ["projects"], queryFn: () => listProjects() });
 
 export const Route = createFileRoute("/_authenticated/copilot")({
-  head: () => ({ meta: [{ title: "Copilot — Agir" }] }),
+  head: () => ({ meta: [{ title: "Copilot | Agir" }] }),
   validateSearch: (s: Record<string, unknown>) => ({ deal: typeof s.deal === "string" ? s.deal : undefined }),
   loader: ({ context }) => context.queryClient.ensureQueryData(projectsQ),
   component: CopilotPage,
@@ -71,7 +71,7 @@ function ChatUI({ token, projects, focused, setDealId }: { token: string; projec
   return (
     <>
       <PageHeader eyebrow="Copilot" title="Investment Copilot"
-        subtitle={focused ? `Focused on ${focused.name} — answers from its findings & drivers` : "Decision-aware analyst across your portfolio"}
+        subtitle={focused ? `Focused on ${focused.name}: answers from its findings & drivers` : "Decision-aware analyst across your portfolio"}
         actions={
           <select value={focused?.id ?? ""} onChange={(e) => setDealId(e.target.value || null)}
             className="bg-background border border-border rounded-md px-3 py-1.5 text-sm">

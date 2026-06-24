@@ -30,7 +30,7 @@ import { toast } from "sonner";
 const signalsQ = queryOptions({ queryKey: ["market-signals"], queryFn: () => listMarketSignals() });
 
 export const Route = createFileRoute("/_authenticated/markets")({
-  head: () => ({ meta: [{ title: "Markets — Agir" }] }),
+  head: () => ({ meta: [{ title: "Markets | Agir" }] }),
   loader: ({ context }) => context.queryClient.ensureQueryData(signalsQ),
   component: MarketsPage,
 });

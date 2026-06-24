@@ -7,7 +7,7 @@
 --   * We ADD a second permissive policy granting access to members of the row's
 --     (or its parent project's) workspace. Postgres OR-combines permissive
 --     policies, so a row is visible if you own it OR share its workspace.
---   * workspace_id is NULLABLE — legacy owner-only rows keep working untouched.
+--   * workspace_id is NULLABLE: legacy owner-only rows keep working untouched.
 -- Membership and workspace creation go through SECURITY DEFINER helpers so RLS
 -- never recurses and the creator can always seed themselves as owner.
 --
@@ -193,7 +193,7 @@ BEGIN
 END $$;
 
 -- assumption_versions / assumption_comments are scoped via assumption_id, not
--- project_id — grant members access through the parent assumption's project.
+-- project_id: grant members access through the parent assumption's project.
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='assumption_versions') THEN
     BEGIN

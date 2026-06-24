@@ -35,7 +35,7 @@ const BAND_STYLES: Record<string, string> = {
 };
 
 function fmt(a: any) {
-  if (a.value_numeric == null && !a.value_text) return "—";
+  if (a.value_numeric == null && !a.value_text) return "Not available";
   if (a.value_text) return a.value_text;
   const n = Number(a.value_numeric);
   if (a.unit === "$") return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
@@ -52,7 +52,7 @@ function conservativeValue(fieldKey: string, values: number[]): number | null {
   if (!values.length) return null;
   if (CONSERVATIVE_MAX_KEYS.has(fieldKey)) return Math.max(...values);
   if (CONSERVATIVE_MIN_KEYS.has(fieldKey)) return Math.min(...values);
-  return null; // no defined conservative direction — analyst must pick
+  return null; // no defined conservative direction: analyst must pick
 }
 const isInterestKey = (k: string) => k === "interest_rate";
 const supersedingSource = (source?: string | null) =>
@@ -99,7 +99,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
     onSuccess: (r: any) => {
       invalidate();
       setReport(r);
-      toast.success(`Pipeline complete (${r.analysis_mode === "ai" ? "AI" : "deterministic"}) — ${r.found} found · ${r.conflicting} conflicting · ${r.missing} missing`);
+      toast.success(`Pipeline complete (${r.analysis_mode === "ai" ? "AI" : "deterministic"}): ${r.found} found · ${r.conflicting} conflicting · ${r.missing} missing`);
       if (r.ai_note) toast.message(r.ai_note);
     },
     onError: (e: Error) => toast.error(e.message),
@@ -108,7 +108,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
     mutationFn: () => recomputeFn({ data: { project_id: projectId, mode } }),
     onSuccess: (r: any) => {
       invalidate();
-      if (r.blocked) toast.error("Underwriting is blocked — resolve missing/conflicting inputs first.");
+      if (r.blocked) toast.error("Underwriting is blocked: resolve missing/conflicting inputs first.");
       else toast.success(`Underwriting recomputed (${r.analysis_mode === "ai" ? "AI" : "deterministic"})`);
       if (r.ai_note) toast.message(r.ai_note);
     },
@@ -201,14 +201,14 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
       {report && <ExtractionReportCard report={report} onClose={() => setReport(null)} />}
       {report?.debug && <ExtractionDebugCard debug={report.debug} />}
 
-      {/* Conflict Resolution Center — conflicts are first-class, not buried */}
+      {/* Conflict Resolution Center: conflicts are first-class, not buried */}
       {conflicts.length > 0 && (
         <Card className="p-5 border-destructive/40 bg-destructive/5">
           <div className="flex items-center gap-2 text-destructive">
             <AlertCircle className="size-4" />
             <span className="text-[10px] uppercase tracking-widest font-semibold">Conflict Resolution Center · {conflicts.length}</span>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">These inputs have conflicting documented values and block underwriting. Pick one — values are never averaged.</p>
+          <p className="text-xs text-muted-foreground mt-1">These inputs have conflicting documented values and block underwriting. Pick one: values are never averaged.</p>
           <div className="mt-3 grid md:grid-cols-2 gap-3">
             {conflicts.map((a) => {
               const values = (Array.isArray(a.conflict_values) ? a.conflict_values : [])
@@ -241,7 +241,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
                     <Button size="sm" variant="ghost" onClick={() => setEditOf(a)}>Enter value…</Button>
                   </div>
                   {isInterestKey(a.field_key) && values.some((cv: any) => supersedingSource(cv.source)) && (
-                    <p className="text-[10px] text-warning mt-2">A rate lock / addendum value is present and likely supersedes the earlier term sheet rate. Confirm before resolving — not auto-applied.</p>
+                    <p className="text-[10px] text-warning mt-2">A rate lock / addendum value is present and likely supersedes the earlier term sheet rate. Confirm before resolving: not auto-applied.</p>
                   )}
                 </div>
               );
@@ -250,7 +250,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
         </Card>
       )}
 
-      {/* Critical Assumptions — required fields driving the recommendation */}
+      {/* Critical Assumptions: required fields driving the recommendation */}
       {critical.length > 0 && (
         <Card className="p-5 elevated">
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Critical Assumptions</div>
@@ -308,14 +308,14 @@ function SourcePanel({ a, onClose }: { a: any | null; onClose: () => void }) {
         {a && (
           <div className="mt-4 space-y-4 text-sm">
             <Field label="Extracted value">{fmt(a)}</Field>
-            <Field label="Source document">{a.source_location || "—"}</Field>
-            <Field label="Confidence">{a.confidence_score}% — {a.confidence_band}</Field>
+            <Field label="Source document">{a.source_location || "Not available"}</Field>
+            <Field label="Confidence">{a.confidence_score}%: {a.confidence_band}</Field>
             <Field label="Source text">
               <blockquote className="text-xs italic text-muted-foreground border-l-2 border-primary pl-3 mt-1 whitespace-pre-wrap">
-                {a.source_text || "—"}
+                {a.source_text || "Not available"}
               </blockquote>
             </Field>
-            <Field label="AI reasoning">{a.ai_reasoning || "—"}</Field>
+            <Field label="AI reasoning">{a.ai_reasoning || "Not available"}</Field>
           </div>
         )}
       </SheetContent>
@@ -364,7 +364,7 @@ function HistoryPanel({ a, onClose }: { a: any | null; onClose: () => void }) {
   return (
     <Sheet open={!!a} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-[500px] sm:max-w-[500px]">
-        <SheetHeader><SheetTitle className="font-mono">{a?.field_label} — versions</SheetTitle></SheetHeader>
+        <SheetHeader><SheetTitle className="font-mono">{a?.field_label}: versions</SheetTitle></SheetHeader>
         {a && <VersionsList assumptionId={a.id} />}
       </SheetContent>
     </Sheet>
@@ -387,8 +387,8 @@ function VersionsList({ assumptionId }: { assumptionId: string }) {
             <Badge variant="outline" className={`${STATUS_STYLES[v.status]} text-[10px] capitalize`}>{v.status.replace("_"," ")}</Badge>
             <span className="text-muted-foreground">{new Date(v.created_at).toLocaleString()}</span>
           </div>
-          <div className="num text-sm mt-1">{v.value_numeric ?? v.value_text ?? "—"}</div>
-          <div className="text-muted-foreground mt-0.5">by {v.changed_by_name || "user"} · {v.change_reason || "—"}</div>
+          <div className="num text-sm mt-1">{v.value_numeric ?? v.value_text ?? "Not available"}</div>
+          <div className="text-muted-foreground mt-0.5">by {v.changed_by_name || "user"} · {v.change_reason || "Not available"}</div>
         </li>
       ))}
     </ol>
@@ -419,7 +419,7 @@ function ExtractionReportCard({ report, onClose }: { report: any; onClose: () =>
         <Field label="Found">{report.found}</Field>
         <Field label="Conflicting">{report.conflicting}</Field>
         <Field label="Missing">{report.missing}</Field>
-        <Field label="Underwriting ready">{report.can_underwrite ? "Yes — all required present" : "No — required fields missing"}</Field>
+        <Field label="Underwriting ready">{report.can_underwrite ? "Yes: all required present" : "No: required fields missing"}</Field>
       </div>
       {report.conflicts?.length > 0 && (
         <div className="mt-3 text-xs">
@@ -451,7 +451,7 @@ function ExtractionDebugCard({ debug }: { debug: any }) {
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 text-sm">
         <Field label="Grouped keys">{debug.grouped_keys?.length ?? 0}</Field>
-        <Field label="Conflicts">{debug.conflict_keys?.join(", ") || "—"}</Field>
+        <Field label="Conflicts">{debug.conflict_keys?.join(", ") || "Not available"}</Field>
         <Field label="Inserted">{debug.inserted_assumptions}</Field>
         <Field label="Updated">{debug.updated_assumptions}</Field>
       </div>
@@ -534,8 +534,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-// Shows which analysis path actually produced the result — AI or the
-// deterministic backup — so the run is never ambiguous.
+// Shows which analysis path actually produced the result: AI or the
+// deterministic backup: so the run is never ambiguous.
 function ModeBadge({ mode }: { mode?: "ai" | "deterministic" }) {
   if (!mode) return null;
   const isAI = mode === "ai";

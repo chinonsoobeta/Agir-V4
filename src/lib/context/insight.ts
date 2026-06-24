@@ -1,5 +1,5 @@
 // The Insight Layer assembler: from one engine output + its input + project
-// meta, produce the full deterministic "analyst read" — context, interpreted
+// meta, produce the full deterministic "analyst read": context, interpreted
 // metrics, causal attribution, a synthesized thesis, key points, and the set of
 // numbers the prose uses (for memo provenance). This is the public entry point
 // the engine, findings, and memo all call.

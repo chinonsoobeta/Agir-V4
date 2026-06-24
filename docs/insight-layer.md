@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-23
 **Goal:** Make the engine, the findings engine, and the memo generator behave
-"as close to an AI as possible — without being an AI." The calculator stays the
+"as close to an AI as possible: without being an AI." The calculator stays the
 solid, deterministic foundation; a new **Insight Layer** sits on top and adds
 context-aware judgment, benchmark reasoning, causal attribution, and
 analyst-voice narrative. Every number it emits remains provenance-backed, and an
@@ -14,13 +14,13 @@ All of `src/lib/context/`:
 
 | Module | Responsibility |
 |---|---|
-| `deal-context.ts` | Derive a `DealContext` (asset class & GPR-weighted mix, market tier, deal stage, loan structure) from existing approved inputs — no new analyst inputs. |
+| `deal-context.ts` | Derive a `DealContext` (asset class & GPR-weighted mix, market tier, deal stage, loan structure) from existing approved inputs: no new analyst inputs. |
 | `benchmarks.ts` | Curated CRE knowledge base (asset-class × market-tier norms) + a layered resolver: **curated defaults → firm config overrides → portfolio-derived percentiles**, each tagged with its `source`. |
-| `portfolio.ts` | `computePortfolioNorms()` — p25/p50/p75 bands from the firm's own deals (the third norm source). |
+| `portfolio.ts` | `computePortfolioNorms()`: p25/p50/p75 bands from the firm's own deals (the third norm source). |
 | `interpret.ts` | Grade each metric into a contextual band (`strong`/`in_line`/`soft`/`weak`), with a comparative phrase ("~70 bps below the …norm of 9.5%"), a context note, and a salience score. |
 | `attribution.ts` | Causal drivers (yield-on-cost vs exit cap) and **what-would-make-it-a-yes** levers (closed-form input changes to clear each gate). |
 | `narrative.ts` | Deterministic NLG: thesis, audience-adapted paragraph (IC/lender/investor/internal), and bullets. Varied phrasing via a **stable hash** (no `Math.random`/`Date`). Defines the `InsightProvider` interface + the `deterministic` provider, and the pluggable seam (`getInsightProvider`/`setInsightProvider`). |
-| `insight.ts` | `buildInsight()` assembles the bundle and exposes `derivedValues` — every number the prose can contain — so the memo's provenance verifier admits them. |
+| `insight.ts` | `buildInsight()` assembles the bundle and exposes `derivedValues`: every number the prose can contain: so the memo's provenance verifier admits them. |
 
 ## How it's wired (one layer, three surfaces)
 
@@ -45,11 +45,11 @@ other deals at run time.
 ## One reconciled recommendation
 
 Two lenses independently produce a recommendation: the **gate verdict**
-(`computeInvestmentVerdict` — return/stress hurdles + hard-fail) and the
+(`computeInvestmentVerdict`: return/stress hurdles + hard-fail) and the
 **findings engine** (severity of prioritized findings). They can legitimately
 disagree (e.g. a deal that clears every finding but trips a stress gate, as the
 Confluence Yards sample does). `reconcileRecommendation()` (in `decision.ts`)
-folds them — plus the contextual read — into ONE recommendation:
+folds them: plus the contextual read: into ONE recommendation:
 
 - A hard fail (equity wipeout / unresolved error flag) is terminal → **REJECT**.
 - Otherwise take the **more conservative** of the two lenses; a non-hard-fail
@@ -59,7 +59,7 @@ folds them — plus the contextual read — into ONE recommendation:
 - The result carries a plain-language rationale naming the binding lens.
 
 The run computes it once (calling the findings engine exactly as the decision
-tab does — same assumptions/scenarios, no engine `input` — so the persisted
+tab does: same assumptions/scenarios, no engine `input`: so the persisted
 value matches what the tab would compute) and persists it on the `insight` row.
 Every surface then reads that single value: the deal header and Decision tab
 (via `buildDecision`, which prefers the persisted value), the Analysis
@@ -80,7 +80,7 @@ competing headline.
 
 ## Tests
 
-`src/test/insight.test.ts` — deal-context classification, layered benchmark
+`src/test/insight.test.ts`: deal-context classification, layered benchmark
 resolution (curated/firm/portfolio), interpretation bands + comparative phrasing,
 deterministic synthesis, and a **provenance-clean** assertion over the full
 narrative across all four audiences. Full suite: 87 passing.

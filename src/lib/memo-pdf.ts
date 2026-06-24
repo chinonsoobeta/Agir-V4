@@ -48,7 +48,7 @@ export async function renderMemoPdfArrayBuffer(report: MemoReport): Promise<Arra
 
   const footer = () => {
     doc.setFont("helvetica", "normal").setFontSize(7).setTextColor(...MUTED);
-    doc.text(`${report.header_band} — Page ${page}`, M, H - 22);
+    doc.text(`${report.header_band}: Page ${page}`, M, H - 22);
   };
   const ensure = (space: number) => {
     if (y + space > H - 40) { footer(); doc.addPage(); page += 1; y = M; }

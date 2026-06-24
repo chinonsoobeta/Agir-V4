@@ -18,7 +18,7 @@ export function industrialFindings(input: NormalizedFindingsInput): Finding[] {
   const isIndustrial = revenue.some((r) => /warehouse|cold|storage|logistics|flex|distribution|industrial/i.test(r.unitType))
     || input.assumptions.some((a) => /dry_warehouse|cold_storage|last_mile_flex/.test(a.field_key));
 
-  // 1) Tenant concentration — explicit assumption, else largest component share.
+  // 1) Tenant concentration: explicit assumption, else largest component share.
   let concentration = assumptionVal(input, "tenant_concentration_pct");
   let concentrationEvidence: string;
   if (concentration != null) {
@@ -77,7 +77,7 @@ export function industrialFindings(input: NormalizedFindingsInput): Finding[] {
     ));
   }
 
-  // 4) Cap-rate sensitivity — cap expansion scenario turns profit negative.
+  // 4) Cap-rate sensitivity: cap expansion scenario turns profit negative.
   const capProfit = metric(input.scenarios.cap_expansion ?? {}, "projected_profit");
   if (capProfit != null && capProfit < 0) {
     findings.push(f(
@@ -86,7 +86,7 @@ export function industrialFindings(input: NormalizedFindingsInput): Finding[] {
       "Exit Cap-Rate Sensitivity",
       [`Cap-expansion scenario development profit ${money(capProfit)}`],
       { cap_expansion_profit: capProfit },
-      "Exit cap sensitivity materially impairs value — a modest cap-rate widening drives development profit negative.",
+      "Exit cap sensitivity materially impairs value: a modest cap-rate widening drives development profit negative.",
       "scenario",
     ));
   }

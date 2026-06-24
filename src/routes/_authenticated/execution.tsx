@@ -45,7 +45,7 @@ const projectsQ = queryOptions({ queryKey: ["projects"], queryFn: () => listProj
 const milestonesQ = queryOptions({ queryKey: ["milestones"], queryFn: () => listMilestones() });
 
 export const Route = createFileRoute("/_authenticated/execution")({
-  head: () => ({ meta: [{ title: "Execution — Agir" }] }),
+  head: () => ({ meta: [{ title: "Execution | Agir" }] }),
   loader: async ({ context }) =>
     Promise.all([
       context.queryClient.ensureQueryData(projectsQ),
@@ -77,7 +77,7 @@ function ExecutionPage() {
       <PageHeader
         eyebrow="Close management"
         title="Deal execution"
-        subtitle="Own the path from approval to close, with deadlines, blockers and accountability in one place."
+        subtitle="See the milestones, blockers, and due dates that could affect closing."
         actions={
           <>
             <Dialog open={tplOpen} onOpenChange={setTplOpen}>
@@ -123,7 +123,7 @@ function ExecutionPage() {
 
         {milestones.length ? (
           <>
-            {/* Table on md+, cards on mobile — no horizontal scrolling for the core workflow */}
+            {/* Table on md+, cards on mobile: no horizontal scrolling for the core workflow */}
             <Card className="hidden md:block overflow-x-auto elevated">
               <table className="data-grid w-full">
                 <thead>
@@ -305,7 +305,7 @@ function MilestoneRow({ item }: { item: any }) {
         <span className={`capitalize ${priorityCls(item.priority)}`}>{item.priority}</span>
       </td>
       <td className={overdue ? "text-destructive" : ""}>
-        {item.due_date ?? "—"}
+        {item.due_date ?? "Not available"}
         {overdue ? ` · ${Math.abs(days!)}d overdue` : ""}
       </td>
       <td>

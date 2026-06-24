@@ -73,7 +73,7 @@ const SECTIONS = [
 type SectionId = (typeof SECTIONS)[number]["id"];
 
 export const Route = createFileRoute("/_authenticated/settings")({
-  head: () => ({ meta: [{ title: "Settings — Agir" }] }),
+  head: () => ({ meta: [{ title: "Settings | Agir" }] }),
   validateSearch: (s: Record<string, unknown>) => ({
     section: typeof s.section === "string" ? s.section : undefined,
   }),
@@ -253,7 +253,7 @@ function AccountSection() {
         <div className="grid sm:grid-cols-2 gap-4 text-sm">
           <div>
             <div className="text-xs text-muted-foreground">Email</div>
-            <div className="num">{profile?.email ?? "—"}</div>
+            <div className="num">{profile?.email ?? "Not available"}</div>
           </div>
           <div>
             <div className="text-xs text-muted-foreground mb-1">Roles</div>
@@ -265,7 +265,7 @@ function AccountSection() {
                   </Badge>
                 ))
               ) : (
-                <span className="text-muted-foreground">—</span>
+                <span className="text-muted-foreground">None</span>
               )}
             </div>
           </div>
@@ -491,7 +491,7 @@ function TeamSection() {
       const link = inv?.token ? `${window.location.origin}/accept-invite?token=${inv.token}` : null;
       if (link) {
         navigator.clipboard?.writeText(link).catch(() => {});
-        toast.success("Invite created — link copied to clipboard");
+        toast.success("Invite created: link copied to clipboard");
       } else {
         toast.success("Invitation sent");
       }
@@ -679,7 +679,7 @@ function DataSection() {
             deterministic calculation.
           </li>
           <li>
-            AI may explain, classify or summarize — it never invents or overrides a financial value.
+            AI may explain, classify, or summarize. It never invents or overrides a financial value.
           </li>
           <li>
             Missing or conflicting required inputs fail closed: underwriting will not run on
@@ -690,7 +690,7 @@ function DataSection() {
       </SectionCard>
       <SectionCard
         title="Exports"
-        description="Take your data with you — clean, typed, and traceable."
+        description="Export clean, typed data with its supporting traceability."
       >
         <div className="flex flex-wrap gap-2">
           <Button

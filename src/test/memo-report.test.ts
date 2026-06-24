@@ -32,7 +32,7 @@ function report() {
   ];
   // Engine-sourced strings deliberately carry the banned Unicode symbols.
   const flags = [
-    { check_key: "covenant_feasibility", severity: "error", message: "requires NOI 14,407,782 (1.20x × ADS) — fails by 2.4×.", expected: 14_407_782, actual: 6_395_155, resolved: false },
+    { check_key: "covenant_feasibility", severity: "error", message: "requires NOI 14,407,782 (1.20x × ADS): fails by 2.4×.", expected: 14_407_782, actual: 6_395_155, resolved: false },
     { check_key: "sources_vs_uses", severity: "error", message: "equity + debt → $37,500,000 short.", expected: 250_000_000, actual: 212_500_000, resolved: false },
     { check_key: "occupancy_vs_lender:Office", severity: "warning", message: "Office occupancy 85.0% is below 93.0%.", expected: 93, actual: 85, resolved: false },
   ];

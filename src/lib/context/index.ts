@@ -1,4 +1,4 @@
-// The deterministic Insight Layer — context-aware judgment, benchmark
+// The deterministic Insight Layer: context-aware judgment, benchmark
 // reasoning, causal attribution and analyst-voice narrative, sitting on top of
 // the calculator. No LLM touches a number or a decision; an LLM provider can be
 // slotted behind the same interface later (wording-only, re-verified).

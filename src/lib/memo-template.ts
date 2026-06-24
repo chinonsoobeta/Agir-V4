@@ -1,4 +1,4 @@
-// Deterministic memo template — produces an investor memo with ZERO AI
+// Deterministic memo template: produces an investor memo with ZERO AI
 // involvement. Every figure is lifted verbatim from an approved/default_accepted/
 // calculated assumption, a deterministic engine output (preferring its
 // formula_text), a reconciliation flag, or the deterministic verdict. It never
@@ -23,7 +23,7 @@ const grouped = (n: number, decimals = 0) =>
   new Intl.NumberFormat("en-US", { maximumFractionDigits: decimals }).format(n);
 
 function fmtByUnit(value: number | null | undefined, unit: string | null | undefined): string {
-  if (value == null || !Number.isFinite(Number(value))) return "—";
+  if (value == null || !Number.isFinite(Number(value))) return "Not available";
   const n = Number(value);
   switch (unit) {
     case "$": return `$${grouped(n)}`;
@@ -76,7 +76,7 @@ export function buildDeterministicMemo(ctx: DeterministicMemoContext): Record<st
   if (retailSf?.value_numeric != null) program.push(`${fmtByUnit(retailSf.value_numeric, "SF")} retail`);
   if (officeSf?.value_numeric != null) program.push(`${fmtByUnit(officeSf.value_numeric, "SF")} office`);
   const project_description = bullet([
-    `${project.name} — ${project.type ?? "development"}${project.location ? `, ${project.location}` : ""}. Status: ${project.status ?? "n/a"}.`,
+    `${project.name}: ${project.type ?? "development"}${project.location ? `, ${project.location}` : ""}. Status: ${project.status ?? "n/a"}.`,
     program.length ? `Program: ${program.join(", ")}.` : "",
   ]);
 
@@ -104,7 +104,7 @@ export function buildDeterministicMemo(ctx: DeterministicMemoContext): Record<st
   const financial_highlights = bullet(base.map(metricLine)) || "Insufficient approved data.";
 
   // ---- Scenario / Stress Summary ----
-  // Labels carry no numeric deltas — the stress parameters are not engine
+  // Labels carry no numeric deltas: the stress parameters are not engine
   // outputs and would not trace through provenance.
   const SCEN_LABELS: Record<string, string> = {
     base: "Base Case", cap_expansion: "Cap Expansion", cost_overrun: "Cost Overrun",

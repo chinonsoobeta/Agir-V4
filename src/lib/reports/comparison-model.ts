@@ -4,7 +4,7 @@
 // scores, recommendation and risk from the decision summary; returns/debt
 // metrics from norm.base; stress outcomes from norm.worstStress. This module
 // only SHAPES those values into a comparison matrix and decides which deal is
-// "best" per metric for highlighting — it computes no financial figures.
+// "best" per metric for highlighting: it computes no financial figures.
 
 import type { ReportColumnType } from "./portfolio-analytics";
 

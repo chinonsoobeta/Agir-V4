@@ -1,4 +1,4 @@
-// Lender Package — debt-focused review package. Covenant compliance, debt
+// Lender Package: debt-focused review package. Covenant compliance, debt
 // service, stress-case debt metrics, reconciliation flags, lender risk summary,
 // and auto-generated lender conditions. Deterministic; no invented numbers.
 
@@ -33,15 +33,15 @@ export function buildLenderPackage(data: ReportData, opts: { generatedLabel: str
   const hold = eVal("hold_years");
   const loanSummary: string[][] = [
     ["Senior loan amount", money(core.loan)],
-    ["Loan-to-cost", core.ltc == null ? "—" : pct(core.ltc)],
-    ["Interest rate", interest == null ? "—" : pct(interest)],
-    ["Amortization", amort == null ? "—" : `${amort} years`],
+    ["Loan-to-cost", core.ltc == null ? "Not available" : pct(core.ltc)],
+    ["Interest rate", interest == null ? "Not available" : pct(interest)],
+    ["Amortization", amort == null ? "Not available" : `${amort} years`],
     ...(io != null && io > 0 ? [["Interest-only period", `${io} months`]] : []),
-    ["Minimum DSCR covenant", core.minDscr == null ? "—" : x(core.minDscr)],
-    ["Stabilization requirement", core.lenderOcc == null ? "—" : pct(core.lenderOcc)],
-    ["Exit cap", core.exitCap == null ? "—" : pct(core.exitCap)],
-    ["Hold period", hold == null ? "—" : `${hold} years`],
-    ["Loan payoff at exit", oVal("base", "loan_payoff_at_exit") == null ? "—" : money(oVal("base", "loan_payoff_at_exit")!)],
+    ["Minimum DSCR covenant", core.minDscr == null ? "Not available" : x(core.minDscr)],
+    ["Stabilization requirement", core.lenderOcc == null ? "Not available" : pct(core.lenderOcc)],
+    ["Exit cap", core.exitCap == null ? "Not available" : pct(core.exitCap)],
+    ["Hold period", hold == null ? "Not available" : `${hold} years`],
+    ["Loan payoff at exit", oVal("base", "loan_payoff_at_exit") == null ? "Not available" : money(oVal("base", "loan_payoff_at_exit")!)],
   ];
   sections.push({ heading: "Loan Summary", table: { columns: ["Term", "Value"], rows: loanSummary } });
 
@@ -72,7 +72,7 @@ export function buildLenderPackage(data: ReportData, opts: { generatedLabel: str
   for (const r of data.revenue) {
     const occ = r.occupancy_pct == null ? null : Number(r.occupancy_pct);
     if (occ != null && core.lenderOcc != null) {
-      cov.push([`Occupancy — ${r.unit_type}`, `Requirement ${pct(core.lenderOcc)}`, pct(occ), occ >= core.lenderOcc ? "PASS" : "BELOW"]);
+      cov.push([`Occupancy: ${r.unit_type}`, `Requirement ${pct(core.lenderOcc)}`, pct(occ), occ >= core.lenderOcc ? "PASS" : "BELOW"]);
     }
   }
   if (cov.length) sections.push({ heading: "Covenant Compliance", table: { columns: ["Covenant", "Basis", "Underwritten", "Status"], rows: cov } });
@@ -80,9 +80,9 @@ export function buildLenderPackage(data: ReportData, opts: { generatedLabel: str
   // 4. Debt service
   const ioDscrRow = data.outputs.find((o) => o.scenario_key === "base" && o.metric_key === "interest_only_dscr");
   const debt: string[][] = [
-    ["Annual debt service", ads == null ? "—" : money(ads)],
+    ["Annual debt service", ads == null ? "Not available" : money(ads)],
     ...(ioDscrRow ? [["Interest-only DSCR (secondary)", x(Number(ioDscrRow.value_numeric ?? 0))]] : []),
-    ["Loan payoff at exit", oVal("base", "loan_payoff_at_exit") == null ? "—" : money(oVal("base", "loan_payoff_at_exit")!)],
+    ["Loan payoff at exit", oVal("base", "loan_payoff_at_exit") == null ? "Not available" : money(oVal("base", "loan_payoff_at_exit")!)],
   ];
   sections.push({ heading: "Debt Service", table: { columns: ["Metric", "Value"], rows: debt } });
 
@@ -95,13 +95,13 @@ export function buildLenderPackage(data: ReportData, opts: { generatedLabel: str
     const rows = metrics.map(([label, key]) =>
       [label, ...scenarioOrder.map((sk) => {
         const v = oVal(sk, key);
-        return v == null ? "—" : key === "dscr" ? x(v) : money(v);
+        return v == null ? "Not available" : key === "dscr" ? x(v) : money(v);
       })]);
     // Debt shortfall row (pure function: payoff - net proceeds, when positive).
     rows.push(["Debt shortfall", ...scenarioOrder.map((sk) => {
       const payoff = oVal(sk, "loan_payoff_at_exit");
       const proceeds = oVal(sk, "net_sale_proceeds");
-      if (payoff == null || proceeds == null) return "—";
+      if (payoff == null || proceeds == null) return "Not available";
       const short = track(payoff - proceeds);
       return short > 0 ? money(short) : "none";
     })]);
@@ -116,7 +116,7 @@ export function buildLenderPackage(data: ReportData, opts: { generatedLabel: str
     } });
   }
 
-  // 7. Lender risk summary (qualitative, derived from flags/metrics — no numbers)
+  // 7. Lender risk summary (qualitative, derived from flags/metrics: no numbers)
   const riskBullets: string[] = [];
   if (core.dscr != null && core.minDscr != null && core.dscr < core.minDscr) riskBullets.push("- Credit risk: underwritten DSCR is below the covenant minimum.");
   if (Math.abs(core.fundingGap) > 1) riskBullets.push("- Funding gap risk: committed equity is short of required equity.");
@@ -130,10 +130,10 @@ export function buildLenderPackage(data: ReportData, opts: { generatedLabel: str
   // Headline stats + verdict + lender-readiness banner.
   const summary_stats: ReportStat[] = [
     { label: "Requested Senior Loan", value: money(core.loan) },
-    { label: "Loan-to-Cost", value: core.ltc == null ? "—" : pct(core.ltc) },
-    { label: "Underwritten DSCR", value: core.dscr == null ? "—" : x(core.dscr) },
-    { label: "Min DSCR Covenant", value: core.minDscr == null ? "—" : x(core.minDscr) },
-    { label: "Stabilized NOI", value: core.noi == null ? "—" : money(core.noi) },
+    { label: "Loan-to-Cost", value: core.ltc == null ? "Not available" : pct(core.ltc) },
+    { label: "Underwritten DSCR", value: core.dscr == null ? "Not available" : x(core.dscr) },
+    { label: "Min DSCR Covenant", value: core.minDscr == null ? "Not available" : x(core.minDscr) },
+    { label: "Stabilized NOI", value: core.noi == null ? "Not available" : money(core.noi) },
     { label: "Funding Gap", value: money(core.fundingGap) },
   ];
   const notReady = (core.dscr != null && core.minDscr != null && core.dscr < core.minDscr) || Math.abs(core.fundingGap) > 1;
@@ -145,7 +145,7 @@ export function buildLenderPackage(data: ReportData, opts: { generatedLabel: str
   derived.push(...disc.derived);
 
   return {
-    header_band: "Agir Pro Finance — Deterministic Underwriting Engine — CONFIDENTIAL DRAFT",
+    header_band: "Agir Pro Finance: Deterministic Underwriting Engine: CONFIDENTIAL DRAFT",
     title: "Lender Package",
     project_name: data.project?.name ?? "Project",
     subtitle: `${data.project?.type ? String(data.project.type).replace(/_/g, " ") : "Development"}${data.project?.location ? ` · ${data.project.location}` : ""}`,

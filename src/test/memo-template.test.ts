@@ -1,4 +1,4 @@
-// Deterministic memo template — proves the no-AI fallback produces every
+// Deterministic memo template: proves the no-AI fallback produces every
 // required section and that EVERY numeric token traces to an approved
 // assumption or a deterministic engine output (zero provenance orphans). This
 // is the structural guarantee that the deterministic memo never invents a
@@ -107,7 +107,7 @@ describe("Deterministic memo template", () => {
     expect(memo.investment_committee_recommendation).toContain("REJECT");
   });
 
-  test("never invents a number — zero provenance orphans", () => {
+  test("never invents a number: zero provenance orphans", () => {
     const { outputs, cashFlows, flags, errorFlags, verdict } = buildContext();
     const memo = buildDeterministicMemo({
       project: { name: "Harbour Centre", location: "Mixed-use waterfront", type: "mixed_use", status: "underwriting" },

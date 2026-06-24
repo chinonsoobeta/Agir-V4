@@ -21,7 +21,7 @@ export type ReconciliationContext = {
   // Debt service actually in force during the hold. When the loan is
   // interest-only for the entire hold, covenant feasibility is tested against
   // the interest-only payment (what is actually due), not the amortizing
-  // constant — otherwise a fully-IO deal that comfortably covers its real debt
+  // constant: otherwise a fully-IO deal that comfortably covers its real debt
   // service is false-failed.
   interestOnlyAnnualDebtService?: number | null;
   ioCoversHold?: boolean | null;
@@ -88,7 +88,7 @@ export function runReconciliationChecks(ctx: ReconciliationContext): Reconciliat
       flags.push({
         check_key: "covenant_feasibility",
         severity: "error",
-        message: `Debt unsupportable: covenant requires NOI ${fmt(requiredNoi)} (${ctx.minDscr.toFixed(2)}x × ${covenantBasis} ${fmt(covenantDebtService)}) vs engine NOI ${fmt(ctx.noi)} — fails covenant by ${Number.isFinite(shortfallRatio) ? shortfallRatio.toFixed(1) : "∞"}×.`,
+        message: `Debt unsupportable: covenant requires NOI ${fmt(requiredNoi)} (${ctx.minDscr.toFixed(2)}x × ${covenantBasis} ${fmt(covenantDebtService)}) vs engine NOI ${fmt(ctx.noi)}: fails covenant by ${Number.isFinite(shortfallRatio) ? shortfallRatio.toFixed(1) : "∞"}×.`,
         expected: requiredNoi,
         actual: ctx.noi,
       });
@@ -132,11 +132,11 @@ export function runReconciliationChecks(ctx: ReconciliationContext): Reconciliat
     if (ctx.statedTotalProjectCost < 0.5 * ctx.budgetSum) {
       // Suspect extraction: a stated total below half the budget sum is almost
       // always a mis-mapped line (e.g. a loan amount read as the total). Surface
-      // it for review as a WARNING — never a hard reconciliation error.
+      // it for review as a WARNING: never a hard reconciliation error.
       flags.push({
         check_key: "budget_vs_stated_total",
         severity: "warning",
-        message: `Suspect stated total project cost ${fmt(ctx.statedTotalProjectCost)} is below half the budget sum ${fmt(ctx.budgetSum)} — likely a mis-extracted value. Pending review; not treated as a hard reconciliation error.${source}`,
+        message: `Suspect stated total project cost ${fmt(ctx.statedTotalProjectCost)} is below half the budget sum ${fmt(ctx.budgetSum)}: likely a mis-extracted value. Pending review; not treated as a hard reconciliation error.${source}`,
         expected: ctx.statedTotalProjectCost,
         actual: ctx.budgetSum,
       });
@@ -263,7 +263,7 @@ export function deriveRiskRegister(output: EngineOutput, flags: ReconciliationFl
       severity: v.breakEvenOccupancyPct >= 90 ? "red" : "yellow",
       risk_type: "operations",
       title: "High Break-even Occupancy",
-      description: `Break-even occupancy is ${v.breakEvenOccupancyPct.toFixed(1)}% — limited cushion before stabilized levered cash flow turns negative.`,
+      description: `Break-even occupancy is ${v.breakEvenOccupancyPct.toFixed(1)}%: limited cushion before stabilized levered cash flow turns negative.`,
     });
   }
   for (const flag of flags) {

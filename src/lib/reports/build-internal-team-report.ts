@@ -1,4 +1,4 @@
-// Internal Team Report — operational report for analysts/PMs. Assumption
+// Internal Team Report: operational report for analysts/PMs. Assumption
 // register, defaults, reconciliation, risks, model outputs, documents, audit
 // trail, and action items. Each section maps to an XLSX tab. Can be generated
 // before underwriting (with missing-data disclosures).
@@ -14,7 +14,7 @@ const SCEN_LABELS: Record<string, string> = {
   base: "Base", cap_expansion: "Cap Expansion", cost_overrun: "Cost Overrun",
   rate_shock: "Rate Shock", revenue_down: "Revenue Downside", combined: "Combined Stress",
 };
-const fmtDate = (s: any) => (s ? new Date(String(s)).toISOString().slice(0, 10) : "—");
+const fmtDate = (s: any) => (s ? new Date(String(s)).toISOString().slice(0, 10) : "Not available");
 
 export function buildInternalTeamReport(data: ReportData, opts: { generatedLabel: string }): MemoReport {
   const { oVal } = makeAccessors(data);
@@ -25,7 +25,7 @@ export function buildInternalTeamReport(data: ReportData, opts: { generatedLabel
 
   const sections: ReportSection[] = [];
 
-  // 1. Summary — project + workflow status.
+  // 1. Summary: project + workflow status.
   const statusCount = (st: string) => data.assumptions.filter((a) => a.status === st).length;
   const counts = {
     documents: data.documents.length,
@@ -38,8 +38,8 @@ export function buildInternalTeamReport(data: ReportData, opts: { generatedLabel
   };
   trackAll(Object.values(counts));
   sections.push({ heading: "Summary", table: { columns: ["Field", "Value"], rows: [
-    ["Project", String(data.project?.name ?? "—")],
-    ["Status", String(data.project?.status ?? "—")],
+    ["Project", String(data.project?.name ?? "Not available")],
+    ["Status", String(data.project?.status ?? "Not available")],
     ["Documents", String(counts.documents)],
     ["Assumptions", String(counts.assumptions)],
     ["Underwriting", counts.outputs > 0 ? "Generated" : "Not started"],
@@ -60,10 +60,10 @@ export function buildInternalTeamReport(data: ReportData, opts: { generatedLabel
   sections.push({ heading: "Assumptions", table: {
     columns: ["Field", "Category", "Value", "Status", "Confidence", "Source"],
     rows: data.assumptions.map((a) => [
-      String(a.field_label ?? a.field_key ?? "—"),
-      String(a.category ?? "—"),
-      a.value_numeric != null ? fmtByUnit(Number(a.value_numeric), a.unit) : String(a.value_text ?? "—"),
-      String(a.status ?? "—"),
+      String(a.field_label ?? a.field_key ?? "Not available"),
+      String(a.category ?? "Not available"),
+      a.value_numeric != null ? fmtByUnit(Number(a.value_numeric), a.unit) : String(a.value_text ?? "Not available"),
+      String(a.status ?? "Not available"),
       `${a.confidence_score ?? 0}% ${a.confidence_band ?? ""}`.trim(),
       assumptionSourceLabel(data, a),
     ]),
@@ -75,7 +75,7 @@ export function buildInternalTeamReport(data: ReportData, opts: { generatedLabel
     trackAll(defaultRows.map((d) => d.value_numeric));
     sections.push({ heading: "Defaults", table: {
       columns: ["Field", "Value", "Source", "Accepted at"],
-      rows: defaultRows.map((d) => [String(d.key), d.value_numeric == null ? "—" : String(d.value_numeric), "Default accepted", fmtDate(d.approved_at)]),
+      rows: defaultRows.map((d) => [String(d.key), d.value_numeric == null ? "Not available" : String(d.value_numeric), "Default accepted", fmtDate(d.approved_at)]),
     } });
   } else {
     sections.push({ heading: "Defaults", body: "No default-accepted inputs." });
@@ -86,16 +86,16 @@ export function buildInternalTeamReport(data: ReportData, opts: { generatedLabel
     columns: ["Check", "Severity", "Detail", "Expected", "Actual", "Resolved"],
     rows: data.flags.length ? data.flags.map((f) => [
       String(f.check_key ?? "-"), String(f.severity ?? "").toUpperCase(), sanitizeSymbols(f.message ?? ""),
-      f.expected == null ? "—" : String(f.expected), f.actual == null ? "—" : String(f.actual), f.resolved ? "yes" : "no",
-    ]) : [["—", "—", "No reconciliation flags.", "—", "—", "—"]],
+      f.expected == null ? "Not available" : String(f.expected), f.actual == null ? "Not available" : String(f.actual), f.resolved ? "yes" : "no",
+    ]) : [["Not available", "Not available", "No reconciliation flags.", "Not available", "Not available", "Not available"]],
   } });
 
   // 6. Risk register.
   sections.push({ heading: "Risks", table: {
     columns: ["Severity", "Type", "Title", "Description"],
     rows: data.risks.length ? data.risks.map((r) => [
-      String(r.severity ?? "").toUpperCase(), String(r.risk_type ?? "—"), String(r.title ?? "—"), sanitizeSymbols(r.description ?? ""),
-    ]) : [["—", "—", "No risks recorded.", "—"]],
+      String(r.severity ?? "").toUpperCase(), String(r.risk_type ?? "Not available"), String(r.title ?? "Not available"), sanitizeSymbols(r.description ?? ""),
+    ]) : [["Not available", "Not available", "No risks recorded.", "Not available"]],
   } });
 
   // 7. Model outputs (base + stress headline metrics).
@@ -110,7 +110,7 @@ export function buildInternalTeamReport(data: ReportData, opts: { generatedLabel
       columns: ["Metric", ...scenarioOrder.map((s) => SCEN_LABELS[s] ?? s)],
       rows: metrics.map(([label, key]) => [label, ...scenarioOrder.map((sk) => {
         const v = oVal(sk, key);
-        return v == null ? "—" : key === "dscr" || key === "equity_multiple" ? x(v) : key === "yield_on_cost" ? `${v.toFixed(2)}%` : money(v);
+        return v == null ? "Not available" : key === "dscr" || key === "equity_multiple" ? x(v) : key === "yield_on_cost" ? `${v.toFixed(2)}%` : money(v);
       })]),
     } });
   } else {
@@ -122,7 +122,7 @@ export function buildInternalTeamReport(data: ReportData, opts: { generatedLabel
     const cf = [...data.cashFlows].sort((a, b) => (a.period_year - b.period_year) || String(a.scenario_key).localeCompare(String(b.scenario_key)));
     sections.push({ heading: "Cash Flows", table: {
       columns: ["Scenario", "Year", "Line", "Amount"],
-      rows: cf.slice(0, 200).map((c) => [String(c.scenario_key ?? "—"), String(c.period_year ?? "—"), String(c.line_key ?? "—"), c.amount == null ? "—" : money(Number(c.amount))]),
+      rows: cf.slice(0, 200).map((c) => [String(c.scenario_key ?? "Not available"), String(c.period_year ?? "Not available"), String(c.line_key ?? "Not available"), c.amount == null ? "Not available" : money(Number(c.amount))]),
     } });
   }
 
@@ -130,14 +130,14 @@ export function buildInternalTeamReport(data: ReportData, opts: { generatedLabel
   sections.push({ heading: "Documents", table: {
     columns: ["Document", "Category", "Status", "Uploaded"],
     rows: data.documents.length ? data.documents.map((d) => [
-      String(d.name ?? "—"), String(d.category ?? "—"), String(d.status ?? "—"), fmtDate(d.upload_date),
-    ]) : [["—", "—", "No documents.", "—"]],
+      String(d.name ?? "Not available"), String(d.category ?? "Not available"), String(d.status ?? "Not available"), fmtDate(d.upload_date),
+    ]) : [["Not available", "Not available", "No documents.", "Not available"]],
   } });
 
   // 10. Audit log.
   sections.push({ heading: "Audit Log", table: {
     columns: ["Time", "Action", "Entity"],
-    rows: data.auditLogs.slice(0, 60).map((a) => [fmtDate(a.created_at), String(a.action ?? "—"), String(a.entity_type ?? "—")]),
+    rows: data.auditLogs.slice(0, 60).map((a) => [fmtDate(a.created_at), String(a.action ?? "Not available"), String(a.entity_type ?? "Not available")]),
   } });
 
   // 11. Action items (operational).
@@ -156,7 +156,7 @@ export function buildInternalTeamReport(data: ReportData, opts: { generatedLabel
   derived.push(...disc.derived);
 
   return {
-    header_band: "Agir Pro Finance — Deterministic Underwriting Engine — INTERNAL",
+    header_band: "Agir Pro Finance: Deterministic Underwriting Engine: INTERNAL",
     title: "Internal Team Report",
     project_name: data.project?.name ?? "Project",
     subtitle: `${data.project?.type ? String(data.project.type).replace(/_/g, " ") : "Development"}${data.project?.location ? ` · ${data.project.location}` : ""}`,

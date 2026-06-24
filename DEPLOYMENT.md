@@ -49,15 +49,15 @@ If you use Google sign-in, configure Google as a Supabase OAuth provider and add
 Apply every migration in `supabase/migrations` to the target Supabase project **before** deploying new code. Two ways:
 
 ```bash
-# Option A — connection string (idempotent; runs every file in order)
+# Option A: connection string (idempotent; runs every file in order)
 POSTGRES_URL="postgresql://…supabase.co:5432/postgres" npm run migrate
 
-# Option B — paste each new .sql into the Supabase dashboard SQL editor
+# Option B: paste each new .sql into the Supabase dashboard SQL editor
 ```
 
 The app is written **migration-safe** (`src/lib/db-compat.ts`): if a newer build runs against an
 older schema, list endpoints return empty, writes fail closed, and deal create/update strip
-not-yet-applied columns and retry. So a staged deploy degrades gracefully — but features that need
+not-yet-applied columns and retry. So a staged deploy degrades gracefully: but features that need
 the new tables (workspaces/teams, milestones, market signals, integration persistence,
 preferences) stay inert until their migration is applied.
 

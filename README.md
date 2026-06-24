@@ -1,4 +1,4 @@
-# Agir — Deterministic Development Underwriting
+# Agir: Deterministic Development Underwriting
 
 Agir is a project-finance underwriting terminal for real estate development deals. It ingests deal documents, extracts the assumptions deterministically, runs a deterministic underwriting engine, and produces auditable investment memos and stakeholder reports (PDF / DOCX / XLSX).
 
@@ -11,7 +11,7 @@ The defining principle: **every financial number is deterministic and traceable.
 1. **Deterministic, not model output.** All underwriting math is pure functions over approved inputs.
 2. **No invented numbers.** The LLM is optional and may only write prose around already-computed values. With no API key, the app is fully deterministic.
 3. **Provenance-verified.** Every memo and report runs a numeric-provenance verifier: each numeric token must trace to an approved/calculated/default-accepted input, an engine output, a reconciliation figure, or simple arithmetic over those. Orphan numbers flag the artifact `needs_review` rather than being silently emitted.
-4. **Fail closed.** When required inputs are missing or conflicting, underwriting is blocked and the UI says exactly what is missing — it never fills gaps on its own.
+4. **Fail closed.** When required inputs are missing or conflicting, underwriting is blocked and the UI says exactly what is missing: it never fills gaps on its own.
 5. **Auditable.** Every persisted output carries `formula_text`; inputs carry `source = extracted | analyst | default` and a status (`approved | default_accepted | calculated | extracted | conflicting | rejected`).
 
 ---
@@ -26,7 +26,7 @@ The defining principle: **every financial number is deterministic and traceable.
 - "Run Extraction" returns a structured **debug trace** (per-document download/parse/candidate counts) surfaced in the UI.
 
 ### 2. Deterministic underwriting engine (`src/lib/engine`)
-Pure TypeScript. Computes TDC, GPR/EGI/NOI, yield on cost, development spread, exit value, DSCR, equity multiple, IRR (or "not meaningful" on an equity wipeout — never a misleading 0.00%), plus a base case and five stress scenarios, reconciliation flags, a risk register, and a verdict. It is **fail-closed**: it reads only `approved` / `default_accepted` rows.
+Pure TypeScript. Computes TDC, GPR/EGI/NOI, yield on cost, development spread, exit value, DSCR, equity multiple, IRR (or "not meaningful" on an equity wipeout: never a misleading 0.00%), plus a base case and five stress scenarios, reconciliation flags, a risk register, and a verdict. It is **fail-closed**: it reads only `approved` / `default_accepted` rows.
 
 ### 3. Investment memo generator
 - A deterministic IC memorandum built from approved assumptions + engine outputs (stat strip, verdict banner, KPI cards, sources & uses, revenue build, scenario analysis, covenant compliance, risks, reconciliation flags, required actions, document sources, footnotes).
@@ -76,7 +76,7 @@ Reports fail closed (e.g. "Run deterministic underwriting before generating this
 - **Framework:** TanStack Start (React 19, TanStack Router/Query), Vite, Tailwind v4, shadcn/ui
 - **Backend:** Supabase (Postgres + Auth + Storage), fail-closed RLS
 - **Docs/exports:** `unpdf` (read), `xlsx` (read/write), `jspdf` (PDF), `docx` (DOCX)
-- **AI (optional):** `@ai-sdk/anthropic` — prose only
+- **AI (optional):** `@ai-sdk/anthropic`: prose only
 - **Tests:** Vitest
 
 ---
@@ -103,22 +103,22 @@ supabase start                    # prints local URL + keys
 supabase db reset                 # applies migrations + seed
 ```
 
-Put the values from `supabase status -o env` into `.env.local` — both the `SUPABASE_*` and the browser-side `VITE_SUPABASE_*` copies. Seeded demo login: `maple.heights@example.com` / `password123`.
+Put the values from `supabase status -o env` into `.env.local`: both the `SUPABASE_*` and the browser-side `VITE_SUPABASE_*` copies. Seeded demo login: `maple.heights@example.com` / `password123`.
 
 Notes:
 - `supabase/config.toml` disables the analytics/vector service, which otherwise fails under colima's Docker socket.
-- The `documents` storage bucket is not created by migrations — create it once: `insert into storage.buckets (id,name,public) values ('documents','documents',false)`.
+- The `documents` storage bucket is not created by migrations: create it once: `insert into storage.buckets (id,name,public) values ('documents','documents',false)`.
 - The dev server launches on Node 22 via `.claude/dev-node22.sh`.
 
 ### AI is optional
-Leave `ANTHROPIC_API_KEY` unset and the memo/report generators use the deterministic template. Set it to enable AI-assisted prose — financial figures remain deterministic and provenance-verified.
+Leave `ANTHROPIC_API_KEY` unset and the memo/report generators use the deterministic template. Set it to enable AI-assisted prose: financial figures remain deterministic and provenance-verified.
 
 ---
 
 ## Verify
 
 ```bash
-npm run test     # Vitest — engine, extraction, memo, and reports suites
+npm run test     # Vitest: engine, extraction, memo, and reports suites
 npm run build    # production build
 ```
 
@@ -136,4 +136,4 @@ src/routes/                App routes (dashboard, projects, assumptions, underwr
 supabase/                  Migrations, seed, config
 ```
 
-> The deterministic underwriting engine in `src/lib/engine` is the source of truth for every financial number. Treat it as fixed — features build *around* it, never inside it.
+> The deterministic underwriting engine in `src/lib/engine` is the source of truth for every financial number. Treat it as fixed: features build *around* it, never inside it.

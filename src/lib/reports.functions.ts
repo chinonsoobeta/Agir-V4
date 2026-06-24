@@ -108,7 +108,7 @@ export const generateReport = createServerFn({ method: "POST" })
     const { deriveCore, reportAllowedValues, generationLabel } = await import("./reports/report-common");
     const report = buildReport(data.report_type, reportData, { generatedLabel: generationLabel() });
 
-    // Numeric provenance — never blocks; failing reports are saved needs_review.
+    // Numeric provenance: never blocks; failing reports are saved needs_review.
     const allowed = reportAllowedValues(reportData, deriveCore(reportData), report.derived_values ?? []);
     const provenance = verifyNumericProvenance(memoReportText(report), allowed);
     const verification_report = {
@@ -140,7 +140,7 @@ export const generateReport = createServerFn({ method: "POST" })
     await context.supabase.from("activities").insert({
       project_id: data.project_id, user_id: context.userId,
       activity_type: "report_generated",
-      description: `Generated ${def.title}${provenance.pass ? " (provenance verified)" : ` — NEEDS REVIEW: ${provenance.orphans.length} token(s) lack provenance`}`,
+      description: `Generated ${def.title}${provenance.pass ? " (provenance verified)" : `: NEEDS REVIEW: ${provenance.orphans.length} token(s) lack provenance`}`,
     });
 
     return {

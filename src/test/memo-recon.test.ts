@@ -1,6 +1,6 @@
 // Regression tests for the false budget_vs_stated_total reconciliation:
 // (A) a DOCX whose runs glue together must not truncate "$162,500,000" to
-//     "162,500", and the senior loan must map to debt_amount — never to
+//     "162,500", and the senior loan must map to debt_amount: never to
 //     total_project_cost. With the senior loan correctly mapped, no bogus
 //     stated total is produced and budget_vs_stated_total does not fire.
 // (B) the reconciliation guard downgrades an implausibly small stated total to
@@ -48,7 +48,7 @@ describe("budget_vs_stated_total does not fire from the senior loan", () => {
 
     const grouped = groupAndResolve(mapCandidates(cands));
     expect(grouped.get("debt_amount")?.value_numeric).toBe(162_500_000);
-    // Total project cost, if mapped, is the real $250M — never the $162.5M loan.
+    // Total project cost, if mapped, is the real $250M: never the $162.5M loan.
     const tpc = grouped.get("total_project_cost");
     if (tpc) expect(tpc.value_numeric).toBe(250_000_000);
     // No key carries the loan value as a stated total.
@@ -70,7 +70,7 @@ describe("budget_vs_stated_total does not fire from the senior loan", () => {
       tdc: 250_000_000, equity: 50_000_000, loan: 162_500_000, noi: 6_395_155,
       amortizingAnnualDebtService: 12_006_485, minDscr: 1.2,
       statedTotalProjectCost: 162_500, budgetSum: 250_000_000,
-      statedTotalSource: "Addendum.docx — Senior Construction Debt: $162,500,000",
+      statedTotalSource: "Addendum.docx: Senior Construction Debt: $162,500,000",
     });
     const flag = flags.find((f) => f.check_key === "budget_vs_stated_total")!;
     expect(flag).toBeDefined();

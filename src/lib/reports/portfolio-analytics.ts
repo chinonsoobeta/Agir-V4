@@ -2,7 +2,7 @@
 //
 // Every figure here is an AGGREGATION of values that already came out of the
 // deterministic engine (via DealSummary / decision_logs). These builders group,
-// count, weight and sort — they never invent or re-derive a financial value.
+// count, weight and sort: they never invent or re-derive a financial value.
 // Numbers stay numbers (no formatting) so exports get real numeric cells and the
 // UI can format per the active locale. Each report carries a plain-language
 // formula/data-source note for transparency.
@@ -216,7 +216,7 @@ export function buildRiskConfidence(deals: DealSummary[]): AnalyticsReport {
         risk: d.riskRating,
         investment: d.investmentScore,
         confidence: d.confidenceScore,
-        topRisk: d.topRisk ?? "—",
+        topRisk: d.topRisk ?? "Not available",
       },
     }))
     .sort((a, b) => (a.cells.confidence as number) - (b.cells.confidence as number));
@@ -384,8 +384,8 @@ export function buildDecisionHistory(decisions: DecisionHistoryRow[]): Analytics
       date: d.created_at,
       name: d.deal_name,
       decision: LABEL[d.decision] ?? d.decision,
-      by: d.user_name ?? "—",
-      conditions: d.conditions ?? "—",
+      by: d.user_name ?? "Not available",
+      conditions: d.conditions ?? "Not available",
     },
   }));
   const approvals = decisions.filter((d) => d.decision.startsWith("approve")).length;

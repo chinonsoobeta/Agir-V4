@@ -1,4 +1,4 @@
-// Investment Committee — where the decision is actually made and recorded.
+// Investment Committee: where the decision is actually made and recorded.
 // Surfaces the engine recommendation, the two headline scores, the approval
 // conditions and findings, then the four IC actions and a permanent audit trail.
 
@@ -44,7 +44,7 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
   const recTone = RECOMMENDATION_TONE[decision.recommendation];
 
   // Do not present any recommendation, score, or condition before deterministic
-  // underwriting and findings exist — that would be a recommendation-like output
+  // underwriting and findings exist: that would be a recommendation-like output
   // with no basis. Show workflow state instead.
   if (!decision.hasUnderwriting || !decision.findings) {
     return (
@@ -166,11 +166,11 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
             );
           })}
         </div>
-        <Textarea className="mt-4" rows={3} placeholder="Committee rationale — cite approved assumptions, returns, DSCR, stress results, and market guidance." value={rationale} onChange={(e) => setRationale(e.target.value)} />
+        <Textarea className="mt-4" rows={3} placeholder="Committee rationale: cite approved assumptions, returns, DSCR, stress results, and market guidance." value={rationale} onChange={(e) => setRationale(e.target.value)} />
         {(action === "approve_with_conditions" || action === "return_to_underwriting") && (
           <Textarea className="mt-2" rows={2}
             placeholder={action === "approve_with_conditions"
-              ? "Conditions — e.g. cap hard-cost re-bid ≤ +5%, confirm rate ≤ 6.5%, OpEx ratio ≤ 38%."
+              ? "Conditions: e.g. cap hard-cost re-bid ≤ +5%, confirm rate ≤ 6.5%, OpEx ratio ≤ 38%."
               : "What must be re-underwritten before this returns to committee?"}
             value={conditions} onChange={(e) => setConditions(e.target.value)} />
         )}

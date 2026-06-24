@@ -60,15 +60,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Agir — Deal Terminal" },
+      { title: "Agir | Real estate investment decisions, made clear" },
       {
         name: "description",
-        content: "AI-powered project finance and deal management for real estate developers.",
+        content:
+          "Agir brings deal flow, deterministic underwriting, investment decisions, execution, and portfolio reporting into one clear workspace.",
       },
-      { property: "og:title", content: "Agir — Deal Terminal" },
+      { property: "og:title", content: "Agir | Real estate investment decisions, made clear" },
       {
         property: "og:description",
-        content: "AI-powered project finance and deal management for real estate developers.",
+        content:
+          "Move from source to close with traceable numbers, a live pipeline, and a shared record of every decision.",
       },
     ],
     links: [

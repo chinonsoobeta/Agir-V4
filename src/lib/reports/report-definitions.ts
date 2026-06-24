@@ -1,4 +1,4 @@
-// Registry of stakeholder reports. Pure metadata — no data access — so it can
+// Registry of stakeholder reports. Pure metadata: no data access: so it can
 // be imported by both the server (readiness/build) and the client (cards/UI).
 
 export type ReportType =

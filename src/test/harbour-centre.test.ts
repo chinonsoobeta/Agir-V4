@@ -1,4 +1,4 @@
-// Golden fixture 2 — Harbour Centre: a catastrophic deal, no sugarcoating.
+// Golden fixture 2: Harbour Centre: a catastrophic deal, no sugarcoating.
 // Asserts the exact blocked → defaults → conflict-resolution → reconciliation
 // → REJECT sequence, engine outputs to the dollar, non-degenerate stress
 // columns, and that no fabricated value can pass the provenance verifier.

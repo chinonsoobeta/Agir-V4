@@ -97,7 +97,7 @@ export const ASSUMPTION_DEFS: AssumptionDef[] = [
   { key: "stabilized_occupancy", label: "Stabilized Occupancy", category: "Operations", unit: "%", numeric: true, required: true,
     aliases: ["stabilized occupancy","economic occupancy","physical occupancy","overall occupancy","portfolio occupancy","blended occupancy","average occupancy"] },
   // Component-level occupancies: when present they are NEVER collapsed into a
-  // flat blended number — each revenue component carries its own occupancy.
+  // flat blended number: each revenue component carries its own occupancy.
   { key: "residential_occupancy", label: "Residential Occupancy", category: "Revenue", unit: "%", numeric: true, required: false,
     aliases: ["residential occupancy","apartment occupancy","residential stabilized occupancy","multifamily occupancy"] },
   { key: "retail_occupancy", label: "Retail Occupancy", category: "Revenue", unit: "%", numeric: true, required: false,

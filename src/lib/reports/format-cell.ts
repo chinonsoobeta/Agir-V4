@@ -10,7 +10,7 @@ export function formatReportCell(
   type: ReportColumnType,
   fmt: Formatters,
 ): string {
-  if (value == null || value === "") return "—";
+  if (value == null || value === "") return "Not available";
   if (typeof value !== "number") {
     if (type === "date") return fmt.date(value);
     return String(value);

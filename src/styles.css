@@ -53,18 +53,18 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
-/* Institutional decision platform — deep ink, restrained accent, colour
+/* Institutional decision platform: deep ink, restrained accent, colour
    reserved for risk / approval / conditions. Modelled on the visual language
    of Blackstone / Apollo / Brookfield rather than a BI dashboard. */
 :root {
   --radius: 0.625rem;
 
   --background: oklch(0.985 0.003 255);
-  --foreground: oklch(0.20 0.018 255);
+  --foreground: oklch(0.2 0.018 255);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.20 0.018 255);
+  --card-foreground: oklch(0.2 0.018 255);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.20 0.018 255);
+  --popover-foreground: oklch(0.2 0.018 255);
   --primary: oklch(0.47 0.105 238);
   --primary-foreground: oklch(0.99 0.002 255);
   --secondary: oklch(0.955 0.008 250);
@@ -98,7 +98,7 @@
 }
 
 .dark {
-  --background: oklch(0.17 0.012 255);        /* near-black ink */
+  --background: oklch(0.17 0.012 255); /* near-black ink */
   --foreground: oklch(0.96 0.004 255);
 
   --card: oklch(0.215 0.013 255);
@@ -107,7 +107,7 @@
   --popover: oklch(0.23 0.014 255);
   --popover-foreground: oklch(0.96 0.004 255);
 
-  --primary: oklch(0.74 0.075 235);           /* restrained steel blue */
+  --primary: oklch(0.74 0.075 235); /* restrained steel blue */
   --primary-foreground: oklch(0.16 0.012 255);
 
   --secondary: oklch(0.27 0.015 255);
@@ -116,25 +116,25 @@
   --muted: oklch(0.255 0.013 255);
   --muted-foreground: oklch(0.66 0.012 255);
 
-  --accent: oklch(0.30 0.02 240);
+  --accent: oklch(0.3 0.02 240);
   --accent-foreground: oklch(0.96 0.004 255);
 
-  --destructive: oklch(0.60 0.20 25);         /* crimson — material risk only */
+  --destructive: oklch(0.6 0.2 25); /* crimson: material risk only */
   --destructive-foreground: oklch(0.98 0.005 255);
-  --success: oklch(0.70 0.14 158);            /* emerald — approval only */
+  --success: oklch(0.7 0.14 158); /* emerald: approval only */
   --success-foreground: oklch(0.16 0.012 255);
-  --warning: oklch(0.80 0.13 78);             /* amber — conditions only */
+  --warning: oklch(0.8 0.13 78); /* amber: conditions only */
   --warning-foreground: oklch(0.18 0.02 78);
 
   --border: oklch(0.29 0.013 255);
   --input: oklch(0.255 0.013 255);
   --ring: oklch(0.74 0.075 235);
 
-  --chart-1: oklch(0.74 0.075 235);  /* steel blue */
-  --chart-2: oklch(0.66 0.10 245);   /* blue — return-to-underwriting */
-  --chart-3: oklch(0.70 0.14 158);   /* green */
-  --chart-4: oklch(0.62 0.10 300);   /* muted violet */
-  --chart-5: oklch(0.80 0.13 78);    /* amber */
+  --chart-1: oklch(0.74 0.075 235); /* steel blue */
+  --chart-2: oklch(0.66 0.1 245); /* blue: return-to-underwriting */
+  --chart-3: oklch(0.7 0.14 158); /* green */
+  --chart-4: oklch(0.62 0.1 300); /* muted violet */
+  --chart-5: oklch(0.8 0.13 78); /* amber */
 
   --sidebar: oklch(0.145 0.012 255);
   --sidebar-foreground: oklch(0.84 0.008 255);
@@ -147,39 +147,92 @@
   color-scheme: dark;
 }
 
-.light { color-scheme: light; }
+.light {
+  color-scheme: light;
+}
 
 @layer base {
-  html, body { background-color: var(--color-background); color: var(--color-foreground); }
-  * { border-color: var(--color-border); }
+  html,
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+  }
+  * {
+    border-color: var(--color-border);
+  }
   body {
     font-family: var(--font-sans);
-    font-feature-settings: "cv11","ss01";
+    font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
     letter-spacing: -0.006em;
   }
 
-  h1, h2, h3 { letter-spacing: -0.02em; }
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.02em;
+  }
 
   /* numeric tabular */
-  .tabular-nums, .num { font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+  .tabular-nums,
+  .num {
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-mono);
+  }
 
   /* serif display for institutional deal headers */
-  .display { font-family: var(--font-display); letter-spacing: -0.01em; }
+  .display {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
 
-  ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--muted-foreground) 45%, transparent); border-radius: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--muted-foreground) 45%, transparent);
+    border-radius: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+.landing {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+}
+
+.landing-grid {
+  background-image:
+    linear-gradient(rgb(23 61 49 / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(23 61 49 / 0.045) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(to bottom, black 20%, transparent 88%);
 }
 
 /* data grid borders */
-.data-grid th, .data-grid td {
+.data-grid th,
+.data-grid td {
   border-bottom: 1px solid var(--color-border);
   padding: 0.55rem 0.85rem;
   font-size: 0.8125rem;
 }
-.data-grid th { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.6875rem; color: var(--color-muted-foreground); font-weight: 600; }
+.data-grid th {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.6875rem;
+  color: var(--color-muted-foreground);
+  font-weight: 600;
+}
 
 /* subtle elevation for institutional cards */
-.elevated { box-shadow: 0 1px 0 0 color-mix(in oklab, var(--border) 75%, transparent), 0 14px 35px -24px rgb(0 0 0 / 0.38); }
-.hairline { border: 1px solid var(--color-border); }
+.elevated {
+  box-shadow:
+    0 1px 0 0 color-mix(in oklab, var(--border) 75%, transparent),
+    0 14px 35px -24px rgb(0 0 0 / 0.38);
+}
+.hairline {
+  border: 1px solid var(--color-border);
+}

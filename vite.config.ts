@@ -8,7 +8,7 @@ import { nitro } from "nitro/vite";
 export default defineConfig(({ mode }) => {
   // Load every env var (no prefix filter) from .env files AND process.env so we can
   // bridge them to the browser. The Vercel Supabase integration only provides
-  // SUPABASE_URL / NEXT_PUBLIC_SUPABASE_URL / SUPABASE_ANON_KEY — it does NOT provide
+  // SUPABASE_URL / NEXT_PUBLIC_SUPABASE_URL / SUPABASE_ANON_KEY: it does NOT provide
   // the VITE_* vars that a Vite browser bundle needs. We inject only the public URL +
   // anon key below. The service-role key is intentionally never exposed to the client.
   const env = loadEnv(mode, process.cwd(), "");
@@ -36,7 +36,7 @@ export default defineConfig(({ mode }) => {
       tsconfigPaths(),
       tailwindcss(),
       // tanstackStart() already includes the TanStack Router code-splitting plugin internally.
-      // Do NOT also add TanStackRouterVite() — registering both runs the route transform twice,
+      // Do NOT also add TanStackRouterVite(): registering both runs the route transform twice,
       // which produces duplicate declarations and a broken client entry module.
       tanstackStart(),
       // nitro() builds the deployable server output. It auto-detects the Vercel build

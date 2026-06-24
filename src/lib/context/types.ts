@@ -1,5 +1,5 @@
 // The deterministic Insight Layer types. Everything here is computed from
-// approved engine inputs / engine outputs by pure functions — no LLM, no
+// approved engine inputs / engine outputs by pure functions: no LLM, no
 // invented numbers. The layer sits ON TOP of the calculator: it interprets,
 // compares, attributes and narrates, but never changes a computed value or the
 // hard verdict gates.
@@ -15,7 +15,7 @@ export type AssetClass =
 
 export type MarketTier = "gateway" | "primary" | "secondary" | "tertiary";
 
-// Where the deal sits in its life cycle — drives which norms and tolerances apply.
+// Where the deal sits in its life cycle: drives which norms and tolerances apply.
 export type DealStage = "ground_up" | "lease_up" | "value_add" | "stabilized";
 
 export type LoanStructure = "interest_only_full" | "partial_io" | "amortizing";

@@ -1,4 +1,4 @@
-// Local QA helper: seed the Summit Point Logistics Park deal end-to-end —
+// Local QA helper for seeding the Summit Point Logistics Park deal end to end.
 // create the project, upload the 11 source documents to the `documents` bucket,
 // and insert linked document rows. Then the UI extraction can run against it.
 import { createClient } from "@supabase/supabase-js";

@@ -1,6 +1,6 @@
 // Loads every table a report can draw on, for one project, in a single pass.
-// A failed table query is an ERROR (thrown with a clear message) — never a
-// silently-empty array — so a report is never built against partial data.
+// A failed table query is an ERROR (thrown with a clear message): never a
+// silently-empty array: so a report is never built against partial data.
 
 export type ReportData = {
   project: Record<string, any> | null;

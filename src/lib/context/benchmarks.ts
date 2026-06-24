@@ -1,7 +1,7 @@
 // Curated CRE benchmark knowledge base + a layered resolver.
 //
 // Norms come from three sources, merged in this order of authority:
-//   1. CURATED institutional defaults (below) — transparent and versioned.
+//   1. CURATED institutional defaults (below): transparent and versioned.
 //   2. Firm config overrides (the configurable policy box).
 //   3. Portfolio-derived percentiles (the firm's own deals), blended when there
 //      is a large enough sample.

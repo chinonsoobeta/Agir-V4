@@ -1,7 +1,7 @@
 // Deterministic synthetic Harbour Centre demo documents, derived ONLY from the
 // verified golden fixture (harbour-fixture.ts). These stand in for the real
 // source files (which are not distributed) so the demo's extraction pipeline
-// has real documents to read. Every value here traces to the fixture — no other
+// has real documents to read. Every value here traces to the fixture: no other
 // Harbour numbers are introduced. Labels are written to match the canonical
 // alias taxonomy so the deterministic mapper resolves them without an LLM.
 //
@@ -28,8 +28,8 @@ const component = (unitType: string) => {
   if (!row) throw new Error(`Harbour fixture missing revenue component ${unitType}`);
   return row;
 };
-const brokerCap = HARBOUR_EXIT_CAP_CONFLICT.values[0].value; // 4.75 — broker opinion
-const lenderCap = HARBOUR_EXIT_CAP_CONFLICT.values[1].value; // 5.25 — lender term sheet
+const brokerCap = HARBOUR_EXIT_CAP_CONFLICT.values[0].value; // 4.75: broker opinion
+const lenderCap = HARBOUR_EXIT_CAP_CONFLICT.values[1].value; // 5.25: lender term sheet
 
 const res = component("Residential");
 const retail = component("Retail");
@@ -64,7 +64,7 @@ export const HARBOUR_DEMO_DOCS: DemoDoc[] = [
     category: "Sponsor",
     file_type: "application/pdf",
     kind: "pdf",
-    title: "Harbour Centre — Sponsor Summary",
+    title: "Harbour Centre: Sponsor Summary",
     lines: [
       `Common equity contribution: ${usd(scalar("equity_amount"))}`,
       `Residential rental units: ${res.unit_count} units`,
@@ -78,7 +78,7 @@ export const HARBOUR_DEMO_DOCS: DemoDoc[] = [
     category: "Market Study",
     file_type: "application/pdf",
     kind: "pdf",
-    title: "Harbour Centre — Market Study",
+    title: "Harbour Centre: Market Study",
     lines: [
       `Residential rent: ${usd(res.rent)} per unit per month`,
       `Residential occupancy: ${res.occupancy_pct}%`,
@@ -95,7 +95,7 @@ export const HARBOUR_DEMO_DOCS: DemoDoc[] = [
     category: "Appraisal",
     file_type: "application/pdf",
     kind: "pdf",
-    title: "Harbour Centre — Broker Opinion of Value",
+    title: "Harbour Centre: Broker Opinion of Value",
     lines: [`Exit cap rate: ${brokerCap}%`],
   },
   {
@@ -104,7 +104,7 @@ export const HARBOUR_DEMO_DOCS: DemoDoc[] = [
     category: "Loan Package",
     file_type: "application/pdf",
     kind: "pdf",
-    title: "Harbour Centre — Lender Term Sheet",
+    title: "Harbour Centre: Lender Term Sheet",
     lines: [
       `Senior loan amount: ${usd(scalar("loan_amount"))}`,
       `Interest rate: ${scalar("interest_rate_pct")}%`,
@@ -145,8 +145,8 @@ export const HARBOUR_DEMO_DOCS: DemoDoc[] = [
   },
 ];
 
-// Plain-text rendering of a narrative (pdf) demo doc — the same text the PDF
-// carries — for unit tests that exercise the candidate extractor directly.
+// Plain-text rendering of a narrative (pdf) demo doc: the same text the PDF
+// carries: for unit tests that exercise the candidate extractor directly.
 export function demoDocPlainText(doc: DemoDoc): string {
   if (doc.kind === "pdf") return [doc.title, ...doc.lines].join("\n");
   // Mirror xlsxBufferToText's "Sheet <name> row <n>: ..." layout.

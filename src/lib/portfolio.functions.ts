@@ -1,4 +1,4 @@
-// Portfolio aggregation — produces the institutional decision view across all
+// Portfolio aggregation: produces the institutional decision view across all
 // deals in one call: pipeline stage, Investment Score, Confidence Score, risk
 // rating and recommendation per deal, computed server-side from the same
 // deterministic engine outputs the deal page uses.
@@ -46,7 +46,7 @@ function capitalFor(project: any, base: Record<string, number>): number {
   return Number(project.revenue_forecast || 0);
 }
 
-// What the deal is waiting on — surfaced in the Investment Queue.
+// What the deal is waiting on: surfaced in the Investment Queue.
 function nextActionFor(stage: PipelineStage, dec: any): string | null {
   switch (stage) {
     case "Screening":
@@ -170,7 +170,7 @@ export const listPortfolio = createServerFn({ method: "GET" })
   });
 
 // Side-by-side comparison for a chosen set of deals. Reuses the SAME
-// deterministic decision layer as the portfolio + deal page — no metric is
+// deterministic decision layer as the portfolio + deal page: no metric is
 // recomputed here, only selected from norm.base / norm.worstStress / findings.
 export const compareDeals = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -253,7 +253,7 @@ export const compareDeals = createServerFn({ method: "GET" })
       });
   });
 
-// Recorded IC decisions across all deals — feeds the Decision History report.
+// Recorded IC decisions across all deals: feeds the Decision History report.
 export const listDecisionHistory = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<DecisionHistoryRow[]> => {
@@ -266,7 +266,7 @@ export const listDecisionHistory = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     return (data ?? []).map((d: any) => ({
       project_id: d.project_id,
-      deal_name: d.projects?.name ?? "—",
+      deal_name: d.projects?.name ?? "Not available",
       decision: d.decision,
       rationale: d.rationale ?? null,
       conditions: d.conditions ?? null,

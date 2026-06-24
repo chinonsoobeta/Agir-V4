@@ -14,7 +14,7 @@ export type ParsedRentRollRow = {
 
 // Deterministic, row-typed parsing (never sheet_to_csv). Multi-row tables map
 // to multi-row targets: each rent-roll component becomes its own
-// revenue_program row with its own occupancy — never collapsed to a scalar.
+// revenue_program row with its own occupancy: never collapsed to a scalar.
 export function parseRentRollWorkbook(buffer: ArrayBuffer) {
   const workbook = XLSX.read(buffer, { type: "array" });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];

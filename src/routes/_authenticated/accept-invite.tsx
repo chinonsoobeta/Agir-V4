@@ -10,7 +10,7 @@ import { Loader2, Users, CheckCircle2, XCircle } from "lucide-react";
 import { acceptInvitation } from "@/lib/workspaces.functions";
 
 export const Route = createFileRoute("/_authenticated/accept-invite")({
-  head: () => ({ meta: [{ title: "Join workspace — Agir" }] }),
+  head: () => ({ meta: [{ title: "Join workspace | Agir" }] }),
   validateSearch: (s: Record<string, unknown>) => ({
     token: typeof s.token === "string" ? s.token : undefined,
   }),

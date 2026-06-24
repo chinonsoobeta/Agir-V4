@@ -1,4 +1,4 @@
-// Executive Summary — compact one/two-page recommendation for senior decision
+// Executive Summary: compact one/two-page recommendation for senior decision
 // makers. Deterministic values only; no invented market commentary.
 
 import type { MemoReport, ReportSection, ReportStat } from "../memo-report";
@@ -20,7 +20,7 @@ export function buildExecutiveSummary(data: ReportData, opts: { generatedLabel: 
 
   const card = (label: string, key: string, unit: string): ReportStat => {
     const v = oVal("base", key);
-    return { label, value: v == null ? "—" : unit === "$" ? money(v) : unit === "%" ? pct(v) : unit === "x" ? x(v) : unit === "bps" ? bps(v) : String(v) };
+    return { label, value: v == null ? "Not available" : unit === "$" ? money(v) : unit === "%" ? pct(v) : unit === "x" ? x(v) : unit === "bps" ? bps(v) : String(v) };
   };
   const metric_cards: ReportStat[] = [
     { label: "Total Development Cost", value: money(core.tdc) },
@@ -50,7 +50,7 @@ export function buildExecutiveSummary(data: ReportData, opts: { generatedLabel: 
   const dealSummaryBody = ins?.narrative ? `${ins.thesis} ${ins.narrative}` : summaryBits.join(" ");
   sections.push({ heading: "Deal Summary", body: dealSummaryBody });
 
-  // "What would move the needle" — the binding levers, with the input change
+  // "What would move the needle": the binding levers, with the input change
   // each one requires (magnitudes are provenance-backed via ins.derived).
   const failingLevers = (ins?.levers ?? []).filter((l: any) => !l.passing);
   if (failingLevers.length) {
@@ -97,7 +97,7 @@ export function buildExecutiveSummary(data: ReportData, opts: { generatedLabel: 
   derived.push(...disc.derived);
 
   return {
-    header_band: "Agir Pro Finance — Deterministic Underwriting Engine — CONFIDENTIAL DRAFT",
+    header_band: "Agir Pro Finance: Deterministic Underwriting Engine: CONFIDENTIAL DRAFT",
     title: "Executive Summary",
     project_name: data.project?.name ?? "Project",
     subtitle: `${data.project?.type ? String(data.project.type).replace(/_/g, " ") : "Development"}${data.project?.location ? ` · ${data.project.location}` : ""}`,

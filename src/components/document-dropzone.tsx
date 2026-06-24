@@ -17,7 +17,7 @@ const STATUS_META: Record<ItemStatus, { icon: any; cls: string; label: string }>
   analyzing: { icon: Loader2, cls: "text-primary animate-spin", label: "Extracting…" },
   done: { icon: CheckCircle2, cls: "text-success", label: "Extracted" },
   failed: { icon: XCircle, cls: "text-destructive", label: "Failed" },
-  duplicate: { icon: CopyX, cls: "text-warning", label: "Duplicate — skipped" },
+  duplicate: { icon: CopyX, cls: "text-warning", label: "Duplicate: skipped" },
 };
 
 /**
@@ -83,7 +83,7 @@ export function DocumentDropzone({
         try {
           await analyzeFn({ data: { id: doc.id, name: file.name, category } });
         } catch (e: any) {
-          // Extraction failure is non-fatal — the file is uploaded; surface why.
+          // Extraction failure is non-fatal: the file is uploaded; surface why.
           setItem(id, { status: "failed", error: e?.message ?? "Extraction failed" });
           onChanged();
           return;

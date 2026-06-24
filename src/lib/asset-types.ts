@@ -20,7 +20,7 @@ export const ASSET_TYPES: { value: string; label: string }[] = [
 const LABEL_BY_VALUE = Object.fromEntries(ASSET_TYPES.map((t) => [t.value, t.label]));
 
 export function assetTypeLabel(value?: string | null): string {
-  if (!value) return "—";
+  if (!value) return "Not available";
   return LABEL_BY_VALUE[value] ?? value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 

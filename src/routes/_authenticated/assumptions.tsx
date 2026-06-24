@@ -14,7 +14,7 @@ const allAssumptionsQ = queryOptions({ queryKey: ["assumptions", "all"], queryFn
 const projectsQ = queryOptions({ queryKey: ["projects"], queryFn: () => listProjects() });
 
 export const Route = createFileRoute("/_authenticated/assumptions")({
-  head: () => ({ meta: [{ title: "Assumption Review Center — Agir" }] }),
+  head: () => ({ meta: [{ title: "Assumption Review Center | Agir" }] }),
   loader: ({ context }) => Promise.all([
     context.queryClient.ensureQueryData(allAssumptionsQ),
     context.queryClient.ensureQueryData(projectsQ),
@@ -92,17 +92,17 @@ function AssumptionsReviewCenter() {
                   <tr key={a.id} className="hover:bg-accent/30">
                     <td>
                       <Link to="/projects/$id" params={{ id: a.project_id }} className="font-medium hover:text-primary">
-                        {a.projects?.name ?? "—"}
+                        {a.projects?.name ?? "Not available"}
                       </Link>
                     </td>
                     <td>{a.field_label}</td>
                     <td className="text-xs text-muted-foreground">{a.category}</td>
                     <td className="text-right num">
-                      {a.value_numeric != null ? Number(a.value_numeric).toLocaleString() : a.value_text ?? "—"} {a.unit && a.unit !== "text" ? a.unit : ""}
+                      {a.value_numeric != null ? Number(a.value_numeric).toLocaleString() : a.value_text ?? "Not available"} {a.unit && a.unit !== "text" ? a.unit : ""}
                     </td>
                     <td className="text-center font-mono text-xs">{a.confidence_score}%</td>
                     <td className="text-center"><Badge variant="outline" className={`${STATUS_STYLES[a.status]} text-[10px] capitalize`}>{a.status.replace("_"," ")}</Badge></td>
-                    <td className="text-xs text-muted-foreground max-w-[220px] truncate">{a.source_location || "—"}</td>
+                    <td className="text-xs text-muted-foreground max-w-[220px] truncate">{a.source_location || "Not available"}</td>
                   </tr>
                 ))}
               </tbody>

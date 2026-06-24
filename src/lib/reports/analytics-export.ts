@@ -125,7 +125,7 @@ export async function downloadReportXlsx(
 
 /** Display formatting for PDF cells (locale-light; keeps export self-contained). */
 function fmtForPdf(v: ReportCell, type: ReportColumnType): string {
-  if (v == null || v === "") return "—";
+  if (v == null || v === "") return "Not available";
   if (typeof v !== "number") return String(v);
   switch (type) {
     case "currency":

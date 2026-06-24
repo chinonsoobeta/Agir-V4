@@ -11,7 +11,7 @@ export type StressPreset = {
   capRateDeltaBps?: number;
   rateDeltaBps?: number;
   // Occupancy slippage (percentage POINTS, applied to every component) and
-  // operating-expense-ratio inflation (percentage POINTS) — the two shocks that
+  // operating-expense-ratio inflation (percentage POINTS): the two shocks that
   // most often sink a lease-up-heavy development and that a rent-only revenue
   // haircut cannot express.
   occupancyDeltaPts?: number;

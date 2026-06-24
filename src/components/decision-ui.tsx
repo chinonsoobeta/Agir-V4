@@ -1,4 +1,4 @@
-// Shared institutional decision primitives — used across the deal page,
+// Shared institutional decision primitives: used across the deal page,
 // Investment Committee, Portfolio and Analysis. These encode the platform's
 // colour discipline: green = approval, red = material risk, amber = conditions,
 // neutral for everything else.
@@ -89,7 +89,7 @@ export function ScoreDial({
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="num text-3xl font-semibold leading-none">{value == null ? "—" : Math.round(value)}</div>
+          <div className="num text-3xl font-semibold leading-none">{value == null ? "Not available" : Math.round(value)}</div>
           {value != null && <div className="text-[10px] text-muted-foreground mt-0.5">/ 100</div>}
         </div>
       </div>

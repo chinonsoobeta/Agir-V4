@@ -1,5 +1,5 @@
 // Sample deal templates for common asset types. These pre-fill DEAL METADATA
-// only — asset type, a starting name, a typical sourcing channel, a default
+// only: asset type, a starting name, a typical sourcing channel, a default
 // probability, and a checklist of documents to gather next. They never set
 // underwriting inputs: the engine's numbers still come exclusively from
 // extracted/approved/calculated provenance rows. Every default here is
@@ -14,7 +14,7 @@ export type DealTemplate = {
   type: string;
   /** Default probability for a freshly sourced deal of this kind. */
   probability: number;
-  /** Typical sourcing channel — pre-fills the Source field. */
+  /** Typical sourcing channel: pre-fills the Source field. */
   source: string;
   /** Suggested deal-name prefix the user can edit. */
   namePrefix: string;
@@ -39,8 +39,8 @@ export const DEAL_TEMPLATES: DealTemplate[] = [
     description: "Stabilized or value-add apartments. Underwrite from a rent roll and T-12.",
     type: "multifamily",
     probability: 30,
-    source: "Broker — marketed",
-    namePrefix: "Multifamily — ",
+    source: "Broker: marketed",
+    namePrefix: "Multifamily: ",
     suggestedDocs: [
       "Offering memorandum",
       "Rent roll",
@@ -55,8 +55,8 @@ export const DEAL_TEMPLATES: DealTemplate[] = [
       "Ground-up warehouse or last-mile. Underwrite from a development budget and lease comps.",
     type: "industrial",
     probability: 25,
-    source: "Direct — sponsor",
-    namePrefix: "Logistics — ",
+    source: "Direct: sponsor",
+    namePrefix: "Logistics: ",
     suggestedDocs: [
       "Development budget",
       "Site plan",
@@ -71,8 +71,8 @@ export const DEAL_TEMPLATES: DealTemplate[] = [
       "Reposition with leasing capital. Underwrite from a stacking plan and TI/LC budget.",
     type: "office",
     probability: 20,
-    source: "Broker — marketed",
-    namePrefix: "Office — ",
+    source: "Broker: marketed",
+    namePrefix: "Office: ",
     suggestedDocs: [
       "Offering memorandum",
       "Stacking plan / rent roll",
@@ -87,8 +87,8 @@ export const DEAL_TEMPLATES: DealTemplate[] = [
       "Grocery-anchored or mixed-use. Underwrite from in-place leases and recovery schedules.",
     type: "mixed_use",
     probability: 30,
-    source: "Broker — marketed",
-    namePrefix: "Mixed-use — ",
+    source: "Broker: marketed",
+    namePrefix: "Mixed-use: ",
     suggestedDocs: [
       "Offering memorandum",
       "Rent roll",

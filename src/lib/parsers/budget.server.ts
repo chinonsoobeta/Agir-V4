@@ -16,7 +16,7 @@ export type BudgetParseResult = {
 export function categoryFor(label: string): ParsedBudgetRow["category"] {
   const normalized = label.toLowerCase();
   if (/^other\b/.test(normalized)) return "other";
-  // Reserves and offsite/infrastructure go to "other" — checked BEFORE land so
+  // Reserves and offsite/infrastructure go to "other": checked BEFORE land so
   // "offsite" (contains "site") and "environmental" are not miscategorised.
   if (/environmental|remediation|pfas|\besa\b/.test(normalized)) return "other";
   if (/off[\s-]?site|public road|infrastructure|municipal|substation|stormwater/.test(normalized)) return "other";
@@ -40,7 +40,7 @@ export function parseBudgetWorkbook(buffer: ArrayBuffer): BudgetParseResult {
   const itemIndex = header.findIndex((h) => /item|description|label/.test(h));
   const labelIndex = itemIndex >= 0 ? itemIndex : Math.max(0, categoryIndex);
   // Amount column: among money-named headers, prefer one whose DATA cells are
-  // actually numeric — a *label* column named "Total Project Cost" or "Cost
+  // actually numeric: a *label* column named "Total Project Cost" or "Cost
   // Item" must never be mistaken for the dollar column. Fall back to the last
   // money-named header, then the first numeric column.
   const dataRows = rows.slice(1);

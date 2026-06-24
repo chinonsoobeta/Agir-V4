@@ -1,7 +1,7 @@
 // Stage 2 of the extraction pipeline: DETERMINISTIC alias mapping. Given the
 // regex candidates from Stage 1, this module maps each candidate to a canonical
 // assumption key using ONLY its label hint, surrounding context, and unit/kind
-// compatibility — no LLM, no invented values. The AI classifier (when an API
+// compatibility: no LLM, no invented values. The AI classifier (when an API
 // key is configured) is a secondary pass for candidates this mapper leaves
 // unresolved; it can never override a deterministic mapping and can never mint
 // a value the regex pass did not already lift from a document.
@@ -70,14 +70,14 @@ export type CandidateMapping = {
 // as a fallback when nothing matches in the hint. Unit/kind compatibility gates
 // every candidate so a percentage never lands on a dollar field.
 // A loan/debt label immediately preceding a value means the value IS the
-// debt — it must never be read as a stated total project cost.
+// debt: it must never be read as a stated total project cost.
 const LOAN_DEBT_LABEL_RE = /(senior\s+(construction\s+)?(loan|debt)|loan amount|loan facility|facility size|debt amount|mortgage|preferred equity|common equity|senior debt)/i;
 
 // Context + range guards for keys that are easily contaminated by lookalike
 // rates (the classic failure: an exit-cap value of 5.75% mapping to the
 // operating expense ratio). A guarded key requires matching context AND, where
 // relevant, a disqualifying context must be ABSENT, AND the value must fall in a
-// plausible range. Range alone is never sufficient — context must match.
+// plausible range. Range alone is never sufficient: context must match.
 type Guard = { need: RegExp; deny?: RegExp; min?: number; max?: number };
 const SENSITIVE_GUARDS: Record<string, Guard> = {
   opex_ratio: {

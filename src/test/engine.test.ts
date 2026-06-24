@@ -30,7 +30,7 @@ describe("development underwriting engine", () => {
     closeToPct(output.values.ltcPct, 65.0);
     expect(output.values.interestOnlyDscr).toBeCloseTo(1.31, 2);
     // Equity multiple includes the sale-year operating cash flow (a real
-    // distribution), and the hold cash flow uses the debt service actually due —
+    // distribution), and the hold cash flow uses the debt service actually due.
     // interest-only for the full 1-year Maple hold (ioMonths = 12). Together
     // those fixes moved the prior 1.07 to 1.107.
     expect(output.values.equityMultiple).toBeCloseTo(1.107, 2);
@@ -129,7 +129,7 @@ describe("reconciliation gates", () => {
   };
 
   test("unit-count consistency compares the building total, not each unit type", () => {
-    // 120 + 80 + 20 = 220 building total, matching the stated 220 — no flag.
+    // 120 + 80 + 20 = 220 building total, matching the stated 220: no flag.
     const ok = runReconciliationChecks({ ...ctxBase, unitCounts: [220, 220] });
     expect(ok.some((f) => f.check_key === "unit_count_consistency")).toBe(false);
     // A genuine disagreement (rent roll 218 vs stated 220) still flags.

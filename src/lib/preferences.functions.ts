@@ -4,7 +4,7 @@ import { z } from "zod";
 import { isMissingRelation } from "./db-compat";
 
 // ---------------------------------------------------------------------------
-// Onboarding — a guided first-run checklist whose completion is DERIVED from
+// Onboarding: a guided first-run checklist whose completion is DERIVED from
 // real data (not a stored flag), so it can never lie about progress. The only
 // stored state is whether the user dismissed it. Reaching a real underwriting
 // result should take ~15 minutes with no admin involvement.
@@ -69,7 +69,7 @@ export type OnboardingProgress = {
   doneCount: number;
   total: number;
   allDone: boolean;
-  /** First incomplete step — the "resume here" target. */
+  /** First incomplete step: the "resume here" target. */
   nextStep: OnboardingStepKey | null;
 };
 
@@ -128,7 +128,7 @@ export const getOnboardingState = createServerFn({ method: "GET" })
       addMilestones,
     });
 
-    // Stored dismissal flag — degrade gracefully if the table is not applied yet.
+    // Stored dismissal flag: degrade gracefully if the table is not applied yet.
     let dismissed = false;
     let completedAt: string | null = null;
     const { data: pref, error } = await supabase

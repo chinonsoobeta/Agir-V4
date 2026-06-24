@@ -1,4 +1,4 @@
-// The Decision view — the first thing seen on a deal. It answers "what
+// The Decision view: the first thing seen on a deal. It answers "what
 // decision should be made, and why?" before any metric is shown. Findings
 // dominate; metrics are demoted to a supporting band at the bottom.
 
@@ -14,7 +14,7 @@ const SEV_TONE: Record<string, keyof typeof TONE_CHIP> = {
 };
 
 function metricFmt(v: number | undefined, unit: string): string {
-  if (v == null || !Number.isFinite(v)) return "—";
+  if (v == null || !Number.isFinite(v)) return "Not available";
   if (unit === "$") return fmtCompact(v);
   if (unit === "%") return `${v.toFixed(1)}%`;
   if (unit === "x") return `${v.toFixed(2)}x`;
@@ -47,7 +47,7 @@ export function DealOverview({ decision }: { decision: DecisionSummary }) {
 
   return (
     <div className="space-y-5">
-      {/* Executive summary — the single most important element */}
+      {/* Executive summary: the single most important element */}
       <Card className="p-6 elevated">
         <div className="flex items-center justify-between">
           <Eyebrow>Executive Summary</Eyebrow>
@@ -65,7 +65,7 @@ export function DealOverview({ decision }: { decision: DecisionSummary }) {
             {decision.insight.interpretations?.length > 0 && (
               <ul className="mt-3 space-y-1">
                 {decision.insight.interpretations.filter((i: any) => i.band !== "neutral").slice(0, 4).map((i: any) => (
-                  <li key={i.metricKey} className="text-xs text-muted-foreground"><span className="font-medium text-foreground/80">{i.label}</span> — {i.comparativePhrase}.</li>
+                  <li key={i.metricKey} className="text-xs text-muted-foreground"><span className="font-medium text-foreground/80">{i.label}</span>: {i.comparativePhrase}.</li>
                 ))}
               </ul>
             )}
@@ -79,7 +79,7 @@ export function DealOverview({ decision }: { decision: DecisionSummary }) {
         </div>
       </Card>
 
-      {/* Findings panel — dominates the screen */}
+      {/* Findings panel: dominates the screen */}
       <div className="grid lg:grid-cols-2 gap-4">
         <FindingsColumn title="Strengths" icon={TrendingUp} tone="approve" findings={f?.strengths ?? []} empty="No strengths surfaced." />
         <FindingsColumn title="Risks" icon={AlertTriangle} tone="reject" findings={[...(f?.risks ?? []), ...(f?.weaknesses ?? [])]} empty="No risks surfaced." />
@@ -102,7 +102,7 @@ export function DealOverview({ decision }: { decision: DecisionSummary }) {
                 <span><span className="font-medium">{s.title}.</span> <span className="text-muted-foreground">{s.rationale}</span></span>
               </li>
             ))}
-            {(f?.strengths ?? []).length === 0 && <li className="text-sm text-muted-foreground">The deterministic strengths set is empty — value creation is unproven at current assumptions.</li>}
+            {(f?.strengths ?? []).length === 0 && <li className="text-sm text-muted-foreground">The deterministic strengths set is empty: value creation is unproven at current assumptions.</li>}
           </ul>
         </Card>
 
@@ -115,12 +115,12 @@ export function DealOverview({ decision }: { decision: DecisionSummary }) {
         </Card>
       </div>
 
-      {/* Metrics — supporting, demoted to the bottom */}
+      {/* Metrics: supporting, demoted to the bottom */}
       <div>
         <Eyebrow>Supporting Metrics</Eyebrow>
         <Card className="p-5 mt-3">
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-x-6 gap-y-4">
-            <MetricItem label="Investment Score" value={decision.investmentScore != null ? `${decision.investmentScore}` : "—"} />
+            <MetricItem label="Investment Score" value={decision.investmentScore != null ? `${decision.investmentScore}` : "Not available"} />
             <MetricItem label="Equity Multiple" value={metricFmt(b.equity_multiple, "x")} />
             <MetricItem label="Levered IRR" value={metricFmt(b.irr_estimate, "%")} />
             <MetricItem label="DSCR" value={metricFmt(b.dscr, "x")} />
@@ -133,7 +133,7 @@ export function DealOverview({ decision }: { decision: DecisionSummary }) {
             <MetricItem label="Equity Req." value={metricFmt(b.equity_requirement, "$")} />
             <MetricItem label="Dev. Profit" value={metricFmt(b.projected_profit, "$")} />
           </div>
-          <p className="text-[11px] text-muted-foreground mt-4">Every figure is a deterministic engine output. Metrics support the decision — they do not make it.</p>
+          <p className="text-[11px] text-muted-foreground mt-4">Every figure is a deterministic engine output. Metrics support the decision: they do not make it.</p>
         </Card>
       </div>
     </div>

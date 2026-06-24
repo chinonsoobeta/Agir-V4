@@ -42,7 +42,7 @@ import { usePreferences } from "@/lib/preferences";
 const projectsQ = queryOptions({ queryKey: ["projects"], queryFn: () => listProjects() });
 
 export const Route = createFileRoute("/_authenticated/reports")({
-  head: () => ({ meta: [{ title: "Reports — Agir" }] }),
+  head: () => ({ meta: [{ title: "Reports | Agir" }] }),
   validateSearch: (s: Record<string, unknown>) => ({
     project: typeof s.project === "string" ? s.project : undefined,
   }),
@@ -97,7 +97,7 @@ function ReportsPage() {
         subtitle={t("page.reports.subtitle")}
       />
       <div className="p-5 md:p-6 space-y-8">
-        {/* Portfolio analytics — aggregate, filterable, exportable */}
+        {/* Portfolio analytics: aggregate, filterable, exportable */}
         <section className="space-y-3">
           <div>
             <h2 className="display text-lg font-semibold">{t("rep.section.portfolio")}</h2>
@@ -106,7 +106,7 @@ function ReportsPage() {
           <PortfolioReports />
         </section>
 
-        {/* Deal documents — committee-ready packages per deal */}
+        {/* Deal documents: committee-ready packages per deal */}
         <section className="space-y-3">
           <div>
             <h2 className="display text-lg font-semibold">{t("rep.section.deal")}</h2>
@@ -380,7 +380,7 @@ function ReportPreview({
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {report.title} — {report.project_name}
+            {report.title}: {report.project_name}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 text-sm">

@@ -10,7 +10,7 @@ import { AnalysisPanel } from "@/components/analysis-panel";
 const projectsQ = queryOptions({ queryKey: ["projects"], queryFn: () => listProjects() });
 
 export const Route = createFileRoute("/_authenticated/analysis")({
-  head: () => ({ meta: [{ title: "Analysis — Agir" }] }),
+  head: () => ({ meta: [{ title: "Analysis | Agir" }] }),
   validateSearch: (s: Record<string, unknown>) => ({ deal: typeof s.deal === "string" ? s.deal : undefined }),
   loader: ({ context }) => context.queryClient.ensureQueryData(projectsQ),
   component: AnalysisPage,
@@ -28,7 +28,7 @@ function AnalysisPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Underwriting" title="Analysis" subtitle="Base case, stress, sensitivity, drivers and covenants — what breaks the deal." />
+      <PageHeader eyebrow="Underwriting" title="Analysis" subtitle="Base case, stress, sensitivity, drivers and covenants: what breaks the deal." />
       <div className="p-8 space-y-5">
         {projects.length === 0 ? (
           <Card className="p-16 text-center elevated"><p className="text-sm text-muted-foreground">Create a deal to run analysis.</p></Card>

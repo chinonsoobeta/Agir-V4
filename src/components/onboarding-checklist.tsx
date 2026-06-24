@@ -49,7 +49,7 @@ export function OnboardingChecklist() {
       setDismissedLocal(true);
       qc.invalidateQueries({ queryKey: ["onboarding"] });
     },
-    onError: () => toast.error("Could not save — hidden for this session"),
+    onError: () => toast.error("Could not save: hidden for this session"),
   });
 
   const seedFn = useServerFn(seedHarbourCentre);
@@ -59,7 +59,7 @@ export function OnboardingChecklist() {
       qc.invalidateQueries({ queryKey: ["portfolio"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       qc.invalidateQueries({ queryKey: ["onboarding"] });
-      toast.success("Guided demo loaded — opening deal");
+      toast.success("Guided demo loaded: opening deal");
       if (project?.id) navigate({ to: "/projects/$id", params: { id: project.id } });
     },
     onError: (e: any) => toast.error(e?.message ?? "Could not load demo"),

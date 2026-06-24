@@ -1,5 +1,5 @@
 // Reusable execution checklists. Applying a template creates a coherent set of
-// milestones for a deal in one click — no developer/admin involvement. Due dates
+// milestones for a deal in one click: no developer/admin involvement. Due dates
 // are offsets from "today" in days (operational defaults, clearly editable after
 // they are created). These are workflow items, not financial values.
 

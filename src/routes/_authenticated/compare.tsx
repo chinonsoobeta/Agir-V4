@@ -20,7 +20,7 @@ import { TONE_TEXT } from "@/components/decision-ui";
 const portfolioQ = queryOptions({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
 
 export const Route = createFileRoute("/_authenticated/compare")({
-  head: () => ({ meta: [{ title: "Compare — Agir" }] }),
+  head: () => ({ meta: [{ title: "Compare | Agir" }] }),
   validateSearch: (s: Record<string, unknown>) => ({
     deals: typeof s.deals === "string" ? s.deals : undefined,
   }),

@@ -76,7 +76,7 @@ import {
 const portfolioQ = queryOptions({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
 
 export const Route = createFileRoute("/_authenticated/deals")({
-  head: () => ({ meta: [{ title: "Deals — Agir" }] }),
+  head: () => ({ meta: [{ title: "Deals | Agir" }] }),
   loader: ({ context }) => context.queryClient.ensureQueryData(portfolioQ),
   component: DealsPage,
 });
@@ -103,13 +103,13 @@ function DealsPage() {
     onSuccess: ({ project_id }) => {
       qc.invalidateQueries({ queryKey: ["portfolio"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
-      toast.success("Harbour Centre seeded — opening deal");
+      toast.success("Harbour Centre seeded: opening deal");
       navigate({ to: "/projects/$id", params: { id: project_id } });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // Bulk stage update across the selected deals — invalidates once at the end.
+  // Bulk stage update across the selected deals: invalidates once at the end.
   const bulkUpdate = useMutation({
     mutationFn: async (status: string) => {
       const ids = [...selected];
@@ -454,7 +454,7 @@ function DealCard({ d }: { d: DealSummary }) {
           </Link>
           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
             <MapPin className="size-3" />
-            {d.location || "—"} · <span>{assetTypeLabel(d.type)}</span>
+            {d.location || "Not available"} · <span>{assetTypeLabel(d.type)}</span>
           </div>
         </div>
         <Button
@@ -507,7 +507,7 @@ function DealCard({ d }: { d: DealSummary }) {
           <div className="grid grid-cols-3 gap-2 border-t border-border pt-4">
             <Stat
               label="Investment"
-              value={d.investmentScore != null ? String(d.investmentScore) : "—"}
+              value={d.investmentScore != null ? String(d.investmentScore) : "Not available"}
               accent={tone}
             />
             <Stat label="Confidence" value={String(d.confidenceScore)} />
@@ -604,7 +604,7 @@ function DealTable({
                   >
                     {deal.name}
                   </Link>
-                  <div className="text-[11px] text-muted-foreground">{deal.location || "—"}</div>
+                  <div className="text-[11px] text-muted-foreground">{deal.location || "Not available"}</div>
                 </td>
                 {show("stage") && (
                   <td>
@@ -617,13 +617,13 @@ function DealTable({
                 {show("capital") && <td className="num text-right">{fmtCompact(deal.capital)}</td>}
                 {show("probability") && <td className="num text-right">{deal.probability}%</td>}
                 {show("investment") && (
-                  <td className="num text-right">{deal.investmentScore ?? "—"}</td>
+                  <td className="num text-right">{deal.investmentScore ?? "Not available"}</td>
                 )}
                 {show("confidence") && <td className="num text-right">{deal.confidenceScore}</td>}
                 {show("close") && (
                   <td>
                     <span className={overdue ? "text-destructive font-medium" : ""}>
-                      {deal.targetCloseDate || "—"}
+                      {deal.targetCloseDate || "Not available"}
                       {overdue && ` · ${Math.abs(days!)}d overdue`}
                     </span>
                   </td>
@@ -707,7 +707,7 @@ function NewDealDialog({ onClose, createFn }: { onClose: () => void; createFn: a
   const num = (v: string) => Number(v) || 0;
 
   // Templates pre-fill DEAL METADATA only (type, source, probability, a name
-  // prefix). They never seed underwriting numbers — those still come from
+  // prefix). They never seed underwriting numbers: those still come from
   // documents the user reviews. Every default is shown in the picker.
   function applyTemplate(id: string) {
     setTemplateId(id);
@@ -856,7 +856,7 @@ function NewDealDialog({ onClose, createFn }: { onClose: () => void; createFn: a
               Optional quick financial summary
             </button>
             <p className="text-[11px] text-muted-foreground mt-1">
-              For reference only — underwriting always runs on the documents and approved
+              For reference only: underwriting always runs on the documents and approved
               assumptions, never these figures.
             </p>
             {showFinancials && (

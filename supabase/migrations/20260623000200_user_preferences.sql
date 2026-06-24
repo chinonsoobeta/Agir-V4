@@ -2,7 +2,7 @@
 -- notification preferences, dashboard layout. One row per user. This is the
 -- home for self-service customization that must NOT live in browser-only
 -- storage (it should follow the user across devices). Engine determinism is
--- untouched — nothing here feeds the underwriting source of truth.
+-- untouched: nothing here feeds the underwriting source of truth.
 --
 -- Idempotent + migration-safe: the app reads this table through a fallback that
 -- degrades to sensible defaults when the table has not yet been applied.

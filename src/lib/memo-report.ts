@@ -1,6 +1,6 @@
 // Structured Investment Committee Memorandum model. Pure: it assembles a typed,
 // renderer-agnostic document (stat strip, verdict banner, KPI cards, and the
-// numbered tables — TDC build-up, capital stack, stabilized revenue build,
+// numbered tables: TDC build-up, capital stack, stabilized revenue build,
 // scenario sensitivity, covenant compliance, risk register, reconciliation
 // flags, document sources) from the project's APPROVED assumptions and
 // DETERMINISTIC engine outputs only. Per-component revenue figures and capital-
@@ -44,7 +44,7 @@ export type MemoReportContext = {
   documents: Row[];
   verdict: { code: string; hardFail?: boolean; gates: Array<{ key: string; label: string; pass: boolean; actual?: number }> };
   generationMode: "ai" | "deterministic";
-  generatedLabel: string; // e.g. "June 2026" (month + year only — no day token)
+  generatedLabel: string; // e.g. "June 2026" (month + year only: no day token)
 };
 
 export const grouped = (n: number, decimals = 0) =>
@@ -99,7 +99,7 @@ export function displaySourceLabel(
 }
 
 export function fmtByUnit(v: number | null | undefined, unit: string | null | undefined): string {
-  if (v == null || !Number.isFinite(Number(v))) return "—";
+  if (v == null || !Number.isFinite(Number(v))) return "Not available";
   const n = Number(v);
   switch (unit) {
     case "$": return money(n);
@@ -136,7 +136,7 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
 
   const docNameById = new Map(documents.map((d) => [d.id, d.name]));
   // Short, readable provenance label for BODY tables: prefer the source document
-  // name, then a file-like source_location, then a generic fallback — always run
+  // name, then a file-like source_location, then a generic fallback: always run
   // through displaySourceLabel so long filenames don't wrap mid-word.
   const sourceLabel = (a: Row | undefined): string => {
     if (!a) return "Approved assumption";
@@ -174,10 +174,10 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
 
   // ---- Verdict banner ----
   const VERDICT_BANNER: Record<string, string> = {
-    REJECT: "DOES NOT MEET INVESTMENT HURDLES — RETURN TO UNDERWRITING",
-    RETURN_TO_UNDERWRITING: "DOES NOT MEET INVESTMENT HURDLES — RETURN TO UNDERWRITING",
+    REJECT: "DOES NOT MEET INVESTMENT HURDLES: RETURN TO UNDERWRITING",
+    RETURN_TO_UNDERWRITING: "DOES NOT MEET INVESTMENT HURDLES: RETURN TO UNDERWRITING",
     APPROVE_WITH_CONDITIONS: "MEETS INVESTMENT HURDLES WITH CONDITIONS",
-    APPROVE: "MEETS INVESTMENT HURDLES — RECOMMEND PROCEED",
+    APPROVE: "MEETS INVESTMENT HURDLES: RECOMMEND PROCEED",
   };
   const yoc = oVal("base", "yield_on_cost");
   const spread = oVal("base", "development_spread");
@@ -273,7 +273,7 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
     ["financing_costs", "Financing Costs"],
     ["contingency", "Contingency"],
   ];
-  const pctOfTdc = (amt: number) => (tdc ? `${track((amt / tdc) * 100).toFixed(2)}%` : "—");
+  const pctOfTdc = (amt: number) => (tdc ? `${track((amt / tdc) * 100).toFixed(2)}%` : "Not available");
 
   // ---- Program and operating model inputs ----
   type Comp = { label: string; unitsSf: string; rate: string; occ: number | null; gpr: number; egi: number };
@@ -406,7 +406,7 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
           ? sourceLabel(opexAssumption)
           : "Approved assumption";
 
-    const revRows = comps.map((c) => [c.label, c.unitsSf, c.rate, c.occ == null ? "—" : pct(c.occ), money(c.gpr), money(c.egi)]);
+    const revRows = comps.map((c) => [c.label, c.unitsSf, c.rate, c.occ == null ? "Not available" : pct(c.occ), money(c.gpr), money(c.egi)]);
     if (otherIncome != null) revRows.push(["Other Income", "n/a", "Approved input", "n/a", "n/a", money(otherIncome)]);
     revRows.push(["Total GPR / EGI", "", "", "", money(totalGpr), money(totalEgi)]);
     revRows.push(["Operating expense ratio", "", ratioSource, "", "", ratioVal == null ? "Not available" : pct(Number(ratioVal))]);
@@ -525,7 +525,7 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
   const equityMismatch = flags.some((f) => f.check_key === "equity_mismatch");
   const actions: string[] = [];
   if (Math.abs(fundingGap) > 1) actions.push(`- Resolve the sources-and-uses funding gap of ${money(fundingGap)} with committed equity, reduced uses, or resized debt.`);
-  // Committed-equity follow-up (deduped — added once even if several flags imply it).
+  // Committed-equity follow-up (deduped: added once even if several flags imply it).
   if (sourcesError || equityMismatch || committedEquity < requiredEquity) {
     actions.push(`- Confirm whether the ${money(committedEquity)} committed equity is capped or whether additional sponsor/JV equity is available.`);
   }
@@ -563,19 +563,19 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
     .map((a) => [a.field_label, fmtByUnit(a.value_numeric, a.unit), sourceDoc(a), "Page unavailable", confidenceBand(a), statusOf(a)]);
   sections.push({
     heading: "Assumption Source Transparency",
-    table: { columns: ["Assumption", "Value", "Source Document", "Page", "Confidence", "Approval Status"], rows: provenanceRows.length ? provenanceRows : [["Insufficient evidence available", "—", "—", "—", "—", "—"]] },
+    table: { columns: ["Assumption", "Value", "Source Document", "Page", "Confidence", "Approval Status"], rows: provenanceRows.length ? provenanceRows : [["Insufficient evidence available", "Not available", "Not available", "Not available", "Not available", "Not available"]] },
   });
 
   // ---- Document sources ----
   const docRows = (documents.length
-    ? documents.map((d) => [d.name, d.category ?? "—"])
+    ? documents.map((d) => [d.name, d.category ?? "Not available"])
     : Array.from(new Set(assumptions.map((a) => a.source_location).filter(Boolean))).map((s) => [String(s), "Approved assumption source"]));
   if (docRows.length) {
     sections.push({ heading: "Document Sources", table: { columns: ["Document", "Category"], rows: docRows } });
   }
 
   // ---- Footnotes ----
-  // Exit-cap conflict resolution — shown ONLY when the project actually has a
+  // Exit-cap conflict resolution: shown ONLY when the project actually has a
   // documented conflict for the cap (conflict_values on the engine input or the
   // assumption). Candidates and sources are pulled from that stored conflict.
   const capInput = eRow("exit_cap_rate_pct");
@@ -614,7 +614,7 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
     `Reconciliation exceptions: ${errorCount} error(s) and ${warningCount} warning(s) remain open.`,
     `Inputs used: ${approvedCount} approved, ${calculatedCount} calculated, ${defaultCount} default-accepted. No AI-generated financial values.`,
     defaultCount > 0 ? `Default-accepted inputs: ${defaultNames.join(", ")}.` : "Default-accepted inputs: none.",
-    `PREPARED: Agir Pro Finance — Deterministic Underwriting Engine — ${ctx.generatedLabel}.`,
+    `PREPARED: Agir Pro Finance: Deterministic Underwriting Engine: ${ctx.generatedLabel}.`,
   ];
 
   // What-if levers from the Insight Layer (input changes that clear each gate).
@@ -624,7 +624,7 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
   }
 
   return {
-    header_band: "Agir Pro Finance — Deterministic Underwriting Engine — CONFIDENTIAL DRAFT",
+    header_band: "Agir Pro Finance: Deterministic Underwriting Engine: CONFIDENTIAL DRAFT",
     title: "Investment Committee Memorandum",
     project_name: project.name,
     subtitle: `${project.type ? String(project.type).replace(/_/g, "-") : "Development"}${project.location ? ` · ${project.location}` : ""}`,

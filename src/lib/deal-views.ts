@@ -6,7 +6,7 @@ import { savePreferenceData } from "./preferences.functions";
 // column visibility. Source of truth is localStorage (instant, reversible, no
 // migration dependency); each change is ALSO mirrored to user_preferences
 // best-effort so it follows the user across devices when the table exists.
-// Everything here is reversible and resettable — no schema names are exposed.
+// Everything here is reversible and resettable: no schema names are exposed.
 
 export type DealSort = "updated" | "investment" | "confidence" | "capital" | "close" | "name";
 

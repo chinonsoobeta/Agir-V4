@@ -128,7 +128,7 @@ export function computeReadiness(rows: ProjectInputRows): Readiness {
   }
 
   // A component is usable only when it is engine-readable AND complete
-  // (count/SF and rent both present) — a partial row never silently feeds
+  // (count/SF and rent both present): a partial row never silently feeds
   // a zero into the engine.
   const readableComponents = rows.revenue.filter(
     (r) => ENGINE_READABLE_STATUSES.includes(r.status) && Number(r.unit_count) > 0 && Number(r.rent) > 0,

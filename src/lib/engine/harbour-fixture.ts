@@ -1,4 +1,4 @@
-// Golden fixture 2: Harbour Centre — a catastrophic deal whose documents were
+// Golden fixture 2: Harbour Centre: a catastrophic deal whose documents were
 // verified by hand. These are the ONLY numbers extraction may produce for this
 // project; anything else (a 5.35% cap, a shrunken budget, 222 units, phantom
 // other income) is a fabrication and a test failure.

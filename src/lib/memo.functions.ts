@@ -9,7 +9,7 @@ import { DEFAULT_AI_MODEL } from "./ai-gateway.server";
 // It runs at temperature 0, and every generated memo is post-verified: each
 // numeric token must trace to an approved/default_accepted/calculated input,
 // an engine output, or a reconciliation figure. Orphan numbers badge the memo
-// needs_review and are persisted in verification_report — they NEVER block
+// needs_review and are persisted in verification_report: they NEVER block
 // memo creation.
 
 // Harden model output parsing: strip markdown fences, take the first JSON
@@ -44,7 +44,7 @@ export const generateMemo = createServerFn({ method: "POST" })
     if (!project) throw new Error("Project not found.");
 
     // Load every input. A failed table query is an ERROR, never a silent empty
-    // array — the memo must never be written against partial data.
+    // array: the memo must never be written against partial data.
     const assumptionsRes = await context.supabase
       .from("assumptions")
       .select("field_key,field_label,value_numeric,value_text,unit,status,confidence_score,source_document_id,source_text,formula_text,approved_by,approved_at")
@@ -99,7 +99,7 @@ export const generateMemo = createServerFn({ method: "POST" })
     const documents = documentsRes.data ?? [];
 
     if (!outputs.length) {
-      throw new Error("Run deterministic underwriting before generating a memo — the memo presents engine output, never numbers of its own.");
+      throw new Error("Run deterministic underwriting before generating a memo: the memo presents engine output, never numbers of its own.");
     }
 
     const outputValue = (scenario: string, key: string) =>
@@ -121,7 +121,7 @@ export const generateMemo = createServerFn({ method: "POST" })
     const aiAvailable = hasAnthropicKey();
     const generation_mode: "ai" | "deterministic" = aiAvailable ? "ai" : "deterministic";
 
-    // Structured IC-memorandum report — deterministic in BOTH modes (the AI only
+    // Structured IC-memorandum report: deterministic in BOTH modes (the AI only
     // affects prose, never the tables/figures). Drives the formatted on-screen
     // view and the PDF/DOCX downloads.
     const { buildMemoReport, memoReportText } = await import("./memo-report");
@@ -192,7 +192,7 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
         const result = await generateText({
           model: getAgirModel(model),
           temperature: 0,
-          system: `Use ONLY values present in CONTEXT. Never introduce a number not in CONTEXT. Cite the metric_key or field_key when quoting a figure. If a section lacks data, write "Insufficient approved data." The investment recommendation must be exactly the deterministic_verdict.code. If deterministic_verdict.code is REJECT, state the magnitude of the projected loss plainly — no sugarcoating.`,
+          system: `Use ONLY values present in CONTEXT. Never introduce a number not in CONTEXT. Cite the metric_key or field_key when quoting a figure. If a section lacks data, write "Insufficient approved data." The investment recommendation must be exactly the deterministic_verdict.code. If deterministic_verdict.code is REJECT, state the magnitude of the projected loss plainly: no sugarcoating.`,
           prompt,
         });
         rawText = result.text;
@@ -253,7 +253,7 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
     await context.supabase.from("activities").insert({
       project_id: project.id, user_id: context.userId,
       activity_type: "memo_generated",
-      description: `Generated ${generation_mode === "deterministic" ? "deterministic-template" : "AI-assisted"} investment memo${provenance.pass ? " (provenance verified)" : ` — NEEDS REVIEW: ${provenance.orphans.length} token(s) lack provenance`}`,
+      description: `Generated ${generation_mode === "deterministic" ? "deterministic-template" : "AI-assisted"} investment memo${provenance.pass ? " (provenance verified)" : `: NEEDS REVIEW: ${provenance.orphans.length} token(s) lack provenance`}`,
     });
     return row;
   });
@@ -313,7 +313,7 @@ export const debugMemoReadiness = createServerFn({ method: "GET" })
     const blocking_reasons: string[] = [];
     if (!project) blocking_reasons.push("Project not found.");
     if (base_outputs_count === 0) blocking_reasons.push("Run deterministic underwriting before generating a memo.");
-    if (financial_outputs_count === 0) blocking_reasons.push("No financial outputs — run deterministic underwriting first.");
+    if (financial_outputs_count === 0) blocking_reasons.push("No financial outputs: run deterministic underwriting first.");
 
     const { hasAnthropicKey } = await import("./ai-gateway.server");
     const has_anthropic_key = hasAnthropicKey();

@@ -26,7 +26,7 @@ function mixedUseInput(): UnderwritingInput {
   };
 }
 
-describe("insight layer — deal context", () => {
+describe("insight layer: deal context", () => {
   test("classifies asset class, loan structure and stage from data alone", () => {
     const mf = deriveDealContext(mapleHeightsInput(), { type: "multifamily", location: "Reference Market" });
     expect(mf.assetClass).toBe("multifamily");
@@ -41,7 +41,7 @@ describe("insight layer — deal context", () => {
   });
 });
 
-describe("insight layer — benchmarks", () => {
+describe("insight layer: benchmarks", () => {
   test("context-aware and carry provenance, with firm + portfolio layering", () => {
     const ctx = deriveDealContext(mapleHeightsInput(), { type: "multifamily", location: "secondary metro" });
     const dy = resolveBenchmark("debt_yield", ctx);
@@ -58,7 +58,7 @@ describe("insight layer — benchmarks", () => {
   });
 });
 
-describe("insight layer — interpretation", () => {
+describe("insight layer: interpretation", () => {
   test("bands, comparative phrasing, and provenance numbers", () => {
     const ctx = deriveDealContext(mapleHeightsInput(), { type: "multifamily", location: "secondary metro" });
     const i = interpretMetric("debt_yield", "Debt Yield", 7.8, "%", ctx);
@@ -69,7 +69,7 @@ describe("insight layer — interpretation", () => {
   });
 });
 
-describe("insight layer — synthesis", () => {
+describe("insight layer: synthesis", () => {
   test("thesis + bullets are produced, deterministic, and the narrative is provenance-clean", () => {
     const input = mixedUseInput();
     const out = runUnderwriting(input);

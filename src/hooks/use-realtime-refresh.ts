@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 // Map each live table to the query-key PREFIXES it should invalidate. Invalidating
 // by prefix covers per-id keys too (e.g. ["timeline", projectId]). This replaces a
 // blanket invalidateQueries() so a single market-signal change no longer refetches
-// the entire app — only the surfaces that actually depend on that table refresh.
+// the entire app: only the surfaces that actually depend on that table refresh.
 const TABLE_QUERY_KEYS: Record<string, QueryKey[]> = {
   projects: [["portfolio"], ["projects"], ["project"], ["onboarding"]],
   financial_outputs: [["portfolio"], ["outputs"], ["compare"], ["timeline"], ["onboarding"]],

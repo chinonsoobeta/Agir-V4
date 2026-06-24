@@ -1,6 +1,6 @@
 // Deterministic natural-language generation: turns structured interpretations +
 // attribution into analyst-voice prose. Varied phrasing is selected by a stable
-// hash (no Math.random / Date — that would break determinism). Every NUMBER the
+// hash (no Math.random / Date: that would break determinism). Every NUMBER the
 // prose emits is also surfaced via insightDerivedValues() so the memo's
 // provenance verifier admits it; benchmark norms come from the curated KB.
 
@@ -120,7 +120,7 @@ function riskCloseSentence(nc: NarrativeInput): string {
   const concernText = concerns.length
     ? `The binding constraints are ${concerns.map((c) => `${c.label.toLowerCase()} (${pick(BAND_ADJ[c.band], c.metricKey)})`).join(" and ")}`
     : "The deal is close to the bar";
-  const leverText = failingLever ? ` — ${failingLever.lever.charAt(0).toLowerCase()}${failingLever.lever.slice(1)}.` : ".";
+  const leverText = failingLever ? `: ${failingLever.lever.charAt(0).toLowerCase()}${failingLever.lever.slice(1)}.` : ".";
   return `${concernText}${leverText}`;
 }
 
@@ -177,7 +177,7 @@ export const deterministicProvider: InsightProvider = {
     const top = [...nc.interpretations].sort((a, b) => b.salience - a.salience).slice(0, 6);
     const out = top.map((i) => {
       const adj = pick(BAND_ADJ[i.band], i.metricKey + "b");
-      const note = i.contextNote ? ` — ${i.contextNote}` : "";
+      const note = i.contextNote ? `: ${i.contextNote}` : "";
       return `${i.label} ${i.comparativePhrase}; reads ${adj}.${note}`;
     });
     for (const lever of nc.attribution.levers.filter((l) => !l.passing)) out.push(`Path to clearing ${lever.gate}: ${lever.lever}.`);

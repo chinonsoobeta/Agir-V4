@@ -1,4 +1,4 @@
-// Analysis — scenarios + underwriting merged into one decision-oriented view.
+// Analysis: scenarios + underwriting merged into one decision-oriented view.
 // The question is "what breaks the deal?", not "what number changed?". The
 // deterministic pro-forma detail is preserved below via the underwriting panel.
 
@@ -19,7 +19,7 @@ const SCENARIO_LABELS: Record<string, string> = {
 };
 const STRESS_ORDER = ["revenue_down", "cost_overrun", "rate_shock", "cap_expansion", "combined"];
 
-// Hard gates the engine uses — used to flag "what breaks the deal".
+// Hard gates the engine uses: used to flag "what breaks the deal".
 const GATES = [
   { key: "dscr", label: "DSCR", min: 1.2, unit: "x", fmt: (v: number) => `${v.toFixed(2)}x` },
   { key: "equity_multiple", label: "Equity Multiple", min: 1.0, unit: "x", fmt: (v: number) => `${v.toFixed(2)}x` },
@@ -40,7 +40,7 @@ export function AnalysisPanel({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
-      {/* What breaks the deal — stress matrix */}
+      {/* What breaks the deal: stress matrix */}
       <section>
         <div className="flex items-center gap-2 mb-3"><Activity className="size-4 text-primary" /><Eyebrow>What breaks the deal · stress matrix</Eyebrow></div>
         <Card className="overflow-x-auto elevated">
@@ -61,7 +61,7 @@ export function AnalysisPanel({ projectId }: { projectId: string }) {
                     const breaks = v != null && v < g.min;
                     return (
                       <td key={sk} className={`text-right num ${v == null ? "text-muted-foreground" : breaks ? "text-destructive font-semibold" : "text-success"}`}>
-                        {v == null ? "—" : g.fmt(v)}
+                        {v == null ? "Not available" : g.fmt(v)}
                       </td>
                     );
                   })}
@@ -70,7 +70,7 @@ export function AnalysisPanel({ projectId }: { projectId: string }) {
             </tbody>
           </table>
         </Card>
-        <p className="text-xs text-muted-foreground mt-2">Red cells fall below the underwriting gate — these are the conditions under which the deal stops clearing.</p>
+        <p className="text-xs text-muted-foreground mt-2">Red cells fall below the underwriting gate: these are the conditions under which the deal stops clearing.</p>
       </section>
 
       {/* Sensitivity + drivers + covenants */}
@@ -93,7 +93,7 @@ export function AnalysisPanel({ projectId }: { projectId: string }) {
               return (
                 <div key={g.key} className="flex items-center justify-between">
                   <span className="text-sm">{g.label}</span>
-                  <span className={`num text-sm ${worst == null ? "text-muted-foreground" : breaks ? "text-destructive" : "text-success"}`}>{worst == null ? "—" : g.fmt(worst)}</span>
+                  <span className={`num text-sm ${worst == null ? "text-muted-foreground" : breaks ? "text-destructive" : "text-success"}`}>{worst == null ? "Not available" : g.fmt(worst)}</span>
                 </div>
               );
             })}

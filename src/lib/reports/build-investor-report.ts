@@ -1,4 +1,4 @@
-// Investor Report — the equity/IC package. Reuses the IC memo report assembly
+// Investor Report: the equity/IC package. Reuses the IC memo report assembly
 // (exec stats, sources & uses, revenue build, scenario analysis, risks,
 // reconciliation flags, required actions, document sources, footnotes) and adds
 // an explicit Key Returns section that shows IRR status (N/M, never 0.00%).
@@ -25,7 +25,7 @@ export function buildInvestorReport(data: ReportData, opts: { generatedLabel: st
   const { oVal } = makeAccessors(data);
   const row = (label: string, key: string, unit: string): string[] => {
     const v = oVal("base", key);
-    return [label, v == null ? "—"
+    return [label, v == null ? "Not available"
       : unit === "$" ? money(v) : unit === "%" ? pct(v) : unit === "x" ? x(v) : unit === "bps" ? bps(v) : String(v)];
   };
   const keyReturns: string[][] = [

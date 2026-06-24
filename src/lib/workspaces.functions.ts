@@ -36,7 +36,7 @@ export type WorkspaceInvitation = {
   status: string;
   created_at: string;
   expires_at: string;
-  /** Acceptance token — visible to workspace admins so they can share the link. */
+  /** Acceptance token: visible to workspace admins so they can share the link. */
   token: string | null;
 };
 

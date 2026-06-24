@@ -134,21 +134,21 @@ function requiredKeysSatisfiedBy(map: Map<string, any>) {
 
 // ---------- Extraction (deterministic pipeline + debug trace) ----------
 //
-// Stage 1 — Document parsing: regex sweep of every uploaded document yields a
+// Stage 1: Document parsing: regex sweep of every uploaded document yields a
 //   typed candidate list (value + unit + context + label hint + source loc).
-// Stage 2 — Deterministic alias mapping (assumption-mapping.ts) is the
+// Stage 2: Deterministic alias mapping (assumption-mapping.ts) is the
 //   AUTHORITATIVE classifier: it maps each candidate to a canonical field_key
 //   from its label/context + unit-kind compatibility. No LLM, no invented
 //   values.
-// Stage 2b — OPTIONAL AI classification runs only when an API key is configured
+// Stage 2b: OPTIONAL AI classification runs only when an API key is configured
 //   and only for candidates the deterministic stage left unresolved, for keys
 //   not already resolved. It can never override a deterministic mapping nor mint
 //   a value the regex pass did not lift from a document.
-// Stage 3 — Grouping & conflict detection: multiple distinct values for one key
+// Stage 3: Grouping & conflict detection: multiple distinct values for one key
 //   become a conflict (value null, sources preserved, blocks underwriting).
 //
 // Returns the audit report plus a structured `debug` trace that pinpoints where
-// a run produced — or failed to produce — values.
+// a run produced: or failed to produce: values.
 
 const ClassificationSchema = z.object({
   candidate_index: z.number().int(),
@@ -163,7 +163,7 @@ export const extractAssumptions = createServerFn({ method: "POST" })
     z.object({
       project_id: z.string().uuid(),
       // AI-assisted classification is the DEFAULT. It is structurally incapable
-      // of inventing a value — it only assigns regex-extracted candidates (Stage
+      // of inventing a value: it only assigns regex-extracted candidates (Stage
       // 1 tokens lifted verbatim from documents) to canonical keys, and it can
       // never override a deterministic alias hit. "deterministic" forces the
       // pure alias-mapping path with no model call.
@@ -179,7 +179,7 @@ export const extractAssumptions = createServerFn({ method: "POST" })
     const wantsAI = data.mode === "ai";
     const useAI = wantsAI && aiAvailable;
     let aiFailureReason: string | null =
-      wantsAI && !aiAvailable ? "AI unavailable (ANTHROPIC_API_KEY missing or malformed) — used the deterministic engine." : null;
+      wantsAI && !aiAvailable ? "AI unavailable (ANTHROPIC_API_KEY missing or malformed): used the deterministic engine." : null;
 
     const { data: docs, error: dErr } = await context.supabase
       .from("documents").select("*").eq("project_id", data.project_id);
@@ -211,7 +211,7 @@ export const extractAssumptions = createServerFn({ method: "POST" })
     const docByName = new Map(docs.map((d) => [d.name, d]));
     let documentsDownloaded = 0;
 
-    // ===== Stage 1 — parse every document, recording a debug row per doc =====
+    // ===== Stage 1: parse every document, recording a debug row per doc =====
     for (const d of docs) {
       const row: DocTrace = {
         document_id: d.id, name: d.name, storage_path: d.storage_path,
@@ -249,7 +249,7 @@ export const extractAssumptions = createServerFn({ method: "POST" })
             ...parsedRevenue.inserted.flatMap((revRow) => mapRevenueProgramRowToAssumptions(revRow, { name: d.name })),
           );
           const parsedBudget = parseBudgetWorkbook(buf);
-          // Aggregate line items by category within this document — multiple
+          // Aggregate line items by category within this document: multiple
           // rows in one category are summed into a single category total, not
           // treated as competing conflicts.
           structuredBudgetMappings.push(...aggregateBudgetRows(parsedBudget.inserted, { name: d.name }));
@@ -268,7 +268,7 @@ export const extractAssumptions = createServerFn({ method: "POST" })
       );
     }
 
-    // ===== Stage 2 — deterministic alias mapping (authoritative) =====
+    // ===== Stage 2: deterministic alias mapping (authoritative) =====
     const deterministic = mapCandidates(allCandidates);
     const deterministicKeys = new Set(deterministic.map((m) => m.field_key));
     const mappedIndices = new Set<number>();
@@ -276,9 +276,9 @@ export const extractAssumptions = createServerFn({ method: "POST" })
       if (mapCandidateToKey(allCandidates[i])) mappedIndices.add(i);
     }
 
-    // ===== Stage 2b — AI classification of unresolved candidates (DEFAULT) =====
+    // ===== Stage 2b: AI classification of unresolved candidates (DEFAULT) =====
     // Primary interpreter for everything the authoritative alias mapper left
-    // unresolved. It only ever assigns a regex-extracted candidate to a key —
+    // unresolved. It only ever assigns a regex-extracted candidate to a key.
     // the numeric value always comes from the document token, never the model.
     let classifiedCount = 0;
     const aiMapped: MappedCandidate[] = [];
@@ -328,7 +328,7 @@ export const extractAssumptions = createServerFn({ method: "POST" })
           }
         }
       } catch (error) {
-        // The deterministic mapping already ran and stands on its own — an AI
+        // The deterministic mapping already ran and stands on its own: an AI
         // failure degrades gracefully to it instead of failing the run.
         aiFailureReason = `AI classification failed; fell back to the deterministic engine (${error instanceof Error ? error.message : "unavailable"}).`;
         warnings.push(aiFailureReason);
@@ -340,7 +340,7 @@ export const extractAssumptions = createServerFn({ method: "POST" })
 
     const mapped = [...deterministic, ...structuredBudgetMappings, ...structuredRevenueMappings, ...aiMapped];
 
-    // ===== Stage 3 — group & resolve (conflicts preserved) =====
+    // ===== Stage 3: group & resolve (conflicts preserved) =====
     const grouped = groupAndResolve(mapped);
 
     const conflictKeys: string[] = [];
@@ -395,7 +395,7 @@ export const extractAssumptions = createServerFn({ method: "POST" })
         source_location: winner.source_location ?? srcDoc?.name ?? null,
         source_text: winner.source_text,
         ai_reasoning: isConflict
-          ? `Conflicting values across documents: ${res.distinct.join(" vs ")}. Resolve by picking one or "use conservative" — values are never averaged or blended.`
+          ? `Conflicting values across documents: ${res.distinct.join(" vs ")}. Resolve by picking one or "use conservative": values are never averaged or blended.`
           : `Deterministically mapped via alias "${winner.matched_alias}" from ${winner.source_doc_name}.`,
       };
 
@@ -655,7 +655,7 @@ export const reviewAssumption = createServerFn({ method: "POST" })
       patch.approved_at = new Date().toISOString();
     } else if (data.action === "modify") {
       // A conflicting key may only be modified to one of the documented
-      // candidate values — never an invented number (mirrors resolveConflict).
+      // candidate values: never an invented number (mirrors resolveConflict).
       if (cur.status === "conflicting") {
         const candidates = ((cur as any).conflict_values ?? [])
           .map((c: any) => Number(c.value))
@@ -700,7 +700,7 @@ export const reviewAssumption = createServerFn({ method: "POST" })
 //
 // REMOVED. The duplicate ad-hoc model (buildModel/recomputeOutputs) that read
 // blended occupancy, applied silent `|| 95`-style defaults, and approximated
-// IRR geometrically has been deleted — not gated, removed. All underwriting,
+// IRR geometrically has been deleted: not gated, removed. All underwriting,
 // pro-forma, scenario, DSCR, IRR and risk-score values are produced solely by
 // runFullUnderwriting (underwriting.functions.ts) over the deterministic
 // engine in src/lib/engine, fed exclusively by approved/default_accepted rows.

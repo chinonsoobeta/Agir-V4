@@ -1,9 +1,9 @@
-// Deal activity timeline — institutional memory.
+// Deal activity timeline: institutional memory.
 //
 // A deal's history already lives across several tables (operational activities,
 // the immutable financial audit log, committee decisions, documents, generated
 // reports, milestones). This module maps each source into ONE labeled,
-// chronological event stream. It is pure read-side parsing/labeling — it never
+// chronological event stream. It is pure read-side parsing/labeling: it never
 // creates or alters a financial value, and it tolerates any source being
 // absent. The React layer adds icons/colour per category.
 
@@ -110,7 +110,7 @@ export function mapTimeline(src: RawSources): TimelineEvent[] {
       category: "deal" as TimelineCategory,
       title: titleCase(a.activity_type),
     };
-    // The integration fallback stores JSON in description — don't dump raw JSON.
+    // The integration fallback stores JSON in description: don't dump raw JSON.
     const detail = a.activity_type === "integration_connection" ? null : a.description;
     events.push({
       id: a.id ?? `act:${a.created_at}:${a.activity_type}`,

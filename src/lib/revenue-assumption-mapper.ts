@@ -86,7 +86,7 @@ export function mapRevenueProgramRowToAssumptions(row: ParsedRentRollRow, source
     ];
   }
 
-  // Generic industrial / logistics components — mapped to the canonical
+  // Generic industrial / logistics components: mapped to the canonical
   // per-component key set so approval writes one revenue_program row.
   const keys = classifyRevenueComponent(row.unitType);
   if (keys) {
