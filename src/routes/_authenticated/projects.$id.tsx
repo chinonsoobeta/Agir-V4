@@ -23,6 +23,7 @@ import { CommitteePanel } from "@/components/committee-panel";
 import { AnalysisPanel } from "@/components/analysis-panel";
 import { DealOverview } from "@/components/deal-overview";
 import { DealTimeline } from "@/components/deal-timeline";
+import { DealCollaboration } from "@/components/deal-collaboration";
 import { buildDecision, pipelineStageFor, RECOMMENDATION_TONE } from "@/lib/decision";
 import { assetTypeLabel } from "@/lib/asset-types";
 import { ScoreDial, RecommendationPill, RiskPill } from "@/components/decision-ui";
@@ -56,6 +57,7 @@ const TABS = [
   { value: "analysis", label: "Analysis" },
   { value: "committee", label: "Investment Committee" },
   { value: "documents", label: "Documents" },
+  { value: "collaboration", label: "Collaboration" },
   { value: "timeline", label: "Timeline" },
   { value: "audit", label: "Audit" },
 ] as const;
@@ -175,6 +177,9 @@ function DealDetail() {
           </TabsContent>
           <TabsContent value="documents" className="mt-6">
             {visited.has("documents") && <DocumentsTab projectId={id} />}
+          </TabsContent>
+          <TabsContent value="collaboration" className="mt-6">
+            {visited.has("collaboration") && <DealCollaboration projectId={id} />}
           </TabsContent>
           <TabsContent value="timeline" className="mt-6">
             {visited.has("timeline") && <DealTimeline projectId={id} />}

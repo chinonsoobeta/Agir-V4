@@ -37,6 +37,7 @@ import {
   PERSONAL_WORKSPACE_ID,
   type WorkspaceRole,
 } from "@/lib/workspaces.functions";
+import { getWorkspaceGovernance, saveWorkspaceGovernance } from "@/lib/operating-depth.functions";
 import {
   User,
   Lock,
@@ -57,6 +58,7 @@ import {
   Trash2,
   UserPlus,
   Building2,
+  Landmark,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -67,6 +69,7 @@ const SECTIONS = [
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "team", label: "Team & members", icon: Users },
+  { id: "governance", label: "Governance", icon: Landmark },
   { id: "data", label: "Data & privacy", icon: ShieldCheck },
   { id: "about", label: "About & help", icon: Info },
 ] as const;
@@ -120,11 +123,136 @@ function SettingsPage() {
           {active === "appearance" && <AppearanceSection />}
           {active === "notifications" && <NotificationsSection />}
           {active === "team" && <TeamSection />}
+          {active === "governance" && <GovernanceSection />}
           {active === "data" && <DataSection />}
           {active === "about" && <AboutSection />}
         </div>
       </div>
     </>
+  );
+}
+
+function GovernanceSection() {
+  const { activeWorkspace } = useWorkspace();
+  const workspaceId = activeWorkspace?.personal ? null : activeWorkspace?.id;
+  const canManage = activeWorkspace?.role === "owner" || activeWorkspace?.role === "admin";
+  const query = useQuery({
+    queryKey: ["workspace-governance", workspaceId],
+    queryFn: () => getWorkspaceGovernance({ data: { workspace_id: workspaceId! } }),
+    enabled: Boolean(workspaceId),
+  });
+  const saveFn = useServerFn(saveWorkspaceGovernance);
+  const [threshold, setThreshold] = useState("");
+  const [twoPerson, setTwoPerson] = useState(false);
+  const [domains, setDomains] = useState("");
+  const [retention, setRetention] = useState("2555");
+  useEffect(() => {
+    if (!query.data) return;
+    setThreshold(
+      query.data.approval_threshold == null ? "" : String(query.data.approval_threshold),
+    );
+    setTwoPerson(Boolean(query.data.require_two_person_approval));
+    setDomains((query.data.allowed_email_domains ?? []).join(", "));
+    setRetention(String(query.data.data_retention_days ?? 2555));
+  }, [query.data]);
+  const save = useMutation({
+    mutationFn: () =>
+      saveFn({
+        data: {
+          workspace_id: workspaceId!,
+          approval_threshold: threshold ? Number(threshold) : null,
+          require_two_person_approval: twoPerson,
+          allowed_email_domains: domains
+            .split(",")
+            .map((value) => value.trim().toLowerCase())
+            .filter(Boolean),
+          data_retention_days: Number(retention),
+        },
+      }),
+    onSuccess: () => {
+      query.refetch();
+      toast.success("Governance settings saved");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  if (!workspaceId) {
+    return (
+      <SectionCard
+        title="Workspace governance"
+        description="Create or select a shared workspace to configure institutional controls."
+      >
+        <p className="text-sm text-muted-foreground">
+          Personal workspaces use owner-only controls and do not require an approval policy.
+        </p>
+      </SectionCard>
+    );
+  }
+
+  return (
+    <SectionCard
+      title="Workspace governance"
+      description="Set approval, access, and retention controls for this workspace."
+    >
+      <div className="space-y-5 max-w-xl">
+        <div>
+          <Label>Capital approval threshold</Label>
+          <Input
+            type="number"
+            min="0"
+            value={threshold}
+            disabled={!canManage}
+            onChange={(event) => setThreshold(event.target.value)}
+            placeholder="Example: 10000000"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Deals at or above this amount should receive the workspace's formal approval process.
+          </p>
+        </div>
+        <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+          <div>
+            <div className="text-sm font-medium">Two-person approval</div>
+            <div className="text-xs text-muted-foreground">
+              Require independent review before high-value decisions are finalized.
+            </div>
+          </div>
+          <Switch checked={twoPerson} disabled={!canManage} onCheckedChange={setTwoPerson} />
+        </div>
+        <div>
+          <Label>Allowed email domains</Label>
+          <Input
+            value={domains}
+            disabled={!canManage}
+            onChange={(event) => setDomains(event.target.value)}
+            placeholder="firm.com, advisor.com"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Comma-separated domains for invitation governance. Leave blank for no restriction.
+          </p>
+        </div>
+        <div>
+          <Label>Data retention, days</Label>
+          <Input
+            type="number"
+            min="30"
+            max="36500"
+            value={retention}
+            disabled={!canManage}
+            onChange={(event) => setRetention(event.target.value)}
+          />
+        </div>
+        {canManage ? (
+          <Button disabled={save.isPending || Number(retention) < 30} onClick={() => save.mutate()}>
+            <Save className="size-4 mr-1.5" />
+            Save governance
+          </Button>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Only workspace owners and administrators can change these controls.
+          </p>
+        )}
+      </div>
+    </SectionCard>
   );
 }
 

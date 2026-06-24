@@ -20,10 +20,22 @@ export default defineConfig(({ mode }) => {
     "";
   const SUPABASE_ANON_KEY =
     env.SUPABASE_ANON_KEY ||
+    env.SUPABASE_PUBLISHABLE_KEY ||
     env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    env.VITE_SUPABASE_PUBLISHABLE_KEY ||
     process.env.SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     "";
+
+  // Server functions read process.env at runtime. Mirror the values loaded from
+  // Vite's env files during local development without exposing any private key.
+  if (!process.env.SUPABASE_URL && SUPABASE_URL) process.env.SUPABASE_URL = SUPABASE_URL;
+  if (!process.env.SUPABASE_ANON_KEY && SUPABASE_ANON_KEY) {
+    process.env.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
+  }
 
   return {
     define: {

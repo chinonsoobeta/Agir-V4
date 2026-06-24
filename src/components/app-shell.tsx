@@ -21,6 +21,7 @@ import {
   Plus,
   Building2,
   Users,
+  ContactRound,
   Sun,
   Moon,
   Languages,
@@ -53,11 +54,13 @@ import {
 } from "@/components/ui/dialog";
 import { useWorkspace } from "@/lib/workspace-context";
 import { createWorkspace } from "@/lib/workspaces.functions";
+import { NotificationCenter } from "@/components/notification-center";
 
 const nav = [
   { to: "/dashboard", label: "nav.home", icon: LayoutDashboard },
   { to: "/portfolio", label: "nav.portfolio", icon: LayoutGrid },
   { to: "/deals", label: "nav.deals", icon: Layers },
+  { to: "/relationships", label: "nav.relationships", icon: ContactRound },
   { to: "/compare", label: "nav.compare", icon: GitCompareArrows },
   { to: "/execution", label: "nav.execution", icon: Workflow },
   { to: "/markets", label: "nav.markets", icon: Radar },
@@ -268,9 +271,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           </div>
-          <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-success/25 bg-success/10 px-2 py-1 text-[9px] uppercase tracking-widest text-success">
-            <Radio className="size-2.5" />
-            {t("shell.live")}
+          <div className="mt-4 flex items-center justify-between">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-success/25 bg-success/10 px-2 py-1 text-[9px] uppercase tracking-widest text-success">
+              <Radio className="size-2.5" />
+              {t("shell.live")}
+            </div>
+            <NotificationCenter />
           </div>
           <WorkspaceSwitcher />
         </div>
@@ -279,6 +285,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="flex-1 min-w-0 overflow-x-hidden">
         <div className="lg:hidden sticky top-0 z-50 h-14 border-b border-border bg-background/95 backdrop-blur flex items-center justify-between px-4">
           <div className="display text-lg font-semibold">Agir</div>
+          <div className="ml-auto mr-2">
+            <NotificationCenter />
+          </div>
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="outline" size="icon">

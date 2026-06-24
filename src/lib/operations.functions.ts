@@ -137,6 +137,7 @@ export const setIntegration = createServerFn({ method: "POST" })
         category: z.string().min(1).max(80),
         display_name: z.string().min(1).max(160),
         status: z.enum(["connected", "attention", "disconnected"]),
+        workspace_id: z.string().uuid().nullable().optional(),
       })
       .parse(value),
   )
@@ -186,6 +187,7 @@ type IntegrationConnection = {
   last_synced_at: string | null;
   created_at: string;
   updated_at: string;
+  workspace_id?: string | null;
 };
 
 function isMissingRelation(error: { code?: string; message?: string } | null) {

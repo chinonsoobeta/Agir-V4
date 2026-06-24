@@ -1,11 +1,35 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { queryOptions, useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useRef, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { listIntegrations, setIntegration } from "@/lib/operations.functions";
+import {
+  importDeals,
+  listIntegrationRuns,
+  listWebhookEndpoints,
+  runIntegrationSync,
+  saveWebhookEndpoint,
+} from "@/lib/operating-depth.functions";
+import { useWorkspace } from "@/lib/workspace-context";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import {
   Building2,
@@ -17,6 +41,9 @@ import {
   RefreshCw,
   Unplug,
   Webhook,
+  Upload,
+  History,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -70,14 +97,74 @@ export const Route = createFileRoute("/_authenticated/integrations")({
 
 function IntegrationsPage() {
   const { data: connections } = useSuspenseQuery(integrationsQ);
+  const { activeWorkspace } = useWorkspace();
+  const workspaceId = activeWorkspace?.personal ? null : activeWorkspace?.id;
+  const runsQ = useQuery({
+    queryKey: ["integration-runs", workspaceId],
+    queryFn: () => listIntegrationRuns({ data: { workspace_id: workspaceId } }),
+  });
+  const webhooksQ = useQuery({
+    queryKey: ["webhooks", workspaceId],
+    queryFn: () => listWebhookEndpoints({ data: { workspace_id: workspaceId } }),
+  });
   const fn = useServerFn(setIntegration);
+  const syncFn = useServerFn(runIntegrationSync);
+  const importFn = useServerFn(importDeals);
+  const webhookFn = useServerFn(saveWebhookEndpoint);
   const qc = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [webhookOpen, setWebhookOpen] = useState(false);
+  const [webhook, setWebhook] = useState({
+    name: "",
+    endpoint_url: "",
+    event_types: "deal.updated",
+  });
   useRealtimeRefresh();
   const mutation = useMutation({
-    mutationFn: (data: any) => fn({ data }),
+    mutationFn: (data: any) => fn({ data: { ...data, workspace_id: workspaceId } }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["integrations"] });
       toast.success("Integration updated");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const sync = useMutation({
+    mutationFn: (connectionId: string) =>
+      syncFn({ data: { connection_id: connectionId, workspace_id: workspaceId } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["integrations"] });
+      qc.invalidateQueries({ queryKey: ["integration-runs", workspaceId] });
+      toast.success("Connection verified and sync completed");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const csvImport = useMutation({
+    mutationFn: (rows: any[]) => importFn({ data: { workspace_id: workspaceId, rows } }),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["portfolio"] });
+      toast.success(`Imported ${result.imported} deals`);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const createWebhook = useMutation({
+    mutationFn: () =>
+      webhookFn({
+        data: {
+          workspace_id: workspaceId,
+          name: webhook.name,
+          endpoint_url: webhook.endpoint_url,
+          event_types: webhook.event_types
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean),
+        },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["webhooks", workspaceId] });
+      setWebhookOpen(false);
+      setWebhook({ name: "", endpoint_url: "", event_types: "deal.updated" });
+      toast.success("Webhook endpoint created");
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -105,6 +192,33 @@ function IntegrationsPage() {
             </div>
           </div>
         </Card>
+        <div className="flex flex-wrap gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              if (!file) return;
+              try {
+                csvImport.mutate(parseDealCsv(await file.text()));
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "Could not parse CSV");
+              } finally {
+                event.target.value = "";
+              }
+            }}
+          />
+          <Button variant="outline" onClick={() => fileRef.current?.click()}>
+            <Upload className="size-4 mr-1.5" />
+            Import deal CSV
+          </Button>
+          <Button variant="outline" onClick={() => setWebhookOpen(true)}>
+            <Webhook className="size-4 mr-1.5" />
+            Add webhook
+          </Button>
+        </div>
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
           {CATALOG.map((app) => {
             const connection: any = byProvider.get(app.provider);
@@ -164,14 +278,9 @@ function IntegrationsPage() {
                     <Button
                       size="icon"
                       variant="outline"
-                      onClick={() =>
-                        mutation.mutate({
-                          provider: app.provider,
-                          category: app.category,
-                          display_name: app.name,
-                          status: "connected",
-                        })
-                      }
+                      disabled={sync.isPending || !connection?.id?.match(/^[0-9a-f-]{36}$/i)}
+                      title="Run connectivity check"
+                      onClick={() => sync.mutate(connection.id)}
                     >
                       <RefreshCw className="size-3.5" />
                     </Button>
@@ -181,7 +290,160 @@ function IntegrationsPage() {
             );
           })}
         </div>
+        <div className="grid lg:grid-cols-2 gap-4">
+          <Card className="p-5 elevated">
+            <div className="flex items-center gap-2">
+              <History className="size-4 text-primary" />
+              <div className="font-semibold">Sync history</div>
+            </div>
+            <div className="mt-4 space-y-2">
+              {(runsQ.data ?? []).length ? (
+                (runsQ.data ?? []).slice(0, 8).map((run: any) => (
+                  <div key={run.id} className="flex items-center gap-3 rounded-md border p-3">
+                    <div
+                      className={`size-2 rounded-full ${run.status === "succeeded" ? "bg-success" : run.status === "failed" ? "bg-destructive" : "bg-warning"}`}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium truncate">
+                        {run.integration_connections?.display_name ?? "Integration"}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {run.records_read} read · {run.records_written} written ·{" "}
+                        {new Date(run.started_at).toLocaleString()}
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="capitalize">
+                      {run.status}
+                    </Badge>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground py-6 text-center">
+                  No sync runs yet. Connect a system and run a check.
+                </p>
+              )}
+            </div>
+          </Card>
+          <Card className="p-5 elevated">
+            <div className="flex items-center gap-2">
+              <Webhook className="size-4 text-primary" />
+              <div className="font-semibold">Outbound webhooks</div>
+            </div>
+            <div className="mt-4 space-y-2">
+              {(webhooksQ.data ?? []).length ? (
+                (webhooksQ.data ?? []).map((endpoint: any) => (
+                  <div key={endpoint.id} className="rounded-md border p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-medium">{endpoint.name}</div>
+                      <Badge variant="outline">{endpoint.active ? "Active" : "Paused"}</Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate mt-1">
+                      {endpoint.endpoint_url}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-2">
+                      Events: {endpoint.event_types.join(", ")}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground py-6 text-center">
+                  No webhook endpoints configured.
+                </p>
+              )}
+            </div>
+          </Card>
+        </div>
       </div>
+      <Dialog open={webhookOpen} onOpenChange={setWebhookOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add webhook endpoint</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Name</Label>
+              <Input
+                value={webhook.name}
+                onChange={(event) => setWebhook({ ...webhook, name: event.target.value })}
+                placeholder="Data warehouse updates"
+              />
+            </div>
+            <div>
+              <Label>HTTPS endpoint</Label>
+              <Input
+                value={webhook.endpoint_url}
+                onChange={(event) => setWebhook({ ...webhook, endpoint_url: event.target.value })}
+                placeholder="https://example.com/hooks/agir"
+              />
+            </div>
+            <div>
+              <Label>Events, comma separated</Label>
+              <Input
+                value={webhook.event_types}
+                onChange={(event) => setWebhook({ ...webhook, event_types: event.target.value })}
+                placeholder="deal.updated, decision.recorded"
+              />
+            </div>
+            <div className="flex gap-2 rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
+              <AlertCircle className="size-4 shrink-0" />
+              Delivery secrets are never displayed after creation. Rotate endpoints if a secret is
+              exposed.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setWebhookOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!webhook.name || !webhook.endpoint_url || createWebhook.isPending}
+              onClick={() => createWebhook.mutate()}
+            >
+              Create endpoint
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
+}
+
+function parseDealCsv(text: string) {
+  const lines = text.split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length < 2) throw new Error("CSV must contain a header and at least one deal.");
+  const split = (line: string) =>
+    line
+      .match(/("([^"]|"")*"|[^,]*)(,|$)/g)
+      ?.map((cell) => cell.replace(/,$/, "").replace(/^"|"$/g, "").replace(/""/g, '"').trim()) ??
+    [];
+  const headers = split(lines[0]).map((value) => value.toLowerCase().replace(/\s+/g, "_"));
+  const required = headers.indexOf("name");
+  if (required < 0) throw new Error("CSV requires a name column.");
+  const allowedTypes = new Set([
+    "industrial",
+    "mixed_use",
+    "multifamily",
+    "office",
+    "retail",
+    "hospitality",
+    "self_storage",
+    "data_center",
+    "life_science",
+    "commercial",
+    "land",
+    "other",
+  ]);
+  return lines.slice(1).map((line, index) => {
+    const cells = split(line);
+    const row = Object.fromEntries(headers.map((header, i) => [header, cells[i] ?? ""]));
+    if (!row.name) throw new Error(`Row ${index + 2} is missing a deal name.`);
+    return {
+      name: row.name,
+      location: row.location || null,
+      type: allowedTypes.has(row.type) ? row.type : "other",
+      source: row.source || "CSV import",
+      probability: Number(row.probability || 25),
+      acquisition_cost: Number(row.acquisition_cost || 0),
+      target_close_date: row.target_close_date || null,
+    };
+  });
 }

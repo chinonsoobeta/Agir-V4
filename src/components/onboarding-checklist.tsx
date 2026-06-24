@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -14,6 +14,8 @@ import {
   getOnboardingState,
   setOnboardingDismissed,
 } from "@/lib/preferences.functions";
+import { trackOnboardingEvent } from "@/lib/operating-depth.functions";
+import { useWorkspace } from "@/lib/workspace-context";
 import { seedHarbourCentre } from "@/lib/demo.functions";
 
 const LOCAL_KEY = "agir-onboarding-dismissed";
@@ -34,6 +36,8 @@ export function OnboardingChecklist() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [dismissedLocal, setDismissedLocal] = useState(localDismissed);
+  const { activeWorkspace } = useWorkspace();
+  const trackFn = useServerFn(trackOnboardingEvent);
 
   const stateQ = useQuery({
     queryKey: ["onboarding"],
@@ -66,6 +70,26 @@ export function OnboardingChecklist() {
   });
 
   const state = stateQ.data;
+  useEffect(() => {
+    if (!state || dismissedLocal || state.dismissed) return;
+    void trackFn({
+      data: {
+        workspace_id: activeWorkspace?.personal ? null : activeWorkspace?.id,
+        event_name: "checklist_viewed",
+        step_key: state.nextStep,
+        metadata: { done_count: state.doneCount, total: state.total },
+      },
+    }).catch(() => {});
+  }, [
+    state,
+    state?.doneCount,
+    state?.dismissed,
+    state?.nextStep,
+    dismissedLocal,
+    activeWorkspace?.id,
+    activeWorkspace?.personal,
+    trackFn,
+  ]);
   // Don't flash before we know; respect dismissal from either source.
   if (!state || dismissedLocal || state.dismissed) return null;
 
@@ -136,6 +160,16 @@ export function OnboardingChecklist() {
             <li key={step.key}>
               <Link
                 to={step.to as string}
+                onClick={() =>
+                  void trackFn({
+                    data: {
+                      workspace_id: activeWorkspace?.personal ? null : activeWorkspace?.id,
+                      event_name: "step_opened",
+                      step_key: step.key,
+                      metadata: { was_complete: done },
+                    },
+                  }).catch(() => {})
+                }
                 className={cn(
                   "flex items-start gap-3 rounded-lg border p-3 transition-colors min-h-[44px]",
                   done

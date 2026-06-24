@@ -162,6 +162,21 @@ export const inviteWorkspaceMember = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ data, context }): Promise<WorkspaceInvitation> => {
     const supabase = context.supabase as any;
+    const { data: governance, error: governanceError } = await supabase
+      .from("workspace_settings")
+      .select("allowed_email_domains")
+      .eq("workspace_id", data.workspace_id)
+      .maybeSingle();
+    if (!isMissingRelation(governanceError) && governanceError) {
+      throw new Error(governanceError.message);
+    }
+    const allowedDomains = (governance?.allowed_email_domains ?? []) as string[];
+    const inviteDomain = data.email.toLowerCase().split("@")[1] ?? "";
+    if (allowedDomains.length && !allowedDomains.includes(inviteDomain)) {
+      throw new Error(
+        `Invitations are restricted to: ${allowedDomains.map((domain) => `@${domain}`).join(", ")}`,
+      );
+    }
     const { data: row, error } = await supabase
       .from("workspace_invitations")
       .insert({

@@ -11,9 +11,14 @@ export const Route = createFileRoute("/api/chat")({
         const token = auth.replace("Bearer ", "");
 
         const SUPABASE_URL = process.env.SUPABASE_URL!;
-        const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        const SUPABASE_ANON_KEY =
+          process.env.SUPABASE_ANON_KEY ||
+          process.env.SUPABASE_PUBLISHABLE_KEY ||
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+          process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
         const { hasAnthropicKey } = await import("@/lib/ai-gateway.server");
-        if (!hasAnthropicKey()) return new Response("Missing or malformed ANTHROPIC_API_KEY", { status: 500 });
+        if (!hasAnthropicKey())
+          return new Response("Missing or malformed ANTHROPIC_API_KEY", { status: 500 });
         if (!SUPABASE_ANON_KEY) return new Response("Missing SUPABASE_ANON_KEY", { status: 500 });
 
         const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -25,12 +30,19 @@ export const Route = createFileRoute("/api/chat")({
 
         const { data: projects } = await supabase.from("projects").select("*");
         const { data: assumptions } = await supabase
-          .from("assumptions").select("project_id,field_key,field_label,category,value_numeric,value_text,unit,status,confidence_score,source_location,source_text,source_document_id,conflict_values")
-          .in("status", ["approved","modified"]);
+          .from("assumptions")
+          .select(
+            "project_id,field_key,field_label,category,value_numeric,value_text,unit,status,confidence_score,source_location,source_text,source_document_id,conflict_values",
+          )
+          .in("status", ["approved", "modified"]);
         const { data: outputs } = await supabase
-          .from("financial_outputs").select("project_id,scenario_key,metric_key,metric_label,value_numeric,unit,formula_text,inputs");
+          .from("financial_outputs")
+          .select(
+            "project_id,scenario_key,metric_key,metric_label,value_numeric,unit,formula_text,inputs",
+          );
         const { data: decisions } = await supabase
-          .from("decision_logs").select("project_id,decision,rationale,conditions,created_at");
+          .from("decision_logs")
+          .select("project_id,decision,rationale,conditions,created_at");
 
         // Deal-aware focus: when the copilot is opened from a deal, the client
         // sends X-Agir-Deal so the copilot reasons over that deal's findings,
@@ -45,7 +57,9 @@ export const Route = createFileRoute("/api/chat")({
             const a = (assumptions ?? []).filter((r: any) => r.project_id === focusId);
             const dec = buildDecision(o as any, a as any);
             focus = `\n\n===== FOCUSED DEAL: ${proj?.name ?? focusId} =====\nRecommendation: ${dec.recommendationLabel}\nInvestment Score: ${dec.investmentScore ?? "n/a"}/100 · Confidence: ${dec.confidenceScore}/100 · Risk: ${dec.riskRating}\nStrengths: ${(dec.findings?.strengths ?? []).map((x) => x.title).join("; ") || "none"}\nRisks: ${(dec.findings?.risks ?? []).map((x) => x.title).join("; ") || "none"}\nOpportunities: ${(dec.findings?.opportunities ?? []).map((x) => x.title).join("; ") || "none"}\nApproval conditions: ${(dec.findings?.approvalConditions ?? []).map((x) => x.title).join("; ") || "none"}\nValue drivers: ${(dec.findings?.primaryDrivers ?? []).map((d) => d.name).join("; ") || "none"}\nRisk drivers: ${(dec.findings?.downsideDrivers ?? []).map((d) => d.name).join("; ") || "none"}\nWhen the user asks why a deal passed/failed or how it could pass, answer from these findings and drivers.`;
-          } catch { /* fall back to portfolio-wide context */ }
+          } catch {
+            /* fall back to portfolio-wide context */
+          }
         }
 
         const context = `Projects:\n${JSON.stringify(projects ?? [], null, 2)}\n\nAPPROVED ASSUMPTIONS (only authoritative source):\n${JSON.stringify(assumptions ?? [], null, 2)}\n\nFinancial outputs:\n${JSON.stringify(outputs ?? [], null, 2)}\n\nIC decisions:\n${JSON.stringify(decisions ?? [], null, 2)}${focus}`;
