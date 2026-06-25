@@ -437,17 +437,44 @@ function ExtractionReportCard({ report, onClose }: { report: any; onClose: () =>
   );
 }
 
+function recoveryLabel(d: any): string {
+  const parts: string[] = [];
+  if (d.recovered_via_ocr) parts.push(`OCR ${Math.round(d.ocr_confidence ?? 0)}%`);
+  if (Array.isArray(d.sheets_selected) && d.sheets_selected.length) parts.push(`sheet: ${d.sheets_selected.join(", ")}`);
+  if (Number(d.merged_cells_filled) > 0) parts.push(`merged: ${d.merged_cells_filled}`);
+  return parts.length ? parts.join(" · ") : (d.download_ok ? "embedded text" : "");
+}
+
 function ExtractionDebugCard({ debug }: { debug: any }) {
+  const perDoc: any[] = debug.per_document ?? [];
+  const needsVerification = perDoc.filter((d) => d.needs_verification);
   return (
     <Card className="p-5 border-chart-2/40">
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Extraction Debug Trace</div>
+
+      {/* Auto-extraction is a checkable first pass, not gospel: flag anything
+          recovered via OCR (low confidence) for human verification. */}
+      {needsVerification.length > 0 && (
+        <div className="mt-3 flex items-start gap-2 rounded border border-chart-5/30 bg-chart-5/10 p-3 text-xs">
+          <AlertCircle className="size-4 shrink-0 mt-0.5 text-chart-5" />
+          <div>
+            <span className="font-semibold uppercase tracking-widest text-chart-5">Verify before approving:</span>{" "}
+            <span className="text-muted-foreground">
+              {needsVerification.length} document{needsVerification.length === 1 ? "" : "s"} recovered via OCR
+              ({needsVerification.map((d) => `${d.name} ${Math.round(d.ocr_confidence ?? 0)}%`).join(", ")}). OCR text can
+              misread digits: confirm each extracted value against the source.
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mt-3 text-sm">
         <Field label="Docs seen">{debug.documents_seen}</Field>
         <Field label="Downloaded">{debug.documents_downloaded}</Field>
         <Field label="Failed">{debug.documents_failed}</Field>
         <Field label="Candidates">{debug.total_candidates}</Field>
         <Field label="Alias mapped">{debug.alias_mapped_count}</Field>
-        <Field label="AI classified">{debug.classified_count}</Field>
+        <Field label="OCR recovered">{needsVerification.length}</Field>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 text-sm">
         <Field label="Grouped keys">{debug.grouped_keys?.length ?? 0}</Field>
@@ -461,23 +488,26 @@ function ExtractionDebugCard({ debug }: { debug: any }) {
           <thead><tr className="bg-muted/20">
             <th className="text-left">Document</th>
             <th className="text-center">DL</th>
-            <th className="text-right">Bytes</th>
             <th className="text-right">Text len</th>
             <th className="text-right">Candidates</th>
-            <th className="text-left">Preview / error</th>
+            <th className="text-left">Recovery</th>
+            <th className="text-left">Preview (value @ source) / error</th>
           </tr></thead>
           <tbody>
-            {debug.per_document?.map((d: any) => (
-              <tr key={d.document_id} className="hover:bg-accent/30 align-top">
-                <td className="font-medium">{d.name}</td>
-                <td className="text-center">{d.download_ok ? "✓" : "✗"}</td>
-                <td className="text-right num">{d.byte_length.toLocaleString()}</td>
+            {perDoc.map((d: any) => (
+              <tr key={d.document_id} className={`align-top hover:bg-accent/30 ${d.needs_verification ? "bg-chart-5/10" : ""}`}>
+                <td className="font-medium">
+                  {d.name}
+                  {d.needs_verification && <span className="ml-1 text-chart-5" title="Recovered via OCR: verify">!</span>}
+                </td>
+                <td className="text-center">{d.download_ok ? "OK" : "x"}</td>
                 <td className="text-right num">{d.text_length.toLocaleString()}</td>
                 <td className="text-right num">{d.candidate_count}</td>
+                <td className="text-muted-foreground max-w-[160px] truncate" title={recoveryLabel(d)}>{recoveryLabel(d)}</td>
                 <td className="text-muted-foreground max-w-[280px] truncate">
                   {d.error
                     ? <span className="text-destructive">{d.error}</span>
-                    : d.candidates_preview?.map((c: any) => `${c.value_text}`).join(" · ") || d.text_preview}
+                    : d.candidates_preview?.map((c: any) => c.source_location ? `${c.value_text} @ ${c.source_location}` : c.value_text).join(" · ") || d.text_preview}
                 </td>
               </tr>
             ))}

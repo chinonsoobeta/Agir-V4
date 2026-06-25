@@ -2,7 +2,8 @@ import { describe, expect, test } from "vitest";
 import * as XLSX from "xlsx";
 import { detectMoneyScale } from "@/lib/money-scale";
 import { parseBudgetWorkbook } from "@/lib/parsers/budget.server";
-import { xlsxBufferToText } from "@/lib/document-text.server";
+import { xlsxBufferToText, extractFileTextWithMeta, pdfBufferToTextWithMeta } from "@/lib/document-text.server";
+import { extractCandidates } from "@/lib/assumption-candidates.server";
 import { groupAndResolve, type MappedCandidate } from "@/lib/assumption-mapping";
 
 function wb(aoa: unknown[][], sheetName = "Sheet1"): ArrayBuffer {
@@ -118,5 +119,64 @@ describe("plausibility backstop blocks an implausibly small aggregate", () => {
     ]).get("residential_rent_monthly");
     expect(rent?.status).toBe("extracted");
     expect(rent?.value_numeric).toBe(2500);
+  });
+});
+
+describe("2A: OCR fallback for scanned / image-only PDFs (mocked boundary)", () => {
+  // A buffer that is not a real text PDF: unpdf recovers nothing, so the text
+  // layer is empty and the OCR fallback must engage.
+  const scanned = new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0]).buffer;
+  const mockOcr = async () => ({
+    text: "Land acquisition cost $34,500,000. The project delivers 220 units. Exit cap rate 5.25%.",
+    confidence: 87,
+  });
+
+  test("empty text layer -> OCR path -> recovered text yields candidates", async () => {
+    const meta = await pdfBufferToTextWithMeta(scanned, { ocr: mockOcr });
+    expect(meta.recoveredViaOcr).toBe(true);
+    expect(meta.ocrConfidence).toBe(87);
+    expect(meta.text).toContain("$34,500,000");
+
+    const extracted = await extractFileTextWithMeta("Scanned_Term_Sheet.pdf", "application/pdf", scanned, { ocr: mockOcr });
+    expect(extracted.recoveredViaOcr).toBe(true);
+    const cands = extractCandidates("Scanned_Term_Sheet.pdf", extracted.text);
+    expect(cands.length).toBeGreaterThan(0);
+    expect(cands.some((c) => c.kind === "currency" && c.value_numeric === 34_500_000)).toBe(true);
+    expect(cands.some((c) => c.kind === "units" && c.value_numeric === 220)).toBe(true);
+  });
+
+  test("OCR that recovers nothing degrades gracefully to no-text (not a crash)", async () => {
+    const meta = await pdfBufferToTextWithMeta(scanned, { ocr: async () => ({ text: "", confidence: 0 }) });
+    expect(meta.recoveredViaOcr).toBe(false);
+    expect(meta.text).toBe("");
+  });
+
+  test("non-PDF documents never invoke the PDF OCR runner", async () => {
+    const ws = XLSX.utils.aoa_to_sheet([["Category", "Line Item", "Amount"], ["land", "Land", 34_500_000]]);
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, ws, "Budget");
+    const buf = XLSX.write(book, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+    const throwing = async () => { throw new Error("OCR must not run for a spreadsheet"); };
+    const extracted = await extractFileTextWithMeta("budget.xlsx", null, buf, { ocr: throwing });
+    expect(extracted.recoveredViaOcr).toBe(false);
+    expect(extracted.text.toLowerCase()).toContain("land");
+  });
+});
+
+describe("2C: merged cells in the free-text spreadsheet path", () => {
+  test("a merged label is propagated onto every spanned row instead of dropped", async () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["Category", "Line Item", "Amount"],
+      ["Hard Costs", "Structure & shell", 100_000_000],
+      [null, "Facade & envelope", 62_000_000],
+    ]);
+    ws["!merges"] = [{ s: { r: 1, c: 0 }, e: { r: 2, c: 0 } }];
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, ws, "Budget");
+    const buf = XLSX.write(book, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+    const text = await xlsxBufferToText(buf);
+    const facadeLine = text.split("\n").find((l) => /Facade/.test(l));
+    expect(facadeLine).toBeTruthy();
+    expect(facadeLine).toMatch(/Hard Costs/i);
   });
 });

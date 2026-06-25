@@ -4,16 +4,64 @@
 // can pinpoint a parsing failure (storage vs. parse vs. empty document).
 
 import { detectMoneyScale } from "./money-scale";
+import { fillMergedCells } from "./parsers/xlsx-utils";
+import { defaultOcrRunner, type OcrRunner } from "./pdf-ocr.server";
 
 function log(name: string, kind: string, length: number, note = "") {
   console.log(`[document-text] ${kind} "${name}" -> ${length} chars${note ? ` (${note})` : ""}`);
 }
 
+// A PDF text layer with fewer than this many non-whitespace characters is
+// treated as "empty / near-empty" (a scanned or image-only PDF) and triggers
+// the OCR fallback.
+const MIN_EMBEDDED_TEXT_CHARS = 16;
+
+export type PdfTextMeta = {
+  text: string;
+  recoveredViaOcr: boolean;
+  // Tesseract mean confidence (0-100) when OCR ran, else null.
+  ocrConfidence: number | null;
+  embeddedChars: number;
+};
+
+// PDF text extraction with an OCR fallback. Reads the embedded text layer first;
+// when it is empty / near-empty (a scanned or image-only PDF) it runs OCR and
+// uses the recovered text, recording that OCR was used and its confidence so the
+// UI can flag the document for verification. The OCR runner is injectable for
+// testing.
+export async function pdfBufferToTextWithMeta(
+  buf: ArrayBuffer,
+  opts: { ocr?: OcrRunner } = {},
+): Promise<PdfTextMeta> {
+  let embedded = "";
+  try {
+    const { extractText, getDocumentProxy } = await import("unpdf");
+    const pdf = await getDocumentProxy(new Uint8Array(buf));
+    const { text } = await extractText(pdf, { mergePages: true });
+    embedded = Array.isArray(text) ? text.join("\n") : String(text ?? "");
+  } catch {
+    embedded = "";
+  }
+  const embeddedChars = embedded.replace(/\s/g, "").length;
+  if (embeddedChars >= MIN_EMBEDDED_TEXT_CHARS) {
+    return { text: embedded, recoveredViaOcr: false, ocrConfidence: null, embeddedChars };
+  }
+
+  // Empty / near-empty text layer: attempt OCR.
+  const runner = opts.ocr ?? defaultOcrRunner;
+  try {
+    const ocr = await runner(buf);
+    if (ocr.text.trim()) {
+      return { text: ocr.text, recoveredViaOcr: true, ocrConfidence: ocr.confidence, embeddedChars };
+    }
+  } catch (error) {
+    console.warn(`[document-text] OCR fallback failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  return { text: embedded, recoveredViaOcr: false, ocrConfidence: null, embeddedChars };
+}
+
 export async function pdfBufferToText(buf: ArrayBuffer): Promise<string> {
-  const { extractText, getDocumentProxy } = await import("unpdf");
-  const pdf = await getDocumentProxy(new Uint8Array(buf));
-  const { text } = await extractText(pdf, { mergePages: true });
-  return Array.isArray(text) ? text.join("\n") : String(text ?? "");
+  return (await pdfBufferToTextWithMeta(buf)).text;
 }
 
 // Spreadsheets are emitted with sheet names and per-row labels preserved so the
@@ -26,6 +74,9 @@ export async function xlsxBufferToText(buf: ArrayBuffer): Promise<string> {
   for (const name of wb.SheetNames) {
     out.push(`# Sheet: ${name}`);
     const ws = wb.Sheets[name];
+    // 2C. Propagate merged-range values so a merged label/amount is emitted on
+    // every spanned row instead of being silently dropped.
+    fillMergedCells(ws);
     const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, blankrows: false });
     const headers = (rows[0] ?? []).map((cell) => String(cell ?? "").trim());
     // A "$ in thousands / millions" declaration in the sheet name or a caption
@@ -144,36 +195,56 @@ export async function docxBufferToText(buf: ArrayBuffer): Promise<string> {
   }
 }
 
-export async function extractFileText(name: string, fileType: string | null | undefined, buf: ArrayBuffer): Promise<string> {
+export type ExtractedText = {
+  text: string;
+  // True when a scanned / image-only PDF was recovered via OCR.
+  recoveredViaOcr: boolean;
+  // Tesseract mean confidence (0-100) when OCR ran, else null.
+  ocrConfidence: number | null;
+};
+
+// Extract text from any supported document, returning OCR metadata alongside it
+// so the per-document debug trace can flag OCR-recovered (low-confidence) text.
+export async function extractFileTextWithMeta(
+  name: string,
+  fileType: string | null | undefined,
+  buf: ArrayBuffer,
+  opts: { ocr?: OcrRunner } = {},
+): Promise<ExtractedText> {
   const lower = name.toLowerCase();
   const type = (fileType ?? "").toLowerCase();
+  const plain = (text: string): ExtractedText => ({ text, recoveredViaOcr: false, ocrConfidence: null });
   try {
     if (lower.endsWith(".pdf") || type.includes("pdf")) {
-      const text = await pdfBufferToText(buf);
-      log(name, "pdf", text.length);
-      return text;
+      const meta = await pdfBufferToTextWithMeta(buf, opts);
+      log(name, "pdf", meta.text.length, meta.recoveredViaOcr ? `recovered via OCR, confidence ${Math.round(meta.ocrConfidence ?? 0)}%` : "");
+      return { text: meta.text, recoveredViaOcr: meta.recoveredViaOcr, ocrConfidence: meta.ocrConfidence };
     }
     if (lower.endsWith(".xlsx") || lower.endsWith(".xls") || type.includes("sheet") || type.includes("excel")) {
       const text = await xlsxBufferToText(buf);
       log(name, "xlsx", text.length);
-      return text;
+      return plain(text);
     }
     if (lower.endsWith(".docx") || type.includes("wordprocessingml")) {
       const text = await docxBufferToText(buf);
       log(name, "docx", text.length, text ? "" : "no text recovered");
-      return text;
+      return plain(text);
     }
     if (lower.endsWith(".csv") || lower.endsWith(".tsv") || type.includes("csv")) {
       const text = new TextDecoder().decode(buf);
       log(name, "csv", text.length);
-      return text;
+      return plain(text);
     }
     // .txt and any other text-like payload.
     const text = new TextDecoder().decode(buf);
     log(name, "text", text.length);
-    return text;
+    return plain(text);
   } catch (error) {
     console.warn(`[document-text] extractFileText failed for "${name}" (${type}): ${error instanceof Error ? error.message : String(error)}`);
-    return "";
+    return plain("");
   }
+}
+
+export async function extractFileText(name: string, fileType: string | null | undefined, buf: ArrayBuffer): Promise<string> {
+  return (await extractFileTextWithMeta(name, fileType, buf)).text;
 }

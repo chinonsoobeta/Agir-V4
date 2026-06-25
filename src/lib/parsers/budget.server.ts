@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { detectMoneyScale } from "../money-scale";
+import { readSheetRows, selectSheets, type HeaderScorer, type SheetRow } from "./xlsx-utils";
 
 export type ParsedBudgetRow = {
   label: string;
@@ -9,9 +10,17 @@ export type ParsedBudgetRow = {
   sourceText: string;
 };
 
+export type BudgetParseMeta = {
+  sheetsScanned: number;
+  sheetSelected: string;
+  headerRow: number; // 1-indexed for human reading
+  mergedCellsFilled: number;
+};
+
 export type BudgetParseResult = {
   inserted: ParsedBudgetRow[];
   rejected: { row: number; reason: string; values: (string | number | boolean | null)[] }[];
+  meta: BudgetParseMeta;
 };
 
 export function categoryFor(label: string): ParsedBudgetRow["category"] {
@@ -29,14 +38,30 @@ export function categoryFor(label: string): ParsedBudgetRow["category"] {
   return "other";
 }
 
-export function parseBudgetWorkbook(buffer: ArrayBuffer): BudgetParseResult {
-  const workbook = XLSX.read(buffer, { type: "array" });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json<(string | number | boolean | null)[]>(sheet, { header: 1, blankrows: false });
+// Header heuristic for budget tabs: a money-named amount column plus a
+// category/line-item label column. A rent-roll tab (unit type / count / rent)
+// scores 0, so it is never mistaken for the budget.
+export const budgetHeaderScore: HeaderScorer = (cells) => {
+  let s = 0;
+  const has = (re: RegExp) => cells.some((c) => re.test(c));
+  if (has(/amount|cost|budget|\$|^total$|value/)) s += 2;
+  if (has(/category/)) s += 1;
+  if (has(/item|description|label/)) s += 1;
+  return s;
+};
+
+// Parse a single budget sheet given its rows and the detected header-row index.
+function parseBudgetSheet(
+  rows: SheetRow[],
+  headerRowIndex: number,
+  sheetName: string,
+): { inserted: ParsedBudgetRow[]; rejected: BudgetParseResult["rejected"] } {
   const inserted: ParsedBudgetRow[] = [];
   const rejected: BudgetParseResult["rejected"] = [];
+  const headerRow = rows[headerRowIndex] ?? [];
+  const header = headerRow.map((cell) => String(cell ?? "").toLowerCase());
+  const dataRows = rows.slice(headerRowIndex + 1);
 
-  const header = rows[0]?.map((cell) => String(cell ?? "").toLowerCase()) ?? [];
   const categoryIndex = header.findIndex((h) => /category/.test(h));
   const itemIndex = header.findIndex((h) => /item|description|label/.test(h));
   const labelIndex = itemIndex >= 0 ? itemIndex : Math.max(0, categoryIndex);
@@ -44,7 +69,6 @@ export function parseBudgetWorkbook(buffer: ArrayBuffer): BudgetParseResult {
   // actually numeric: a *label* column named "Total Project Cost" or "Cost
   // Item" must never be mistaken for the dollar column. Fall back to the last
   // money-named header, then the first numeric column.
-  const dataRows = rows.slice(1);
   const numericShare = (i: number) => {
     const vals = dataRows.map((r) => r[i]).filter((c) => c != null && String(c).trim() !== "");
     if (!vals.length) return 0;
@@ -61,20 +85,19 @@ export function parseBudgetWorkbook(buffer: ArrayBuffer): BudgetParseResult {
   if (amountIndex < 0) amountIndex = Math.max(1, header.findIndex((h) => /amount|cost|budget|total/.test(h)));
 
   // Honor a declared scale ("$ in thousands / millions") from the amount-column
-  // header first, then the sheet name + header row. Without this a raw 34,500
-  // land line under a "($000)" column or an "(in thousands)" tab is read as
-  // $34.5k instead of $34.5M.
-  const sheetName = workbook.SheetNames[0];
-  const amountHeader = amountIndex >= 0 ? String(rows[0]?.[amountIndex] ?? "") : "";
+  // header first, then the sheet name, the header row, and any caption/title
+  // rows ABOVE the header (a merged "$ in thousands" banner is common).
+  const amountHeader = amountIndex >= 0 ? String(headerRow[amountIndex] ?? "") : "";
   const columnScale = detectMoneyScale(amountHeader);
+  const captionCells = rows.slice(0, headerRowIndex + 1).flat().map((c) => String(c ?? ""));
   const scale =
     columnScale !== 1
       ? columnScale
-      : detectMoneyScale([sheetName, ...(rows[0] ?? []).map((c) => String(c ?? ""))].join(" "));
+      : detectMoneyScale([sheetName, ...captionCells].join(" "));
   const scaleLabel = scale === 1_000 ? "thousands" : scale === 1_000_000 ? "millions" : scale === 1_000_000_000 ? "billions" : null;
 
-  rows.slice(1).forEach((row, i) => {
-    const rowNumber = i + 2;
+  dataRows.forEach((row, i) => {
+    const rowNumber = headerRowIndex + i + 2;
     const categoryLabel = categoryIndex >= 0 ? String(row[categoryIndex] ?? "").trim() : "";
     const itemLabel = String(row[labelIndex] ?? "").trim();
     const label = itemLabel || categoryLabel;
@@ -94,7 +117,7 @@ export function parseBudgetWorkbook(buffer: ArrayBuffer): BudgetParseResult {
       label,
       amount,
       category,
-      sourceCellRef: `Sheet ${workbook.SheetNames[0]} row ${rowNumber}`,
+      sourceCellRef: `Sheet ${sheetName} row ${rowNumber}`,
       sourceText: [
         categoryLabel ? `Category=${categoryLabel}` : null,
         label ? `Line Item=${label}` : null,
@@ -105,4 +128,26 @@ export function parseBudgetWorkbook(buffer: ArrayBuffer): BudgetParseResult {
   });
 
   return { inserted, rejected };
+}
+
+export function parseBudgetWorkbook(buffer: ArrayBuffer): BudgetParseResult {
+  const workbook = XLSX.read(buffer, { type: "array" });
+  // A workbook may carry several tabs (summary, detail, rent roll). Pick the
+  // single best budget tab by header heuristics; summing multiple budget tabs
+  // would risk double counting a summary against its detail, so budget stays
+  // single-sheet (selected, not assumed to be the first tab).
+  const [selected] = selectSheets(workbook, budgetHeaderScore);
+  const ws = workbook.Sheets[selected.name];
+  const { rows, mergedCellsFilled } = readSheetRows(ws);
+  const { inserted, rejected } = parseBudgetSheet(rows, selected.headerRowIndex, selected.name);
+  return {
+    inserted,
+    rejected,
+    meta: {
+      sheetsScanned: workbook.SheetNames.length,
+      sheetSelected: selected.name,
+      headerRow: selected.headerRowIndex + 1,
+      mergedCellsFilled,
+    },
+  };
 }
