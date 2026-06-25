@@ -74,7 +74,9 @@ export type DerivedCore = ReturnType<typeof deriveCore>;
 export function deriveCore(data: ReportData) {
   const { oVal, eVal, aVal } = makeAccessors(data);
   const tdc = oVal("base", "total_project_cost") ?? aVal("total_project_cost") ?? 0;
-  const loan = aVal("debt_amount") ?? eVal("loan_amount") ?? 0;
+  const seniorLoan = aVal("debt_amount") ?? eVal("loan_amount") ?? 0;
+  const mezzanineLoan = aVal("mezzanine_amount") ?? eVal("mezzanine_amount") ?? 0;
+  const loan = seniorLoan + mezzanineLoan;
   const committedEquity = aVal("equity_amount") ?? eVal("equity_amount") ?? 0;
   const requiredEquity = oVal("base", "equity_requirement") ?? tdc - loan;
   const fundingGap = requiredEquity - committedEquity;
@@ -84,7 +86,21 @@ export function deriveCore(data: ReportData) {
   const exitCap = eVal("exit_cap_rate_pct") ?? aVal("exit_cap_rate");
   const ltc = oVal("base", "loan_to_cost");
   const lenderOcc = eVal("lender_stabilized_occupancy_pct") ?? aVal("lender_stabilized_occupancy");
-  return { tdc, loan, committedEquity, requiredEquity, fundingGap, noi, dscr, minDscr, exitCap, ltc, lenderOcc };
+  return {
+    tdc,
+    loan,
+    seniorLoan,
+    mezzanineLoan,
+    committedEquity,
+    requiredEquity,
+    fundingGap,
+    noi,
+    dscr,
+    minDscr,
+    exitCap,
+    ltc,
+    lenderOcc,
+  };
 }
 
 export function reportVerdict(data: ReportData) {

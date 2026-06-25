@@ -56,7 +56,7 @@ export function buildDeterministicMemo(ctx: DeterministicMemoContext): Record<st
     a ? `• ${a.field_label}: ${fmtByUnit(a.value_numeric, a.unit)}` : "";
 
   // ---- Executive Summary ----
-  const headlineKeys = ["total_project_cost", "equity_requirement", "yield_on_cost", "development_spread", "irr_estimate", "equity_multiple", "dscr"];
+  const headlineKeys = ["total_project_cost", "equity_requirement", "yield_on_cost", "development_spread", "irr_estimate", "equity_multiple", "lp_irr", "lp_equity_multiple", "gp_promote", "dscr"];
   const headline = headlineKeys.map(baseMetric).filter(Boolean) as Row[];
   const executive_summary = bullet([
     `${project.name} is a ${project.type ?? "development"} project${project.location ? ` in ${project.location}` : ""}.`,

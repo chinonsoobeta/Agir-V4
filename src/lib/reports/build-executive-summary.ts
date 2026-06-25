@@ -35,6 +35,9 @@ export function buildExecutiveSummary(data: ReportData, opts: { generatedLabel: 
     card("Development Spread", "development_spread", "bps"),
     card("Equity Multiple", "equity_multiple", "x"),
     { label: "Levered IRR", value: irrStatusText(data) },
+    card("LP IRR", "lp_irr", "%"),
+    card("LP Equity Multiple", "lp_equity_multiple", "x"),
+    card("GP Promote", "gp_promote", "$"),
   ];
 
   const sections: ReportSection[] = [];

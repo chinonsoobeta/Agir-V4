@@ -165,7 +165,9 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
   };
 
   const tdc = oVal("base", "total_project_cost") ?? (aVal("total_project_cost") ?? 0);
-  const loan = aVal("debt_amount") ?? eVal("loan_amount") ?? 0;
+  const seniorLoan = aVal("debt_amount") ?? eVal("loan_amount") ?? 0;
+  const mezzanineLoan = aVal("mezzanine_amount") ?? eVal("mezzanine_amount") ?? 0;
+  const loan = seniorLoan + mezzanineLoan;
   const committedEquity = aVal("equity_amount") ?? eVal("equity_amount") ?? 0;
   const requiredEquity = oVal("base", "equity_requirement") ?? (tdc - loan);
   const fundingGap = track(requiredEquity - committedEquity);
@@ -217,7 +219,9 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
   // ---- Summary stat strip ----
   const summary_stats: ReportStat[] = [
     { label: "Total Development Cost", value: money(tdc) },
-    { label: "Senior Loan", value: money(loan) },
+    { label: "Senior Loan", value: money(seniorLoan) },
+    ...(mezzanineLoan > 0 ? [{ label: "Mezzanine Debt", value: money(mezzanineLoan) }] : []),
+    ...(mezzanineLoan > 0 ? [{ label: "Total Debt", value: money(loan) }] : []),
     { label: "Required Equity", value: money(requiredEquity) },
     { label: "Committed Equity", value: money(committedEquity) },
     ...(exitCap != null ? [{ label: "Exit Cap (approved)", value: pct(exitCap) }] : []),
@@ -236,6 +240,9 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
     card("Exit Value (base)", "base", "exit_value", "$"),
     card("Development Profit", "base", "projected_profit", "$"),
     card("Equity Multiple", "base", "equity_multiple", "x"),
+    card("LP IRR", "base", "lp_irr", "%"),
+    card("LP Equity Multiple", "base", "lp_equity_multiple", "x"),
+    card("GP Promote", "base", "gp_promote", "$"),
     card("Stabilized NOI", "base", "stabilized_noi", "$"),
   ];
 
@@ -379,8 +386,12 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
   usesRows.push(["Total Development Cost", "Deterministic engine", money(tdc)]);
   const sourceTotal = track(loan + committedEquity);
   const sourcesRows = [
-    ["Senior Debt", sourceDoc(aByKey("debt_amount")), money(loan)],
-    ["Mezzanine Debt", "Insufficient evidence available", "Not included"],
+    ["Senior Debt", sourceDoc(aByKey("debt_amount")), money(seniorLoan)],
+    [
+      "Mezzanine Debt",
+      mezzanineLoan > 0 ? sourceDoc(aByKey("mezzanine_amount")) : "Insufficient evidence available",
+      mezzanineLoan > 0 ? money(mezzanineLoan) : "Not included",
+    ],
     ["Preferred Equity", "Insufficient evidence available", "Not included"],
     ["Common Equity / Sponsor Equity", sourceDoc(aByKey("equity_amount")), money(committedEquity)],
     ["Total Sources", "Debt plus equity", money(sourceTotal)],
@@ -388,7 +399,7 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
   ];
   sections.push({
     heading: "Sources & Uses of Capital",
-    body: "Uses are tied to approved budget assumptions. Sources are limited to documented debt and equity; no mezzanine debt or preferred equity is included without source evidence.",
+    body: "Uses are tied to approved budget assumptions. Sources include only documented senior debt, mezzanine debt, and equity. No capital source is inferred without approved evidence.",
     table: { columns: ["Uses / Sources", "Source", "Amount"], rows: [...usesRows, ["", "", ""], ...sourcesRows] },
   });
 
@@ -422,7 +433,13 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
 
   // ---- 7. Debt analysis ----
   const debtRows = [
-    ["Loan Amount", money(loan), sourceDoc(aByKey("debt_amount"))],
+    ["Senior Loan Amount", money(seniorLoan), sourceDoc(aByKey("debt_amount"))],
+    [
+      "Mezzanine Amount",
+      mezzanineLoan > 0 ? money(mezzanineLoan) : "Not included",
+      mezzanineLoan > 0 ? sourceDoc(aByKey("mezzanine_amount")) : "Insufficient evidence available",
+    ],
+    ["Total Debt", money(loan), "Deterministic sum of approved tranches"],
     ["Interest Rate", interestRate == null ? "Insufficient evidence available" : pct(interestRate), sourceDoc(aByKey("interest_rate"))],
     ["Debt Type", "Senior debt", sourceDoc(aByKey("debt_amount"))],
     ["Amortization", amortYears == null ? "Insufficient evidence available" : `${grouped(amortYears)} years`, sourceDoc(aByKey("amortization_years"))],

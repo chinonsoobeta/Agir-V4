@@ -1,7 +1,16 @@
 export { annualDebtService, interestOnlyDebtService, loanBalanceAfterYears, loanBalanceSchedule } from "./debt";
 export { irr } from "./metrics";
+export { runEuropeanWaterfall, type TimedCashFlow, type WaterfallResult } from "./waterfall";
 export { runUnderwriting, componentGpr } from "./proforma";
-export type { EngineOutput, UnderwritingInput, RevenueUnitInput, BudgetInput } from "./types";
+export type {
+  EngineOutput,
+  UnderwritingInput,
+  RevenueUnitInput,
+  BudgetInput,
+  DebtTrancheInput,
+  PromoteTierInput,
+  WaterfallInput,
+} from "./types";
 export { STRESS_PRESETS, applyStress, type StressPreset } from "./scenarios";
 export {
   ENGINE_READABLE_STATUSES,

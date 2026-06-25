@@ -298,12 +298,29 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
         <UnderwritingMetric label="Recommendation" text={recommendation} sub={recRationale} highlight={recommendation === "REJECT" || recommendation === "RETURN_TO_UNDERWRITING" ? "text-destructive" : "text-primary"} />
         <UnderwritingMetric label="Exit Value" row={metric("exit_value")} />
         <UnderwritingMetric label="IRR" row={irrRow} text={equityWipeout ? "not meaningful" : undefined} sub={equityWipeout ? "Equity loss: IRR not meaningful" : undefined} highlight={equityWipeout ? "text-destructive" : undefined} />
-        <UnderwritingMetric label="DSCR (amortizing)" row={metric("dscr")} />
+        <UnderwritingMetric label="All-in DSCR" row={metric("dscr")} />
         <UnderwritingMetric label="Equity Multiple" row={metric("equity_multiple")} highlight={equityWipeout ? "text-destructive" : undefined} />
         <UnderwritingMetric label="Debt Yield" row={metric("debt_yield")} />
         <UnderwritingMetric label="Break-even Occ." row={metric("break_even_occupancy")} />
         <UnderwritingMetric label="Risk Score" text={riskScoreRow ? String(Math.round(Number(riskScoreRow.value_numeric))) : "Not available"} sub={riskScoreRow?.formula_text} />
       </div>
+
+      <Card className="p-5">
+        <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+          LP return vs deal return
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-3">
+          <UnderwritingMetric label="Deal IRR" row={metric("irr_estimate")} />
+          <UnderwritingMetric label="LP IRR" row={metric("lp_irr")} />
+          <UnderwritingMetric label="Deal Equity Multiple" row={metric("equity_multiple")} />
+          <UnderwritingMetric label="LP Equity Multiple" row={metric("lp_equity_multiple")} />
+          <UnderwritingMetric label="GP Promote" row={metric("gp_promote")} />
+        </div>
+        <p className="text-xs text-muted-foreground mt-3">
+          LP and GP returns use the deterministic European waterfall. When no waterfall inputs
+          are approved, LP returns equal the deal return and GP promote is zero.
+        </p>
+      </Card>
 
       {equityWipeout && (
         <div className={`rounded border p-3 text-sm ${SEV_STYLES.error}`}>

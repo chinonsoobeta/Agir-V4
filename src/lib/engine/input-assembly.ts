@@ -98,6 +98,17 @@ const ABSENT_MEANS_ZERO = new Set([
   "construction_months",
   "lease_up_months",
   "avg_outstanding_factor",
+  "phase_equity_draws",
+  "mezzanine_amount",
+  "mezz_amort_years",
+  "mezz_io_months",
+  "lp_equity_split_pct",
+  "preferred_return_pct",
+  "gp_catch_up",
+  "promote_tier_1_hurdle_pct",
+  "promote_tier_1_gp_split_pct",
+  "promote_tier_2_hurdle_pct",
+  "promote_tier_2_gp_split_pct",
 ]);
 
 export type Readiness = {
@@ -125,6 +136,11 @@ export function computeReadiness(rows: ProjectInputRows): Readiness {
     const all = rows.scalars.filter((r) => r.key === key);
     if (all.some((r) => r.status === "conflicting")) conflicting.push(key);
     else if (!readableScalar(rows.scalars, key)) missing.push(key);
+  }
+
+  const mezzAmount = readableScalar(rows.scalars, "mezzanine_amount")?.value_numeric ?? 0;
+  if (mezzAmount > 0 && !readableScalar(rows.scalars, "mezz_interest_rate_pct")) {
+    missing.push("mezz_interest_rate_pct");
   }
 
   // A component is usable only when it is engine-readable AND complete
@@ -246,6 +262,18 @@ export function assembleEngineInput(rows: ProjectInputRows): UnderwritingInput {
       occupancyPct: r.occupancy_pct == null ? (projectOcc ?? null) : Number(r.occupancy_pct),
     }));
 
+  const mezzanineAmount = optionalZero("mezzanine_amount");
+  const promoteTiers = [
+    {
+      hurdleRatePct: optionalZero("promote_tier_1_hurdle_pct"),
+      gpSplitPct: optionalZero("promote_tier_1_gp_split_pct"),
+    },
+    {
+      hurdleRatePct: optionalZero("promote_tier_2_hurdle_pct"),
+      gpSplitPct: optionalZero("promote_tier_2_gp_split_pct"),
+    },
+  ].filter((tier) => tier.gpSplitPct > 0);
+
   return {
     budget: {
       land: budgetSum("land"),
@@ -272,5 +300,21 @@ export function assembleEngineInput(rows: ProjectInputRows): UnderwritingInput {
     equityAmount: required("equity_amount"),
     rentGrowthPct: optionalZero("rent_growth_pct"),
     expenseGrowthPct: optionalZero("expense_growth_pct"),
+    phaseEquityDraws: optionalZero("phase_equity_draws") >= 1,
+    mezzanine:
+      mezzanineAmount > 0
+        ? {
+            amount: mezzanineAmount,
+            interestRatePct: required("mezz_interest_rate_pct"),
+            amortYears: optionalZero("mezz_amort_years"),
+            ioMonths: optionalZero("mezz_io_months"),
+          }
+        : null,
+    waterfall: {
+      lpEquityPct: optionalZero("lp_equity_split_pct") || 100,
+      preferredReturnPct: optionalZero("preferred_return_pct"),
+      gpCatchUp: optionalZero("gp_catch_up") >= 1,
+      promoteTiers,
+    },
   };
 }

@@ -145,6 +145,85 @@ describe("development underwriting engine", () => {
     const irrMetric = development.metrics.find((m) => m.key === "irr_estimate");
     expect(irrMetric?.formula).toContain("24 months construction");
   });
+
+  test("absent IC-grade inputs preserve legacy outputs exactly", () => {
+    const legacy = runUnderwriting(mapleHeightsInput());
+    const explicitDefaults = runUnderwriting({
+      ...mapleHeightsInput(),
+      phaseEquityDraws: false,
+      mezzanine: null,
+      waterfall: null,
+    });
+    expect(explicitDefaults).toEqual(legacy);
+  });
+
+  test("mezzanine debt lowers required equity and weakens all-in coverage", () => {
+    const base = runUnderwriting(mapleHeightsInput());
+    const withMezz = runUnderwriting({
+      ...mapleHeightsInput(),
+      mezzanine: {
+        amount: 3_000_000,
+        interestRatePct: 12,
+        amortYears: 0,
+        ioMonths: 60,
+      },
+    });
+    expect(withMezz.values.totalDebt).toBe(base.values.totalDebt + 3_000_000);
+    expect(withMezz.values.requiredEquity).toBe(base.values.requiredEquity - 3_000_000);
+    expect(withMezz.values.allInAnnualDebtService).toBeGreaterThan(
+      base.values.allInAnnualDebtService,
+    );
+    expect(withMezz.values.seniorDscr).toBeCloseTo(base.values.seniorDscr, 8);
+    expect(withMezz.values.allInDscr).toBeLessThan(withMezz.values.seniorDscr);
+    expect(withMezz.values.loanPayoffAtExit).toBeGreaterThan(base.values.loanPayoffAtExit);
+    for (const key of ["senior_annual_debt_service", "senior_dscr"]) {
+      const metric = withMezz.metrics.find((row) => row.key === key);
+      expect(metric?.formula.length).toBeGreaterThan(20);
+    }
+  });
+
+  test("straight-line construction draws change timing without changing total equity", () => {
+    const base = { ...mapleHeightsInput(), holdYears: 5, constructionMonths: 24 };
+    const upfront = runUnderwriting(base);
+    const phased = runUnderwriting({ ...base, phaseEquityDraws: true });
+    const phasedEquity = phased.cashFlows
+      .filter((row) => row.lineKey === "equity")
+      .reduce((sum, row) => sum + row.amount, 0);
+    expect(phasedEquity).toBeCloseTo(-phased.values.equity, 6);
+    expect(phased.values.equityMultiple).toBeCloseTo(upfront.values.equityMultiple, 9);
+    expect(phased.values.irrPct).toBeGreaterThan(upfront.values.irrPct);
+    expect(phased.cashFlows.filter((row) => row.lineKey === "equity").length).toBe(2);
+    expect(phased.metrics.find((row) => row.key === "irr_estimate")?.formula).toContain(
+      "drawn straight-line monthly",
+    );
+  });
+
+  test("waterfall outputs are first-class engine metrics with formula text", () => {
+    const output = runUnderwriting({
+      ...mapleHeightsInput(),
+      holdYears: 5,
+      waterfall: {
+        lpEquityPct: 90,
+        preferredReturnPct: 8,
+        gpCatchUp: true,
+        promoteTiers: [{ hurdleRatePct: 8, gpSplitPct: 20 }],
+      },
+    });
+    for (const key of [
+      "lp_irr",
+      "lp_equity_multiple",
+      "gp_irr",
+      "gp_equity_multiple",
+      "gp_promote",
+    ]) {
+      const metric = output.metrics.find((row) => row.key === key);
+      expect(metric).toBeDefined();
+      expect(metric?.formula.length).toBeGreaterThan(20);
+    }
+    expect(Number.isFinite(output.values.lpIrrPct)).toBe(true);
+    expect(Number.isFinite(output.values.gpIrrPct)).toBe(true);
+    expect(output.values.gpPromote).toBeGreaterThanOrEqual(0);
+  });
 });
 
 describe("reconciliation gates", () => {

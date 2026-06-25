@@ -37,6 +37,11 @@ export function buildInvestorReport(data: ReportData, opts: { generatedLabel: st
     row("Development Profit", "projected_profit", "$"),
     row("Equity Multiple", "equity_multiple", "x"),
     ["Levered IRR", irrStatusText(data)],
+    row("LP IRR", "lp_irr", "%"),
+    row("LP Equity Multiple", "lp_equity_multiple", "x"),
+    row("GP IRR", "gp_irr", "%"),
+    row("GP Equity Multiple", "gp_equity_multiple", "x"),
+    row("GP Promote", "gp_promote", "$"),
     row("Cash-on-Cash", "cash_on_cash", "%"),
     row("Cumulative Cash Shortfall", "cumulative_cash_shortfall", "$"),
   ];

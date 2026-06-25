@@ -146,11 +146,17 @@ function buildReconciliationContext(rows: ProjectInputRows, input: UnderwritingI
   return {
     tdc: output.values.tdc,
     equity: input.equityAmount ?? 0,
-    loan: input.loanAmount,
+    loan: output.values.totalDebt,
     noi: output.values.noi,
-    amortizingAnnualDebtService: output.values.annualDebtService,
-    interestOnlyAnnualDebtService: input.loanAmount * (input.interestRatePct / 100),
-    ioCoversHold: (input.ioMonths ?? 0) >= input.holdYears * 12,
+    amortizingAnnualDebtService: output.values.allInAnnualDebtService,
+    interestOnlyAnnualDebtService:
+      input.loanAmount * (input.interestRatePct / 100) +
+      (input.mezzanine?.amount ?? 0) * ((input.mezzanine?.interestRatePct ?? 0) / 100),
+    ioCoversHold:
+      (input.ioMonths ?? 0) >= input.holdYears * 12 &&
+      (!input.mezzanine ||
+        input.mezzanine.amount <= 0 ||
+        input.mezzanine.ioMonths >= input.holdYears * 12),
     statedLtcPct: scalarValue(rows, "stated_ltc_pct"),
     minDscr: scalarValue(rows, "min_dscr"),
     minDebtYield: scalarValue(rows, "min_debt_yield"),

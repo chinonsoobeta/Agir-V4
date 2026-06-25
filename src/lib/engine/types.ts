@@ -21,6 +21,26 @@ export type RevenueUnitInput = {
   occupancyPct?: number | null;
 };
 
+export type DebtTrancheInput = {
+  name: "senior" | "mezzanine";
+  amount: number;
+  interestRatePct: number;
+  amortYears: number;
+  ioMonths: number;
+};
+
+export type PromoteTierInput = {
+  hurdleRatePct: number;
+  gpSplitPct: number;
+};
+
+export type WaterfallInput = {
+  lpEquityPct: number;
+  preferredReturnPct: number;
+  gpCatchUp: boolean;
+  promoteTiers: PromoteTierInput[];
+};
+
 export type UnderwritingInput = {
   budget: BudgetInput;
   revenueProgram: RevenueUnitInput[];
@@ -40,6 +60,9 @@ export type UnderwritingInput = {
   equityAmount?: number | null;
   rentGrowthPct: number;
   expenseGrowthPct: number;
+  phaseEquityDraws?: boolean;
+  mezzanine?: Omit<DebtTrancheInput, "name"> | null;
+  waterfall?: WaterfallInput | null;
 };
 
 export type MetricOutput = {
@@ -112,5 +135,15 @@ export type EngineOutput = {
     irrPct: number;
     debtYieldPct: number;
     breakEvenOccupancyPct: number;
+    totalDebt: number;
+    seniorAnnualDebtService: number;
+    allInAnnualDebtService: number;
+    seniorDscr: number;
+    allInDscr: number;
+    lpIrrPct: number;
+    lpEquityMultiple: number;
+    gpIrrPct: number;
+    gpEquityMultiple: number;
+    gpPromote: number;
   };
 };
