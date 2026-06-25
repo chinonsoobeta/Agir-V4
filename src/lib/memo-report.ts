@@ -453,6 +453,43 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
       : "Return profile cannot be fully assessed because spread is unavailable.";
   sections.push({ heading: "Return Analysis", body: returnBody, table: { columns: ["Metric", "Result", "Interpretation"], rows: returnRows } });
 
+  // ---- 8b. LP / GP returns (distribution waterfall) ----
+  // Shown only when a promote is configured (gp_promote > 0). Without a
+  // waterfall the LP return equals the deal return, so there is nothing distinct
+  // to surface and the section is omitted (keeping non-waterfall memos unchanged).
+  const lpIrr = oVal("base", "lp_irr");
+  const gpIrr = oVal("base", "gp_irr");
+  const lpEm = oVal("base", "lp_equity_multiple");
+  const gpEm = oVal("base", "gp_equity_multiple");
+  const gpPromoteAmt = oVal("base", "gp_promote");
+  const lpPref = oVal("base", "lp_preferred_return");
+  const dealIrr = oVal("base", "irr_estimate");
+  if ((gpPromoteAmt ?? 0) > 0) {
+    const irrCell = (v: number | null) => (v == null || !Number.isFinite(v) ? "Not meaningful" : pct(v));
+    const wfRows: string[][] = [
+      ["Deal Levered IRR", irrCell(dealIrr), "Return on total equity before the promote."],
+      ["LP Levered IRR", irrCell(lpIrr), "Limited partner return after preferred return and promote."],
+      ["GP Levered IRR", irrCell(gpIrr), "General partner return including the promote."],
+      ["LP Equity Multiple", lpEm == null ? "Not available" : x(lpEm), "LP distributions divided by LP capital."],
+      ["GP Equity Multiple", gpEm == null || gpEm === 0 ? "Not applicable (no GP co-invest)" : x(gpEm), "GP distributions divided by GP capital."],
+      ["LP Preferred Return", lpPref == null ? "Not available" : money(lpPref), "Preferred return distributed to the LP (excludes return of capital)."],
+      ["GP Promote", gpPromoteAmt == null ? "Not available" : money(gpPromoteAmt), "GP carried interest above a pari-passu split by ownership."],
+    ];
+    const lpVsDeal =
+      dealIrr != null && lpIrr != null && Number.isFinite(dealIrr) && Number.isFinite(lpIrr)
+        ? `The distribution waterfall splits levered returns between the LP and GP. The LP return of ${pct(lpIrr)} compares with the ${pct(dealIrr)} deal-level return; the difference is the GP promote.`
+        : "The distribution waterfall splits levered returns between the LP and the GP.";
+    sections.push({
+      heading: "LP / GP Returns",
+      body: lpVsDeal,
+      table: {
+        columns: ["Measure", "Result", "Basis"],
+        rows: wfRows,
+        note: "Deterministic European waterfall: return of capital, preferred return, optional GP catch-up, then a promoted carry split.",
+      },
+    });
+  }
+
   // ---- 9. Sensitivity analysis ----
   const SCEN_LABELS: Record<string, string> = {
     base: "Base", cap_expansion: "Cap Expansion", cost_overrun: "Cost Overrun",

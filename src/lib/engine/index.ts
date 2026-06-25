@@ -1,7 +1,25 @@
 export { annualDebtService, interestOnlyDebtService, loanBalanceAfterYears, loanBalanceSchedule } from "./debt";
-export { irr } from "./metrics";
+export { irr, xirr } from "./metrics";
 export { runUnderwriting, componentGpr } from "./proforma";
-export type { EngineOutput, UnderwritingInput, RevenueUnitInput, BudgetInput } from "./types";
+export type { EngineOutput, UnderwritingInput, RevenueUnitInput, BudgetInput, MezzanineInput } from "./types";
+export {
+  buildDebtStack,
+  stackDebtServiceForYear,
+  stackPayoffAfterYears,
+  stackInterestCarry,
+  type DebtTranche,
+  type DebtStack,
+} from "./tranches";
+export { buildEquityContributions, equityDrawConventionText, type EquityContribution } from "./equity-timing";
+export {
+  runWaterfall,
+  isWaterfallActive,
+  equityMultiple,
+  type WaterfallConfig,
+  type PromoteTier,
+  type WaterfallResult,
+  type WaterfallEvent,
+} from "./waterfall";
 export { STRESS_PRESETS, applyStress, type StressPreset } from "./scenarios";
 export {
   ENGINE_READABLE_STATUSES,

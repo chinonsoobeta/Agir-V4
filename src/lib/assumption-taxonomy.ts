@@ -128,6 +128,38 @@ export const ASSUMPTION_DEFS: AssumptionDef[] = [
   { key: "min_dscr", label: "Minimum DSCR Covenant", category: "Capital Stack", unit: "x", numeric: true, required: false,
     aliases: ["minimum dscr","dscr covenant","required dscr"] },
 
+  // ---- Multi-tranche debt (mezzanine). Optional; absent => senior-only. ----
+  { key: "mezz_debt_amount", label: "Mezzanine Debt Amount", category: "Capital Stack", unit: "$", numeric: true, required: false,
+    aliases: ["mezzanine debt","mezzanine loan","mezz loan","mezz debt","subordinate debt","junior debt","mezzanine facility"] },
+  { key: "mezz_interest_rate", label: "Mezzanine Interest Rate", category: "Capital Stack", unit: "%", numeric: true, required: false,
+    aliases: ["mezzanine rate","mezzanine interest rate","mezz rate","mezz coupon","subordinate debt rate"] },
+  { key: "mezz_amortization_years", label: "Mezzanine Amortization", category: "Capital Stack", unit: "yr", numeric: true, required: false,
+    aliases: ["mezzanine amortization","mezz amortization","mezzanine amort term"] },
+  { key: "mezz_io_months", label: "Mezzanine Interest-Only Period", category: "Capital Stack", unit: "mo", numeric: true, required: false,
+    aliases: ["mezzanine interest only","mezz io","mezzanine io period"] },
+
+  // ---- LP/GP distribution waterfall and promote. Optional; absent => LP holds the whole deal. ----
+  { key: "lp_equity_pct", label: "LP Equity Share", category: "Capital Stack", unit: "%", numeric: true, required: false,
+    aliases: ["lp equity","lp equity share","limited partner equity","lp share","lp contribution pct"] },
+  { key: "gp_equity_pct", label: "GP Equity Share (co-invest)", category: "Capital Stack", unit: "%", numeric: true, required: false,
+    aliases: ["gp equity","gp equity share","gp co-invest","general partner equity","sponsor co-invest","gp share"] },
+  { key: "preferred_return_pct", label: "Preferred Return (hurdle)", category: "Capital Stack", unit: "%", numeric: true, required: false,
+    aliases: ["preferred return","pref return","preferred rate","lp preferred","hurdle rate","pref"] },
+  { key: "gp_catch_up_pct", label: "GP Catch-Up", category: "Capital Stack", unit: "%", numeric: true, required: false,
+    aliases: ["gp catch-up","gp catch up","catch-up","catchup","gp catchup percentage"] },
+  { key: "promote_tier1_hurdle_pct", label: "Promote Tier 1 Hurdle", category: "Capital Stack", unit: "%", numeric: true, required: false,
+    aliases: ["promote tier 1 hurdle","first hurdle","tier 1 irr hurdle","first promote hurdle"] },
+  { key: "promote_tier1_gp_pct", label: "Promote Tier 1 GP Split", category: "Capital Stack", unit: "%", numeric: true, required: false,
+    aliases: ["promote tier 1","first promote","tier 1 promote","carried interest tier 1","gp promote tier 1"] },
+  { key: "promote_tier2_hurdle_pct", label: "Promote Tier 2 Hurdle", category: "Capital Stack", unit: "%", numeric: true, required: false,
+    aliases: ["promote tier 2 hurdle","second hurdle","tier 2 irr hurdle","second promote hurdle"] },
+  { key: "promote_tier2_gp_pct", label: "Promote Tier 2 GP Split", category: "Capital Stack", unit: "%", numeric: true, required: false,
+    aliases: ["promote tier 2","second promote","tier 2 promote","carried interest tier 2","gp promote tier 2"] },
+
+  // ---- Equity draw timing. Optional; absent => single lump sum at t=0. ----
+  { key: "equity_draw_months", label: "Equity Draw Period", category: "Schedule", unit: "mo", numeric: true, required: false,
+    aliases: ["equity draw period","equity draw months","equity contribution schedule","equity draw schedule"] },
+
   { key: "exit_cap_rate", label: "Exit Cap Rate", category: "Exit", unit: "%", numeric: true, required: true,
     aliases: ["exit cap","exit cap rate","disposition cap","reversion cap rate","terminal cap"] },
   { key: "hold_period_years", label: "Hold Period", category: "Exit", unit: "yr", numeric: true, required: false,

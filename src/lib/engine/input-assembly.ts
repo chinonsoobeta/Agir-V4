@@ -167,6 +167,8 @@ const CONSERVATIVE_PICKS_MAX = new Set([
   "io_months",
   // Higher equity required = more capital at risk = more conservative.
   "equity_amount",
+  // A pricier mezzanine tranche is the more conservative read.
+  "mezz_interest_rate_pct",
 ]);
 const CONSERVATIVE_PICKS_MIN = new Set([
   "stabilized_occupancy_pct",
@@ -176,6 +178,8 @@ const CONSERVATIVE_PICKS_MIN = new Set([
   "loan_amount",
   "hold_years",
   "amort_years",
+  // Less subordinate debt = less leverage = more conservative.
+  "mezz_loan_amount",
 ]);
 
 export function conservativePick(key: string, values: number[]): number {
@@ -246,6 +250,42 @@ export function assembleEngineInput(rows: ProjectInputRows): UnderwritingInput {
       occupancyPct: r.occupancy_pct == null ? (projectOcc ?? null) : Number(r.occupancy_pct),
     }));
 
+  // ---- IC-grade optional extensions (all absent => today's behavior) ----
+  // 1B. Mezzanine tranche: present only when a positive mezz loan is approved.
+  const mezzAmount = scalar("mezz_loan_amount");
+  const mezzanine =
+    mezzAmount != null && mezzAmount > 0
+      ? {
+          amount: mezzAmount,
+          ratePct: scalar("mezz_interest_rate_pct") ?? 0,
+          amortYears: scalar("mezz_amort_years") ?? 0,
+          ioMonths: scalar("mezz_io_months") ?? 0,
+        }
+      : null;
+
+  // 1C. LP/GP waterfall: assembled only when a promote or preferred return is
+  // approved. lp/gp equity shares default to 100/0 (LP holds the whole deal).
+  const lpEquityPct = scalar("lp_equity_pct");
+  const gpEquityPct = scalar("gp_equity_pct");
+  const preferredReturnPct = scalar("preferred_return_pct") ?? 0;
+  const tier1Gp = scalar("promote_tier1_gp_pct");
+  const tier2Gp = scalar("promote_tier2_gp_pct");
+  const tiers: { hurdlePct?: number | null; gpPct: number }[] = [];
+  if (tier1Gp != null) tiers.push({ hurdlePct: scalar("promote_tier1_hurdle_pct"), gpPct: tier1Gp });
+  if (tier2Gp != null) tiers.push({ hurdlePct: scalar("promote_tier2_hurdle_pct"), gpPct: tier2Gp });
+  const hasWaterfall = preferredReturnPct > 0 || tiers.some((t) => t.gpPct > 0) || lpEquityPct != null || gpEquityPct != null;
+  const resolvedLp = lpEquityPct != null ? lpEquityPct : gpEquityPct != null ? 100 - gpEquityPct : 100;
+  const resolvedGp = gpEquityPct != null ? gpEquityPct : lpEquityPct != null ? 100 - lpEquityPct : 0;
+  const waterfall = hasWaterfall
+    ? {
+        lpEquityPct: resolvedLp,
+        gpEquityPct: resolvedGp,
+        preferredReturnPct,
+        gpCatchUpPct: scalar("gp_catch_up_pct") ?? 0,
+        tiers,
+      }
+    : null;
+
   return {
     budget: {
       land: budgetSum("land"),
@@ -272,5 +312,8 @@ export function assembleEngineInput(rows: ProjectInputRows): UnderwritingInput {
     equityAmount: required("equity_amount"),
     rentGrowthPct: optionalZero("rent_growth_pct"),
     expenseGrowthPct: optionalZero("expense_growth_pct"),
+    equityDrawMonths: scalar("equity_draw_months"),
+    mezzanine,
+    waterfall,
   };
 }

@@ -1,5 +1,8 @@
-import { annualDebtService, interestOnlyDebtService, loanBalanceAfterYears } from "./debt";
+import { interestOnlyDebtService } from "./debt";
 import { pct, xirr } from "./metrics";
+import { buildDebtStack, stackDebtServiceForYear, stackInterestCarry, stackPayoffAfterYears, type DebtTranche } from "./tranches";
+import { buildEquityContributions, equityDrawConventionText } from "./equity-timing";
+import { equityMultiple as moneyMultiple, runWaterfall, type WaterfallConfig } from "./waterfall";
 import type { CashFlowRow, EngineOutput, EngineWarning, MetricOutput, RevenueUnitInput, UnderwritingInput } from "./types";
 
 const money = (value: number) =>
@@ -18,11 +21,25 @@ export function componentGpr(row: RevenueUnitInput) {
 export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   const tdcPreFinancing =
     input.budget.land + input.budget.hard + input.budget.soft + input.budget.contingency + num(input.budget.other ?? 0);
-  const computedInterestReserve =
-    input.loanAmount *
-    (input.interestRatePct / 100) *
-    ((input.constructionMonths + input.leaseUpMonths) / 12) *
-    input.avgOutstandingFactor;
+
+  // Capital stack: a senior loan plus any subordinate (mezzanine) tranche. A
+  // senior-only stack reproduces today's single-loan math exactly.
+  const seniorTranche: DebtTranche = {
+    key: "senior", label: "Senior",
+    amount: input.loanAmount, ratePct: input.interestRatePct, amortYears: input.amortYears, ioMonths: input.ioMonths,
+  };
+  const mezz = input.mezzanine && input.mezzanine.amount > 0 ? input.mezzanine : null;
+  const mezzTranche: DebtTranche | null = mezz
+    ? { key: "mezzanine", label: "Mezzanine", amount: mezz.amount, ratePct: mezz.ratePct, amortYears: mezz.amortYears, ioMonths: mezz.ioMonths }
+    : null;
+  const debtStack = buildDebtStack(seniorTranche, mezzTranche ? [mezzTranche] : []);
+  const totalDebt = debtStack.totalDebt;
+
+  // Interest carried during construction + lease-up, summed across tranches.
+  // Identical to the single-loan reserve when there is no mezzanine.
+  const computedInterestReserve = stackInterestCarry(
+    debtStack, input.constructionMonths + input.leaseUpMonths, input.avgOutstandingFactor,
+  );
   const interestReserve = input.budget.financingInterest ?? computedInterestReserve;
   const tdc = tdcPreFinancing + interestReserve;
 
@@ -42,10 +59,11 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   const developmentSpreadBps = (yieldOnCostPct - input.exitCapRatePct) * 100;
   const exitValue = input.exitCapRatePct > 0 ? noi / (input.exitCapRatePct / 100) : 0;
   const netSaleBeforeDebt = exitValue * (1 - input.sellingCostsPct / 100);
-  const loanPayoffAtExit = loanBalanceAfterYears(
-    input.loanAmount, input.interestRatePct, input.amortYears, input.ioMonths, input.holdYears);
+  // Payoff sums every tranche's outstanding balance (each honoring its own IO
+  // and amortization). Equal to the single senior balance when there is no mezz.
+  const loanPayoffAtExit = stackPayoffAfterYears(debtStack, input.holdYears);
   const saleProceedsToEquity = netSaleBeforeDebt - loanPayoffAtExit;
-  const equityWipeout = input.loanAmount > 0 && netSaleBeforeDebt < loanPayoffAtExit;
+  const equityWipeout = totalDebt > 0 && netSaleBeforeDebt < loanPayoffAtExit;
   const developmentProfit = exitValue - tdc;
   const profitOnCostPct = pct(developmentProfit, tdc);
   // Cost/unit counts dwelling units only; per_sf components (retail/office)
@@ -53,32 +71,30 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   const unitCount = input.revenueProgram.reduce(
     (sum, row) => sum + (row.rentBasis === "per_unit" ? row.unitCount : 0), 0);
   const costPerUnit = unitCount ? tdc / unitCount : 0;
-  const impliedEquity = tdc - input.loanAmount;
+  // Equity requirement is funded by TOTAL debt (senior + mezz). Equal to
+  // TDC - senior loan when there is no mezzanine.
+  const impliedEquity = tdc - totalDebt;
   const equity = input.equityAmount && input.equityAmount > 0 ? input.equityAmount : impliedEquity;
-  const ltcPct = pct(input.loanAmount, tdc);
+  const ltcPct = pct(totalDebt, tdc);
 
   // Debt service follows extracted terms: amortizing payment is the headline
   // whenever an amortization term exists; interest-only is secondary, labeled.
-  const amortizingDebtService = annualDebtService(input.loanAmount, input.interestRatePct, input.amortYears);
+  // The senior figures are the headline (unchanged); all-in figures add mezz.
+  // The headline DSCR stays on the (conservative) amortizing senior basis, but
+  // the cash-flow waterfall, returns and break-even use the payment actually
+  // made (see stackDebtServiceForYear, which honors each tranche's IO period).
   const ioDebtService = interestOnlyDebtService(input.loanAmount, input.interestRatePct);
-  const annualDs = input.amortYears > 0 ? amortizingDebtService : ioDebtService;
+  const annualDs = debtStack.seniorAnnualDebtService;
+  const totalDebtService = debtStack.annualDebtService;
+  const mezzDebtService = totalDebtService - annualDs;
   const dscr = annualDs > 0 ? noi / annualDs : 0;
+  const seniorDscr = dscr;
+  const allInDscr = totalDebtService > 0 ? noi / totalDebtService : 0;
   const interestOnlyDscr = ioDebtService > 0 ? noi / ioDebtService : 0;
 
-  // Debt service actually DUE in hold-year `year` (1-indexed): interest-only
-  // during the IO period, the amortizing payment afterwards, blended across the
-  // year that straddles conversion. The headline DSCR stays amortizing (a
-  // conservative coverage reference), but the cash-flow waterfall, returns and
-  // break-even must use the payment actually made -- otherwise the model bills
-  // amortization that the loan balance (which honors IO, see debt.ts) never
-  // applies.
-  const monthlyIo = ioDebtService / 12;
-  const monthlyAmort = amortizingDebtService / 12;
-  const debtServiceForYear = (year: number) => {
-    if (input.amortYears <= 0) return ioDebtService;
-    const ioMonthsInYear = Math.min(12, Math.max(0, input.ioMonths - (year - 1) * 12));
-    return ioMonthsInYear * monthlyIo + (12 - ioMonthsInYear) * monthlyAmort;
-  };
+  // Debt service actually due across ALL tranches in hold-year `year` (1-indexed).
+  // For a senior-only deal this is byte-identical to the prior single-loan logic.
+  const debtServiceForYear = (year: number) => stackDebtServiceForYear(debtStack, year);
   const year1DebtService = debtServiceForYear(1);
   const stabilizedLeveredCf = noi - year1DebtService;
   const cashOnCashPct = equity > 0 ? pct(stabilizedLeveredCf, equity) : 0;
@@ -127,17 +143,37 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   // without it, levered IRR is systematically overstated on development deals.
   // (The equity multiple is a money multiple and stays intentionally timing-free.)
   const developmentYears = (input.constructionMonths + input.leaseUpMonths) / 12;
-  const irrTimedFlows = [
-    { t: 0, amount: -equity },
+  // 1A. Equity draw timing: the single t=0 outflow becomes a timed contribution
+  // vector. With no draw schedule this is exactly [{ t: 0, -equity }], so the
+  // IRR vector is unchanged. A straight-line draw defers part of the outflow.
+  const equityContributions = buildEquityContributions(equity, input.equityDrawMonths ?? 0);
+  const distributionFlows = [
     ...interimLevered.map((cf, i) => ({ t: developmentYears + i + 1, amount: cf })),
     { t: developmentYears + exitYear, amount: finalEquityFlow },
   ];
+  const irrTimedFlows = [...equityContributions, ...distributionFlows];
   // IRR and the equity multiple agree on a total loss: when equity recovers
   // nothing (distributions <= 0) or the sale wipes out, IRR is not meaningful
   // and the equity multiple floors at ~0.0x.
   const irrPct =
     equityWipeout || (equity > 0 && totalDistributions <= 0) ? Number.NaN : xirr(irrTimedFlows);
   const irrStatus: EngineOutput["irrStatus"] = Number.isFinite(irrPct) ? "computed" : "not_meaningful";
+
+  // 1C. LP/GP distribution waterfall over the same levered equity vector. With
+  // no promote configured the waterfall is inactive and LP returns equal the
+  // deal returns (GP promote = 0), preserving backward compatibility.
+  const waterfallConfig: WaterfallConfig = input.waterfall ?? {
+    lpEquityPct: 100, gpEquityPct: 0, preferredReturnPct: 0, gpCatchUpPct: 0, tiers: [],
+  };
+  const wf = runWaterfall(irrTimedFlows, waterfallConfig);
+  const lpHasReturn = wf.lp.contributed > 0 && wf.lp.distributed > 0;
+  const gpHasReturn = wf.gp.contributed > 0 && wf.gp.distributed > 0;
+  const lpIrrPct = wf.active ? (lpHasReturn ? xirr(wf.lp.flows) : Number.NaN) : irrPct;
+  const lpEquityMultiple = wf.active ? moneyMultiple(wf.lp.contributed, wf.lp.distributed) : equityMultiple;
+  const lpPreferredReturn = wf.lpPreferredPaid;
+  const gpIrrPct = wf.active && gpHasReturn ? xirr(wf.gp.flows) : Number.NaN;
+  const gpEquityMultiple = wf.active ? moneyMultiple(wf.gp.contributed, wf.gp.distributed) : 0;
+  const gpPromote = wf.gpPromote;
 
   const cashFlows: CashFlowRow[] = [
     { periodYear: 0, lineKey: "equity", amount: -equity },
@@ -168,10 +204,11 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
     });
   }
 
+  const drawNote = (input.equityDrawMonths ?? 0) > 1 ? ` Equity draw: ${equityDrawConventionText(input.equityDrawMonths ?? 0)}.` : "";
   const irrFormula = equityWipeout
     ? `Equity loss: IRR not meaningful: sale proceeds ${money(netSaleBeforeDebt)} < loan payoff ${money(loanPayoffAtExit)}; EM ≈ 0.0x`
     : Number.isFinite(irrPct)
-      ? `IRR from equity cash flows [${irrFlows.map((v) => money(v)).join(", ")}], with operating cash flow and sale phased ${input.constructionMonths} months construction + ${input.leaseUpMonths} months lease-up after equity is committed = ${irrPct.toFixed(2)}%`
+      ? `IRR from equity cash flows [${irrFlows.map((v) => money(v)).join(", ")}], with operating cash flow and sale phased ${input.constructionMonths} months construction + ${input.leaseUpMonths} months lease-up after equity is committed = ${irrPct.toFixed(2)}%.${drawNote}`
       : "IRR not meaningful: equity cash flows do not include both negative and positive values.";
 
   const metrics: MetricOutput[] = [
@@ -198,6 +235,18 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
     { key: "loan_payoff_at_exit", label: "Loan Payoff at Exit", value: loanPayoffAtExit, unit: "$", formula: `Loan balance after ${input.holdYears}yr (${input.ioMonths}mo IO, ${input.amortYears}yr amort) = ${money(loanPayoffAtExit)}` },
     { key: "equity_multiple", label: "Equity Multiple", value: equityMultiple, unit: "x", formula: equityWipeout ? `Equity wipeout: sale proceeds ${money(netSaleBeforeDebt)} < loan payoff ${money(loanPayoffAtExit)} → EM ≈ 0.0x` : `Equity multiple = distributions ${money(finalEquityFlow + interimSum)} / equity ${money(equity)} = ${equityMultiple.toFixed(2)}x` },
     { key: "cost_per_unit", label: "Cost / Unit", value: costPerUnit, unit: "$", formula: `Cost per unit = TDC ${money(tdc)} / ${unitCount} units = ${money(costPerUnit)}` },
+    // ---- Multi-tranche debt (1B). Equal the senior figures when no mezzanine. ----
+    { key: "total_debt", label: "Total Debt", value: totalDebt, unit: "$", formula: mezz ? `Total debt = senior ${money(input.loanAmount)} + mezzanine ${money(mezz.amount)} = ${money(totalDebt)}` : `Total debt = senior loan ${money(input.loanAmount)} (no subordinate debt) = ${money(totalDebt)}` },
+    { key: "total_debt_service", label: "All-in Annual Debt Service", value: totalDebtService, unit: "$", formula: mezz ? `All-in annual debt service = senior ${money(annualDs)} + mezzanine ${money(mezzDebtService)} = ${money(totalDebtService)}` : `All-in annual debt service = senior ${money(totalDebtService)} (no subordinate debt)` },
+    { key: "senior_dscr", label: "Senior DSCR", value: seniorDscr, unit: "x", formula: `Senior DSCR = NOI ${money(noi)} / senior debt service ${money(annualDs)} = ${seniorDscr.toFixed(2)}x` },
+    { key: "all_in_dscr", label: "All-in DSCR", value: allInDscr, unit: "x", formula: mezz ? `All-in DSCR = NOI ${money(noi)} / all-in debt service ${money(totalDebtService)} = ${allInDscr.toFixed(2)}x` : `All-in DSCR = senior DSCR ${allInDscr.toFixed(2)}x (no subordinate debt)` },
+    // ---- LP/GP waterfall (1C). Equal the deal figures when no promote. ----
+    { key: "lp_irr", label: "LP Levered IRR", value: lpIrrPct, unit: "%", formula: Number.isFinite(lpIrrPct) ? `LP IRR = ${lpIrrPct.toFixed(2)}% from LP equity cash flows after the distribution waterfall. ${wf.formulaText}` : `LP IRR not meaningful (no positive LP distribution). ${wf.formulaText}` },
+    { key: "lp_equity_multiple", label: "LP Equity Multiple", value: lpEquityMultiple, unit: "x", formula: wf.active ? `LP equity multiple = LP distributions ${money(wf.lp.distributed)} / LP capital ${money(wf.lp.contributed)} = ${lpEquityMultiple.toFixed(2)}x` : `LP equity multiple = deal equity multiple ${equityMultiple.toFixed(2)}x (LP holds the entire deal)` },
+    { key: "lp_preferred_return", label: "LP Preferred Return Distributed", value: lpPreferredReturn, unit: "$", formula: `LP preferred return distributed = ${money(lpPreferredReturn)} (return of capital excluded)` },
+    { key: "gp_irr", label: "GP Levered IRR", value: gpIrrPct, unit: "%", formula: Number.isFinite(gpIrrPct) ? `GP IRR = ${gpIrrPct.toFixed(2)}% from GP equity cash flows (co-invest plus promote).` : `GP IRR not meaningful (GP contributed no co-invest capital).` },
+    { key: "gp_equity_multiple", label: "GP Equity Multiple", value: gpEquityMultiple, unit: "x", formula: wf.gp.contributed > 0 ? `GP equity multiple = GP distributions ${money(wf.gp.distributed)} / GP capital ${money(wf.gp.contributed)} = ${gpEquityMultiple.toFixed(2)}x` : `GP equity multiple not applicable: GP contributed no co-invest capital` },
+    { key: "gp_promote", label: "GP Promote", value: gpPromote, unit: "$", formula: `GP promote (carried interest) = GP distributions ${money(wf.gp.distributed)} less a pari-passu split by ownership = ${money(gpPromote)}` },
   ];
 
   return {
@@ -236,6 +285,18 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
       irrPct,
       debtYieldPct,
       breakEvenOccupancyPct,
+      totalDebt,
+      seniorDebtService: annualDs,
+      mezzDebtService,
+      totalDebtService,
+      seniorDscr,
+      allInDscr,
+      lpIrrPct,
+      lpEquityMultiple,
+      lpPreferredReturn,
+      gpIrrPct,
+      gpEquityMultiple,
+      gpPromote,
     },
   };
 }

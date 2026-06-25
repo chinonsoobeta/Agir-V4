@@ -1,3 +1,5 @@
+import type { WaterfallConfig } from "./waterfall";
+
 export type SourceKind = "extracted" | "analyst" | "default";
 
 export type BudgetInput = {
@@ -21,6 +23,16 @@ export type RevenueUnitInput = {
   occupancyPct?: number | null;
 };
 
+// A subordinate debt tranche (e.g. mezzanine). Senior debt stays the top-level
+// loanAmount/interestRatePct/amortYears/ioMonths fields; this is anything below
+// it in the capital stack.
+export type MezzanineInput = {
+  amount: number;
+  ratePct: number;
+  amortYears: number;
+  ioMonths: number;
+};
+
 export type UnderwritingInput = {
   budget: BudgetInput;
   revenueProgram: RevenueUnitInput[];
@@ -40,6 +52,14 @@ export type UnderwritingInput = {
   equityAmount?: number | null;
   rentGrowthPct: number;
   expenseGrowthPct: number;
+  // ---- IC-grade extensions (all optional; absent => today's behavior) ----
+  // 1A. Months over which equity is drawn straight-line. Absent/0 => a single
+  // lump sum at t=0 (the conservative default).
+  equityDrawMonths?: number | null;
+  // 1B. A mezzanine (or other subordinate) tranche. Absent => senior-only.
+  mezzanine?: MezzanineInput | null;
+  // 1C. LP/GP distribution waterfall. Absent => LP holds the whole deal.
+  waterfall?: WaterfallConfig | null;
 };
 
 export type MetricOutput = {
@@ -112,5 +132,19 @@ export type EngineOutput = {
     irrPct: number;
     debtYieldPct: number;
     breakEvenOccupancyPct: number;
+    // ---- Multi-tranche debt (1B): equal today's senior figures when no mezz ----
+    totalDebt: number;
+    seniorDebtService: number;
+    mezzDebtService: number;
+    totalDebtService: number;
+    seniorDscr: number;
+    allInDscr: number;
+    // ---- LP/GP waterfall (1C): equal the deal-level figures when no promote ----
+    lpIrrPct: number;
+    lpEquityMultiple: number;
+    lpPreferredReturn: number;
+    gpIrrPct: number;
+    gpEquityMultiple: number;
+    gpPromote: number;
   };
 };

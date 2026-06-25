@@ -24,6 +24,24 @@ export const TAXONOMY_TO_ENGINE_SCALAR: Record<string, string> = {
   // (reconciliation flags a debt yield below the covenant). Previously absent,
   // so approving this covenant silently no-op'd.
   min_debt_yield: "min_debt_yield",
+
+  // IC-grade extensions (all optional; absent => today's behavior).
+  // 1A. Equity draw timing.
+  equity_draw_months: "equity_draw_months",
+  // 1B. Mezzanine tranche.
+  mezz_debt_amount: "mezz_loan_amount",
+  mezz_interest_rate: "mezz_interest_rate_pct",
+  mezz_amortization_years: "mezz_amort_years",
+  mezz_io_months: "mezz_io_months",
+  // 1C. LP/GP waterfall and promote.
+  lp_equity_pct: "lp_equity_pct",
+  gp_equity_pct: "gp_equity_pct",
+  preferred_return_pct: "preferred_return_pct",
+  gp_catch_up_pct: "gp_catch_up_pct",
+  promote_tier1_hurdle_pct: "promote_tier1_hurdle_pct",
+  promote_tier1_gp_pct: "promote_tier1_gp_pct",
+  promote_tier2_hurdle_pct: "promote_tier2_hurdle_pct",
+  promote_tier2_gp_pct: "promote_tier2_gp_pct",
 };
 
 export const ENGINE_SCALAR_TO_TAXONOMY: Record<string, string> = Object.fromEntries(

@@ -228,6 +228,17 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   const equityWipeout = Boolean(metric("equity_multiple")?.formula_text?.includes("Equity wipeout"));
   const defaultedKeys: string[] = readiness.defaultedKeys ?? [];
 
+  // IC-grade structure: surface the LP/GP waterfall and a multi-tranche stack
+  // only when they are configured. Without them the LP return equals the deal
+  // return, so there is nothing distinct to show and the block stays hidden.
+  const gpPromoteRow = metric("gp_promote");
+  const waterfallActive = gpPromoteRow != null && Number(gpPromoteRow.value_numeric) > 0;
+  const totalDsRow = metric("total_debt_service");
+  const seniorDsRow = metric("annual_debt_service");
+  const mezzActive =
+    totalDsRow != null && seniorDsRow != null &&
+    Number(totalDsRow.value_numeric) > Number(seniorDsRow.value_numeric) + 1;
+
   // Evidence trail: group the approved engine inputs by the document (or analyst
   // / default origin) that supplied each one, so a reader can trace a headline
   // output back to the source it ultimately came from -- the "every number is
@@ -310,6 +321,43 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
           <ShieldAlert className="size-4 inline mr-2" />
           Equity wipeout: net sale proceeds are below the loan payoff at exit. EM ≈ 0.0x; IRR is not meaningful.
         </div>
+      )}
+
+      {/* IC-grade capital structure: multi-tranche debt and the LP/GP waterfall. */}
+      {(waterfallActive || mezzActive) && (
+        <Card className="p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Scale className="size-3.5 text-muted-foreground" />
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+              Capital Structure &amp; LP / GP Returns
+            </div>
+          </div>
+          {mezzActive && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <UnderwritingMetric label="Total Debt" row={metric("total_debt")} />
+              <UnderwritingMetric label="Senior DSCR" row={metric("senior_dscr")} />
+              <UnderwritingMetric label="All-in DSCR" row={metric("all_in_dscr")} />
+              <UnderwritingMetric label="All-in Debt Service" row={metric("total_debt_service")} />
+            </div>
+          )}
+          {waterfallActive && (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <UnderwritingMetric label="Deal IRR" row={irrRow} />
+                <UnderwritingMetric label="LP IRR" row={metric("lp_irr")} highlight="text-chart-2" />
+                <UnderwritingMetric label="GP IRR" row={metric("gp_irr")} />
+                <UnderwritingMetric label="GP Promote" row={metric("gp_promote")} />
+                <UnderwritingMetric label="LP Equity Multiple" row={metric("lp_equity_multiple")} />
+                <UnderwritingMetric label="GP Equity Multiple" row={metric("gp_equity_multiple")} />
+                <UnderwritingMetric label="LP Preferred Return" row={metric("lp_preferred_return")} />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                LP return is what an investor actually earns after the preferred return and GP promote. The deal
+                IRR is the return on total equity before the split; the difference is the carried interest.
+              </p>
+            </>
+          )}
+        </Card>
       )}
 
       <DeterministicRead row={insightRow} />
