@@ -33,6 +33,8 @@ export {
   buildAllowedValues,
   verifyNumericProvenance,
   type ProvenanceReport,
+  type AllowedValue,
+  type TokenUnit,
 } from "./provenance";
 
 // Golden fixture 1: Maple Heights: marginal deal, correct math.

@@ -559,7 +559,7 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
   ];
   const provenanceRows = usedKeys
     .map((key) => aByKey(key))
-    .filter((a): a is Row => Boolean(a) && a.value_numeric != null)
+    .filter((a): a is Row => a != null && a.value_numeric != null)
     .map((a) => [a.field_label, fmtByUnit(a.value_numeric, a.unit), sourceDoc(a), "Page unavailable", confidenceBand(a), statusOf(a)]);
   sections.push({
     heading: "Assumption Source Transparency",

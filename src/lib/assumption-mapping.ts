@@ -228,6 +228,19 @@ export type GroupResolution = {
 const roundKey = (m: MappedCandidate): number | string | null =>
   m.value_numeric != null ? Math.round(m.value_numeric * 1000) / 1000 : m.value_text;
 
+// Coarse plausibility floor for whole-deal AGGREGATE dollar keys. In
+// institutional CRE these are never sub-$250k; a value below the floor is almost
+// always a units/scale slip (e.g. a "$ in thousands" budget read 1000x too small
+// that scale detection did not catch). Deliberately excludes small-by-nature
+// dollar keys (per-unit rent, other income, contingency, reserves, individual
+// soft/financing lines) so a legitimate small value is never falsely blocked.
+const PLAUSIBILITY_FLOOR: Record<string, number> = {
+  total_project_cost: 250_000,
+  hard_costs: 250_000,
+  debt_amount: 250_000,
+  equity_amount: 250_000,
+};
+
 // Group mapped candidates by key and resolve each group. Multiple DISTINCT
 // values for one key become a conflict: no value is chosen, both sources are
 // preserved, and the key must block underwriting. Values are never averaged.
@@ -251,17 +264,27 @@ export function groupAndResolve(mapped: MappedCandidate[]): Map<string, GroupRes
     const distinct = Array.from(new Set(members.map(roundKey)));
     const isConflict = distinct.length > 1;
     const winner = members[0];
+    // Plausibility backstop: an aggregate dollar value below its floor is almost
+    // always a units/scale slip. Fail closed -- block it as a conflict so an
+    // analyst confirms or corrects the magnitude -- rather than letting a
+    // confidently-wrong number flow silently to the engine.
+    const floor = PLAUSIBILITY_FLOOR[field_key];
+    const implausible =
+      !isConflict && floor != null && winner.value_numeric != null && Math.abs(winner.value_numeric) < floor;
+    const blocked = isConflict || implausible;
     const conflict_values = isConflict
       ? members
           .filter((m) => m.value_numeric != null || m.value_text != null)
           .map((m) => ({ value: roundKey(m), source: m.source_doc_name }))
           .filter((c, i, all) => all.findIndex((x) => x.value === c.value) === i)
-      : null;
+      : implausible
+        ? [{ value: roundKey(winner), source: `${winner.source_doc_name} - implausibly small for ${field_key}; check units/scale` }]
+        : null;
     out.set(field_key, {
       field_key,
-      status: isConflict ? "conflicting" : "extracted",
-      value_numeric: isConflict ? null : winner.value_numeric,
-      value_text: isConflict ? null : winner.value_text,
+      status: blocked ? "conflicting" : "extracted",
+      value_numeric: blocked ? null : winner.value_numeric,
+      value_text: blocked ? null : winner.value_text,
       winner,
       members,
       distinct,

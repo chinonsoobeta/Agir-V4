@@ -1,0 +1,66 @@
+name: CI
+
+# Keeps `main` honest: every push and PR must pass lint, typecheck, tests, and a
+# production build. A separate job regenerates the Supabase types from the
+# migrations and fails if the committed types have drifted out of sync (the exact
+# gate prescribed in DEPLOYMENT.md). Type drift is what silently let 70+ tsc
+# errors accumulate on main before this workflow existed.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test
+      # vite.config.ts defaults missing Supabase env to "" so the build needs no
+      # secrets; runtime config is injected by the host (Vercel) at deploy time.
+      - run: npm run build
+      # NOTE: `npm run lint` is intentionally NOT gated yet. The repo currently
+      # has pre-existing, repo-wide prettier/prettier formatting violations
+      # (eslint-plugin-prettier is enabled but the tree was never fully
+      # formatted). Wiring it in now would fail every PR. Run `npm run format`
+      # across the tree in a dedicated change, then add `- run: npm run lint`
+      # here.
+
+  schema-types:
+    name: Supabase types in sync with migrations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      # Boots the local stack and applies every migration in supabase/migrations.
+      - run: supabase start
+      - name: Regenerate types from the migrated schema
+        run: supabase gen types typescript --local --schema public > src/integrations/supabase/types.ts
+      - name: Match repository formatting
+        run: npx prettier --write src/integrations/supabase/types.ts
+      - name: Fail if committed types are stale
+        run: |
+          if ! git diff --exit-code -- src/integrations/supabase/types.ts; then
+            echo "::error::src/integrations/supabase/types.ts is out of date. Regenerate it with: supabase gen types typescript --local --schema public > src/integrations/supabase/types.ts"
+            exit 1
+          fi

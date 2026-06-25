@@ -53,7 +53,7 @@ export async function renderMemoDocxBase64(report: MemoReport): Promise<string> 
       })],
     });
 
-  const makeTable = (table: ReportTable): Table => {
+  const makeTable = (table: ReportTable) => {
     const cols = table.columns.length;
     const firstW = 32;
     const restW = (100 - firstW) / Math.max(1, cols - 1);

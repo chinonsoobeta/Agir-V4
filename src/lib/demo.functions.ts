@@ -177,7 +177,7 @@ export const seedHarbourCentre = createServerFn({ method: "POST" })
       project_id: project.id,
       owner_id: context.userId,
       category: row.category,
-      label: row.label,
+      label: row.label ?? "",
       amount: row.amount,
       source: "extracted",
       status: row.status,

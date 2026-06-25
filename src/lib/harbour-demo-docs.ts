@@ -121,7 +121,7 @@ export const HARBOUR_DEMO_DOCS: DemoDoc[] = [
     file_type: XLSX_TYPE,
     kind: "xlsx",
     sheet: "Construction Budget",
-    rows: [["Line item", "Amount"], ...HARBOUR_BUDGET_LINES.map((b) => [b.label, usd(b.amount)])],
+    rows: [["Line item", "Amount"], ...HARBOUR_BUDGET_LINES.map((b) => [b.label ?? "", usd(b.amount)])],
   },
   {
     name: "Harbour_Centre_Rent_Roll.xlsx",

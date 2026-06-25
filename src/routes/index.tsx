@@ -100,25 +100,25 @@ function LandingPage() {
   const primaryLabel = hasSession ? "Open workspace" : "Start with Agir";
 
   return (
-    <main className="landing min-h-screen overflow-hidden bg-[#f7f7f2] text-[#10241e]">
-      <header className="relative z-50 border-b border-[#173d31]/10 bg-[#f7f7f2]/90 backdrop-blur-xl">
+    <main className="landing min-h-screen overflow-hidden bg-[#f6f7fc] text-[#0f1430]">
+      <header className="relative z-50 border-b border-[#1e2750]/10 bg-[#f6f7fc]/90 backdrop-blur-xl">
         <div className="mx-auto flex h-20 max-w-[1440px] items-center justify-between px-5 sm:px-8 lg:px-12">
           <Link to="/" className="flex items-center gap-3" aria-label="Agir home">
             <BrandMark />
             <span className="text-xl font-semibold tracking-[-0.03em]">Agir</span>
           </Link>
 
-          <nav className="hidden items-center gap-8 text-sm font-medium text-[#315047] lg:flex">
-            <a href="#platform" className="transition-colors hover:text-[#0a7451]">
+          <nav className="hidden items-center gap-8 text-sm font-medium text-[#3b456e] lg:flex">
+            <a href="#platform" className="transition-colors hover:text-[#4460e6]">
               Platform
             </a>
-            <a href="#how-it-works" className="transition-colors hover:text-[#0a7451]">
+            <a href="#how-it-works" className="transition-colors hover:text-[#4460e6]">
               How it works
             </a>
-            <a href="#why-agir" className="transition-colors hover:text-[#0a7451]">
+            <a href="#why-agir" className="transition-colors hover:text-[#4460e6]">
               Why Agir
             </a>
-            <a href="#security" className="transition-colors hover:text-[#0a7451]">
+            <a href="#security" className="transition-colors hover:text-[#4460e6]">
               Data integrity
             </a>
           </nav>
@@ -128,14 +128,14 @@ function LandingPage() {
               <Link to="/auth">
                 <Button
                   variant="ghost"
-                  className="text-[#173d31] hover:bg-[#e9eee9] hover:text-[#0a7451]"
+                  className="text-[#1e2750] hover:bg-[#ecebfb] hover:text-[#4460e6]"
                 >
                   Sign in
                 </Button>
               </Link>
             )}
             <Link to={primaryTo}>
-              <Button className="rounded-full bg-[#0b6b4b] px-5 text-white hover:bg-[#095d41]">
+              <Button className="rounded-full bg-[#3a52d6] px-5 text-white hover:bg-[#2f43c0]">
                 {primaryLabel}
                 <ArrowRight className="ml-2 size-4" />
               </Button>
@@ -144,7 +144,7 @@ function LandingPage() {
 
           <button
             type="button"
-            className="flex size-10 items-center justify-center rounded-full border border-[#173d31]/15 lg:hidden"
+            className="flex size-10 items-center justify-center rounded-full border border-[#1e2750]/15 lg:hidden"
             onClick={() => setMenuOpen((open) => !open)}
             aria-label="Toggle navigation"
           >
@@ -153,7 +153,7 @@ function LandingPage() {
         </div>
 
         {menuOpen && (
-          <div className="border-t border-[#173d31]/10 bg-[#f7f7f2] px-5 py-5 lg:hidden">
+          <div className="border-t border-[#1e2750]/10 bg-[#f6f7fc] px-5 py-5 lg:hidden">
             <nav className="flex flex-col gap-4 text-sm font-medium">
               <a href="#platform" onClick={() => setMenuOpen(false)}>
                 Platform
@@ -177,7 +177,7 @@ function LandingPage() {
                 </Link>
               )}
               <Link to={primaryTo} className={hasSession ? "col-span-2" : ""}>
-                <Button className="w-full rounded-full bg-[#0b6b4b] text-white">
+                <Button className="w-full rounded-full bg-[#3a52d6] text-white">
                   {primaryLabel}
                 </Button>
               </Link>
@@ -188,25 +188,25 @@ function LandingPage() {
 
       <section className="relative">
         <div className="landing-grid absolute inset-0 opacity-60" />
-        <div className="absolute -left-40 top-28 size-[34rem] rounded-full bg-[#d5efde] blur-3xl" />
+        <div className="absolute -left-40 top-28 size-[34rem] rounded-full bg-[#e1e6fb] blur-3xl" />
         <div className="absolute -right-52 top-8 size-[38rem] rounded-full bg-[#dce7fa] blur-3xl" />
 
         <div className="relative mx-auto grid max-w-[1440px] gap-12 px-5 pb-20 pt-16 sm:px-8 sm:pt-24 lg:grid-cols-[0.86fr_1.14fr] lg:items-center lg:px-12 lg:pb-28 lg:pt-28">
           <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#0b6b4b]/20 bg-white/70 px-3 py-1.5 text-xs font-semibold text-[#0b6b4b] shadow-sm">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#3a52d6]/20 bg-white/70 px-3 py-1.5 text-xs font-semibold text-[#3a52d6] shadow-sm">
               <Sparkles className="size-3.5" />
               Built for real estate investment teams
             </div>
             <h1 className="mt-7 text-balance text-[3.4rem] font-semibold leading-[0.98] tracking-[-0.065em] sm:text-[4.6rem] lg:text-[5.2rem]">
               Make the call with better evidence.
             </h1>
-            <p className="mt-7 max-w-xl text-lg leading-8 text-[#48645b] sm:text-xl">
+            <p className="mt-7 max-w-xl text-lg leading-8 text-[#505c80] sm:text-xl">
               Agir gives your team one place to find the best opportunities, underwrite them with
               traceable numbers, and move approved deals to close.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Link to={primaryTo}>
-                <Button className="h-12 w-full rounded-full bg-[#0b6b4b] px-6 text-base text-white shadow-[0_10px_30px_-12px_rgba(11,107,75,0.65)] hover:bg-[#095d41] sm:w-auto">
+                <Button className="h-12 w-full rounded-full bg-[#3a52d6] px-6 text-base text-white shadow-[0_10px_30px_-12px_rgba(11,107,75,0.65)] hover:bg-[#2f43c0] sm:w-auto">
                   {primaryLabel}
                   <ArrowRight className="ml-2 size-4" />
                 </Button>
@@ -214,17 +214,17 @@ function LandingPage() {
               <a href="#platform">
                 <Button
                   variant="outline"
-                  className="h-12 w-full rounded-full border-[#173d31]/20 bg-white/60 px-6 text-base text-[#173d31] hover:bg-white sm:w-auto"
+                  className="h-12 w-full rounded-full border-[#1e2750]/20 bg-white/60 px-6 text-base text-[#1e2750] hover:bg-white sm:w-auto"
                 >
                   See the platform
                 </Button>
               </a>
             </div>
-            <div className="mt-9 flex flex-wrap gap-x-6 gap-y-3 text-sm text-[#48645b]">
+            <div className="mt-9 flex flex-wrap gap-x-6 gap-y-3 text-sm text-[#505c80]">
               {["No invented numbers", "Source-linked assumptions", "Setup in minutes"].map(
                 (item) => (
                   <span key={item} className="flex items-center gap-2">
-                    <CircleCheck className="size-4 text-[#0b6b4b]" />
+                    <CircleCheck className="size-4 text-[#3a52d6]" />
                     {item}
                   </span>
                 ),
@@ -236,7 +236,7 @@ function LandingPage() {
         </div>
       </section>
 
-      <section className="border-y border-[#173d31]/10 bg-[#112e26] text-white">
+      <section className="border-y border-[#1e2750]/10 bg-[#15193a] text-white">
         <div className="mx-auto grid max-w-[1440px] gap-8 px-5 py-8 sm:grid-cols-3 sm:px-8 lg:px-12">
           <ProofPoint value="One view" label="Pipeline, underwriting, decisions, and execution" />
           <ProofPoint
@@ -260,34 +260,34 @@ function LandingPage() {
           {platformFeatures.map(({ icon: Icon, title, body }, index) => (
             <Card
               key={title}
-              className="group border-[#173d31]/10 bg-white/75 p-6 shadow-[0_18px_50px_-38px_rgba(16,36,30,0.45)] transition-all hover:-translate-y-1 hover:border-[#0b6b4b]/30 hover:bg-white"
+              className="group border-[#1e2750]/10 bg-white/75 p-6 shadow-[0_18px_50px_-38px_rgba(16,36,30,0.45)] transition-all hover:-translate-y-1 hover:border-[#3a52d6]/30 hover:bg-white"
             >
               <div className="flex items-start justify-between">
-                <div className="flex size-11 items-center justify-center rounded-xl bg-[#e3f0e8] text-[#0b6b4b]">
+                <div className="flex size-11 items-center justify-center rounded-xl bg-[#eaedfd] text-[#3a52d6]">
                   <Icon className="size-5" />
                 </div>
-                <span className="font-mono text-xs text-[#789087]">0{index + 1}</span>
+                <span className="font-mono text-xs text-[#8a93b4]">0{index + 1}</span>
               </div>
               <h3 className="mt-8 text-xl font-semibold tracking-[-0.025em]">{title}</h3>
-              <p className="mt-3 leading-7 text-[#5a7169]">{body}</p>
+              <p className="mt-3 leading-7 text-[#646d92]">{body}</p>
             </Card>
           ))}
         </div>
       </section>
 
-      <section id="how-it-works" className="bg-[#e9eee8]">
+      <section id="how-it-works" className="bg-[#ecebfb]">
         <div className="mx-auto max-w-[1440px] px-5 py-24 sm:px-8 lg:px-12 lg:py-32">
           <SectionIntro
             eyebrow="One continuous record"
             title="A deal should not restart every time it changes hands."
             body="The source documents, approved assumptions, committee rationale, and closing work remain attached to the same deal record."
           />
-          <div className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-[#173d31]/10 bg-[#173d31]/10 lg:grid-cols-5">
+          <div className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-[#1e2750]/10 bg-[#1e2750]/10 lg:grid-cols-5">
             {lifecycle.map(([number, title, body]) => (
-              <div key={number} className="bg-[#f7f7f2] p-6 lg:min-h-64">
-                <div className="font-mono text-xs text-[#0b6b4b]">{number}</div>
+              <div key={number} className="bg-[#f6f7fc] p-6 lg:min-h-64">
+                <div className="font-mono text-xs text-[#3a52d6]">{number}</div>
                 <h3 className="mt-8 text-2xl font-semibold tracking-[-0.035em]">{title}</h3>
-                <p className="mt-4 text-sm leading-6 text-[#5a7169]">{body}</p>
+                <p className="mt-4 text-sm leading-6 text-[#646d92]">{body}</p>
               </div>
             ))}
           </div>
@@ -299,13 +299,13 @@ function LandingPage() {
         className="mx-auto grid max-w-[1440px] gap-14 px-5 py-24 sm:px-8 lg:grid-cols-2 lg:items-center lg:px-12 lg:py-32"
       >
         <div>
-          <div className="inline-flex size-12 items-center justify-center rounded-xl bg-[#112e26] text-white">
+          <div className="inline-flex size-12 items-center justify-center rounded-xl bg-[#15193a] text-white">
             <Gauge className="size-6" />
           </div>
           <h2 className="mt-7 max-w-xl text-4xl font-semibold leading-tight tracking-[-0.05em] sm:text-5xl">
             Strong controls should make work easier, not heavier.
           </h2>
-          <p className="mt-6 max-w-xl text-lg leading-8 text-[#5a7169]">
+          <p className="mt-6 max-w-xl text-lg leading-8 text-[#646d92]">
             Agir starts with a usable workflow. Teams can add structure as they grow without waiting
             for a consultant to configure the basics.
           </p>
@@ -331,14 +331,14 @@ function LandingPage() {
           ].map(([title, body]) => (
             <div
               key={title}
-              className="flex gap-4 rounded-xl border border-[#173d31]/10 bg-white/75 p-5"
+              className="flex gap-4 rounded-xl border border-[#1e2750]/10 bg-white/75 p-5"
             >
-              <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-[#dff0e5] text-[#0b6b4b]">
+              <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-[#e7ebfc] text-[#3a52d6]">
                 <Check className="size-3.5" />
               </div>
               <div>
                 <h3 className="font-semibold">{title}</h3>
-                <p className="mt-1 text-sm leading-6 text-[#5a7169]">{body}</p>
+                <p className="mt-1 text-sm leading-6 text-[#646d92]">{body}</p>
               </div>
             </div>
           ))}
@@ -346,51 +346,51 @@ function LandingPage() {
       </section>
 
       <section id="security" className="px-5 pb-24 sm:px-8 lg:px-12 lg:pb-32">
-        <div className="mx-auto grid max-w-[1344px] overflow-hidden rounded-[2rem] bg-[#112e26] text-white lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="mx-auto grid max-w-[1344px] overflow-hidden rounded-[2rem] bg-[#15193a] text-white lg:grid-cols-[1.05fr_0.95fr]">
           <div className="p-8 sm:p-12 lg:p-16">
-            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8ed2b6]">
+            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a7baff]">
               Deterministic by design
             </div>
             <h2 className="mt-5 max-w-xl text-4xl font-semibold leading-tight tracking-[-0.045em] sm:text-5xl">
               The explanation can be intelligent. The numbers must be exact.
             </h2>
-            <p className="mt-6 max-w-xl text-lg leading-8 text-[#bed0c9]">
+            <p className="mt-6 max-w-xl text-lg leading-8 text-[#c6cdea]">
               Agir separates financial calculation from generated prose. The engine uses approved
               inputs, records its formulas, and stops when required data is missing or conflicting.
             </p>
             <Link to={primaryTo}>
-              <Button className="mt-8 rounded-full bg-[#d9f35e] px-6 text-[#173d31] hover:bg-[#cce84e]">
+              <Button className="mt-8 rounded-full bg-[#a78bfa] px-6 text-[#1e2750] hover:bg-[#9472f0]">
                 {primaryLabel}
                 <ArrowRight className="ml-2 size-4" />
               </Button>
             </Link>
           </div>
-          <div className="relative min-h-[26rem] border-t border-white/10 bg-[#183c31] p-8 sm:p-12 lg:border-l lg:border-t-0">
+          <div className="relative min-h-[26rem] border-t border-white/10 bg-[#1e2750] p-8 sm:p-12 lg:border-l lg:border-t-0">
             <IntegrityStack />
           </div>
         </div>
       </section>
 
-      <footer className="border-t border-[#173d31]/10 bg-[#f1f2ec]">
+      <footer className="border-t border-[#1e2750]/10 bg-[#f1f3fd]">
         <div className="mx-auto flex max-w-[1440px] flex-col gap-8 px-5 py-10 sm:px-8 md:flex-row md:items-end md:justify-between lg:px-12">
           <div>
             <div className="flex items-center gap-3">
               <BrandMark />
               <span className="text-xl font-semibold">Agir</span>
             </div>
-            <p className="mt-4 max-w-md text-sm leading-6 text-[#5a7169]">
+            <p className="mt-4 max-w-md text-sm leading-6 text-[#646d92]">
               A real estate investment workspace built for clear decisions and accountable
               execution.
             </p>
           </div>
-          <div className="flex flex-wrap gap-x-6 gap-y-3 text-sm text-[#48645b]">
-            <Link to="/auth" className="hover:text-[#0b6b4b]">
+          <div className="flex flex-wrap gap-x-6 gap-y-3 text-sm text-[#505c80]">
+            <Link to="/auth" className="hover:text-[#3a52d6]">
               Sign in
             </Link>
-            <a href="#platform" className="hover:text-[#0b6b4b]">
+            <a href="#platform" className="hover:text-[#3a52d6]">
               Platform
             </a>
-            <a href="#security" className="hover:text-[#0b6b4b]">
+            <a href="#security" className="hover:text-[#3a52d6]">
               Data integrity
             </a>
             <span>© {new Date().getFullYear()} Agir</span>
@@ -403,7 +403,7 @@ function LandingPage() {
 
 function BrandMark() {
   return (
-    <span className="flex size-9 items-center justify-center rounded-lg bg-[#0b6b4b] text-base font-semibold text-white shadow-sm">
+    <span className="flex size-9 items-center justify-center rounded-lg bg-[#3a52d6] text-base font-semibold text-white shadow-sm">
       A
     </span>
   );
@@ -412,13 +412,13 @@ function BrandMark() {
 function SectionIntro({ eyebrow, title, body }: { eyebrow: string; title: string; body: string }) {
   return (
     <div className="max-w-3xl">
-      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#0b6b4b]">
+      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#3a52d6]">
         {eyebrow}
       </div>
       <h2 className="mt-5 text-4xl font-semibold leading-tight tracking-[-0.05em] sm:text-5xl">
         {title}
       </h2>
-      <p className="mt-5 max-w-2xl text-lg leading-8 text-[#5a7169]">{body}</p>
+      <p className="mt-5 max-w-2xl text-lg leading-8 text-[#646d92]">{body}</p>
     </div>
   );
 }
@@ -427,7 +427,7 @@ function ProofPoint({ value, label }: { value: string; label: string }) {
   return (
     <div className="border-white/10 sm:border-r sm:pr-8 last:border-r-0">
       <div className="text-xl font-semibold tracking-[-0.025em]">{value}</div>
-      <div className="mt-1 text-sm leading-6 text-[#aac0b7]">{label}</div>
+      <div className="mt-1 text-sm leading-6 text-[#b6bedf]">{label}</div>
     </div>
   );
 }
@@ -441,24 +441,24 @@ function ProductPreview() {
 
   return (
     <div className="relative mx-auto w-full max-w-3xl lg:ml-auto">
-      <div className="absolute -inset-5 rounded-[2rem] bg-gradient-to-br from-[#9bc7ad]/30 to-[#9db8e8]/30 blur-2xl" />
-      <div className="relative overflow-hidden rounded-2xl border border-[#173d31]/15 bg-[#fbfcf8] shadow-[0_35px_80px_-32px_rgba(16,36,30,0.55)]">
-        <div className="flex h-12 items-center justify-between border-b border-[#173d31]/10 bg-white px-4">
+      <div className="absolute -inset-5 rounded-[2rem] bg-gradient-to-br from-[#c4b5fd]/30 to-[#9db8e8]/30 blur-2xl" />
+      <div className="relative overflow-hidden rounded-2xl border border-[#1e2750]/15 bg-[#fbfcff] shadow-[0_35px_80px_-32px_rgba(16,36,30,0.55)]">
+        <div className="flex h-12 items-center justify-between border-b border-[#1e2750]/10 bg-white px-4">
           <div className="flex items-center gap-2">
             <span className="size-2.5 rounded-full bg-[#ff746c]" />
             <span className="size-2.5 rounded-full bg-[#f4c34e]" />
-            <span className="size-2.5 rounded-full bg-[#65c985]" />
+            <span className="size-2.5 rounded-full bg-[#86a3ff]" />
           </div>
-          <div className="rounded-full bg-[#edf2ed] px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-[#5a7169]">
+          <div className="rounded-full bg-[#eef1fc] px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-[#646d92]">
             Live investment overview
           </div>
-          <div className="size-6 rounded-full bg-[#173d31] text-center text-[9px] leading-6 text-white">
+          <div className="size-6 rounded-full bg-[#1e2750] text-center text-[9px] leading-6 text-white">
             MH
           </div>
         </div>
 
         <div className="grid min-h-[31rem] sm:grid-cols-[8rem_1fr]">
-          <div className="hidden border-r border-[#173d31]/10 bg-[#f1f3ee] p-3 sm:block">
+          <div className="hidden border-r border-[#1e2750]/10 bg-[#f1f3fd] p-3 sm:block">
             <div className="mb-5 flex items-center gap-2 px-2 py-2">
               <BrandMark />
               <span className="font-semibold">Agir</span>
@@ -466,7 +466,7 @@ function ProductPreview() {
             {["Overview", "Portfolio", "Deal flow", "Execution", "Reports"].map((item, index) => (
               <div
                 key={item}
-                className={`mb-1 rounded-md px-2.5 py-2 text-[10px] ${index === 0 ? "bg-white font-semibold text-[#0b6b4b] shadow-sm" : "text-[#6c8179]"}`}
+                className={`mb-1 rounded-md px-2.5 py-2 text-[10px] ${index === 0 ? "bg-white font-semibold text-[#3a52d6] shadow-sm" : "text-[#6e7799]"}`}
               >
                 {item}
               </div>
@@ -476,13 +476,13 @@ function ProductPreview() {
           <div className="min-w-0 p-4 sm:p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[#789087]">
+                <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[#8a93b4]">
                   Investment overview
                 </div>
                 <div className="mt-1 text-xl font-semibold tracking-[-0.04em]">Good morning</div>
               </div>
-              <div className="flex items-center gap-1.5 rounded-full bg-[#dff0e5] px-2 py-1 text-[9px] font-semibold text-[#0b6b4b]">
-                <span className="size-1.5 rounded-full bg-[#16a36d]" />
+              <div className="flex items-center gap-1.5 rounded-full bg-[#e7ebfc] px-2 py-1 text-[9px] font-semibold text-[#3a52d6]">
+                <span className="size-1.5 rounded-full bg-[#5a78f7]" />
                 Live
               </div>
             </div>
@@ -494,23 +494,23 @@ function ProductPreview() {
             </div>
 
             <div className="mt-3 grid gap-3 lg:grid-cols-[1.15fr_0.85fr]">
-              <div className="rounded-xl border border-[#173d31]/10 bg-white p-3">
+              <div className="rounded-xl border border-[#1e2750]/10 bg-white p-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-semibold">Pipeline flow</span>
-                  <span className="text-[9px] text-[#789087]">Manage</span>
+                  <span className="text-[9px] text-[#8a93b4]">Manage</span>
                 </div>
                 <div className="mt-4 space-y-4">
                   {stages.map(([stage, count, capital], index) => (
                     <div key={stage}>
                       <div className="flex items-center justify-between text-[9px]">
                         <span className="font-medium">
-                          {stage} <span className="text-[#8ba097]">{count}</span>
+                          {stage} <span className="text-[#9199b8]">{count}</span>
                         </span>
                         <span className="font-mono">{capital}</span>
                       </div>
-                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#edf1ec]">
+                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#eef1fc]">
                         <div
-                          className="h-full rounded-full bg-[#2b8b68]"
+                          className="h-full rounded-full bg-[#4b66ef]"
                           style={{ width: `${82 - index * 21}%` }}
                         />
                       </div>
@@ -519,32 +519,32 @@ function ProductPreview() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-[#173d31]/10 bg-[#173d31] p-3 text-white">
-                <div className="text-[9px] uppercase tracking-widest text-[#a8c0b7]">
+              <div className="rounded-xl border border-[#1e2750]/10 bg-[#1e2750] p-3 text-white">
+                <div className="text-[9px] uppercase tracking-widest text-[#b6bedf]">
                   Decision ready
                 </div>
                 <div className="mt-3 text-sm font-semibold">Harbour Centre</div>
                 <div className="mt-3 flex items-end justify-between">
                   <div>
                     <div className="font-mono text-3xl">82</div>
-                    <div className="text-[8px] text-[#a8c0b7]">Investment score</div>
+                    <div className="text-[8px] text-[#b6bedf]">Investment score</div>
                   </div>
-                  <div className="rounded-full bg-[#d9f35e] px-2 py-1 text-[8px] font-semibold text-[#173d31]">
+                  <div className="rounded-full bg-[#a78bfa] px-2 py-1 text-[8px] font-semibold text-[#1e2750]">
                     PROCEED
                   </div>
                 </div>
-                <div className="mt-4 border-t border-white/10 pt-3 text-[9px] leading-4 text-[#c6d6d0]">
+                <div className="mt-4 border-t border-white/10 pt-3 text-[9px] leading-4 text-[#ccd2ee]">
                   Returns clear the base hurdles. Resolve two closing conditions before funding.
                 </div>
               </div>
             </div>
 
-            <div className="mt-3 rounded-xl border border-[#173d31]/10 bg-white p-3">
+            <div className="mt-3 rounded-xl border border-[#1e2750]/10 bg-white p-3">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-semibold">Priority deals</span>
-                <span className="text-[9px] text-[#789087]">Confidence</span>
+                <span className="text-[9px] text-[#8a93b4]">Confidence</span>
               </div>
-              <div className="mt-2 divide-y divide-[#173d31]/8">
+              <div className="mt-2 divide-y divide-[#1e2750]/8">
                 {[
                   ["Harbour Centre", "Vancouver industrial", "82"],
                   ["King Street", "Toronto mixed use", "76"],
@@ -553,9 +553,9 @@ function ProductPreview() {
                   <div key={name} className="grid grid-cols-[1fr_auto] items-center gap-3 py-2">
                     <div>
                       <div className="text-[9px] font-semibold">{name}</div>
-                      <div className="text-[8px] text-[#789087]">{detail}</div>
+                      <div className="text-[8px] text-[#8a93b4]">{detail}</div>
                     </div>
-                    <div className="font-mono text-xs text-[#0b6b4b]">{score}</div>
+                    <div className="font-mono text-xs text-[#3a52d6]">{score}</div>
                   </div>
                 ))}
               </div>
@@ -569,8 +569,8 @@ function ProductPreview() {
 
 function PreviewMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-[#173d31]/10 bg-white p-3">
-      <div className="text-[8px] uppercase tracking-wider text-[#789087]">{label}</div>
+    <div className="rounded-lg border border-[#1e2750]/10 bg-white p-3">
+      <div className="text-[8px] uppercase tracking-wider text-[#8a93b4]">{label}</div>
       <div className="mt-1 font-mono text-sm font-semibold">{value}</div>
     </div>
   );
@@ -584,19 +584,19 @@ function IntegrityStack() {
           icon: FileCheck2,
           title: "Approved input",
           detail: "Exit cap rate · 5.25%",
-          accent: "bg-[#d9f35e] text-[#173d31]",
+          accent: "bg-[#a78bfa] text-[#1e2750]",
         },
         {
           icon: Building2,
           title: "Source evidence",
           detail: "Lender term sheet · page 4",
-          accent: "bg-[#b9d8ff] text-[#173d31]",
+          accent: "bg-[#b9d8ff] text-[#1e2750]",
         },
         {
           icon: ShieldCheck,
           title: "Engine output",
           detail: "DSCR · 1.42x · formula recorded",
-          accent: "bg-[#8ed2b6] text-[#173d31]",
+          accent: "bg-[#a7baff] text-[#1e2750]",
         },
       ].map(({ icon: Icon, title, detail, accent }, index) => (
         <div
@@ -609,7 +609,7 @@ function IntegrityStack() {
           </div>
           <div>
             <div className="text-sm font-semibold">{title}</div>
-            <div className="mt-1 font-mono text-[10px] text-[#b9ccc5]">{detail}</div>
+            <div className="mt-1 font-mono text-[10px] text-[#c2c9e8]">{detail}</div>
           </div>
         </div>
       ))}

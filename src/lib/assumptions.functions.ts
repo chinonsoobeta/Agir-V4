@@ -479,7 +479,8 @@ export const extractAssumptions = createServerFn({ method: "POST" })
         (!existingByKey.has(def.key) || existingByKey.get(def.key)?.status === "missing"))
       .map((def) => def.key);
 
-    const reportMap = new Map(existingByKey);
+    const reportMap = new Map<string, { field_key: string; status: string }>();
+    for (const [k, v] of existingByKey) reportMap.set(k, { field_key: k, status: v.status });
     for (const key of grouped.keys()) reportMap.set(key, { field_key: key, status: conflictKeys.includes(key) ? "conflicting" : "extracted" });
     for (const key of calculatedKeys) reportMap.set(key, { field_key: key, status: "calculated" });
     const satisfiedRequired = new Set(requiredKeysSatisfiedBy(reportMap));

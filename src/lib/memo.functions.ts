@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { computeInvestmentVerdict } from "./verdict";
-import { buildAllowedValues, verifyNumericProvenance } from "./engine";
+import { buildAllowedValues, verifyNumericProvenance, type AllowedValue } from "./engine";
 import { DEFAULT_AI_MODEL } from "./ai-gateway.server";
 
 // The LLM's only job here is PROSE around values injected from engine output.
@@ -143,24 +143,38 @@ export const generateMemo = createServerFn({ method: "POST" })
       const a = f.actual == null ? null : Number(f.actual);
       if (e != null) flagDerived.push(e);
       if (a != null) flagDerived.push(a);
+      // Gaps (expected - actual) and coverage ratios are legitimately derivable
+      // figures the memo may quote. The provenance hardening here is
+      // unit-awareness (see cashFlowAllowed below), not narrowing this set.
       if (e != null && a != null) {
         flagDerived.push(e - a, a - e);
         if (a !== 0) flagDerived.push(e / a);
         if (e !== 0) flagDerived.push(a / e);
       }
     }
-    const allowed = buildAllowedValues(
-      assumptions.map((a: any) => (a.value_numeric == null ? null : Number(a.value_numeric))),
-      engineInputs.map((r: any) => (r.value_numeric == null ? null : Number(r.value_numeric))),
-      outputs.map((o: any) => (o.value_numeric == null ? null : Number(o.value_numeric))),
-      cashFlows.map((c: any) => Number(c.amount)),
-      flags.flatMap((f: any) => [f.expected == null ? null : Number(f.expected), f.actual == null ? null : Number(f.actual)]),
-      verdict.gates.map((g) => (g.actual == null ? null : Number(g.actual))),
-      // Fixed gate thresholds quoted by the verdict
-      [1.5, 15, 100, 1.2, 1.0],
-      flagDerived,
-      report.derived_values,
-    );
+    // Cash-flow amounts are tagged as money so a fabricated rate (e.g. "5.25%")
+    // can no longer be validated by a coincidental dollar magnitude. Assumptions,
+    // engine inputs and outputs stay untyped, so a legitimate rate is never
+    // falsely orphaned.
+    const cashFlowAllowed: AllowedValue[] = [];
+    for (const c of cashFlows as any[]) {
+      const v = Number(c.amount);
+      if (Number.isFinite(v)) cashFlowAllowed.push({ value: v, unit: "$" }, { value: -v, unit: "$" });
+    }
+    const allowed: AllowedValue[] = [
+      ...buildAllowedValues(
+        assumptions.map((a: any) => (a.value_numeric == null ? null : Number(a.value_numeric))),
+        engineInputs.map((r: any) => (r.value_numeric == null ? null : Number(r.value_numeric))),
+        outputs.map((o: any) => (o.value_numeric == null ? null : Number(o.value_numeric))),
+        flags.flatMap((f: any) => [f.expected == null ? null : Number(f.expected), f.actual == null ? null : Number(f.actual)]),
+        verdict.gates.map((g) => (g.actual == null ? null : Number(g.actual))),
+        // Fixed gate thresholds quoted by the verdict
+        [1.5, 15, 100, 1.2, 1.0],
+        flagDerived,
+        report.derived_values,
+      ),
+      ...cashFlowAllowed,
+    ];
 
     let memo: Record<string, unknown> = {};
     let parse_warning: string | null = null;
@@ -280,7 +294,7 @@ export const debugMemoReadiness = createServerFn({ method: "GET" })
     const { data: project } = await context.supabase
       .from("projects").select("id,name").eq("id", data.project_id).maybeSingle();
 
-    const count = async (table: string, filters?: (q: any) => any) => {
+    const count = async (table: "assumptions" | "underwriting_inputs" | "cash_flows" | "reconciliation_flags", filters?: (q: any) => any) => {
       let q = context.supabase.from(table).select("*", { count: "exact", head: true }).eq("project_id", data.project_id);
       if (filters) q = filters(q);
       const { count: c } = await q;
@@ -298,7 +312,7 @@ export const debugMemoReadiness = createServerFn({ method: "GET" })
     const base_outputs_count = (outputs ?? []).filter((o: any) => o.scenario_key === "base").length;
     const combined_outputs_count = (outputs ?? []).filter((o: any) => o.scenario_key === "combined").length;
     const verdictRow = (outputs ?? []).find((o: any) => o.scenario_key === "base" && o.metric_key === "verdict");
-    const latest_verdict = verdictRow?.inputs?.code ?? verdictRow?.formula_text ?? null;
+    const latest_verdict = (verdictRow?.inputs as { code?: string } | null)?.code ?? verdictRow?.formula_text ?? null;
 
     const { data: flags } = await context.supabase
       .from("reconciliation_flags").select("severity,resolved").eq("project_id", data.project_id);

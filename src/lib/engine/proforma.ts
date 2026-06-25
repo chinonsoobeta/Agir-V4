@@ -1,5 +1,5 @@
 import { annualDebtService, interestOnlyDebtService, loanBalanceAfterYears } from "./debt";
-import { irr, pct } from "./metrics";
+import { pct, xirr } from "./metrics";
 import type { CashFlowRow, EngineOutput, EngineWarning, MetricOutput, RevenueUnitInput, UnderwritingInput } from "./types";
 
 const money = (value: number) =>
@@ -119,10 +119,24 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   const totalDistributions = finalEquityFlow + interimSum;
   const equityMultiple = equity > 0 ? Math.max(0, totalDistributions / equity) : 0;
   const irrFlows = [-equity, ...interimLevered, finalEquityFlow];
+  // Returns are phased on the real development timeline: equity is committed at
+  // t=0, but the stabilized operating cash flows and the sale do not begin until
+  // construction + lease-up is complete. Discounting each flow at its true time
+  // (a fractional-year delay) instead of assuming year-1 stabilization is the
+  // difference between a turnkey acquisition and a multi-year ground-up build --
+  // without it, levered IRR is systematically overstated on development deals.
+  // (The equity multiple is a money multiple and stays intentionally timing-free.)
+  const developmentYears = (input.constructionMonths + input.leaseUpMonths) / 12;
+  const irrTimedFlows = [
+    { t: 0, amount: -equity },
+    ...interimLevered.map((cf, i) => ({ t: developmentYears + i + 1, amount: cf })),
+    { t: developmentYears + exitYear, amount: finalEquityFlow },
+  ];
   // IRR and the equity multiple agree on a total loss: when equity recovers
   // nothing (distributions <= 0) or the sale wipes out, IRR is not meaningful
   // and the equity multiple floors at ~0.0x.
-  const irrPct = equityWipeout || (equity > 0 && totalDistributions <= 0) ? Number.NaN : irr(irrFlows);
+  const irrPct =
+    equityWipeout || (equity > 0 && totalDistributions <= 0) ? Number.NaN : xirr(irrTimedFlows);
   const irrStatus: EngineOutput["irrStatus"] = Number.isFinite(irrPct) ? "computed" : "not_meaningful";
 
   const cashFlows: CashFlowRow[] = [
@@ -157,7 +171,7 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   const irrFormula = equityWipeout
     ? `Equity loss: IRR not meaningful: sale proceeds ${money(netSaleBeforeDebt)} < loan payoff ${money(loanPayoffAtExit)}; EM ≈ 0.0x`
     : Number.isFinite(irrPct)
-      ? `IRR from equity cash flows [${irrFlows.map((v) => money(v)).join(", ")}] = ${irrPct.toFixed(2)}%`
+      ? `IRR from equity cash flows [${irrFlows.map((v) => money(v)).join(", ")}], with operating cash flow and sale phased ${input.constructionMonths} months construction + ${input.leaseUpMonths} months lease-up after equity is committed = ${irrPct.toFixed(2)}%`
       : "IRR not meaningful: equity cash flows do not include both negative and positive values.";
 
   const metrics: MetricOutput[] = [

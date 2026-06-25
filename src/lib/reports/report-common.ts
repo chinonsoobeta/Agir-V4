@@ -7,6 +7,7 @@ import { ENGINE_SCALAR_TO_TAXONOMY } from "../taxonomy-engine-map";
 import { ASSUMPTION_BY_KEY } from "../assumption-taxonomy";
 import { money, pct, x, bps, sanitizeSymbols, displaySourceLabel, type ReportStat } from "../memo-report";
 import type { ReportData } from "./report-data.server";
+import type { AllowedValue, TokenUnit } from "../engine/provenance";
 
 import type { ReportDefinition } from "./report-definitions";
 
@@ -202,27 +203,48 @@ export function insightFor(data: ReportData, audience: "ic" | "lender" | "invest
 
 // Numbers a report may reference (for provenance), gathered from every
 // deterministic source plus simple pure-function derivations.
-export function reportAllowedValues(data: ReportData, core: DerivedCore, extra: number[] = []): number[] {
-  const out: number[] = [];
-  const push = (n: any) => { const v = Number(n); if (Number.isFinite(v)) out.push(v, -v); };
+export function reportAllowedValues(data: ReportData, core: DerivedCore, extra: number[] = []): AllowedValue[] {
+  const out: AllowedValue[] = [];
+  const asUnit = (u: unknown): TokenUnit | undefined =>
+    u === "$" || u === "%" || u === "x" || u === "bps" ? u : undefined;
+  const push = (n: any, unit?: TokenUnit) => {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return;
+    if (unit) out.push({ value: v, unit }, { value: -v, unit });
+    else out.push(v, -v);
+  };
+  // Assumptions / engine inputs stay untyped: their unit is not carried here and
+  // leaving them permissive guarantees a legitimate rate is never orphaned.
   data.assumptions.forEach((a) => push(a.value_numeric));
   data.engineInputs.forEach((i) => push(i.value_numeric));
-  data.outputs.forEach((o) => push(o.value_numeric));
-  data.cashFlows.forEach((c) => push(c.amount));
-  data.budget.forEach((b) => push(b.amount));
-  data.revenue.forEach((r) => { push(r.unit_count); push(r.avg_sf); push(r.market_rent_monthly); push(r.occupancy_pct); });
+  // Outputs and cash flows carry a known unit, so a rate token can no longer be
+  // validated by an unrelated dollar magnitude (the old unit-blind hole).
+  data.outputs.forEach((o) => push(o.value_numeric, asUnit((o as any).unit)));
+  data.cashFlows.forEach((c) => push(c.amount, "$"));
+  data.budget.forEach((b) => push(b.amount, "$"));
+  data.revenue.forEach((r) => {
+    push(r.unit_count);
+    push(r.avg_sf);
+    push(r.market_rent_monthly, "$");
+    push(r.occupancy_pct, "%");
+  });
   for (const f of data.flags) {
     const e = f.expected == null ? null : Number(f.expected);
     const a = f.actual == null ? null : Number(f.actual);
     if (e != null) push(e);
     if (a != null) push(a);
+    // Reconciliation gaps (expected - actual) and their coverage ratios are
+    // figures a report legitimately quotes (a lender package shows a "2.4x"
+    // coverage). The provenance hardening here is UNIT-AWARENESS -- a rate token
+    // can no longer be validated by a coincidental dollar magnitude -- not
+    // narrowing this derivable set.
     if (e != null && a != null) { push(e - a); push(a - e); if (a !== 0) push(e / a); if (e !== 0) push(a / e); }
     if (Array.isArray(f.conflict_values)) f.conflict_values.forEach((c: any) => push(c.value));
   }
   data.engineInputs.forEach((i) => { if (Array.isArray(i.conflict_values)) i.conflict_values.forEach((c: any) => push(c.value)); });
-  // Fixed verdict thresholds.
-  [1.5, 15, 100, 1.2, 1.0].forEach(push);
-  extra.forEach(push);
+  // Fixed verdict thresholds (left untyped: they surface as both % and x).
+  [1.5, 15, 100, 1.2, 1.0].forEach((n) => push(n));
+  extra.forEach((n) => push(n));
   return out;
 }
 

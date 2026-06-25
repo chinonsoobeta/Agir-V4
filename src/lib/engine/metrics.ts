@@ -1,12 +1,19 @@
-export function irr(cashFlows: number[]) {
-  if (cashFlows.length < 2) return Number.NaN;
-  const hasPositive = cashFlows.some((v) => v > 0);
-  const hasNegative = cashFlows.some((v) => v < 0);
+// Time-indexed IRR (XIRR): every cash flow carries an explicit time offset in
+// YEARS. This lets a development delay (construction + lease-up before stabilized
+// operations) be discounted at its true time instead of assuming cash arrives in
+// year 1. Robust to awkward vectors: Newton's method first, then a bracketed
+// bisection that expands the upper bound, with an explicit near-total-loss
+// fallback at the -99% floor. Returns a percentage, or NaN when the flows lack
+// both a positive and a negative value (no meaningful IRR).
+export function xirr(flows: { t: number; amount: number }[]) {
+  if (flows.length < 2) return Number.NaN;
+  const hasPositive = flows.some((f) => f.amount > 0);
+  const hasNegative = flows.some((f) => f.amount < 0);
   if (!hasPositive || !hasNegative) return Number.NaN;
 
-  const npv = (rate: number) => cashFlows.reduce((sum, cf, i) => sum + cf / Math.pow(1 + rate, i), 0);
+  const npv = (rate: number) => flows.reduce((sum, f) => sum + f.amount / Math.pow(1 + rate, f.t), 0);
   const derivative = (rate: number) =>
-    cashFlows.reduce((sum, cf, i) => (i === 0 ? sum : sum - (i * cf) / Math.pow(1 + rate, i + 1)), 0);
+    flows.reduce((sum, f) => (f.t === 0 ? sum : sum - (f.t * f.amount) / Math.pow(1 + rate, f.t + 1)), 0);
 
   let guess = 0.12;
   for (let i = 0; i < 50; i++) {
@@ -47,6 +54,12 @@ export function irr(cashFlows: number[]) {
     }
   }
   return ((low + high) / 2) * 100;
+}
+
+// Equal-period IRR: cash flow at index i occurs at the end of period i (t = i).
+// Implemented on top of xirr so the two solvers can never diverge.
+export function irr(cashFlows: number[]) {
+  return xirr(cashFlows.map((amount, t) => ({ t, amount })));
 }
 
 export function pct(numerator: number, denominator: number) {

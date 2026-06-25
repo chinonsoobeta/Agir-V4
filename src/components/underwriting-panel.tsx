@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { queryOptions, useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listFinancialOutputs, listRisks, listDecisions, listAudit, recordDecision } from "@/lib/assumptions.functions";
+import { listFinancialOutputs, listRisks, listDecisions, listAudit, recordDecision, listAssumptions } from "@/lib/assumptions.functions";
 import {
   acceptDefaults,
   getUnderwritingReadiness,
@@ -30,6 +30,7 @@ const readinessQ = (pid: string) => queryOptions({ queryKey: ["uw-readiness", pi
 const flagsQ = (pid: string) => queryOptions({ queryKey: ["recon-flags", pid], queryFn: () => listReconciliationFlags({ data: { project_id: pid } }) });
 const memosQ = (pid: string) => queryOptions({ queryKey: ["memos", pid], queryFn: () => listMemos({ data: { project_id: pid } }) });
 const memoDebugQ = (pid: string) => queryOptions({ queryKey: ["memo-debug", pid], queryFn: () => debugMemoReadiness({ data: { project_id: pid } }) });
+const assumptionsQ = (pid: string) => queryOptions({ queryKey: ["assumptions", pid], queryFn: () => listAssumptions({ data: { project_id: pid } }) });
 
 const SCENARIO_LABELS: Record<string, string> = {
   base: "Base Case", revenue_down: "Revenue Downside (−10%)",
@@ -74,6 +75,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   const { data: risks } = useSuspenseQuery(risksQ(projectId));
   const { data: readiness } = useSuspenseQuery(readinessQ(projectId));
   const { data: flags } = useSuspenseQuery(flagsQ(projectId));
+  const { data: assumptions } = useSuspenseQuery(assumptionsQ(projectId));
   const qc = useQueryClient();
   const runFn = useServerFn(runFullUnderwriting);
   const acceptDefaultsFn = useServerFn(acceptDefaults);
@@ -226,6 +228,30 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   const equityWipeout = Boolean(metric("equity_multiple")?.formula_text?.includes("Equity wipeout"));
   const defaultedKeys: string[] = readiness.defaultedKeys ?? [];
 
+  // Evidence trail: group the approved engine inputs by the document (or analyst
+  // / default origin) that supplied each one, so a reader can trace a headline
+  // output back to the source it ultimately came from -- the "every number is
+  // traceable" promise made visible, not just asserted.
+  const PROVENANCE_STATUSES = new Set(["approved", "default_accepted", "calculated", "extracted", "modified"]);
+  const sourceGroups: Array<[string, string[]]> = (() => {
+    const groups = new Map<string, string[]>();
+    for (const a of (assumptions as any[]) ?? []) {
+      if (!PROVENANCE_STATUSES.has(a.status)) continue;
+      const docName: string | undefined = a.documents?.name;
+      const origin = docName
+        ? docName
+        : a.status === "default_accepted" || a.source === "default"
+          ? "Static defaults (no document)"
+          : a.source === "analyst" || a.status === "modified"
+            ? "Analyst entry"
+            : "Extracted (unlinked)";
+      const arr = groups.get(origin) ?? [];
+      arr.push(a.field_label ?? a.field_key);
+      groups.set(origin, arr);
+    }
+    return [...groups.entries()].sort((x, y) => y[1].length - x[1].length);
+  })();
+
   return (
     <div className="space-y-4">
       <Card className="p-5">
@@ -335,6 +361,38 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
           </table>
         </div>
       </Card>}
+
+      {/* Evidence: trace the pro forma back to the documents behind it */}
+      {outputs.length > 0 && sourceGroups.length > 0 && (
+        <Card className="p-5">
+          <div className="flex items-center gap-2">
+            <FileText className="size-3.5 text-muted-foreground" />
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+              Evidence: source documents behind these numbers
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1 mb-3">
+            Every figure above is computed only from these approved inputs. Each input traces to the
+            document (or analyst entry) that supplied it.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {sourceGroups.map(([source, fields]) => (
+              <div key={source} className="rounded border border-border bg-muted/10 p-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <FileText className="size-3.5 shrink-0 text-primary" />
+                  <span className="truncate" title={source}>{source}</span>
+                  <Badge variant="outline" className="ml-auto text-[10px]">{fields.length}</Badge>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {fields.map((f, i) => (
+                    <span key={i} className="text-[10px] rounded bg-secondary px-1.5 py-0.5 text-secondary-foreground">{f}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Risk register: fixed thresholds over engine outputs + flags */}
       <Card className="p-5">

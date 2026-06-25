@@ -4,12 +4,25 @@
 // caller. Any orphan number fails verification -- this is the structural
 // guarantee that a synthesized figure cannot reach a screen silently.
 
+export type TokenUnit = "$" | "%" | "x" | "bps";
+
 export type NumericToken = {
   raw: string;
   value: number;
   // half-unit of the least significant displayed digit (e.g. "2.45" -> 0.005)
   tolerance: number;
+  // The unit the token is written in, inferred from its suffix / $ sign.
+  unit?: TokenUnit;
 };
+
+// An allowed value is either a bare number (unit-agnostic: validates a token of
+// the same magnitude regardless of unit, the original behavior) or a value
+// carrying a unit. A unit-tagged value only validates a token of a COMPATIBLE
+// unit, so a fabricated "5.25%" can no longer be waved through by an unrelated
+// $5.25 sitting in the allowed set. Callers tag the values whose unit is known
+// ($ cash flows, % / x / bps outputs) and leave the rest untyped, so a
+// legitimate rate is never falsely orphaned.
+export type AllowedValue = number | { value: number; unit?: TokenUnit };
 
 export type ProvenanceReport = {
   tokenCount: number;
@@ -45,7 +58,17 @@ export function collectNumericTokens(text: string): NumericToken[] {
     if (multiplier === 1 && isInt && base >= 1900 && base <= 2100) continue;
     const decimals = numeric.includes(".") ? numeric.split(".")[1].length : 0;
     const tolerance = 0.5 * Math.pow(10, -decimals) * multiplier;
-    out.push({ raw: m[0].trim(), value, tolerance });
+    const unit: TokenUnit | undefined =
+      suffix === "%"
+        ? "%"
+        : suffix === "bps"
+          ? "bps"
+          : suffix === "×" || suffix === "x"
+            ? "x"
+            : hasDollar || multiplier !== 1
+              ? "$"
+              : undefined;
+    out.push({ raw: m[0].trim(), value, tolerance, unit });
   }
   return out;
 }
@@ -61,11 +84,19 @@ export function buildAllowedValues(...groups: (number | null | undefined)[][]): 
   return out;
 }
 
-function tokenMatches(token: NumericToken, allowed: number[]): boolean {
-  return allowed.some((a) => Math.abs(token.value - a) <= Math.max(token.tolerance, Math.abs(a) * 1e-9));
+function tokenMatches(token: NumericToken, allowed: AllowedValue[]): boolean {
+  return allowed.some((entry) => {
+    const value = typeof entry === "number" ? entry : entry.value;
+    const unit = typeof entry === "number" ? undefined : entry.unit;
+    // Unit gate: a unit-tagged allowed value only validates a token written in
+    // the same unit. An untyped allowed value (or an untyped token) stays
+    // permissive, so a legitimate figure is never falsely orphaned.
+    if (unit != null && token.unit != null && unit !== token.unit) return false;
+    return Math.abs(token.value - value) <= Math.max(token.tolerance, Math.abs(value) * 1e-9);
+  });
 }
 
-export function verifyNumericProvenance(text: string, allowed: number[]): ProvenanceReport {
+export function verifyNumericProvenance(text: string, allowed: AllowedValue[]): ProvenanceReport {
   const tokens = collectNumericTokens(text);
   const orphans = tokens.filter((t) => !tokenMatches(t, allowed));
   return { tokenCount: tokens.length, orphans, pass: orphans.length === 0 };

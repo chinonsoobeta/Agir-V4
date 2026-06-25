@@ -3,6 +3,8 @@
 // logs the resulting text length so the extraction debug trace and server logs
 // can pinpoint a parsing failure (storage vs. parse vs. empty document).
 
+import { detectMoneyScale } from "./money-scale";
+
 function log(name: string, kind: string, length: number, note = "") {
   console.log(`[document-text] ${kind} "${name}" -> ${length} chars${note ? ` (${note})` : ""}`);
 }
@@ -26,9 +28,25 @@ export async function xlsxBufferToText(buf: ArrayBuffer): Promise<string> {
     const ws = wb.Sheets[name];
     const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, blankrows: false });
     const headers = (rows[0] ?? []).map((cell) => String(cell ?? "").trim());
+    // A "$ in thousands / millions" declaration in the sheet name or a caption
+    // row applies to every money cell; a column header can override it per
+    // column. Honoring it stops a raw 34,500 from being read as $34.5k.
+    const sheetScale = detectMoneyScale([name, ...rows.slice(0, 3).flat().map((c) => String(c ?? ""))].join(" "));
+    // Apply the sheet scale only to columns that are clearly money columns (by
+    // header), so a percent / count / SF column is never rescaled even when the
+    // sheet declares a dollar scale. An explicit per-column scale always wins.
+    const columnScales = headers.map((h) => {
+      const colScale = detectMoneyScale(h);
+      if (colScale !== 1) return colScale;
+      const isMoneyColumn =
+        /amount|budget|cost|price|value|loan|equity|debt|proceeds|income|revenue|noi|opex|expense|tdc|total|contingency|financing|acquisition|capital|reserve|fee|\$/i.test(
+          h,
+        );
+      return isMoneyColumn ? sheetScale : 1;
+    });
     rows.forEach((row, index) => {
       const cells = row
-        .map((cell, columnIndex) => formatSpreadsheetCell(cell, headers[columnIndex], row))
+        .map((cell, columnIndex) => formatSpreadsheetCell(cell, headers[columnIndex], row, columnScales[columnIndex] ?? sheetScale))
         .filter(Boolean)
         .join(" | ");
       out.push(`Sheet ${name} row ${index + 1}: ${cells}`);
@@ -37,7 +55,7 @@ export async function xlsxBufferToText(buf: ArrayBuffer): Promise<string> {
   return out.join("\n");
 }
 
-function formatSpreadsheetCell(cell: unknown, header: string | undefined, row: unknown[]): string {
+function formatSpreadsheetCell(cell: unknown, header: string | undefined, row: unknown[], scale = 1): string {
   if (cell == null) return "";
   const label = String(header ?? "").trim();
   const prefix = label ? `${label}=` : "";
@@ -55,7 +73,10 @@ function formatSpreadsheetCell(cell: unknown, header: string | undefined, row: u
       financialContext,
     );
 
-  const formatted = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(cell);
+  // Apply a declared "in thousands / millions" scale to money cells only, so a
+  // percent or count column is never rescaled.
+  const value = looksLikeMoney && scale !== 1 ? cell * scale : cell;
+  const formatted = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
   if (looksLikePercent) return `${prefix}${(cell * 100).toFixed(2)}%`;
   return `${prefix}${looksLikeMoney ? `$${formatted}` : formatted}`;
 }

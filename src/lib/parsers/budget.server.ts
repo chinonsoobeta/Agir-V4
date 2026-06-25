@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { detectMoneyScale } from "../money-scale";
 
 export type ParsedBudgetRow = {
   label: string;
@@ -10,7 +11,7 @@ export type ParsedBudgetRow = {
 
 export type BudgetParseResult = {
   inserted: ParsedBudgetRow[];
-  rejected: { row: number; reason: string; values: unknown[] }[];
+  rejected: { row: number; reason: string; values: (string | number | boolean | null)[] }[];
 };
 
 export function categoryFor(label: string): ParsedBudgetRow["category"] {
@@ -31,7 +32,7 @@ export function categoryFor(label: string): ParsedBudgetRow["category"] {
 export function parseBudgetWorkbook(buffer: ArrayBuffer): BudgetParseResult {
   const workbook = XLSX.read(buffer, { type: "array" });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, blankrows: false });
+  const rows = XLSX.utils.sheet_to_json<(string | number | boolean | null)[]>(sheet, { header: 1, blankrows: false });
   const inserted: ParsedBudgetRow[] = [];
   const rejected: BudgetParseResult["rejected"] = [];
 
@@ -59,13 +60,27 @@ export function parseBudgetWorkbook(buffer: ArrayBuffer): BudgetParseResult {
   if (amountIndex < 0) amountIndex = header.findIndex((_, i) => i !== labelIndex && i !== categoryIndex && numericShare(i) >= 0.6);
   if (amountIndex < 0) amountIndex = Math.max(1, header.findIndex((h) => /amount|cost|budget|total/.test(h)));
 
+  // Honor a declared scale ("$ in thousands / millions") from the amount-column
+  // header first, then the sheet name + header row. Without this a raw 34,500
+  // land line under a "($000)" column or an "(in thousands)" tab is read as
+  // $34.5k instead of $34.5M.
+  const sheetName = workbook.SheetNames[0];
+  const amountHeader = amountIndex >= 0 ? String(rows[0]?.[amountIndex] ?? "") : "";
+  const columnScale = detectMoneyScale(amountHeader);
+  const scale =
+    columnScale !== 1
+      ? columnScale
+      : detectMoneyScale([sheetName, ...(rows[0] ?? []).map((c) => String(c ?? ""))].join(" "));
+  const scaleLabel = scale === 1_000 ? "thousands" : scale === 1_000_000 ? "millions" : scale === 1_000_000_000 ? "billions" : null;
+
   rows.slice(1).forEach((row, i) => {
     const rowNumber = i + 2;
     const categoryLabel = categoryIndex >= 0 ? String(row[categoryIndex] ?? "").trim() : "";
     const itemLabel = String(row[labelIndex] ?? "").trim();
     const label = itemLabel || categoryLabel;
     const rawAmount = row[amountIndex];
-    const amount = typeof rawAmount === "number" ? rawAmount : Number(String(rawAmount ?? "").replace(/[$,]/g, ""));
+    const parsedAmount = typeof rawAmount === "number" ? rawAmount : Number(String(rawAmount ?? "").replace(/[$,]/g, ""));
+    const amount = Number.isFinite(parsedAmount) ? parsedAmount * scale : parsedAmount;
     if (/^total$/i.test(categoryLabel) || /total development cost|^total$/i.test(label)) {
       rejected.push({ row: rowNumber, reason: "Total row skipped to avoid double counting.", values: row });
       return;
@@ -84,6 +99,7 @@ export function parseBudgetWorkbook(buffer: ArrayBuffer): BudgetParseResult {
         categoryLabel ? `Category=${categoryLabel}` : null,
         label ? `Line Item=${label}` : null,
         `Amount=$${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(amount)}`,
+        scaleLabel ? `Scale=${scaleLabel}` : null,
       ].filter(Boolean).join(" | "),
     });
   });

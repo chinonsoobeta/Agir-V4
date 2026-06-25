@@ -202,12 +202,34 @@
 .landing {
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
   font-feature-settings: "cv11", "ss01";
+  /* The marketing page is designed in a fixed light palette of hardcoded hex.
+     Pin the shadcn component tokens (Card, Button, etc.) to their light values
+     -- scoped here so they override an ancestor `.dark` -- so the page renders
+     identically whether or not the app/system is in dark mode. */
+  color-scheme: light;
+  --background: oklch(0.985 0.003 255);
+  --foreground: oklch(0.2 0.018 255);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.018 255);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.018 255);
+  --primary: oklch(0.47 0.105 238);
+  --primary-foreground: oklch(0.99 0.002 255);
+  --secondary: oklch(0.955 0.008 250);
+  --secondary-foreground: oklch(0.24 0.018 255);
+  --muted: oklch(0.955 0.007 250);
+  --muted-foreground: oklch(0.51 0.018 255);
+  --accent: oklch(0.93 0.025 240);
+  --accent-foreground: oklch(0.25 0.035 245);
+  --border: oklch(0.89 0.009 250);
+  --input: oklch(0.92 0.008 250);
+  --ring: oklch(0.47 0.105 238);
 }
 
 .landing-grid {
   background-image:
-    linear-gradient(rgb(23 61 49 / 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(23 61 49 / 0.045) 1px, transparent 1px);
+    linear-gradient(rgb(30 39 80 / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(30 39 80 / 0.05) 1px, transparent 1px);
   background-size: 48px 48px;
   mask-image: linear-gradient(to bottom, black 20%, transparent 88%);
 }

@@ -18,9 +18,9 @@ export type ParsedRentRollRow = {
 export function parseRentRollWorkbook(buffer: ArrayBuffer) {
   const workbook = XLSX.read(buffer, { type: "array" });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, blankrows: false });
+  const rows = XLSX.utils.sheet_to_json<(string | number | boolean | null)[]>(sheet, { header: 1, blankrows: false });
   const inserted: ParsedRentRollRow[] = [];
-  const rejected: { row: number; reason: string; values: unknown[] }[] = [];
+  const rejected: { row: number; reason: string; values: (string | number | boolean | null)[] }[] = [];
 
   const header = rows[0]?.map((cell) => String(cell ?? "").toLowerCase()) ?? [];
   const foundTypeIndex = header.findIndex((h) => /unit type|type|plan|component/.test(h));

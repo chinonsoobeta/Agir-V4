@@ -117,6 +117,34 @@ describe("development underwriting engine", () => {
     // ...and the headline DSCR metric stays on the (conservative) amortizing basis.
     expect(io.values.dscr).toBeCloseTo(io.values.noi / amortizing, 4);
   });
+
+  test("returns are phased on the construction + lease-up timeline", () => {
+    // Multi-year hold so interim operating flows exist and IRR is finite. Maple
+    // pins budget.financingInterest, so changing the construction / lease-up
+    // months moves ONLY the return timeline -- never the interest reserve, TDC,
+    // or equity -- which isolates the phasing effect.
+    const base = { ...mapleHeightsInput(), holdYears: 5 };
+    const turnkey = runUnderwriting({ ...base, constructionMonths: 0, leaseUpMonths: 0 });
+    const development = runUnderwriting({ ...base, constructionMonths: 24, leaseUpMonths: 12 });
+
+    expect(turnkey.irrStatus).toBe("computed");
+    expect(development.irrStatus).toBe("computed");
+
+    // The delay changes WHEN cash is received, not the undiscounted amounts: the
+    // cash-flow ledger and the (timing-free) equity multiple stay identical.
+    expect(development.cashFlows).toEqual(turnkey.cashFlows);
+    expect(development.values.equityMultiple).toBeCloseTo(turnkey.values.equityMultiple, 9);
+
+    // A 3-year build/lease-up delay pushes every distribution later, so the
+    // levered IRR must be strictly lower than the instant-turnkey case (but a
+    // gain stays a gain: equity multiple > 1 keeps IRR positive).
+    expect(development.values.irrPct).toBeLessThan(turnkey.values.irrPct);
+    expect(development.values.irrPct).toBeGreaterThan(0);
+
+    // The phasing is recorded in the IRR metric formula for auditability.
+    const irrMetric = development.metrics.find((m) => m.key === "irr_estimate");
+    expect(irrMetric?.formula).toContain("24 months construction");
+  });
 });
 
 describe("reconciliation gates", () => {
