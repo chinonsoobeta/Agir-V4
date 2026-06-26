@@ -186,7 +186,7 @@ export const extractAssumptions = createServerFn({ method: "POST" })
     if (dErr) throw new Error(dErr.message);
     if (!docs?.length) throw new Error("Upload documents to this project before extracting assumptions.");
 
-    const { extractFileText } = await import("./document-text.server");
+    const { extractFileTextWithMeta } = await import("./document-text.server");
     const { extractCandidates } = await import("./assumption-candidates.server");
     const { downloadDocumentBlob } = await import("./storage-download.server");
     const { parseRentRollWorkbook } = await import("./parsers/rent-roll.server");
@@ -201,7 +201,11 @@ export const extractAssumptions = createServerFn({ method: "POST" })
       document_id: string; name: string; storage_path: string;
       download_ok: boolean; byte_length: number; file_type: string | null;
       text_length: number; text_preview: string; candidate_count: number;
-      candidates_preview: Array<{ kind: string; value_text: string; label_hint: string }>;
+      candidates_preview: Array<{ kind: string; value_text: string; label_hint: string; source_location: string | null }>;
+      // 2D transparency: how the text/values were recovered and what needs review.
+      recovered_via_ocr: boolean; ocr_confidence: number | null;
+      needs_verification: boolean; verification_note: string | null;
+      sheets_scanned: number | null; sheets_selected: string[] | null; merged_cells_filled: number | null;
       error: string | null;
     };
     const perDocument: DocTrace[] = [];
@@ -216,7 +220,11 @@ export const extractAssumptions = createServerFn({ method: "POST" })
       const row: DocTrace = {
         document_id: d.id, name: d.name, storage_path: d.storage_path,
         download_ok: false, byte_length: 0, file_type: d.file_type ?? null,
-        text_length: 0, text_preview: "", candidate_count: 0, candidates_preview: [], error: null,
+        text_length: 0, text_preview: "", candidate_count: 0, candidates_preview: [],
+        recovered_via_ocr: false, ocr_confidence: null,
+        needs_verification: false, verification_note: null,
+        sheets_scanned: null, sheets_selected: null, merged_cells_filled: null,
+        error: null,
       };
       try {
         const dl = await downloadDocumentBlob(context.supabase, d.storage_path);
@@ -230,9 +238,17 @@ export const extractAssumptions = createServerFn({ method: "POST" })
         documentsDownloaded++;
         const buf = await dl.data.arrayBuffer();
         row.byte_length = buf.byteLength;
-        const text = await extractFileText(d.name, d.file_type, buf);
+        const extracted = await extractFileTextWithMeta(d.name, d.file_type, buf);
+        const text = extracted.text;
         row.text_length = text.length;
         row.text_preview = text.slice(0, 200);
+        row.recovered_via_ocr = extracted.recoveredViaOcr;
+        row.ocr_confidence = extracted.ocrConfidence;
+        if (extracted.recoveredViaOcr) {
+          row.needs_verification = true;
+          row.verification_note = `Recovered via OCR (confidence ${Math.round(extracted.ocrConfidence ?? 0)}%); auto-extracted values must be verified.`;
+          warnings.push(`${d.name}: text recovered via OCR (confidence ${Math.round(extracted.ocrConfidence ?? 0)}%); please verify the extracted values.`);
+        }
         if (!text.trim()) {
           row.error = "no extractable text";
           warnings.push(`${d.name}: downloaded ${buf.byteLength} bytes but no text could be parsed.`);
@@ -241,7 +257,7 @@ export const extractAssumptions = createServerFn({ method: "POST" })
         }
         const cands = extractCandidates(d.name, text.slice(0, 40000));
         row.candidate_count = cands.length;
-        row.candidates_preview = cands.slice(0, 5).map((c) => ({ kind: c.kind, value_text: c.value_text, label_hint: c.label_hint.slice(0, 48) }));
+        row.candidates_preview = cands.slice(0, 5).map((c) => ({ kind: c.kind, value_text: c.value_text, label_hint: c.label_hint.slice(0, 48), source_location: c.source_location }));
         allCandidates.push(...cands);
         if (/\.(xlsx|xls)$/i.test(d.name)) {
           const parsedRevenue = parseRentRollWorkbook(buf);
@@ -253,6 +269,11 @@ export const extractAssumptions = createServerFn({ method: "POST" })
           // rows in one category are summed into a single category total, not
           // treated as competing conflicts.
           structuredBudgetMappings.push(...aggregateBudgetRows(parsedBudget.inserted, { name: d.name }));
+          // 2D: record which sheet(s) fed the typed parsers and how many merged
+          // cells were recovered, so the trace shows the workbook was scanned.
+          row.sheets_scanned = parsedBudget.meta.sheetsScanned;
+          row.sheets_selected = Array.from(new Set([...parsedRevenue.meta.sheetsSelected, parsedBudget.meta.sheetSelected].filter(Boolean)));
+          row.merged_cells_filled = parsedBudget.meta.mergedCellsFilled + parsedRevenue.meta.mergedCellsFilled;
         }
       } catch (error) {
         row.error = error instanceof Error ? error.message : "unreadable document";

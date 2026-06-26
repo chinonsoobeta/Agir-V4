@@ -442,6 +442,7 @@ export type Database = {
           category: string;
           completed_at: string | null;
           created_at: string;
+          depends_on: string[];
           due_date: string | null;
           id: string;
           notes: string | null;
@@ -457,6 +458,7 @@ export type Database = {
           category?: string;
           completed_at?: string | null;
           created_at?: string;
+          depends_on?: string[];
           due_date?: string | null;
           id?: string;
           notes?: string | null;
@@ -472,6 +474,7 @@ export type Database = {
           category?: string;
           completed_at?: string | null;
           created_at?: string;
+          depends_on?: string[];
           due_date?: string | null;
           id?: string;
           notes?: string | null;
@@ -703,6 +706,54 @@ export type Database = {
           },
         ];
       };
+      external_record_links: {
+        Row: {
+          connection_id: string;
+          created_at: string;
+          direction: string;
+          external_id: string;
+          id: string;
+          last_synced_at: string;
+          owner_id: string;
+          project_id: string | null;
+        };
+        Insert: {
+          connection_id: string;
+          created_at?: string;
+          direction?: string;
+          external_id: string;
+          id?: string;
+          last_synced_at?: string;
+          owner_id: string;
+          project_id?: string | null;
+        };
+        Update: {
+          connection_id?: string;
+          created_at?: string;
+          direction?: string;
+          external_id?: string;
+          id?: string;
+          last_synced_at?: string;
+          owner_id?: string;
+          project_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "external_record_links_connection_id_fkey";
+            columns: ["connection_id"];
+            isOneToOne: false;
+            referencedRelation: "integration_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "external_record_links_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       financial_outputs: {
         Row: {
           computed_at: string;
@@ -793,6 +844,88 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "generated_reports_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ic_conditions: {
+        Row: {
+          created_at: string;
+          id: string;
+          label: string;
+          owner_id: string;
+          project_id: string;
+          satisfied_at: string | null;
+          satisfied_by: string | null;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          label: string;
+          owner_id: string;
+          project_id: string;
+          satisfied_at?: string | null;
+          satisfied_by?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          label?: string;
+          owner_id?: string;
+          project_id?: string;
+          satisfied_at?: string | null;
+          satisfied_by?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ic_conditions_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ic_votes: {
+        Row: {
+          created_at: string;
+          id: string;
+          owner_id: string;
+          project_id: string;
+          rationale: string | null;
+          updated_at: string;
+          vote: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          owner_id: string;
+          project_id: string;
+          rationale?: string | null;
+          updated_at?: string;
+          vote: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          owner_id?: string;
+          project_id?: string;
+          rationale?: string | null;
+          updated_at?: string;
+          vote?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ic_votes_project_id_fkey";
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";

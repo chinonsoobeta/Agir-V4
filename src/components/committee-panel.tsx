@@ -8,6 +8,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { listFinancialOutputs, listDecisions, recordDecision } from "@/lib/assumptions.functions";
 import { listAssumptions } from "@/lib/assumptions.functions";
 import { listReconciliationFlags } from "@/lib/underwriting.functions";
+import { castVote, listIcVotes, addCondition, updateConditionStatus, listConditions } from "@/lib/operating-layer.functions";
 import { MemoSection } from "@/components/underwriting-panel";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,15 @@ const outputsQ = (pid: string) => queryOptions({ queryKey: ["outputs", pid], que
 const assumptionsQ = (pid: string) => queryOptions({ queryKey: ["assumptions", pid], queryFn: () => listAssumptions({ data: { project_id: pid } }) });
 const decisionsQ = (pid: string) => queryOptions({ queryKey: ["decisions", pid], queryFn: () => listDecisions({ data: { project_id: pid } }) });
 const flagsQ = (pid: string) => queryOptions({ queryKey: ["recon-flags", pid], queryFn: () => listReconciliationFlags({ data: { project_id: pid } }) });
+const icVotesQ = (pid: string) => queryOptions({ queryKey: ["ic-votes", pid], queryFn: () => listIcVotes({ data: { project_id: pid } }) });
+const icCondsQ = (pid: string) => queryOptions({ queryKey: ["ic-conditions", pid], queryFn: () => listConditions({ data: { project_id: pid } }) });
+
+const VOTE_OPTIONS: { key: "approve" | "approve_with_conditions" | "reject" | "abstain"; label: string }[] = [
+  { key: "approve", label: "Approve" },
+  { key: "approve_with_conditions", label: "Approve w/ Conditions" },
+  { key: "reject", label: "Reject" },
+  { key: "abstain", label: "Abstain" },
+];
 
 type ICAction = "approve" | "approve_with_conditions" | "return_to_underwriting" | "reject";
 
@@ -150,8 +160,11 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
         </Card>
       </div>
 
+      {/* Committee votes + tracked conditions (governance over the engine verdict) */}
+      <CommitteeGovernance projectId={projectId} />
+
       {/* IC decision */}
-      <Card className="p-6 elevated">
+      <Card className="p-6 elevated" data-section="record-decision">
         <div className="flex items-center gap-2"><Gavel className="size-4 text-primary" /><SectionLabel>Record Committee Decision</SectionLabel></div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-4">
           {ACTIONS.map((a) => {
@@ -212,6 +225,112 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
             })}
           </ul>
         )}
+      </Card>
+    </div>
+  );
+}
+
+// 3B: committee voting + tracked approval conditions. Votes and conditions are
+// governance layered ON TOP of the deterministic engine verdict; they never
+// change a computed number. Vote tallying and condition transitions are pure
+// (see src/lib/committee/voting.ts); this component only renders and mutates.
+function CommitteeGovernance({ projectId }: { projectId: string }) {
+  const { data: voteData } = useSuspenseQuery(icVotesQ(projectId));
+  const { data: condData } = useSuspenseQuery(icCondsQ(projectId));
+  const qc = useQueryClient();
+  const castFn = useServerFn(castVote);
+  const addFn = useServerFn(addCondition);
+  const updFn = useServerFn(updateConditionStatus);
+  const [newCondition, setNewCondition] = useState("");
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["ic-votes", projectId] });
+    qc.invalidateQueries({ queryKey: ["ic-conditions", projectId] });
+  };
+  const cast = useMutation({
+    mutationFn: (vote: (typeof VOTE_OPTIONS)[number]["key"]) => castFn({ data: { project_id: projectId, vote } }),
+    onSuccess: () => { invalidate(); toast.success("Vote recorded"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const add = useMutation({
+    mutationFn: () => addFn({ data: { project_id: projectId, label: newCondition } }),
+    onSuccess: () => { invalidate(); setNewCondition(""); toast.success("Condition added"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const upd = useMutation({
+    mutationFn: (v: { id: string; action: "satisfy" | "reopen" | "waive" }) => updFn({ data: v }),
+    onSuccess: () => invalidate(),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const tally = voteData.tally;
+  const conditions = condData.conditions as Array<{ id: string; label: string; status: string }>;
+
+  return (
+    <div className="grid lg:grid-cols-2 gap-4">
+      <Card className="p-5 elevated">
+        <div className="flex items-center gap-2"><Gavel className="size-4 text-primary" /><SectionLabel>Committee Votes</SectionLabel></div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {VOTE_OPTIONS.map((v) => (
+            <Button key={v.key} size="sm" variant="outline" disabled={cast.isPending} onClick={() => cast.mutate(v.key)}>{v.label}</Button>
+          ))}
+        </div>
+        <div className="mt-4 text-sm">
+          <div className="flex flex-wrap gap-3 num text-xs text-muted-foreground">
+            <span>Approve {tally.counts.approve}</span>
+            <span>+Conditions {tally.counts.approve_with_conditions}</span>
+            <span>Reject {tally.counts.reject}</span>
+            <span>Abstain {tally.counts.abstain}</span>
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <Badge variant="outline" className="text-[10px] uppercase">{tally.outcome.replace(/_/g, " ")}</Badge>
+            <span className="text-xs text-muted-foreground">
+              {tally.quorumMet ? `${tally.approvalPct.toFixed(0)}% approve of ${tally.decisiveVotes} decisive vote(s)` : "quorum not met"}
+            </span>
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-2">
+            Votes are governance over the deterministic engine verdict; they never change a computed number.
+          </p>
+        </div>
+      </Card>
+
+      <Card className="p-5 elevated">
+        <div className="flex items-center gap-2">
+          <ListChecks className="size-4 text-warning" />
+          <SectionLabel>Tracked Conditions{condData.openCount > 0 ? ` (${condData.openCount} open)` : condData.cleared && conditions.length ? " (all cleared)" : ""}</SectionLabel>
+        </div>
+        <ul className="mt-3 space-y-2">
+          {conditions.length === 0 ? (
+            <li className="text-sm text-muted-foreground">No tracked conditions yet. Add the conditions an approval depends on.</li>
+          ) : conditions.map((c) => (
+            <li key={c.id} className="flex items-center justify-between gap-2 text-sm">
+              <span className="flex items-center gap-2 min-w-0">
+                <span className={`size-1.5 rounded-full shrink-0 ${c.status === "open" ? "bg-warning" : c.status === "satisfied" ? "bg-success" : "bg-muted-foreground"}`} />
+                <span className={`truncate ${c.status !== "open" ? "line-through text-muted-foreground" : ""}`}>{c.label}</span>
+                <Badge variant="outline" className="text-[9px] uppercase shrink-0">{c.status}</Badge>
+              </span>
+              <span className="flex gap-1 shrink-0">
+                {c.status === "open" ? (
+                  <>
+                    <Button size="sm" variant="ghost" disabled={upd.isPending} onClick={() => upd.mutate({ id: c.id, action: "satisfy" })}>Satisfy</Button>
+                    <Button size="sm" variant="ghost" disabled={upd.isPending} onClick={() => upd.mutate({ id: c.id, action: "waive" })}>Waive</Button>
+                  </>
+                ) : (
+                  <Button size="sm" variant="ghost" disabled={upd.isPending} onClick={() => upd.mutate({ id: c.id, action: "reopen" })}>Reopen</Button>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-3 flex gap-2">
+          <input
+            className="flex-1 rounded border border-border bg-background px-2 py-1 text-sm"
+            placeholder="Add a tracked condition..."
+            value={newCondition}
+            onChange={(e) => setNewCondition(e.target.value)}
+          />
+          <Button size="sm" disabled={!newCondition || add.isPending} onClick={() => add.mutate()}>Add</Button>
+        </div>
       </Card>
     </div>
   );

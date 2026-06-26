@@ -28,6 +28,7 @@ import { createMilestone, listMilestones, updateMilestone } from "@/lib/operatio
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { daysUntil } from "@/lib/platform-insights";
 import { MILESTONE_TEMPLATES, expandTemplate } from "@/lib/milestone-templates";
+import { computeCriticalPath, type ExecMilestone } from "@/lib/execution/critical-path";
 import {
   CalendarCheck,
   CheckCircle2,
@@ -121,6 +122,8 @@ function ExecutionPage() {
 
         <AttentionQueue overdue={overdue} dueSoon={dueSoon} blocked={blocked} />
 
+        <CriticalPathPanel projects={projects} milestones={milestones} />
+
         {milestones.length ? (
           <>
             {/* Table on md+, cards on mobile: no horizontal scrolling for the core workflow */}
@@ -162,6 +165,80 @@ function ExecutionPage() {
         )}
       </div>
     </>
+  );
+}
+
+// 3A: per-deal critical path. Groups milestones by deal, runs the pure
+// dependency engine (computeCriticalPath), and surfaces only the deals whose
+// open / overdue items actually threaten the target close, worst slack first.
+function CriticalPathPanel({ projects, milestones }: { projects: any[]; milestones: any[] }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const byProject = new Map<string, any[]>();
+  for (const m of milestones) {
+    const arr = byProject.get(m.project_id) ?? [];
+    arr.push(m);
+    byProject.set(m.project_id, arr);
+  }
+  const rows: { project: any; titleOf: (id: string) => string; result: ReturnType<typeof computeCriticalPath> }[] = [];
+  for (const [pid, ms] of byProject) {
+    const project = projects.find((p) => p.id === pid);
+    if (!project) continue;
+    const exec: ExecMilestone[] = ms.map((m) => ({
+      id: m.id, title: m.title, dueDate: m.due_date ?? null, status: m.status,
+      dependsOn: Array.isArray(m.depends_on) ? m.depends_on : [], priority: m.priority,
+    }));
+    const result = computeCriticalPath(exec, project.target_close_date ?? null, today);
+    if (!result.blocking.length) continue;
+    const titleMap = new Map(ms.map((m) => [m.id, m.title]));
+    rows.push({ project, titleOf: (id) => titleMap.get(id) ?? id, result });
+  }
+  if (!rows.length) return null;
+  rows.sort((a, b) => (a.result.blocking[0]?.slackDays ?? 0) - (b.result.blocking[0]?.slackDays ?? 0));
+
+  return (
+    <Card className="elevated border-warning/35">
+      <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+        <ListChecks className="size-4 text-warning" />
+        <span className="text-sm font-semibold">Critical path to close</span>
+        <span className="text-xs text-muted-foreground">deals whose open milestones threaten the target close</span>
+      </div>
+      <ul className="divide-y divide-border">
+        {rows.map(({ project, titleOf, result }) => (
+          <li key={project.id} className="p-4">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-medium">{project.name}</span>
+              <span className="text-xs text-muted-foreground num">
+                projected close {result.projectedCloseDate ?? "n/a"}
+                {project.target_close_date ? ` vs target ${project.target_close_date}` : ""}
+                {result.hasCycle ? " · dependency cycle" : ""}
+              </span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {result.blocking.slice(0, 8).map((b) => (
+                <span
+                  key={b.id}
+                  className={`text-[10px] rounded px-1.5 py-0.5 border ${
+                    b.reasons.includes("overdue")
+                      ? "border-destructive/40 text-destructive"
+                      : b.reasons.includes("on_critical_path")
+                        ? "border-warning/40 text-warning"
+                        : "border-border text-muted-foreground"
+                  }`}
+                  title={b.reasons.join(", ")}
+                >
+                  {b.title}{b.slackDays != null ? ` (${b.slackDays >= 0 ? "+" : ""}${b.slackDays}d)` : ""}
+                </span>
+              ))}
+            </div>
+            {result.criticalPath.length > 0 && (
+              <div className="mt-1.5 text-[10px] text-muted-foreground">
+                Critical path: {result.criticalPath.map((id) => titleOf(id)).join(" -> ")}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 
