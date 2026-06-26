@@ -363,6 +363,47 @@ export type Database = {
           },
         ];
       };
+      counterparty_templates: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          field_key: string;
+          fingerprint: string;
+          id: string;
+          label: string;
+          owner_id: string;
+          workspace_id: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          field_key: string;
+          fingerprint: string;
+          id?: string;
+          label: string;
+          owner_id: string;
+          workspace_id?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          field_key?: string;
+          fingerprint?: string;
+          id?: string;
+          label?: string;
+          owner_id?: string;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "counterparty_templates_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       deal_assignments: {
         Row: {
           assigned_by: string;
@@ -750,6 +791,50 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      extraction_aliases: {
+        Row: {
+          alias_text: string;
+          created_at: string;
+          created_by: string | null;
+          field_key: string;
+          id: string;
+          owner_id: string;
+          updated_at: string;
+          usage_count: number;
+          workspace_id: string | null;
+        };
+        Insert: {
+          alias_text: string;
+          created_at?: string;
+          created_by?: string | null;
+          field_key: string;
+          id?: string;
+          owner_id: string;
+          updated_at?: string;
+          usage_count?: number;
+          workspace_id?: string | null;
+        };
+        Update: {
+          alias_text?: string;
+          created_at?: string;
+          created_by?: string | null;
+          field_key?: string;
+          id?: string;
+          owner_id?: string;
+          updated_at?: string;
+          usage_count?: number;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "extraction_aliases_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },
         ];

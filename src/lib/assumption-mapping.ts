@@ -12,7 +12,7 @@ import { ASSUMPTION_DEFS, ASSUMPTION_BY_KEY, type AssumptionDef } from "./assump
 // Candidate kinds that are admissible for a taxonomy unit. This is a guard
 // against gross mismatches (e.g. a percentage mapping to a dollar field); the
 // label match is the primary signal.
-function kindFitsKey(kind: CandidateKind, def: AssumptionDef): boolean {
+export function kindFitsKey(kind: CandidateKind, def: AssumptionDef): boolean {
   switch (def.unit) {
     case "%":
       return kind === "percent";
@@ -50,6 +50,21 @@ function aliasStrings(def: AssumptionDef): string[] {
 const ALIAS_TABLE: Array<{ def: AssumptionDef; alias: string }> = ASSUMPTION_DEFS.flatMap((def) =>
   aliasStrings(def).map((alias) => ({ def, alias })),
 ).sort((a, b) => b.alias.length - a.alias.length);
+
+// WS2 / 2D. Learned aliases recorded from analyst corrections, checked with the
+// SAME proximity/guard rules as the static aliases. An empty list (the default
+// everywhere except the live extraction path) leaves mapping byte-identical: it
+// returns the exact ALIAS_TABLE reference and iteration order.
+export type LearnedAliasEntry = { field_key: string; alias_text: string };
+
+function aliasTableFor(learned: ReadonlyArray<LearnedAliasEntry>): Array<{ def: AssumptionDef; alias: string }> {
+  if (!learned.length) return ALIAS_TABLE;
+  const extra = learned
+    .map((l) => ({ def: ASSUMPTION_BY_KEY[l.field_key], alias: (l.alias_text || "").toLowerCase().trim() }))
+    .filter((e): e is { def: AssumptionDef; alias: string } => Boolean(e.def) && e.alias.length >= 3);
+  if (!extra.length) return ALIAS_TABLE;
+  return [...ALIAS_TABLE, ...extra].sort((a, b) => b.alias.length - a.alias.length);
+}
 
 export type CandidateMapping = {
   field_key: string;
@@ -116,7 +131,11 @@ function passesSensitiveGuard(cand: Candidate, key: string): boolean {
   return true;
 }
 
-export function mapCandidateToKey(cand: Candidate, exclude: Set<string> = new Set()): CandidateMapping | null {
+export function mapCandidateToKey(
+  cand: Candidate,
+  exclude: Set<string> = new Set(),
+  learnedAliases: ReadonlyArray<LearnedAliasEntry> = [],
+): CandidateMapping | null {
   const hint = (cand.label_hint || "").toLowerCase();
 
   // Match against the line-scoped label hint, preferring the alias whose match
@@ -126,7 +145,7 @@ export function mapCandidateToKey(cand: Candidate, exclude: Set<string> = new Se
   let best: CandidateMapping | null = null;
   let bestEnd = -1;
   let bestLen = -1;
-  for (const { def, alias } of ALIAS_TABLE) {
+  for (const { def, alias } of aliasTableFor(learnedAliases)) {
     if (exclude.has(def.key)) continue;
     if (!kindFitsKey(cand.kind, def)) continue;
     const idx = hint.lastIndexOf(alias);
@@ -146,7 +165,7 @@ export function mapCandidateToKey(cand: Candidate, exclude: Set<string> = new Se
   if (best && best.field_key === "total_project_cost" && !exclude.has("total_project_cost")) {
     const tail = hint.slice(-32);
     if (LOAN_DEBT_LABEL_RE.test(tail)) {
-      return mapCandidateToKey(cand, new Set([...exclude, "total_project_cost"]));
+      return mapCandidateToKey(cand, new Set([...exclude, "total_project_cost"]), learnedAliases);
     }
   }
 
@@ -156,7 +175,7 @@ export function mapCandidateToKey(cand: Candidate, exclude: Set<string> = new Se
   // value from landing on the operating expense ratio, an interest rate from a
   // cap-rate context, or a component occupancy from the stabilized field.
   if (best && SENSITIVE_GUARDS[best.field_key] && !passesSensitiveGuard(cand, best.field_key)) {
-    return mapCandidateToKey(cand, new Set([...exclude, best.field_key]));
+    return mapCandidateToKey(cand, new Set([...exclude, best.field_key]), learnedAliases);
   }
   return best;
 }
@@ -189,10 +208,13 @@ export type MappedCandidate = {
 };
 
 // Map every candidate deterministically; unmapped candidates are dropped.
-export function mapCandidates(candidates: Candidate[]): MappedCandidate[] {
+export function mapCandidates(
+  candidates: Candidate[],
+  learnedAliases: ReadonlyArray<LearnedAliasEntry> = [],
+): MappedCandidate[] {
   const out: MappedCandidate[] = [];
   for (const c of candidates) {
-    const m = mapCandidateToKey(c);
+    const m = mapCandidateToKey(c, new Set(), learnedAliases);
     if (!m) continue;
     const def = ASSUMPTION_BY_KEY[m.field_key];
     if (!def) continue;

@@ -193,7 +193,13 @@ export const extractAssumptions = createServerFn({ method: "POST" })
     const { mapRevenueProgramRowToAssumptions } = await import("./revenue-assumption-mapper");
     const { parseBudgetWorkbook } = await import("./parsers/budget.server");
     const { aggregateBudgetRows } = await import("./budget-assumption-mapper");
+    // WS2 / 2B + 2D: structure-aware Excel recovery and the learning store.
+    const { parseStructuredWorkbook } = await import("./parsers/structure.server");
+    const learning = await import("./extraction-learning.server");
+    const { documentFingerprint, applyTemplate, buildTemplateEntries, deriveAliasFromCorrection } =
+      await import("./extraction-learning");
     type Cand = Awaited<ReturnType<typeof extractCandidates>>[number];
+    type LearnedAlias = { field_key: string; alias_text: string };
 
     const warnings: string[] = [];
     const skippedDocs: string[] = [];
@@ -212,8 +218,19 @@ export const extractAssumptions = createServerFn({ method: "POST" })
     const allCandidates: Cand[] = [];
     const structuredRevenueMappings: MappedCandidate[] = [];
     const structuredBudgetMappings: MappedCandidate[] = [];
+    // WS2 / 2B: candidates recovered from named ranges + sources & uses blocks.
+    const structuredStructureMappings: MappedCandidate[] = [];
+    // WS2 / 2D: per-document candidates + structural fingerprint, for template
+    // auto-apply and template/alias learning.
+    const perDocCands: Array<{ cands: Cand[]; fingerprint: string | null }> = [];
     const docByName = new Map(docs.map((d) => [d.name, d]));
     let documentsDownloaded = 0;
+
+    // WS2 / 2D: load this project's workspace-scoped learned aliases up front so the
+    // deterministic mapper applies past analyst corrections to this run. Best-effort
+    // and migration-safe (empty when the learning tables are not yet applied).
+    const learningScope = await learning.loadProjectScope(context, data.project_id);
+    const learnedAliases = await learning.loadLearnedAliases(context, learningScope);
 
     // ===== Stage 1: parse every document, recording a debug row per doc =====
     for (const d of docs) {
@@ -259,6 +276,9 @@ export const extractAssumptions = createServerFn({ method: "POST" })
         row.candidate_count = cands.length;
         row.candidates_preview = cands.slice(0, 5).map((c) => ({ kind: c.kind, value_text: c.value_text, label_hint: c.label_hint.slice(0, 48), source_location: c.source_location }));
         allCandidates.push(...cands);
+        // WS2 / 2D: a structural fingerprint of this document's label set, so a
+        // counterparty template learned from one document auto-maps the next.
+        perDocCands.push({ cands, fingerprint: documentFingerprint(cands.map((c) => c.label_hint)) });
         if (/\.(xlsx|xls)$/i.test(d.name)) {
           const parsedRevenue = parseRentRollWorkbook(buf);
           structuredRevenueMappings.push(
@@ -269,6 +289,11 @@ export const extractAssumptions = createServerFn({ method: "POST" })
           // rows in one category are summed into a single category total, not
           // treated as competing conflicts.
           structuredBudgetMappings.push(...aggregateBudgetRows(parsedBudget.inserted, { name: d.name }));
+          // WS2 / 2B: named ranges + Sources & Uses (deterministic structure). The
+          // Uses block feeds the same category aggregation; Sources lifts debt/equity.
+          const structured = parseStructuredWorkbook(buf, d.name);
+          structuredStructureMappings.push(...structured.namedRanges, ...structured.sourcesUses.scalars);
+          structuredBudgetMappings.push(...aggregateBudgetRows(structured.sourcesUses.budgetRows, { name: d.name }));
           // 2D: record which sheet(s) fed the typed parsers and how many merged
           // cells were recovered, so the trace shows the workbook was scanned.
           row.sheets_scanned = parsedBudget.meta.sheetsScanned;
@@ -289,12 +314,29 @@ export const extractAssumptions = createServerFn({ method: "POST" })
       );
     }
 
+    // ===== WS2 / 2D: counterparty template auto-apply =====
+    // Load templates for the documents' fingerprints and auto-map this run's
+    // candidates from any known lender/broker template. Structure only: the value
+    // still comes from the document token.
+    const fingerprints = Array.from(new Set(perDocCands.map((p) => p.fingerprint).filter((f): f is string => Boolean(f))));
+    const templates = await learning.loadTemplates(context, learningScope, fingerprints);
+    const templateMapped: MappedCandidate[] = [];
+    if (templates.length) {
+      for (const p of perDocCands) {
+        if (!p.fingerprint) continue;
+        const forFp = templates.filter((t) => t.fingerprint === p.fingerprint);
+        if (forFp.length) templateMapped.push(...applyTemplate(p.cands, forFp));
+      }
+    }
+
     // ===== Stage 2: deterministic alias mapping (authoritative) =====
-    const deterministic = mapCandidates(allCandidates);
+    // Learned aliases (past analyst corrections) are applied with the same
+    // proximity/guard rules as the static aliases; an empty set is byte-identical.
+    const deterministic = mapCandidates(allCandidates, learnedAliases);
     const deterministicKeys = new Set(deterministic.map((m) => m.field_key));
     const mappedIndices = new Set<number>();
     for (let i = 0; i < allCandidates.length; i++) {
-      if (mapCandidateToKey(allCandidates[i])) mappedIndices.add(i);
+      if (mapCandidateToKey(allCandidates[i], new Set(), learnedAliases)) mappedIndices.add(i);
     }
 
     // ===== Stage 2b: AI classification of unresolved candidates (DEFAULT) =====
@@ -303,6 +345,10 @@ export const extractAssumptions = createServerFn({ method: "POST" })
     // the numeric value always comes from the document token, never the model.
     let classifiedCount = 0;
     const aiMapped: MappedCandidate[] = [];
+    // WS2 / 2D: a label the AI mapped (that the deterministic mapper missed) is
+    // promoted into the deterministic alias store so it resolves without a model
+    // next time.
+    const aiLearned: LearnedAlias[] = [];
     const unresolved = allCandidates.map((c, i) => ({ c, i })).filter(({ i }) => !mappedIndices.has(i));
     if (unresolved.length && useAI) {
       try {
@@ -345,6 +391,8 @@ export const extractAssumptions = createServerFn({ method: "POST" })
               matched_alias: "(ai)",
               via: "alias",
             });
+            const learnedAlias = deriveAliasFromCorrection(def.key, u.c.label_hint);
+            if (learnedAlias) aiLearned.push(learnedAlias);
             classifiedCount++;
           }
         }
@@ -359,7 +407,14 @@ export const extractAssumptions = createServerFn({ method: "POST" })
     // result; otherwise the deterministic backup carried the run.
     const analysisMode: "ai" | "deterministic" = useAI && !aiFailureReason ? "ai" : "deterministic";
 
-    const mapped = [...deterministic, ...structuredBudgetMappings, ...structuredRevenueMappings, ...aiMapped];
+    const mapped = [
+      ...deterministic,
+      ...structuredBudgetMappings,
+      ...structuredRevenueMappings,
+      ...structuredStructureMappings,
+      ...templateMapped,
+      ...aiMapped,
+    ];
 
     // ===== Stage 3: group & resolve (conflicts preserved) =====
     const grouped = groupAndResolve(mapped);
@@ -507,6 +562,32 @@ export const extractAssumptions = createServerFn({ method: "POST" })
     const satisfiedRequired = new Set(requiredKeysSatisfiedBy(reportMap));
     const missingRequired = REQUIRED_KEYS.filter((key) => !satisfiedRequired.has(key) && allMissingKeys.includes(key));
 
+    // ===== WS2 / 2D: persist what this run learned (best-effort, never blocks) =====
+    // A counterparty template captures each document's deterministic label -> key
+    // structure under its fingerprint; AI-promoted aliases enrich the deterministic
+    // map. Both are filtered against what is already stored, then inserted.
+    let templatesLearned = 0;
+    let aliasesLearned = 0;
+    try {
+      const newTemplateEntries = perDocCands.flatMap((p) =>
+        p.fingerprint
+          ? buildTemplateEntries(
+              p.fingerprint,
+              p.cands
+                .map((c) => ({
+                  field_key: mapCandidateToKey(c, new Set(), learnedAliases)?.field_key ?? "",
+                  label: c.label_hint,
+                }))
+                .filter((r) => r.field_key),
+            )
+          : [],
+      );
+      templatesLearned = await learning.recordTemplates(context, learningScope, newTemplateEntries, templates);
+      aliasesLearned = await learning.recordLearnedAliases(context, learningScope, aiLearned, learnedAliases);
+    } catch {
+      // Learning is a side benefit: a failure here never affects the extraction result.
+    }
+
     const debug = {
       project_id: data.project_id,
       analysis_mode: analysisMode,
@@ -521,6 +602,11 @@ export const extractAssumptions = createServerFn({ method: "POST" })
       classified_count: classifiedCount,
       alias_mapped_count: deterministic.length,
       mapped_count: mapped.length,
+      // WS2 / 2B + 2D transparency.
+      structure_mapped_count: structuredStructureMappings.length,
+      template_auto_mapped_count: templateMapped.length,
+      templates_learned: templatesLearned,
+      aliases_learned: aliasesLearned,
       grouped_keys: Array.from(grouped.keys()),
       conflict_keys: conflictKeys,
       missing_keys: allMissingKeys,
@@ -712,10 +798,63 @@ export const reviewAssumption = createServerFn({ method: "POST" })
     // Approval propagates into the engine-readable tables; rejection demotes.
     if (upd.status === "approved" || upd.status === "modified") {
       await propagateApprovedToEngine(context, upd);
+      // WS2 / 2D: an accepted extraction enriches the deterministic alias map so the
+      // same source label maps without a model next time. Best-effort, never blocks.
+      try {
+        const { loadProjectScope, loadLearnedAliases, recordLearnedAliases } = await import("./extraction-learning.server");
+        const { deriveAliasFromCorrection, sourceLabelFromText } = await import("./extraction-learning");
+        const alias = deriveAliasFromCorrection(upd.field_key, sourceLabelFromText(cur.source_text));
+        if (alias) {
+          const scope = await loadProjectScope(context, cur.project_id);
+          const existing = await loadLearnedAliases(context, scope);
+          await recordLearnedAliases(context, scope, [alias], existing);
+        }
+      } catch {
+        // learning is best-effort
+      }
     } else if (upd.status === "rejected") {
       await demoteEngineRows(context, upd);
     }
     return upd;
+  });
+
+// WS2 / 2A. Bulk-approve the high-confidence tail in one action. Only clean
+// (non-conflicting) extracted rows with a value are approved: a conflict still
+// needs a human pick. RLS-scoped: the user-scoped client only returns rows the
+// caller may see, and approval propagates into the engine-readable tables.
+const BulkApproveSchema = z.object({
+  project_id: z.string().uuid(),
+  ids: z.array(z.string().uuid()).min(1).max(200),
+});
+
+export const bulkApproveAssumptions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => BulkApproveSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const by = await userName(context);
+    const { data: rows, error } = await context.supabase
+      .from("assumptions").select("*").eq("project_id", data.project_id).in("id", data.ids);
+    if (error) throw new Error(error.message);
+    const eligible = (rows ?? []).filter(
+      (a: any) => a.status === "extracted" && (a.value_numeric != null || a.value_text),
+    );
+    let approved = 0;
+    for (const a of eligible) {
+      const { data: upd, error: uErr } = await context.supabase.from("assumptions").update({
+        status: "approved", approved_by: context.userId, approved_at: new Date().toISOString(),
+        current_version: a.current_version + 1,
+      }).eq("id", a.id).select().single();
+      if (uErr) throw new Error(uErr.message);
+      await recordVersion(context, upd, "Bulk-approved high-confidence extraction", by);
+      await propagateApprovedToEngine(context, upd);
+      approved++;
+    }
+    if (approved) {
+      await auditLog(context, data.project_id, "project", data.project_id, "assumptions_bulk_approved", {
+        requested: data.ids.length, approved,
+      });
+    }
+    return { approved, requested: data.ids.length };
   });
 
 // ---------- Financial engine ----------

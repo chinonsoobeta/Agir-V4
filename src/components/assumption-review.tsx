@@ -4,8 +4,10 @@
 import { useState } from "react";
 import { useSuspenseQuery, useMutation, useQueryClient, queryOptions } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listAssumptions, listAssumptionVersions, reviewAssumption, extractAssumptions, getReadiness } from "@/lib/assumptions.functions";
+import { listAssumptions, listAssumptionVersions, reviewAssumption, extractAssumptions, getReadiness, bulkApproveAssumptions } from "@/lib/assumptions.functions";
 import { runFullUnderwriting } from "@/lib/underwriting.functions";
+import { triageOrder, selectHighConfidenceTail, highlightSegments } from "@/lib/extraction-review";
+import { useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Check, X, Edit3, Eye, History, Sparkles, RefreshCw, AlertCircle, Calculator } from "lucide-react";
+import { Check, X, Edit3, Eye, History, Sparkles, RefreshCw, AlertCircle, Calculator, ListChecks, CheckCheck } from "lucide-react";
 import { REQUIRED_KEYS } from "@/lib/assumption-taxonomy";
 import { toast } from "sonner";
 
@@ -58,6 +60,41 @@ const isInterestKey = (k: string) => k === "interest_rate";
 const supersedingSource = (source?: string | null) =>
   !!source && /rate[\s_-]?lock|rate[\s_-]?update|financing[\s_-]?update|addendum/i.test(source);
 
+// The documented candidate values for a conflicting key (shared by the Conflict
+// Center and the keyboard triage queue). Never invents a value: these are the
+// distinct documented numbers preserved at extraction.
+function conflictChoices(a: any): { value: number; source: string | null }[] {
+  return (Array.isArray(a.conflict_values) ? a.conflict_values : [])
+    .map((cv: any) => ({ value: typeof cv === "object" ? cv.value : cv, source: typeof cv === "object" ? cv.source : null }))
+    .filter((cv: any) => Number.isFinite(Number(cv.value)))
+    .map((cv: any) => ({ value: Number(cv.value), source: cv.source }));
+}
+
+// The token to highlight inside a source snippet: the text value, else the numeric
+// value rendered with thousands separators so it matches "$34,500,000" in context.
+function valueNeedle(a: any): string {
+  if (a.value_text) return String(a.value_text);
+  if (a.value_numeric != null) return Number(a.value_numeric).toLocaleString("en-US");
+  return "";
+}
+
+// Render a source snippet with the extracted value highlighted.
+function HighlightedSource({ text, value }: { text: string | null | undefined; value: string }) {
+  const segments = highlightSegments(text, value);
+  if (!segments.length) return <span className="text-muted-foreground">Not available</span>;
+  return (
+    <>
+      {segments.map((seg, i) =>
+        seg.match ? (
+          <mark key={i} className="bg-primary/25 text-foreground rounded px-0.5">{seg.text}</mark>
+        ) : (
+          <span key={i}>{seg.text}</span>
+        ),
+      )}
+    </>
+  );
+}
+
 export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
   const { data: assumptions } = useSuspenseQuery(assumptionsQ(projectId));
   const { data: readiness } = useSuspenseQuery(readinessQ(projectId));
@@ -65,6 +102,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
   const extractFn = useServerFn(extractAssumptions);
   const recomputeFn = useServerFn(runFullUnderwriting);
   const reviewFn = useServerFn(reviewAssumption);
+  const bulkFn = useServerFn(bulkApproveAssumptions);
 
   const [sourceOf, setSourceOf] = useState<any | null>(null);
   const [editOf, setEditOf] = useState<any | null>(null);
@@ -117,6 +155,19 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
   const review = useMutation({
     mutationFn: (d: any) => reviewFn({ data: d }),
     onSuccess: () => { invalidate(); toast.success("Updated"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // WS2 / 2A. Keyboard-first triage queue + bulk-accept of the high-confidence tail.
+  const [triageOpen, setTriageOpen] = useState(false);
+  const triageItems = triageOrder(assumptions);
+  const bulkTailIds = selectHighConfidenceTail(assumptions);
+  const bulkApprove = useMutation({
+    mutationFn: () => bulkFn({ data: { project_id: projectId, ids: bulkTailIds } }),
+    onSuccess: (r: any) => {
+      invalidate();
+      toast.success(`Approved ${r.approved} high-confidence ${r.approved === 1 ? "input" : "inputs"}`);
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -178,6 +229,14 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
             <Button size="sm" variant="outline" onClick={() => recompute.mutate()} disabled={recompute.isPending}>
               <RefreshCw className="size-4 mr-1" />{recompute.isPending ? "Computing…" : "Recompute model"}
             </Button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="secondary" className="flex-1" onClick={() => setTriageOpen(true)} disabled={triageItems.length === 0}>
+                <ListChecks className="size-4 mr-1" />Triage{triageItems.length ? ` (${triageItems.length})` : ""}
+              </Button>
+              <Button size="sm" variant="outline" className="flex-1" onClick={() => bulkApprove.mutate()} disabled={bulkTailIds.length === 0 || bulkApprove.isPending}>
+                <CheckCheck className="size-4 mr-1" />{bulkApprove.isPending ? "Accepting…" : `Accept ${bulkTailIds.length} high`}
+              </Button>
+            </div>
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4 text-sm">
@@ -197,6 +256,18 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
           </div>
         )}
       </Card>
+
+      {triageOpen && triageItems.length > 0 && (
+        <TriageQueue
+          items={triageItems}
+          pending={review.isPending}
+          onApprove={(a) => review.mutate({ id: a.id, action: "approve", change_reason: "Approved in triage" })}
+          onReject={(a) => review.mutate({ id: a.id, action: "reject", change_reason: "Rejected in triage" })}
+          onEdit={(a) => setEditOf(a)}
+          onResolve={(a, value) => review.mutate({ id: a.id, action: "modify", value_numeric: value, change_reason: `Resolved conflict to ${value}` })}
+          onClose={() => setTriageOpen(false)}
+        />
+      )}
 
       {report && <ExtractionReportCard report={report} onClose={() => setReport(null)} />}
       {report?.debug && <ExtractionDebugCard debug={report.debug} />}
@@ -300,6 +371,132 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
   );
 }
 
+// WS2 / 2A. Keyboard-first triage of the confidence-ranked queue. Conflicts first,
+// then low, then medium confidence (see triageOrder). A=approve, R=reject,
+// E=modify, number keys pick a documented value for a conflict, J/K navigate.
+function TriageQueue({
+  items,
+  pending,
+  onApprove,
+  onReject,
+  onEdit,
+  onResolve,
+  onClose,
+}: {
+  items: any[];
+  pending: boolean;
+  onApprove: (a: any) => void;
+  onReject: (a: any) => void;
+  onEdit: (a: any) => void;
+  onResolve: (a: any, value: number) => void;
+  onClose: () => void;
+}) {
+  const [index, setIndex] = useState(0);
+  const clampedIndex = Math.min(index, Math.max(0, items.length - 1));
+  const current = items[clampedIndex];
+
+  // Keep the cursor in range as items resolve and leave the queue; close when empty.
+  useEffect(() => {
+    if (items.length === 0) { onClose(); return; }
+    if (index > items.length - 1) setIndex(items.length - 1);
+  }, [items.length, index, onClose]);
+
+  const next = () => setIndex((i) => Math.min(i + 1, items.length - 1));
+  const prev = () => setIndex((i) => Math.max(i - 1, 0));
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) return;
+      if (!current) return;
+      const isConflict = current.status === "conflicting";
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.key === "j" || e.key === "ArrowDown" || e.key === "ArrowRight") { e.preventDefault(); next(); return; }
+      if (e.key === "k" || e.key === "ArrowUp" || e.key === "ArrowLeft") { e.preventDefault(); prev(); return; }
+      if (pending) return;
+      if ((e.key === "a" || e.key === "A") && !isConflict) { onApprove(current); next(); return; }
+      if (e.key === "r" || e.key === "R") { onReject(current); next(); return; }
+      if (e.key === "e" || e.key === "E") { onEdit(current); return; }
+      if (isConflict && /^[1-9]$/.test(e.key)) {
+        const pick = conflictChoices(current)[Number(e.key) - 1];
+        if (pick) { onResolve(current, pick.value); next(); }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, pending, items.length]);
+
+  if (!current) return null;
+  const isConflict = current.status === "conflicting";
+  const choices = isConflict ? conflictChoices(current) : [];
+
+  return (
+    <Card className="p-5 border-primary/50 elevated">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-primary">
+          <ListChecks className="size-4" />
+          <span className="text-[10px] uppercase tracking-widest font-semibold">Triage Queue</span>
+          <span className="num text-xs text-muted-foreground">{clampedIndex + 1} of {items.length}</span>
+        </div>
+        <Button variant="ghost" size="sm" onClick={onClose}>Close (Esc)</Button>
+      </div>
+
+      <div className="mt-3 rounded-lg border border-border bg-background p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-medium">{current.field_label}</div>
+            <div className="num text-2xl mt-1">{fmt(current)}</div>
+          </div>
+          <Badge variant="outline" className={`${STATUS_STYLES[current.status]} text-[9px] capitalize shrink-0`}>{current.status.replace("_", " ")}</Badge>
+        </div>
+        <div className="mt-1 text-[11px] font-mono text-muted-foreground">
+          {current.confidence_score}% confidence · {current.source_location || "no source"}
+        </div>
+        <blockquote className="mt-3 text-xs text-muted-foreground border-l-2 border-primary pl-3 whitespace-pre-wrap">
+          <HighlightedSource text={current.source_text} value={valueNeedle(current)} />
+        </blockquote>
+
+        {isConflict ? (
+          <div className="mt-4">
+            <p className="text-[11px] text-destructive uppercase tracking-widest font-semibold">Conflict: pick a documented value</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {choices.map((cv, i) => (
+                <Button key={i} size="sm" variant="outline" disabled={pending} title={cv.source || ""}
+                  onClick={() => { onResolve(current, cv.value); next(); }}>
+                  <span className="text-[10px] text-muted-foreground mr-1.5">{i + 1}</span>
+                  <span className="num">{cv.value.toLocaleString()}</span>
+                </Button>
+              ))}
+              <Button size="sm" variant="ghost" disabled={pending} onClick={() => onEdit(current)}>Enter value… (E)</Button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button size="sm" disabled={pending} onClick={() => { onApprove(current); next(); }}>
+              <Check className="size-4 mr-1" />Approve (A)
+            </Button>
+            <Button size="sm" variant="outline" disabled={pending} onClick={() => { onReject(current); next(); }}>
+              <X className="size-4 mr-1" />Reject (R)
+            </Button>
+            <Button size="sm" variant="ghost" disabled={pending} onClick={() => onEdit(current)}>
+              <Edit3 className="size-4 mr-1" />Modify (E)
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground">
+        <span>Keys: A approve · R reject · E modify · J/K next/prev · Esc close</span>
+        <div className="flex gap-1">
+          <Button variant="ghost" size="sm" onClick={prev} disabled={clampedIndex === 0}>Prev (K)</Button>
+          <Button variant="ghost" size="sm" onClick={next} disabled={clampedIndex >= items.length - 1}>Next (J)</Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function SourcePanel({ a, onClose }: { a: any | null; onClose: () => void }) {
   return (
     <Sheet open={!!a} onOpenChange={(o) => !o && onClose()}>
@@ -311,8 +508,8 @@ function SourcePanel({ a, onClose }: { a: any | null; onClose: () => void }) {
             <Field label="Source document">{a.source_location || "Not available"}</Field>
             <Field label="Confidence">{a.confidence_score}%: {a.confidence_band}</Field>
             <Field label="Source text">
-              <blockquote className="text-xs italic text-muted-foreground border-l-2 border-primary pl-3 mt-1 whitespace-pre-wrap">
-                {a.source_text || "Not available"}
+              <blockquote className="text-xs text-muted-foreground border-l-2 border-primary pl-3 mt-1 whitespace-pre-wrap">
+                {a.source_text ? <HighlightedSource text={a.source_text} value={valueNeedle(a)} /> : "Not available"}
               </blockquote>
             </Field>
             <Field label="AI reasoning">{a.ai_reasoning || "Not available"}</Field>
