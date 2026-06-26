@@ -30,6 +30,7 @@ import {
   saveWebhookEndpoint,
 } from "@/lib/operating-depth.functions";
 import { useWorkspace } from "@/lib/workspace-context";
+import { CONNECTOR_REGISTRY } from "@/lib/integrations/connector";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import {
   Building2,
@@ -192,6 +193,30 @@ function IntegrationsPage() {
             </div>
           </div>
         </Card>
+
+        {/* 3C: honest connector status. Only "live" connectors perform a real
+            round-trip; planned ones are never shown as connected. */}
+        <Card className="p-5 elevated">
+          <div className="flex items-center gap-2">
+            <Plug className="size-4 text-muted-foreground" />
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Connector status</div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            Only connectors marked Live perform a real import / export round-trip today. Planned connectors are
+            disclosed as roadmap, never shown as connected.
+          </p>
+          <div className="mt-3 grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            {CONNECTOR_REGISTRY.map((c) => (
+              <div key={c.provider} className="rounded border border-border p-2 flex items-center justify-between gap-2">
+                <span className="text-sm">{c.label}</span>
+                <Badge variant="outline" className={`text-[9px] uppercase ${c.status === "live" ? "text-success border-success/40" : "text-muted-foreground"}`}>
+                  {c.status}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </Card>
+
         <div className="flex flex-wrap gap-2">
           <input
             ref={fileRef}
