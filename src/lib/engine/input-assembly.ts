@@ -286,6 +286,23 @@ export function assembleEngineInput(rows: ProjectInputRows): UnderwritingInput {
       }
     : null;
 
+  // ---- Monthly cash-flow spine (WS1). All absent => the annual path runs. ----
+  // 1C. A refinance is assembled only when a positive refinance month is
+  // approved. Rate and amortization default to the senior loan's (a pure
+  // rate-and-term takeout) when not separately supplied.
+  const refiMonth = scalar("refinance_month");
+  const refinance =
+    refiMonth != null && refiMonth > 0
+      ? {
+          month: refiMonth,
+          newAmount: scalar("refinance_amount"),
+          ltvPct: scalar("refinance_ltv_pct"),
+          ratePct: scalar("refinance_rate_pct") ?? required("interest_rate_pct"),
+          amortYears: scalar("refinance_amort_years") ?? required("amort_years"),
+          ioMonths: scalar("refinance_io_months") ?? 0,
+        }
+      : null;
+
   return {
     budget: {
       land: budgetSum("land"),
@@ -317,5 +334,9 @@ export function assembleEngineInput(rows: ProjectInputRows): UnderwritingInput {
     waterfall,
     // 1D: opt-in lease-up absorption (a positive flag turns it on).
     leaseUpCurve: (scalar("lease_up_curve") ?? 0) > 0,
+    // WS1 monthly spine: a positive flag opts the deal into monthly precision.
+    monthlyModel: (scalar("monthly_model") ?? 0) > 0,
+    constructionDrawCurve: (scalar("construction_s_curve") ?? 0) > 0 ? "s_curve" : "straight_line",
+    refinance,
   };
 }

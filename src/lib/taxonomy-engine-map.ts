@@ -44,6 +44,17 @@ export const TAXONOMY_TO_ENGINE_SCALAR: Record<string, string> = {
   promote_tier1_gp_pct: "promote_tier1_gp_pct",
   promote_tier2_hurdle_pct: "promote_tier2_hurdle_pct",
   promote_tier2_gp_pct: "promote_tier2_gp_pct",
+
+  // Monthly cash-flow spine (WS1; all optional, absent => today's annual path).
+  monthly_model: "monthly_model",
+  construction_s_curve: "construction_s_curve",
+  // 1C. Refinance event.
+  refinance_month: "refinance_month",
+  refinance_amount: "refinance_amount",
+  refinance_ltv_pct: "refinance_ltv_pct",
+  refinance_rate: "refinance_rate_pct",
+  refinance_amort_years: "refinance_amort_years",
+  refinance_io_months: "refinance_io_months",
 };
 
 export const ENGINE_SCALAR_TO_TAXONOMY: Record<string, string> = Object.fromEntries(

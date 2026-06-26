@@ -1,7 +1,30 @@
 export { annualDebtService, interestOnlyDebtService, loanBalanceAfterYears, loanBalanceSchedule } from "./debt";
 export { irr, xirr } from "./metrics";
 export { runUnderwriting, componentGpr } from "./proforma";
-export type { EngineOutput, UnderwritingInput, RevenueUnitInput, BudgetInput, MezzanineInput } from "./types";
+export type {
+  EngineOutput,
+  UnderwritingInput,
+  RevenueUnitInput,
+  BudgetInput,
+  MezzanineInput,
+  RefinanceInput,
+  CustomLineInput,
+  MonthlySchedule,
+  PeriodNode,
+  ScheduleLineKey,
+  ScheduleReconciliation,
+} from "./types";
+export { applyMonthlySchedule, smoothstep, cumulativeDrawFraction, type ScheduleContext } from "./schedule";
+export {
+  parseExpression,
+  evaluate,
+  evaluateExpression,
+  collectReferences,
+  collectLiterals,
+  ExpressionError,
+  type ExprNode,
+  type WhitelistFn,
+} from "./expression";
 export {
   buildDebtStack,
   stackDebtServiceForYear,

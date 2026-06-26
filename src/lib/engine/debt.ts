@@ -15,19 +15,21 @@ export function interestOnlyDebtService(loanAmount: number, annualRatePct: numbe
   return loanAmount * (annualRatePct / 100);
 }
 
-// Outstanding balance after `years`, honoring an initial interest-only period.
-// During IO months the balance is unchanged; afterwards it follows the
-// standard amortization schedule over amortYears.
-export function loanBalanceAfterYears(
+// Outstanding balance after `elapsedMonths`, honoring an initial interest-only
+// period. During IO months the balance is unchanged; afterwards it follows the
+// standard amortization schedule over amortYears. The monthly primitive used by
+// both the annual payoff (loanBalanceAfterYears) and the monthly spine
+// (schedule.ts), so the two can never drift apart.
+export function loanBalanceAfterMonths(
   loanAmount: number,
   annualRatePct: number,
   amortYears: number,
   ioMonths: number,
-  years: number,
+  elapsedMonths: number,
 ) {
   if (loanAmount <= 0) return 0;
-  const elapsedMonths = Math.max(0, Math.round(years * 12));
-  const amortizingMonths = Math.max(0, elapsedMonths - Math.max(0, Math.round(ioMonths)));
+  const months = Math.max(0, Math.round(elapsedMonths));
+  const amortizingMonths = Math.max(0, months - Math.max(0, Math.round(ioMonths)));
   if (amortizingMonths === 0 || amortYears <= 0) return loanAmount;
   const rate = annualRatePct / 100;
   if (rate <= 0) {
@@ -40,6 +42,19 @@ export function loanBalanceAfterYears(
   const n = Math.min(amortizingMonths, totalMonths);
   const growth = Math.pow(1 + monthlyRate, n);
   return Math.max(0, loanAmount * growth - payment * ((growth - 1) / monthlyRate));
+}
+
+// Outstanding balance after `years` (delegates to the monthly primitive so the
+// annual and monthly paths share one amortization formula). Byte-identical to
+// the prior standalone implementation.
+export function loanBalanceAfterYears(
+  loanAmount: number,
+  annualRatePct: number,
+  amortYears: number,
+  ioMonths: number,
+  years: number,
+) {
+  return loanBalanceAfterMonths(loanAmount, annualRatePct, amortYears, ioMonths, Math.round(years * 12));
 }
 
 // Year-end balance schedule from year 1 through `holdYears` (for payoff at exit

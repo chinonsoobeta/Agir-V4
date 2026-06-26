@@ -163,6 +163,25 @@ export const ASSUMPTION_DEFS: AssumptionDef[] = [
   { key: "lease_up_curve", label: "Lease-up Absorption Curve", category: "Schedule", unit: "count", numeric: true, required: false,
     aliases: ["lease-up curve","absorption curve","lease-up absorption","absorption schedule"] },
 
+  // ---- Monthly cash-flow spine (WS1). All optional flags/inputs; absent => the
+  // annual engine path runs untouched. ----
+  { key: "monthly_model", label: "Monthly Cash-flow Model", category: "Schedule", unit: "count", numeric: true, required: false,
+    aliases: ["monthly model","monthly cash flow","monthly cash-flow model","monthly spine","period model"] },
+  { key: "construction_s_curve", label: "Construction Draw S-curve", category: "Schedule", unit: "count", numeric: true, required: false,
+    aliases: ["s-curve","construction s-curve","draw s-curve","construction draw curve","s curve draws"] },
+  { key: "refinance_month", label: "Refinance Month", category: "Capital Stack", unit: "mo", numeric: true, required: false,
+    aliases: ["refinance month","refi month","refinance timing","refinance date"] },
+  { key: "refinance_amount", label: "Refinance Loan Amount", category: "Capital Stack", unit: "$", numeric: true, required: false,
+    aliases: ["refinance amount","refi amount","refinance loan","new loan amount","takeout loan","permanent loan amount"] },
+  { key: "refinance_ltv_pct", label: "Refinance LTV", category: "Capital Stack", unit: "%", numeric: true, required: false,
+    aliases: ["refinance ltv","refi ltv","takeout ltv","permanent loan ltv"] },
+  { key: "refinance_rate", label: "Refinance Interest Rate", category: "Capital Stack", unit: "%", numeric: true, required: false,
+    aliases: ["refinance rate","refi rate","takeout rate","permanent loan rate"] },
+  { key: "refinance_amort_years", label: "Refinance Amortization", category: "Capital Stack", unit: "yr", numeric: true, required: false,
+    aliases: ["refinance amortization","refi amortization","permanent loan amortization"] },
+  { key: "refinance_io_months", label: "Refinance Interest-Only Period", category: "Capital Stack", unit: "mo", numeric: true, required: false,
+    aliases: ["refinance interest only","refi io","refinance io period"] },
+
   { key: "exit_cap_rate", label: "Exit Cap Rate", category: "Exit", unit: "%", numeric: true, required: true,
     aliases: ["exit cap","exit cap rate","disposition cap","reversion cap rate","terminal cap"] },
   { key: "hold_period_years", label: "Hold Period", category: "Exit", unit: "yr", numeric: true, required: false,

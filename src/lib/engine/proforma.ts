@@ -3,6 +3,7 @@ import { pct, xirr } from "./metrics";
 import { buildDebtStack, stackDebtServiceForYear, stackInterestCarry, stackPayoffAfterYears, type DebtTranche } from "./tranches";
 import { buildEquityContributions, equityDrawConventionText } from "./equity-timing";
 import { leaseUpAdjustedIrr } from "./lease-up";
+import { applyMonthlySchedule, type ScheduleContext } from "./schedule";
 import { equityMultiple as moneyMultiple, runWaterfall, type WaterfallConfig } from "./waterfall";
 import type { CashFlowRow, EngineOutput, EngineWarning, MetricOutput, RevenueUnitInput, UnderwritingInput } from "./types";
 
@@ -266,7 +267,7 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
       : []),
   ];
 
-  return {
+  const baseOutput: EngineOutput = {
     metrics,
     cashFlows,
     warnings,
@@ -317,4 +318,40 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
       leaseUpAdjustedIrrPct,
     },
   };
+
+  // Monthly cash-flow spine (WS1). OFF by default: a deal that does not opt in
+  // returns the annual output above byte-for-byte. When monthlyModel is on the
+  // spine refines the figures it can (construction carry, lease-up absorption,
+  // refinance) and rolls back up to these annual figures.
+  if (!input.monthlyModel) return baseOutput;
+  const scheduleContext: ScheduleContext = {
+    constructionMonths: input.constructionMonths,
+    leaseUpMonths: input.leaseUpMonths,
+    exitYear,
+    developmentYears,
+    debtStack,
+    budget: {
+      land: input.budget.land,
+      hard: input.budget.hard,
+      soft: input.budget.soft,
+      contingency: input.budget.contingency,
+    },
+    interestReserve,
+    egi,
+    opex,
+    noi,
+    gpr,
+    equity,
+    rentGrowthPct: input.rentGrowthPct,
+    expenseGrowthPct: input.expenseGrowthPct,
+    equityContributions,
+    holdLevered,
+    finalEquityFlow,
+    netSaleBeforeDebt,
+    loanPayoffAtExit,
+    irrPct,
+    exitCapRatePct: input.exitCapRatePct,
+    equityWipeout,
+  };
+  return applyMonthlySchedule(input, baseOutput, scheduleContext);
 }
