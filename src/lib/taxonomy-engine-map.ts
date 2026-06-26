@@ -28,6 +28,8 @@ export const TAXONOMY_TO_ENGINE_SCALAR: Record<string, string> = {
   // IC-grade extensions (all optional; absent => today's behavior).
   // 1A. Equity draw timing.
   equity_draw_months: "equity_draw_months",
+  // 1D. Lease-up absorption curve (opt-in flag).
+  lease_up_curve: "lease_up_curve",
   // 1B. Mezzanine tranche.
   mezz_debt_amount: "mezz_loan_amount",
   mezz_interest_rate: "mezz_interest_rate_pct",

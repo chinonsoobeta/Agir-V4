@@ -60,6 +60,9 @@ export type UnderwritingInput = {
   mezzanine?: MezzanineInput | null;
   // 1C. LP/GP distribution waterfall. Absent => LP holds the whole deal.
   waterfall?: WaterfallConfig | null;
+  // 1D. Credit partial operating income earned during lease-up (a linear
+  // absorption ramp). Absent/false => the conservative full-delay model.
+  leaseUpCurve?: boolean | null;
 };
 
 export type MetricOutput = {
@@ -146,5 +149,7 @@ export type EngineOutput = {
     gpIrrPct: number;
     gpEquityMultiple: number;
     gpPromote: number;
+    // ---- Lease-up absorption (1D): equals the deal IRR when off / no lease-up ----
+    leaseUpAdjustedIrrPct: number;
   };
 };

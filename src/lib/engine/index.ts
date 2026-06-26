@@ -11,6 +11,7 @@ export {
   type DebtStack,
 } from "./tranches";
 export { buildEquityContributions, equityDrawConventionText, type EquityContribution } from "./equity-timing";
+export { leaseUpAdjustedIrr, leaseUpAbsorptionIncome } from "./lease-up";
 export {
   runWaterfall,
   isWaterfallActive,

@@ -159,6 +159,9 @@ export const ASSUMPTION_DEFS: AssumptionDef[] = [
   // ---- Equity draw timing. Optional; absent => single lump sum at t=0. ----
   { key: "equity_draw_months", label: "Equity Draw Period", category: "Schedule", unit: "mo", numeric: true, required: false,
     aliases: ["equity draw period","equity draw months","equity contribution schedule","equity draw schedule"] },
+  // ---- Lease-up absorption curve (1D). Optional flag; absent => off. ----
+  { key: "lease_up_curve", label: "Lease-up Absorption Curve", category: "Schedule", unit: "count", numeric: true, required: false,
+    aliases: ["lease-up curve","absorption curve","lease-up absorption","absorption schedule"] },
 
   { key: "exit_cap_rate", label: "Exit Cap Rate", category: "Exit", unit: "%", numeric: true, required: true,
     aliases: ["exit cap","exit cap rate","disposition cap","reversion cap rate","terminal cap"] },

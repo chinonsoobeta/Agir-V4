@@ -31,6 +31,7 @@ import {
 } from "@/lib/operating-depth.functions";
 import { useWorkspace } from "@/lib/workspace-context";
 import { CONNECTOR_REGISTRY } from "@/lib/integrations/connector";
+import { exportDealsCsv, importDealsCsv } from "@/lib/operating-layer.functions";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import {
   Building2,
@@ -216,6 +217,8 @@ function IntegrationsPage() {
             ))}
           </div>
         </Card>
+
+        <CsvConnectorPanel connections={connections} workspaceId={workspaceId} />
 
         <div className="flex flex-wrap gap-2">
           <input
@@ -471,4 +474,105 @@ function parseDealCsv(text: string) {
       target_close_date: row.target_close_date || null,
     };
   });
+}
+
+// 3C: the live CSV connector, end to end. Explicit field mapping (external
+// column -> internal field) drives both export (download) and import (paste).
+// Import is idempotent via external_record_links and records a sync run.
+function CsvConnectorPanel({
+  connections,
+  workspaceId,
+}: {
+  connections: any[];
+  workspaceId: string | null | undefined;
+}) {
+  const qc = useQueryClient();
+  const ensureFn = useServerFn(setIntegration);
+  const exportFn = useServerFn(exportDealsCsv);
+  const importFn = useServerFn(importDealsCsv);
+  const csvConn = connections.find((c: any) => c.provider === "csv");
+  const [csvText, setCsvText] = useState("");
+  const [result, setResult] = useState<{ created: number; updated: number; failed: number; parseErrors: string[] } | null>(null);
+
+  // The explicit mapping used for both directions.
+  const MAPPING: Record<string, string> = {
+    "Deal ID": "external_id",
+    Name: "name",
+    Market: "location",
+    Source: "source",
+    "Win %": "probability",
+    "Target Close": "target_close_date",
+  };
+
+  const enable = useMutation({
+    mutationFn: () =>
+      ensureFn({ data: { provider: "csv", category: "spreadsheet", display_name: "CSV Import / Export", status: "connected", workspace_id: workspaceId ?? null } }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["integrations"] }); toast.success("CSV connector enabled"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const doExport = useMutation({
+    mutationFn: () => exportFn({ data: { connection_id: csvConn.id, mapping: MAPPING } }),
+    onSuccess: (r: any) => {
+      const blob = new Blob([r.csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "agir_deals_export.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${r.recordCount} deal(s)`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const doImport = useMutation({
+    mutationFn: () => importFn({ data: { connection_id: csvConn.id, csv: csvText, mapping: MAPPING } }),
+    onSuccess: (r: any) => {
+      setResult(r);
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      toast.success(`Import complete: ${r.created} new, ${r.updated} updated, ${r.failed} failed`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <Card className="p-5 elevated">
+      <div className="flex items-center gap-2">
+        <FileSpreadsheet className="size-4 text-primary" />
+        <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">CSV deal sync (live connector)</div>
+      </div>
+      <p className="text-xs text-muted-foreground mt-1">
+        Explicit field mapping: {Object.entries(MAPPING).map(([col, field]) => `${col} -> ${field}`).join(", ")}.
+        Imports are idempotent (re-importing a Deal ID updates the same deal).
+      </p>
+      {!csvConn ? (
+        <Button size="sm" className="mt-3" disabled={enable.isPending} onClick={() => enable.mutate()}>
+          <Plug className="size-4 mr-1.5" />
+          Enable CSV connector
+        </Button>
+      ) : (
+        <div className="mt-3 space-y-3">
+          <Button size="sm" variant="outline" disabled={doExport.isPending} onClick={() => doExport.mutate()}>
+            <RefreshCw className="size-4 mr-1.5" />
+            Export deals to CSV
+          </Button>
+          <textarea
+            className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs font-mono h-28"
+            placeholder={"Paste CSV with a header row, e.g.\nDeal ID,Name,Market,Source,Win %,Target Close\nCRM-1,Harbour Centre,Vancouver,broker,60,2026-09-01"}
+            value={csvText}
+            onChange={(e) => setCsvText(e.target.value)}
+          />
+          <Button size="sm" disabled={!csvText.trim() || doImport.isPending} onClick={() => doImport.mutate()}>
+            <Upload className="size-4 mr-1.5" />
+            Import deals from CSV
+          </Button>
+          {result && (
+            <div className="text-xs text-muted-foreground">
+              Imported {result.created} new, {result.updated} updated, {result.failed} failed.
+              {result.parseErrors.length > 0 && <span className="text-warning"> {result.parseErrors.slice(0, 3).join("; ")}</span>}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
 }

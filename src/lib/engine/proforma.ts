@@ -2,6 +2,7 @@ import { interestOnlyDebtService } from "./debt";
 import { pct, xirr } from "./metrics";
 import { buildDebtStack, stackDebtServiceForYear, stackInterestCarry, stackPayoffAfterYears, type DebtTranche } from "./tranches";
 import { buildEquityContributions, equityDrawConventionText } from "./equity-timing";
+import { leaseUpAdjustedIrr } from "./lease-up";
 import { equityMultiple as moneyMultiple, runWaterfall, type WaterfallConfig } from "./waterfall";
 import type { CashFlowRow, EngineOutput, EngineWarning, MetricOutput, RevenueUnitInput, UnderwritingInput } from "./types";
 
@@ -175,6 +176,14 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   const gpEquityMultiple = wf.active ? moneyMultiple(wf.gp.contributed, wf.gp.distributed) : 0;
   const gpPromote = wf.gpPromote;
 
+  // 1D. Lease-up absorption: an opt-in figure that credits partial operating
+  // income earned during the lease-up window. Off (or no lease-up, or a loss)
+  // it equals the deal IRR exactly, so existing deals are unchanged.
+  const leaseUpActive = Boolean(input.leaseUpCurve) && input.leaseUpMonths > 0 && !equityWipeout && Number.isFinite(irrPct);
+  const leaseUpAdjustedIrrPct = leaseUpActive
+    ? leaseUpAdjustedIrr({ equityContributions, distributionFlows, stabilizedLeveredCf, constructionMonths: input.constructionMonths, leaseUpMonths: input.leaseUpMonths })
+    : irrPct;
+
   const cashFlows: CashFlowRow[] = [
     { periodYear: 0, lineKey: "equity", amount: -equity },
     { periodYear: 0, lineKey: "construction", amount: -tdcPreFinancing },
@@ -247,6 +256,14 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
     { key: "gp_irr", label: "GP Levered IRR", value: gpIrrPct, unit: "%", formula: Number.isFinite(gpIrrPct) ? `GP IRR = ${gpIrrPct.toFixed(2)}% from GP equity cash flows (co-invest plus promote).` : `GP IRR not meaningful (GP contributed no co-invest capital).` },
     { key: "gp_equity_multiple", label: "GP Equity Multiple", value: gpEquityMultiple, unit: "x", formula: wf.gp.contributed > 0 ? `GP equity multiple = GP distributions ${money(wf.gp.distributed)} / GP capital ${money(wf.gp.contributed)} = ${gpEquityMultiple.toFixed(2)}x` : `GP equity multiple not applicable: GP contributed no co-invest capital` },
     { key: "gp_promote", label: "GP Promote", value: gpPromote, unit: "$", formula: `GP promote (carried interest) = GP distributions ${money(wf.gp.distributed)} less a pari-passu split by ownership = ${money(gpPromote)}` },
+    // 1D. Emitted only when lease-up absorption is active, so deals without it
+    // (every golden fixture) are byte-identical and carry no extra metric row.
+    ...(leaseUpActive
+      ? [{
+          key: "lease_up_adjusted_irr", label: "Lease-up Adjusted IRR", value: leaseUpAdjustedIrrPct, unit: "%" as const,
+          formula: `Lease-up adjusted IRR = ${leaseUpAdjustedIrrPct.toFixed(2)}%, crediting partial operating income across the ${input.leaseUpMonths}-month lease-up (linear absorption) vs the ${irrPct.toFixed(2)}% full-delay deal IRR`,
+        }]
+      : []),
   ];
 
   return {
@@ -297,6 +314,7 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
       gpIrrPct,
       gpEquityMultiple,
       gpPromote,
+      leaseUpAdjustedIrrPct,
     },
   };
 }

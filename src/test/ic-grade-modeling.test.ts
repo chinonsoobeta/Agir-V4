@@ -9,6 +9,7 @@ import {
   buildAllowedValues,
   buildEquityContributions,
   isWaterfallActive,
+  leaseUpAbsorptionIncome,
   mapleHeightsInput,
   runUnderwriting,
   runWaterfall,
@@ -287,5 +288,32 @@ describe("WS1.1C LP/GP waterfall and promote (hand-computed)", () => {
     expect(withWaterfall.values.gpPromote).toBeGreaterThan(0);
     expect(withWaterfall.values.lpIrrPct).toBeLessThan(withWaterfall.values.irrPct);
     expect(withWaterfall.values.gpIrrPct).toBeGreaterThan(withWaterfall.values.irrPct);
+  });
+});
+
+describe("WS1.1D lease-up absorption curve", () => {
+  test("off by default: the lease-up adjusted IRR equals the deal IRR and adds no metric", () => {
+    const out = runUnderwriting(profitableInput({ constructionMonths: 12, leaseUpMonths: 12, holdYears: 5 }));
+    expect(out.values.leaseUpAdjustedIrrPct).toBe(out.values.irrPct);
+    expect(out.metrics.some((m) => m.key === "lease_up_adjusted_irr")).toBe(false);
+  });
+
+  test("on: crediting partial lease-up income raises IRR, emits the metric, and leaves the deal outputs unchanged", () => {
+    const base = profitableInput({ constructionMonths: 12, leaseUpMonths: 12, holdYears: 5 });
+    const off = runUnderwriting(base);
+    const on = runUnderwriting({ ...base, leaseUpCurve: true });
+    expect(on.values.leaseUpAdjustedIrrPct).toBeGreaterThan(off.values.irrPct);
+    expect(on.metrics.some((m) => m.key === "lease_up_adjusted_irr")).toBe(true);
+    // The opt-in figure never disturbs the conservative deal-level outputs.
+    expect(on.values.irrPct).toBeCloseTo(off.values.irrPct, 9);
+    expect(on.values.equityMultiple).toBeCloseTo(off.values.equityMultiple, 9);
+    expect(on.cashFlows).toEqual(off.cashFlows);
+  });
+
+  test("leaseUpAbsorptionIncome: a linear ramp is half the stabilized cash flow over the window", () => {
+    expect(leaseUpAbsorptionIncome(1_000_000, 12)).toBeCloseTo(500_000, 6); // 1.0 yr x 0.5
+    expect(leaseUpAbsorptionIncome(1_000_000, 6)).toBeCloseTo(250_000, 6); // 0.5 yr x 0.5
+    expect(leaseUpAbsorptionIncome(1_000_000, 0)).toBe(0);
+    expect(leaseUpAbsorptionIncome(-50_000, 12)).toBe(0); // a stabilized loss contributes nothing
   });
 });

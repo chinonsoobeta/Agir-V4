@@ -315,5 +315,7 @@ export function assembleEngineInput(rows: ProjectInputRows): UnderwritingInput {
     equityDrawMonths: scalar("equity_draw_months"),
     mezzanine,
     waterfall,
+    // 1D: opt-in lease-up absorption (a positive flag turns it on).
+    leaseUpCurve: (scalar("lease_up_curve") ?? 0) > 0,
   };
 }
