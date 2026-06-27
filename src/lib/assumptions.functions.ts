@@ -175,6 +175,28 @@ async function recordVersion(ctx: any, a: any, changeReason: string, by: string)
   });
 }
 
+export const EXTRACTION_TEXT_SCAN_CHAR_LIMIT = 40_000;
+export const STALE_ASSUMPTION_REVIEW_MESSAGE =
+  "Assumption changed while you were reviewing it. Refresh and retry.";
+
+export async function updateAssumptionWithExpectedVersion(
+  supabase: any,
+  id: string,
+  expectedVersion: number,
+  patch: Record<string, unknown>,
+) {
+  const { data, error } = await supabase
+    .from("assumptions")
+    .update(patch)
+    .eq("id", id)
+    .eq("current_version", expectedVersion)
+    .select()
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error(STALE_ASSUMPTION_REVIEW_MESSAGE);
+  return data;
+}
+
 const PRESENT_STATUSES = new Set([
   "extracted",
   "conflicting",
@@ -380,7 +402,7 @@ export const extractAssumptions = createServerFn({ method: "POST" })
           perDocument.push(row);
           continue;
         }
-        const cands = extractCandidates(d.name, text.slice(0, 40000));
+        const cands = extractCandidates(d.name, text.slice(0, EXTRACTION_TEXT_SCAN_CHAR_LIMIT));
         row.candidate_count = cands.length;
         row.candidates_preview = cands.slice(0, 5).map((c) => ({
           kind: c.kind,
@@ -1020,13 +1042,12 @@ export const reviewAssumption = createServerFn({ method: "POST" })
     } else {
       patch.status = "needs_review";
     }
-    const { data: upd, error: uErr } = await context.supabase
-      .from("assumptions")
-      .update(patch)
-      .eq("id", data.id)
-      .select()
-      .single();
-    if (uErr) throw new Error(uErr.message);
+    const upd = await updateAssumptionWithExpectedVersion(
+      context.supabase,
+      data.id,
+      cur.current_version,
+      patch,
+    );
     await recordVersion(
       context,
       upd,

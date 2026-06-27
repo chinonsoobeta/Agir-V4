@@ -50,6 +50,85 @@ import {
 } from "./taxonomy-engine-map";
 
 const ProjectIdSchema = z.object({ project_id: z.string().uuid() });
+export const APPROVED_ASSUMPTION_SYNC_MESSAGE =
+  "Approved assumptions are still syncing to engine inputs. Retry underwriting in a moment.";
+
+function valuesMatch(actual: unknown, expected: unknown) {
+  if (actual == null || expected == null) return false;
+  const a = Number(actual);
+  const e = Number(expected);
+  return (
+    Number.isFinite(a) &&
+    Number.isFinite(e) &&
+    Math.abs(a - e) <= Math.max(1e-6, Math.abs(e) * 1e-9)
+  );
+}
+
+function revenueColumnFor(field: string) {
+  return field === "rent" ? "market_rent_monthly" : field;
+}
+
+export async function assertApprovedAssumptionsSynced(supabase: any, projectId: string) {
+  const { data: assumptions, error } = await supabase
+    .from("assumptions")
+    .select("field_key,field_label,value_numeric,status")
+    .eq("project_id", projectId)
+    .in("status", ["approved", "modified"]);
+  if (error) throw new Error(error.message);
+  const rows = (assumptions ?? []).filter((row: any) => row.value_numeric != null);
+  if (!rows.length) return;
+
+  const [{ data: scalars }, { data: budget }, { data: revenue }] = await Promise.all([
+    supabase
+      .from("underwriting_inputs")
+      .select("key,value_numeric,status")
+      .eq("project_id", projectId),
+    supabase
+      .from("development_budget")
+      .select("category,label,amount,status")
+      .eq("project_id", projectId),
+    supabase.from("revenue_program").select("*").eq("project_id", projectId),
+  ]);
+
+  for (const row of rows as any[]) {
+    const scalarKey = TAXONOMY_TO_ENGINE_SCALAR[row.field_key];
+    if (scalarKey) {
+      const synced = (scalars ?? []).some(
+        (input: any) =>
+          input.key === scalarKey &&
+          input.status === "approved" &&
+          valuesMatch(input.value_numeric, row.value_numeric),
+      );
+      if (!synced) throw new Error(APPROVED_ASSUMPTION_SYNC_MESSAGE);
+      continue;
+    }
+
+    const budgetCategory = TAXONOMY_TO_BUDGET_CATEGORY[row.field_key];
+    if (budgetCategory) {
+      const synced = (budget ?? []).some(
+        (input: any) =>
+          input.category === budgetCategory &&
+          input.label === row.field_label &&
+          input.status === "approved" &&
+          valuesMatch(input.amount, row.value_numeric),
+      );
+      if (!synced) throw new Error(APPROVED_ASSUMPTION_SYNC_MESSAGE);
+      continue;
+    }
+
+    const revenueMap = TAXONOMY_TO_REVENUE_FIELD[row.field_key];
+    if (revenueMap) {
+      const column = revenueColumnFor(revenueMap.field);
+      const synced = (revenue ?? []).some(
+        (input: any) =>
+          input.unit_type === revenueMap.unitType &&
+          input.status === "approved" &&
+          valuesMatch(input[column], row.value_numeric),
+      );
+      if (!synced) throw new Error(APPROVED_ASSUMPTION_SYNC_MESSAGE);
+    }
+  }
+}
 
 // The single loader. Everything the engine sees flows through here.
 async function loadProjectRows(supabase: any, projectId: string): Promise<ProjectInputRows> {
@@ -531,6 +610,7 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
       // Fail closed: zero metrics, zero charts, no partial numbers.
       return { blocked: true as const, readiness, ...aiMeta };
     }
+    await assertApprovedAssumptionsSynced(context.supabase, data.project_id);
 
     const input = assembleEngineInput(rows);
     const base = runUnderwriting(input);

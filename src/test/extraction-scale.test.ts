@@ -8,6 +8,7 @@ import {
   pdfBufferToTextWithMeta,
 } from "@/lib/document-text.server";
 import { extractCandidates } from "@/lib/assumption-candidates.server";
+import { EXTRACTION_TEXT_SCAN_CHAR_LIMIT } from "@/lib/assumptions.functions";
 import { groupAndResolve, type MappedCandidate } from "@/lib/assumption-mapping";
 
 function wb(aoa: unknown[][], sheetName = "Sheet1"): ArrayBuffer {
@@ -198,6 +199,37 @@ describe("2A: OCR fallback for scanned / image-only PDFs (mocked boundary)", () 
     const extracted = await extractFileTextWithMeta("budget.xlsx", null, buf, { ocr: throwing });
     expect(extracted.recoveredViaOcr).toBe(false);
     expect(extracted.text.toLowerCase()).toContain("land");
+  });
+});
+
+describe("large-document extraction bounds", () => {
+  test("candidate extraction scans a bounded prefix and reports timing for a 50-page-style payload", () => {
+    const page = [
+      "Development underwriting package page",
+      "Noise OCR 0O1l | duplicated footer | unrelated rent comps | boilerplate",
+      "Land acquisition cost $34,500,000.",
+      "Hard costs $162,000,000.",
+      "Interest rate 6.25%.",
+      "Exit cap rate 5.25%.",
+      "Lease-up period 12 months.",
+    ].join("\n");
+    const largeText = Array.from({ length: 50 }, (_, i) => `Page ${i + 1}\n${page}`)
+      .join("\n\n")
+      .repeat(90);
+
+    expect(largeText.length).toBeGreaterThan(1_000_000);
+    const scannedText = largeText.slice(0, EXTRACTION_TEXT_SCAN_CHAR_LIMIT);
+    const started = performance.now();
+    const candidates = extractCandidates("Large_Appraisal.txt", scannedText);
+    const elapsedMs = performance.now() - started;
+
+    console.info(
+      `[large-doc-profile] bytes=${largeText.length} scanned_chars=${scannedText.length} candidates=${candidates.length} elapsed_ms=${elapsedMs.toFixed(1)}`,
+    );
+
+    expect(scannedText.length).toBe(EXTRACTION_TEXT_SCAN_CHAR_LIMIT);
+    expect(candidates.length).toBeGreaterThan(0);
+    expect(elapsedMs).toBeLessThan(3_000);
   });
 });
 
