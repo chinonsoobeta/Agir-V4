@@ -1,0 +1,15 @@
+{
+  "project_name": "Summit Point Logistics Park",
+  "location": "I-85 logistics corridor, Charlotte, North Carolina",
+  "asset_type": "industrial_logistics",
+  "test_profile": "Option B - hidden risk deal",
+  "intended_behavior": {
+    "base_case": "appears investable or near-investable on headline metrics",
+    "hidden_risk": "tenant concentration, cap-rate widening, rate update, specialized cold-storage re-tenanting risk",
+    "expected_conflicts": [
+      "exit_cap_rate: 5.25% sponsor vs 5.75% appraisal vs 5.75%-6.25% market range",
+      "interest_rate: 6.65% term sheet vs 7.15% rate lock addendum",
+      "operating_expense_ratio: 24.00% sponsor vs 27.00% appraisal vs 26.00%-28.00% tax addendum"
+    ]
+  }
+}

@@ -18,7 +18,9 @@ import { generateFindings } from "@/lib/findings";
 import { industrialFindings } from "@/lib/findings/modules/industrial";
 import type { NormalizedFindingsInput } from "@/lib/findings/findings-types";
 
-const fixtureDir = "/Users/chinonsoobeta/Downloads/source_documents";
+// Fixtures are vendored into the repo so the suite is self-contained (CI has no
+// access to a developer's ~/Downloads). See src/test/fixtures/summit-point/.
+const fixtureDir = path.join(import.meta.dirname, "fixtures", "summit-point");
 const rentRollPath = path.join(fixtureDir, "Summit_Point_Rent_Roll.xlsx");
 const budgetPath = path.join(fixtureDir, "Summit_Point_Construction_Budget.xlsx");
 

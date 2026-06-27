@@ -625,8 +625,25 @@ export function applyMonthlySchedule(
     const diff = rolledUp - annual;
     return { key, label, annual, rolledUp, diff, withinTolerance: Math.abs(diff) <= tol(annual) };
   };
-  const year1SeniorDs =
-    trancheDebtServiceForYear(senior, 1) + (mezz ? trancheDebtServiceForYear(mezz, 1) : 0);
+  // Year-1 debt service must reconcile against the loan basis ACTUALLY in force
+  // during stabilization year 1. When a refinance has taken effect by then, the
+  // monthly spine (correctly) reflects the NEW loan, but the annual backbone
+  // never modeled the refinance -- so reconciling against the original senior
+  // loan would flag a false "out of tolerance" on every refinanced deal (the two
+  // numbers are each correct, just computed on different loan bases). Pick the
+  // in-force basis: when a refi is effective within year 1, sum the per-month
+  // in-force senior debt service (the same swap the spine applies); otherwise use
+  // the original senior loan's independent annual figure. Mezzanine is unaffected
+  // by the refinance and stays an independent annual cross-check.
+  const mezzYear1 = mezz ? trancheDebtServiceForYear(mezz, 1) : 0;
+  let seniorYear1: number;
+  if (refi && newSenior && refiMonth < stabilizationStart + 12) {
+    seniorYear1 = 0;
+    for (let j = 0; j < 12; j += 1) seniorYear1 += seniorMonthlyDs(stabilizationStart + j, j);
+  } else {
+    seniorYear1 = trancheDebtServiceForYear(senior, 1);
+  }
+  const year1SeniorDs = seniorYear1 + mezzYear1;
   const reconciliation: ScheduleReconciliation[] = [
     recon(
       "construction_draws",

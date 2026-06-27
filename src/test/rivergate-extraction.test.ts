@@ -9,8 +9,9 @@ import { mapRevenueProgramRowToAssumptions } from "@/lib/revenue-assumption-mapp
 import { parseBudgetWorkbook } from "@/lib/parsers/budget.server";
 import { mapBudgetRowToAssumption } from "@/lib/budget-assumption-mapper";
 
-const fixtureDir =
-  "/Users/chinonsoobeta/Downloads/Rivergate_Innovation_District_Test_Package/source_documents";
+// Fixtures are vendored into the repo so the suite is self-contained (CI has no
+// access to a developer's ~/Downloads). See src/test/fixtures/rivergate/.
+const fixtureDir = path.join(import.meta.dirname, "fixtures", "rivergate");
 const rentRollPath = path.join(fixtureDir, "Rivergate_Rent_Roll.xlsx");
 const budgetPath = path.join(fixtureDir, "Rivergate_Construction_Budget.xlsx");
 

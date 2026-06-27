@@ -233,3 +233,39 @@ describe("WS1 (d): provenance -- every new metric formula is orphan-free", () =>
     }
   });
 });
+
+describe("WS1 (1C): refinance does not falsely break the year-1 reconciliation", () => {
+  // Regression: a refinance landing at stabilization swaps the senior loan, so
+  // the monthly spine's year-1 debt service reflects the NEW loan while the
+  // annual backbone never modeled the refi. The reconciliation baseline must use
+  // the in-force loan or it reports a false ~28% out-of-tolerance on every
+  // refinanced deal (both numbers are individually correct).
+  test("a refinance at stabilization keeps every reconciliation line within tolerance", () => {
+    const out = runUnderwriting(
+      devDeal({
+        monthlyModel: true,
+        // construction 12 + lease-up 12 => stabilization starts at month 24.
+        refinance: {
+          month: 24,
+          ltvPct: 65,
+          newAmount: null,
+          ratePct: 5.5,
+          amortYears: 30,
+          ioMonths: 0,
+        },
+      }),
+    );
+    expect(out.schedule).toBeDefined();
+    const recon = out.schedule!.reconciliation;
+    const dsy1 = recon.find((r) => r.key === "debt_service_year1")!;
+    expect(dsy1.withinTolerance).toBe(true);
+    expect(recon.every((r) => r.withinTolerance)).toBe(true);
+    // the refinance genuinely took effect (a post-refi DSCR was produced)
+    expect(out.values.postRefiDscr).toBeGreaterThan(0);
+  });
+
+  test("a deal without a refinance still reconciles (no regression)", () => {
+    const out = runUnderwriting(devDeal({ monthlyModel: true }));
+    expect(out.schedule!.reconciliation.every((r) => r.withinTolerance)).toBe(true);
+  });
+});
