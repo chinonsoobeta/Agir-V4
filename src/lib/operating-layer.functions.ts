@@ -43,11 +43,17 @@ export const setMilestoneDependencies = createServerFn({ method: "POST" })
 
 export const getCriticalPath = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
+  .inputValidator((d: { project_id: string }) =>
+    z.object({ project_id: z.string().uuid() }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     const [{ data: milestones, error: mErr }, { data: project }] = await Promise.all([
       context.supabase.from("deal_milestones").select("*").eq("project_id", data.project_id),
-      context.supabase.from("projects").select("target_close_date").eq("id", data.project_id).maybeSingle(),
+      context.supabase
+        .from("projects")
+        .select("target_close_date")
+        .eq("id", data.project_id)
+        .maybeSingle(),
     ]);
     if (mErr) throw new Error(mErr.message);
     const execMilestones: ExecMilestone[] = (milestones ?? []).map((m: any) => ({
@@ -59,7 +65,11 @@ export const getCriticalPath = createServerFn({ method: "GET" })
       priority: m.priority,
     }));
     const result = computeCriticalPath(execMilestones, project?.target_close_date ?? null, today());
-    return { ...result, targetCloseDate: project?.target_close_date ?? null, milestoneCount: execMilestones.length };
+    return {
+      ...result,
+      targetCloseDate: project?.target_close_date ?? null,
+      milestoneCount: execMilestones.length,
+    };
   });
 
 // ===================== 3B. IC voting + conditions =====================
@@ -67,25 +77,36 @@ export const getCriticalPath = createServerFn({ method: "GET" })
 export const castVote = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({
-      project_id: z.string().uuid(),
-      vote: z.enum(["approve", "approve_with_conditions", "reject", "abstain"]),
-      rationale: z.string().max(4000).nullable().optional(),
-    }).parse(d),
+    z
+      .object({
+        project_id: z.string().uuid(),
+        vote: z.enum(["approve", "approve_with_conditions", "reject", "abstain"]),
+        rationale: z.string().max(4000).nullable().optional(),
+      })
+      .parse(d),
   )
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
       .from("ic_votes")
       .upsert(
-        { project_id: data.project_id, owner_id: context.userId, vote: data.vote, rationale: data.rationale ?? null },
+        {
+          project_id: data.project_id,
+          owner_id: context.userId,
+          vote: data.vote,
+          rationale: data.rationale ?? null,
+        },
         { onConflict: "project_id,owner_id" },
       )
       .select()
       .single();
     if (error) throw new Error(error.message);
     await context.supabase.from("audit_logs").insert({
-      project_id: data.project_id, owner_id: context.userId, user_id: context.userId,
-      entity_type: "ic_vote", entity_id: row?.id ?? null, action: "cast_vote",
+      project_id: data.project_id,
+      owner_id: context.userId,
+      user_id: context.userId,
+      entity_type: "ic_vote",
+      entity_id: row?.id ?? null,
+      action: "cast_vote",
       payload: { vote: data.vote },
     });
     return row;
@@ -93,10 +114,14 @@ export const castVote = createServerFn({ method: "POST" })
 
 export const listIcVotes = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
+  .inputValidator((d: { project_id: string }) =>
+    z.object({ project_id: z.string().uuid() }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
-      .from("ic_votes").select("*").eq("project_id", data.project_id);
+      .from("ic_votes")
+      .select("*")
+      .eq("project_id", data.project_id);
     if (error) throw new Error(error.message);
     const votes: IcVote[] = (rows ?? []).map((r: any) => ({ memberId: r.owner_id, vote: r.vote }));
     return { votes: rows ?? [], tally: tallyVotes(votes) };
@@ -110,7 +135,12 @@ export const addCondition = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
       .from("ic_conditions")
-      .insert({ project_id: data.project_id, owner_id: context.userId, label: data.label, status: "open" })
+      .insert({
+        project_id: data.project_id,
+        owner_id: context.userId,
+        label: data.label,
+        status: "open",
+      })
       .select()
       .single();
     if (error) throw new Error(error.message);
@@ -124,10 +154,16 @@ export const updateConditionStatus = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { data: current, error: cErr } = await context.supabase
-      .from("ic_conditions").select("status").eq("id", data.id).single();
+      .from("ic_conditions")
+      .select("status")
+      .eq("id", data.id)
+      .single();
     if (cErr) throw new Error(cErr.message);
     // Deterministic state machine: throws on an illegal transition.
-    const next: ConditionStatus = transitionCondition(current.status as ConditionStatus, data.action as ConditionAction);
+    const next: ConditionStatus = transitionCondition(
+      current.status as ConditionStatus,
+      data.action as ConditionAction,
+    );
     const satisfied = next === "satisfied";
     const { data: row, error } = await context.supabase
       .from("ic_conditions")
@@ -145,10 +181,15 @@ export const updateConditionStatus = createServerFn({ method: "POST" })
 
 export const listConditions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
+  .inputValidator((d: { project_id: string }) =>
+    z.object({ project_id: z.string().uuid() }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
-      .from("ic_conditions").select("*").eq("project_id", data.project_id).order("created_at", { ascending: true });
+      .from("ic_conditions")
+      .select("*")
+      .eq("project_id", data.project_id)
+      .order("created_at", { ascending: true });
     if (error) throw new Error(error.message);
     const conditions = rows ?? [];
     return {
@@ -171,11 +212,15 @@ export const exportDealsCsv = createServerFn({ method: "POST" })
     const connector = getConnector("csv");
     if (!connector) throw new Error("CSV connector is not available.");
     const { data: connection, error: connErr } = await context.supabase
-      .from("integration_connections").select("*").eq("id", data.connection_id).single();
+      .from("integration_connections")
+      .select("*")
+      .eq("id", data.connection_id)
+      .single();
     if (connErr) throw new Error(connErr.message);
 
     const { data: projects, error: pErr } = await context.supabase
-      .from("projects").select("id,name,location,type,source,probability,target_close_date");
+      .from("projects")
+      .select("id,name,location,type,source,probability,target_close_date");
     if (pErr) throw new Error(pErr.message);
 
     const records: DealRecord[] = (projects ?? []).map((p: any) => ({
@@ -190,10 +235,14 @@ export const exportDealsCsv = createServerFn({ method: "POST" })
     const csv = connector.formatOutbound(records, data.mapping as FieldMapping);
 
     await context.supabase.from("integration_sync_runs").insert({
-      connection_id: data.connection_id, owner_id: context.userId,
+      connection_id: data.connection_id,
+      owner_id: context.userId,
       workspace_id: connection.workspace_id ?? null,
-      direction: "outbound", status: "succeeded",
-      records_read: records.length, records_written: records.length, records_failed: 0,
+      direction: "outbound",
+      status: "succeeded",
+      records_read: records.length,
+      records_written: records.length,
+      records_failed: 0,
       completed_at: new Date().toISOString(),
     });
     return { csv, recordCount: records.length };
@@ -202,17 +251,22 @@ export const exportDealsCsv = createServerFn({ method: "POST" })
 export const importDealsCsv = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({
-      connection_id: z.string().uuid(),
-      csv: z.string().min(1).max(2_000_000),
-      mapping: MappingSchema,
-    }).parse(d),
+    z
+      .object({
+        connection_id: z.string().uuid(),
+        csv: z.string().min(1).max(2_000_000),
+        mapping: MappingSchema,
+      })
+      .parse(d),
   )
   .handler(async ({ data, context }) => {
     const connector = getConnector("csv");
     if (!connector) throw new Error("CSV connector is not available.");
     const { data: connection, error: connErr } = await context.supabase
-      .from("integration_connections").select("*").eq("id", data.connection_id).single();
+      .from("integration_connections")
+      .select("*")
+      .eq("id", data.connection_id)
+      .single();
     if (connErr) throw new Error(connErr.message);
     const workspaceId = connection.workspace_id ?? null;
 
@@ -241,10 +295,15 @@ export const importDealsCsv = createServerFn({ method: "POST" })
         };
 
         if (link?.project_id) {
-          const { error } = await context.supabase.from("projects").update(patch).eq("id", link.project_id);
+          const { error } = await context.supabase
+            .from("projects")
+            .update(patch)
+            .eq("id", link.project_id);
           if (error) throw new Error(error.message);
-          await context.supabase.from("external_record_links")
-            .update({ last_synced_at: new Date().toISOString() }).eq("id", link.id);
+          await context.supabase
+            .from("external_record_links")
+            .update({ last_synced_at: new Date().toISOString() })
+            .eq("id", link.id);
           updated++;
         } else {
           const { data: project, error } = await context.supabase
@@ -254,8 +313,11 @@ export const importDealsCsv = createServerFn({ method: "POST" })
             .single();
           if (error) throw new Error(error.message);
           const { error: linkErr } = await context.supabase.from("external_record_links").insert({
-            connection_id: data.connection_id, owner_id: context.userId,
-            project_id: project.id, external_id: rec.external_id, direction: "inbound",
+            connection_id: data.connection_id,
+            owner_id: context.userId,
+            project_id: project.id,
+            external_id: rec.external_id,
+            direction: "inbound",
           });
           if (linkErr) throw new Error(linkErr.message);
           created++;
@@ -267,9 +329,14 @@ export const importDealsCsv = createServerFn({ method: "POST" })
 
     const status = failed === 0 ? "succeeded" : created + updated > 0 ? "partial" : "failed";
     await context.supabase.from("integration_sync_runs").insert({
-      connection_id: data.connection_id, owner_id: context.userId, workspace_id: workspaceId,
-      direction: "inbound", status,
-      records_read: records.length + errors.length, records_written: created + updated, records_failed: failed,
+      connection_id: data.connection_id,
+      owner_id: context.userId,
+      workspace_id: workspaceId,
+      direction: "inbound",
+      status,
+      records_read: records.length + errors.length,
+      records_written: created + updated,
+      records_failed: failed,
       error_summary: errors.slice(0, 10).join("; ") || null,
       completed_at: new Date().toISOString(),
     });
@@ -278,11 +345,16 @@ export const importDealsCsv = createServerFn({ method: "POST" })
 
 export const listSyncRuns = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { connection_id: string }) => z.object({ connection_id: z.string().uuid() }).parse(d))
+  .inputValidator((d: { connection_id: string }) =>
+    z.object({ connection_id: z.string().uuid() }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
-      .from("integration_sync_runs").select("*").eq("connection_id", data.connection_id)
-      .order("started_at", { ascending: false }).limit(20);
+      .from("integration_sync_runs")
+      .select("*")
+      .eq("connection_id", data.connection_id)
+      .order("started_at", { ascending: false })
+      .limit(20);
     if (error) throw new Error(error.message);
     return rows ?? [];
   });

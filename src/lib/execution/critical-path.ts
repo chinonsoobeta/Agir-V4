@@ -51,7 +51,8 @@ const epoch = (d: string | null): number | null => {
   const t = Date.parse(d);
   return Number.isFinite(t) ? t : null;
 };
-const isoFromEpoch = (ms: number | null): string | null => (ms == null ? null : new Date(ms).toISOString().slice(0, 10));
+const isoFromEpoch = (ms: number | null): string | null =>
+  ms == null ? null : new Date(ms).toISOString().slice(0, 10);
 const isComplete = (m: ExecMilestone) => m.status === "complete";
 
 export function computeCriticalPath(
@@ -62,7 +63,11 @@ export function computeCriticalPath(
   const byId = new Map(milestones.map((m) => [m.id, m]));
   // Only keep edges that point at a real milestone (drop dangling links).
   const preds = new Map<string, string[]>();
-  for (const m of milestones) preds.set(m.id, m.dependsOn.filter((p) => byId.has(p) && p !== m.id));
+  for (const m of milestones)
+    preds.set(
+      m.id,
+      m.dependsOn.filter((p) => byId.has(p) && p !== m.id),
+    );
 
   // ---- Cycle detection (DFS coloring). Cycle edges are excluded from the
   // longest-path memo so the computation always terminates. ----
@@ -88,16 +93,19 @@ export function computeCriticalPath(
     color.set(id, 2);
   };
   for (const m of milestones) if ((color.get(m.id) ?? 0) === 0) dfsCycle(m.id);
-  const livePreds = (id: string) => (preds.get(id) ?? []).filter((p) => !inCycleEdge.has(`${id}->${p}`));
+  const livePreds = (id: string) =>
+    (preds.get(id) ?? []).filter((p) => !inCycleEdge.has(`${id}->${p}`));
 
   // ---- Topological order (Kahn over the acyclic edge set). ----
   const indegree = new Map<string, number>();
   for (const m of milestones) indegree.set(m.id, 0);
-  for (const m of milestones) for (const _p of livePreds(m.id)) indegree.set(m.id, (indegree.get(m.id) ?? 0) + 1);
+  for (const m of milestones)
+    for (const _p of livePreds(m.id)) indegree.set(m.id, (indegree.get(m.id) ?? 0) + 1);
   const ready = milestones.filter((m) => (indegree.get(m.id) ?? 0) === 0).map((m) => m.id);
   const order: string[] = [];
   const dependents = new Map<string, string[]>();
-  for (const m of milestones) for (const p of livePreds(m.id)) dependents.set(p, [...(dependents.get(p) ?? []), m.id]);
+  for (const m of milestones)
+    for (const p of livePreds(m.id)) dependents.set(p, [...(dependents.get(p) ?? []), m.id]);
   while (ready.length) {
     const id = ready.shift()!;
     order.push(id);
@@ -167,11 +175,14 @@ export function computeCriticalPath(
     const dueMs = epoch(m.dueDate);
     if (dueMs != null && todayMs != null && dueMs < todayMs) reasons.push("overdue");
     if (onCritical.has(m.id)) reasons.push("on_critical_path");
-    if (livePreds(m.id).some((p) => !isComplete(byId.get(p)!))) reasons.push("blocked_by_incomplete");
+    if (livePreds(m.id).some((p) => !isComplete(byId.get(p)!)))
+      reasons.push("blocked_by_incomplete");
     if (!reasons.length) continue;
     const chainFinish = finishOf(m.id);
     const slackDays =
-      targetMs != null && chainFinish != null ? Math.round((targetMs - chainFinish) / DAY_MS) : null;
+      targetMs != null && chainFinish != null
+        ? Math.round((targetMs - chainFinish) / DAY_MS)
+        : null;
     blocking.push({ id: m.id, title: m.title, dueDate: m.dueDate, reasons, slackDays });
   }
   // Worst-first: least slack (most negative) first, then overdue, then by title.

@@ -11,9 +11,13 @@ export function xirr(flows: { t: number; amount: number }[]) {
   const hasNegative = flows.some((f) => f.amount < 0);
   if (!hasPositive || !hasNegative) return Number.NaN;
 
-  const npv = (rate: number) => flows.reduce((sum, f) => sum + f.amount / Math.pow(1 + rate, f.t), 0);
+  const npv = (rate: number) =>
+    flows.reduce((sum, f) => sum + f.amount / Math.pow(1 + rate, f.t), 0);
   const derivative = (rate: number) =>
-    flows.reduce((sum, f) => (f.t === 0 ? sum : sum - (f.t * f.amount) / Math.pow(1 + rate, f.t + 1)), 0);
+    flows.reduce(
+      (sum, f) => (f.t === 0 ? sum : sum - (f.t * f.amount) / Math.pow(1 + rate, f.t + 1)),
+      0,
+    );
 
   let guess = 0.12;
   for (let i = 0; i < 50; i++) {
@@ -65,4 +69,3 @@ export function irr(cashFlows: number[]) {
 export function pct(numerator: number, denominator: number) {
   return denominator === 0 ? 0 : (numerator / denominator) * 100;
 }
-

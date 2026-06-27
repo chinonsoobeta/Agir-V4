@@ -19,10 +19,18 @@ import type {
 
 type Bands = Record<string, BenchmarkBand>;
 
-const higher = (weak: number, target: number, strong: number, unit: BenchmarkBand["unit"]): BenchmarkBand =>
-  ({ betterDirection: "higher", weak, target, strong, unit });
-const lower = (strong: number, target: number, weak: number, unit: BenchmarkBand["unit"]): BenchmarkBand =>
-  ({ betterDirection: "lower", weak, target, strong, unit });
+const higher = (
+  weak: number,
+  target: number,
+  strong: number,
+  unit: BenchmarkBand["unit"],
+): BenchmarkBand => ({ betterDirection: "higher", weak, target, strong, unit });
+const lower = (
+  strong: number,
+  target: number,
+  weak: number,
+  unit: BenchmarkBand["unit"],
+): BenchmarkBand => ({ betterDirection: "lower", weak, target, strong, unit });
 
 // Asset-class-agnostic baseline (institutional, mid-cycle).
 const BASE: Bands = {
@@ -43,7 +51,13 @@ const BASE: Bands = {
 const ASSET_DELTA: Partial<Record<AssetClass, Partial<Record<string, number>>>> = {
   multifamily: { debt_yield: -0.5, yield_on_cost: -0.3 },
   industrial: { debt_yield: 0.0, yield_on_cost: 0.3, development_spread: 25 },
-  office: { debt_yield: 1.5, dscr: 0.1, yield_on_cost: 0.7, development_spread: 50, break_even_occupancy: -5 },
+  office: {
+    debt_yield: 1.5,
+    dscr: 0.1,
+    yield_on_cost: 0.7,
+    development_spread: 50,
+    break_even_occupancy: -5,
+  },
   retail: { debt_yield: 1.0, dscr: 0.05, yield_on_cost: 0.5, break_even_occupancy: -3 },
   hospitality: { debt_yield: 3.0, dscr: 0.2, yield_on_cost: 1.5, development_spread: 100 },
   mixed_use: { debt_yield: 0.3, development_spread: 15 },
@@ -52,12 +66,27 @@ const ASSET_DELTA: Partial<Record<AssetClass, Partial<Record<string, number>>>> 
 
 // Market tier shifts yields/coverage: gateway markets clear at lower yields,
 // tertiary markets need more cushion.
-const TIER_YIELD_DELTA: Record<MarketTier, number> = { gateway: -1.0, primary: -0.3, secondary: 0, tertiary: 0.8 };
-const TIER_DSCR_DELTA: Record<MarketTier, number> = { gateway: -0.05, primary: -0.02, secondary: 0, tertiary: 0.05 };
+const TIER_YIELD_DELTA: Record<MarketTier, number> = {
+  gateway: -1.0,
+  primary: -0.3,
+  secondary: 0,
+  tertiary: 0.8,
+};
+const TIER_DSCR_DELTA: Record<MarketTier, number> = {
+  gateway: -0.05,
+  primary: -0.02,
+  secondary: 0,
+  tertiary: 0.05,
+};
 const TIER_YIELD_METRICS = new Set(["debt_yield", "yield_on_cost", "cash_on_cash"]);
 
 function shiftBand(band: BenchmarkBand, delta: number): BenchmarkBand {
-  return { ...band, weak: band.weak + delta, target: band.target + delta, strong: band.strong + delta };
+  return {
+    ...band,
+    weak: band.weak + delta,
+    target: band.target + delta,
+    strong: band.strong + delta,
+  };
 }
 
 export function curatedBenchmark(metricKey: string, context: DealContext): BenchmarkBand | null {
@@ -66,12 +95,18 @@ export function curatedBenchmark(metricKey: string, context: DealContext): Bench
   let band = base;
   const assetDelta = ASSET_DELTA[context.assetClass]?.[metricKey];
   if (assetDelta != null) band = shiftBand(band, assetDelta);
-  if (TIER_YIELD_METRICS.has(metricKey)) band = shiftBand(band, TIER_YIELD_DELTA[context.marketTier]);
+  if (TIER_YIELD_METRICS.has(metricKey))
+    band = shiftBand(band, TIER_YIELD_DELTA[context.marketTier]);
   if (metricKey === "dscr") band = shiftBand(band, TIER_DSCR_DELTA[context.marketTier]);
   return band;
 }
 
-function applyFirmOverride(band: BenchmarkBand, ctx: DealContext, metricKey: string, inputs?: BenchmarkInputs): BenchmarkBand {
+function applyFirmOverride(
+  band: BenchmarkBand,
+  ctx: DealContext,
+  metricKey: string,
+  inputs?: BenchmarkInputs,
+): BenchmarkBand {
   const cfg = inputs?.firmConfig?.overrides;
   if (!cfg) return band;
   const merged = { ...(cfg.all?.[metricKey] ?? {}), ...(cfg[ctx.assetClass]?.[metricKey] ?? {}) };
@@ -81,21 +116,47 @@ function applyFirmOverride(band: BenchmarkBand, ctx: DealContext, metricKey: str
 // Blend portfolio percentiles with the curated/firm band when the sample is big
 // enough. p50 nudges the target; p25/p75 nudge the weak/strong rails per
 // direction. A 50/50 blend keeps curated discipline while reflecting the book.
-function blendPortfolio(band: BenchmarkBand, metricKey: string, inputs?: BenchmarkInputs): { band: BenchmarkBand; blended: boolean; n: number } {
+function blendPortfolio(
+  band: BenchmarkBand,
+  metricKey: string,
+  inputs?: BenchmarkInputs,
+): { band: BenchmarkBand; blended: boolean; n: number } {
   const pn = inputs?.portfolioNorms;
   const min = inputs?.portfolioMinSample ?? 8;
   const stat = pn?.bands?.[metricKey];
   if (!pn || !stat || stat.n < min) return { band, blended: false, n: 0 };
   const mid = (a: number, b: number) => (a + b) / 2;
   if (band.betterDirection === "higher") {
-    return { band: { ...band, weak: mid(band.weak, stat.p25), target: mid(band.target, stat.p50), strong: mid(band.strong, stat.p75) }, blended: true, n: stat.n };
+    return {
+      band: {
+        ...band,
+        weak: mid(band.weak, stat.p25),
+        target: mid(band.target, stat.p50),
+        strong: mid(band.strong, stat.p75),
+      },
+      blended: true,
+      n: stat.n,
+    };
   }
-  return { band: { ...band, strong: mid(band.strong, stat.p25), target: mid(band.target, stat.p50), weak: mid(band.weak, stat.p75) }, blended: true, n: stat.n };
+  return {
+    band: {
+      ...band,
+      strong: mid(band.strong, stat.p25),
+      target: mid(band.target, stat.p50),
+      weak: mid(band.weak, stat.p75),
+    },
+    blended: true,
+    n: stat.n,
+  };
 }
 
 // The single resolver. Curated → firm override → portfolio blend, with the
 // resulting provenance recorded on the returned Benchmark.
-export function resolveBenchmark(metricKey: string, context: DealContext, inputs?: BenchmarkInputs): Benchmark | null {
+export function resolveBenchmark(
+  metricKey: string,
+  context: DealContext,
+  inputs?: BenchmarkInputs,
+): Benchmark | null {
   const curated = curatedBenchmark(metricKey, context);
   if (!curated) return null;
   const withFirm = applyFirmOverride(curated, context, metricKey, inputs);

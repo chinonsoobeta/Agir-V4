@@ -15,13 +15,16 @@ export function detectMoneyScale(text: string): number {
   // Inherently currency-scoped compact notations: "$MM", "($000)", "'000s", etc.
   if (/\$\s*bn\b|\(\s*\$?\s*bn\s*\)/.test(t)) return 1_000_000_000;
   if (/\$\s*mm\b|\(\s*\$?\s*mm\s*\)|\bin\s+\$?\s*mm\b/.test(t)) return 1_000_000;
-  if (/\(\s*\$?\s*0{3}s?\s*\)|['’]\s*0{3}s?\b|\bin\s+\$?\s*0{3}s?\b|\$\s*0{3}s?\b/.test(t)) return 1_000;
+  if (/\(\s*\$?\s*0{3}s?\s*\)|['’]\s*0{3}s?\b|\bin\s+\$?\s*0{3}s?\b|\$\s*0{3}s?\b/.test(t))
+    return 1_000;
 
   // Long form ("in thousands", "(millions)", "stated in millions"): accepted
   // only when the text is clearly about money, so a non-currency column is never
   // rescaled.
   const currencyAnchored =
-    /\$|usd|cad|dollar|amount|figure|cost|budget|loan|equity|capital|price|proceeds|value|noi|revenue|financing/.test(t);
+    /\$|usd|cad|dollar|amount|figure|cost|budget|loan|equity|capital|price|proceeds|value|noi|revenue|financing/.test(
+      t,
+    );
   if (!currencyAnchored) return 1;
 
   const m =

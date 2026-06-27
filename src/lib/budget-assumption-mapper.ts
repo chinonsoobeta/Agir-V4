@@ -18,14 +18,18 @@ const money = (n: number) => new Intl.NumberFormat("en-US", { maximumFractionDig
 function reserveKeyFor(label: string): string | null {
   const t = label.toLowerCase();
   if (/environmental|remediation|pfas|\besa\b/.test(t)) return "environmental_reserve";
-  if (/off[\s-]?site|public road|infrastructure|municipal|substation|stormwater/.test(t)) return "offsite_improvements";
+  if (/off[\s-]?site|public road|infrastructure|municipal|substation|stormwater/.test(t))
+    return "offsite_improvements";
   if (/leasing|tenant improvement|\bti\b|\blc\b/.test(t)) return "leasing_reserve";
   if (/tax reassess|reassessed/.test(t)) return "tax_reassessment";
   return null;
 }
 
 // Single-row mapper kept for compatibility / non-aggregated callers.
-export function mapBudgetRowToAssumption(row: ParsedBudgetRow, sourceDocument: { name: string }): MappedCandidate | null {
+export function mapBudgetRowToAssumption(
+  row: ParsedBudgetRow,
+  sourceDocument: { name: string },
+): MappedCandidate | null {
   const key = BUDGET_KEY_BY_CATEGORY[row.category];
   if (!key) return null;
   const def = ASSUMPTION_BY_KEY[key];
@@ -50,7 +54,10 @@ export function mapBudgetRowToAssumption(row: ParsedBudgetRow, sourceDocument: {
 // detail is preserved in source_text for audit drilldown. A conflict can only
 // arise later when a DIFFERENT document claims a competing total for the same
 // category (groupAndResolve sees two category_totals).
-export function aggregateBudgetRows(rows: ParsedBudgetRow[], sourceDocument: { name: string }): MappedCandidate[] {
+export function aggregateBudgetRows(
+  rows: ParsedBudgetRow[],
+  sourceDocument: { name: string },
+): MappedCandidate[] {
   type Bucket = { key: string; total: number; lines: ParsedBudgetRow[] };
   const buckets = new Map<string, Bucket>();
 

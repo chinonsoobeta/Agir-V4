@@ -1,11 +1,24 @@
 import { interestOnlyDebtService } from "./debt";
 import { pct, xirr } from "./metrics";
-import { buildDebtStack, stackDebtServiceForYear, stackInterestCarry, stackPayoffAfterYears, type DebtTranche } from "./tranches";
+import {
+  buildDebtStack,
+  stackDebtServiceForYear,
+  stackInterestCarry,
+  stackPayoffAfterYears,
+  type DebtTranche,
+} from "./tranches";
 import { buildEquityContributions, equityDrawConventionText } from "./equity-timing";
 import { leaseUpAdjustedIrr } from "./lease-up";
 import { applyMonthlySchedule, type ScheduleContext } from "./schedule";
 import { equityMultiple as moneyMultiple, runWaterfall, type WaterfallConfig } from "./waterfall";
-import type { CashFlowRow, EngineOutput, EngineWarning, MetricOutput, RevenueUnitInput, UnderwritingInput } from "./types";
+import type {
+  CashFlowRow,
+  EngineOutput,
+  EngineWarning,
+  MetricOutput,
+  RevenueUnitInput,
+  UnderwritingInput,
+} from "./types";
 
 const money = (value: number) =>
   new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(value));
@@ -22,17 +35,32 @@ export function componentGpr(row: RevenueUnitInput) {
 
 export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   const tdcPreFinancing =
-    input.budget.land + input.budget.hard + input.budget.soft + input.budget.contingency + num(input.budget.other ?? 0);
+    input.budget.land +
+    input.budget.hard +
+    input.budget.soft +
+    input.budget.contingency +
+    num(input.budget.other ?? 0);
 
   // Capital stack: a senior loan plus any subordinate (mezzanine) tranche. A
   // senior-only stack reproduces today's single-loan math exactly.
   const seniorTranche: DebtTranche = {
-    key: "senior", label: "Senior",
-    amount: input.loanAmount, ratePct: input.interestRatePct, amortYears: input.amortYears, ioMonths: input.ioMonths,
+    key: "senior",
+    label: "Senior",
+    amount: input.loanAmount,
+    ratePct: input.interestRatePct,
+    amortYears: input.amortYears,
+    ioMonths: input.ioMonths,
   };
   const mezz = input.mezzanine && input.mezzanine.amount > 0 ? input.mezzanine : null;
   const mezzTranche: DebtTranche | null = mezz
-    ? { key: "mezzanine", label: "Mezzanine", amount: mezz.amount, ratePct: mezz.ratePct, amortYears: mezz.amortYears, ioMonths: mezz.ioMonths }
+    ? {
+        key: "mezzanine",
+        label: "Mezzanine",
+        amount: mezz.amount,
+        ratePct: mezz.ratePct,
+        amortYears: mezz.amortYears,
+        ioMonths: mezz.ioMonths,
+      }
     : null;
   const debtStack = buildDebtStack(seniorTranche, mezzTranche ? [mezzTranche] : []);
   const totalDebt = debtStack.totalDebt;
@@ -40,7 +68,9 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   // Interest carried during construction + lease-up, summed across tranches.
   // Identical to the single-loan reserve when there is no mezzanine.
   const computedInterestReserve = stackInterestCarry(
-    debtStack, input.constructionMonths + input.leaseUpMonths, input.avgOutstandingFactor,
+    debtStack,
+    input.constructionMonths + input.leaseUpMonths,
+    input.avgOutstandingFactor,
   );
   const interestReserve = input.budget.financingInterest ?? computedInterestReserve;
   const tdc = tdcPreFinancing + interestReserve;
@@ -71,7 +101,9 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   // Cost/unit counts dwelling units only; per_sf components (retail/office)
   // are not "units" and must never inflate the count (220 stays 220).
   const unitCount = input.revenueProgram.reduce(
-    (sum, row) => sum + (row.rentBasis === "per_unit" ? row.unitCount : 0), 0);
+    (sum, row) => sum + (row.rentBasis === "per_unit" ? row.unitCount : 0),
+    0,
+  );
   const costPerUnit = unitCount ? tdc / unitCount : 0;
   // Equity requirement is funded by TOTAL debt (senior + mezz). Equal to
   // TDC - senior loan when there is no mezzanine.
@@ -111,7 +143,8 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   // matches the cash-flow waterfall and the covenant test.
   const breakEvenOccupancyPct =
     gpr > 0 && input.expenseRatioPct < 100
-      ? ((year1DebtService / (1 - input.expenseRatioPct / 100) - input.otherIncomeAnnual) / gpr) * 100
+      ? ((year1DebtService / (1 - input.expenseRatioPct / 100) - input.otherIncomeAnnual) / gpr) *
+        100
       : 0;
 
   const exitYear = Math.max(1, Math.round(input.holdYears));
@@ -159,19 +192,27 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   // and the equity multiple floors at ~0.0x.
   const irrPct =
     equityWipeout || (equity > 0 && totalDistributions <= 0) ? Number.NaN : xirr(irrTimedFlows);
-  const irrStatus: EngineOutput["irrStatus"] = Number.isFinite(irrPct) ? "computed" : "not_meaningful";
+  const irrStatus: EngineOutput["irrStatus"] = Number.isFinite(irrPct)
+    ? "computed"
+    : "not_meaningful";
 
   // 1C. LP/GP distribution waterfall over the same levered equity vector. With
   // no promote configured the waterfall is inactive and LP returns equal the
   // deal returns (GP promote = 0), preserving backward compatibility.
   const waterfallConfig: WaterfallConfig = input.waterfall ?? {
-    lpEquityPct: 100, gpEquityPct: 0, preferredReturnPct: 0, gpCatchUpPct: 0, tiers: [],
+    lpEquityPct: 100,
+    gpEquityPct: 0,
+    preferredReturnPct: 0,
+    gpCatchUpPct: 0,
+    tiers: [],
   };
   const wf = runWaterfall(irrTimedFlows, waterfallConfig);
   const lpHasReturn = wf.lp.contributed > 0 && wf.lp.distributed > 0;
   const gpHasReturn = wf.gp.contributed > 0 && wf.gp.distributed > 0;
   const lpIrrPct = wf.active ? (lpHasReturn ? xirr(wf.lp.flows) : Number.NaN) : irrPct;
-  const lpEquityMultiple = wf.active ? moneyMultiple(wf.lp.contributed, wf.lp.distributed) : equityMultiple;
+  const lpEquityMultiple = wf.active
+    ? moneyMultiple(wf.lp.contributed, wf.lp.distributed)
+    : equityMultiple;
   const lpPreferredReturn = wf.lpPreferredPaid;
   const gpIrrPct = wf.active && gpHasReturn ? xirr(wf.gp.flows) : Number.NaN;
   const gpEquityMultiple = wf.active ? moneyMultiple(wf.gp.contributed, wf.gp.distributed) : 0;
@@ -180,9 +221,19 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   // 1D. Lease-up absorption: an opt-in figure that credits partial operating
   // income earned during the lease-up window. Off (or no lease-up, or a loss)
   // it equals the deal IRR exactly, so existing deals are unchanged.
-  const leaseUpActive = Boolean(input.leaseUpCurve) && input.leaseUpMonths > 0 && !equityWipeout && Number.isFinite(irrPct);
+  const leaseUpActive =
+    Boolean(input.leaseUpCurve) &&
+    input.leaseUpMonths > 0 &&
+    !equityWipeout &&
+    Number.isFinite(irrPct);
   const leaseUpAdjustedIrrPct = leaseUpActive
-    ? leaseUpAdjustedIrr({ equityContributions, distributionFlows, stabilizedLeveredCf, constructionMonths: input.constructionMonths, leaseUpMonths: input.leaseUpMonths })
+    ? leaseUpAdjustedIrr({
+        equityContributions,
+        distributionFlows,
+        stabilizedLeveredCf,
+        constructionMonths: input.constructionMonths,
+        leaseUpMonths: input.leaseUpMonths,
+      })
     : irrPct;
 
   const cashFlows: CashFlowRow[] = [
@@ -214,7 +265,10 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
     });
   }
 
-  const drawNote = (input.equityDrawMonths ?? 0) > 1 ? ` Equity draw: ${equityDrawConventionText(input.equityDrawMonths ?? 0)}.` : "";
+  const drawNote =
+    (input.equityDrawMonths ?? 0) > 1
+      ? ` Equity draw: ${equityDrawConventionText(input.equityDrawMonths ?? 0)}.`
+      : "";
   const irrFormula = equityWipeout
     ? `Equity loss: IRR not meaningful: sale proceeds ${money(netSaleBeforeDebt)} < loan payoff ${money(loanPayoffAtExit)}; EM ≈ 0.0x`
     : Number.isFinite(irrPct)
@@ -222,48 +276,262 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
       : "IRR not meaningful: equity cash flows do not include both negative and positive values.";
 
   const metrics: MetricOutput[] = [
-    { key: "total_project_cost", label: "Total Project Cost", value: tdc, unit: "$", formula: `TDC = land ${money(input.budget.land)} + hard ${money(input.budget.hard)} + soft ${money(input.budget.soft)} + contingency ${money(input.budget.contingency)}${input.budget.other ? ` + reserves ${money(num(input.budget.other))}` : ""} + financing ${money(interestReserve)} = ${money(tdc)}` },
-    { key: "gpr", label: "Gross Potential Rent", value: gpr, unit: "$", formula: `GPR = ${input.revenueProgram.map((r) => `${r.unitType} ${money(componentGpr(r))}`).join(" + ")} = ${money(gpr)}` },
-    { key: "projected_revenue", label: "Effective Gross Income", value: egi, unit: "$", formula: `EGI = ${input.revenueProgram.map((r) => `${r.unitType} ${money(componentGpr(r))} x ${(r.occupancyPct ?? input.stabilizedOccupancyPct).toFixed(0)}%`).join(" + ")} + other income ${money(input.otherIncomeAnnual)} = ${money(egi)}` },
-    { key: "stabilized_noi", label: "Stabilized NOI", value: noi, unit: "$", formula: `NOI = EGI ${money(egi)} - OpEx ${money(opex)} (${input.expenseRatioPct}%) = ${money(noi)}` },
-    { key: "projected_profit", label: "Development Profit", value: developmentProfit, unit: "$", formula: `Development profit = exit value ${money(exitValue)} - TDC ${money(tdc)} = ${money(developmentProfit)}` },
-    { key: "profit_margin", label: "Profit on Cost", value: profitOnCostPct, unit: "%", formula: `Profit on cost = ${money(developmentProfit)} / ${money(tdc)} = ${profitOnCostPct.toFixed(2)}%` },
-    { key: "equity_requirement", label: "Equity Requirement", value: impliedEquity, unit: "$", formula: `Required equity = TDC ${money(tdc)} - loan ${money(input.loanAmount)} = ${money(impliedEquity)}` },
-    { key: "loan_to_cost", label: "Loan-to-Cost", value: ltcPct, unit: "%", formula: `LTC = loan ${money(input.loanAmount)} / TDC ${money(tdc)} = ${ltcPct.toFixed(2)}%` },
-    { key: "annual_debt_service", label: "Annual Debt Service (amortizing)", value: annualDs, unit: "$", formula: `ADS = standard mortgage payment on ${money(input.loanAmount)} @ ${input.interestRatePct}% / ${input.amortYears}yr = ${money(annualDs)}` },
-    { key: "dscr", label: "DSCR (amortizing)", value: dscr, unit: "x", formula: `DSCR = NOI ${money(noi)} / amortizing debt service ${money(annualDs)} = ${dscr.toFixed(2)}x` },
-    { key: "interest_only_dscr", label: "DSCR (interest-only, secondary)", value: interestOnlyDscr, unit: "x", formula: `Interest-only DSCR (secondary) = NOI ${money(noi)} / interest ${money(ioDebtService)} = ${interestOnlyDscr.toFixed(2)}x` },
+    {
+      key: "total_project_cost",
+      label: "Total Project Cost",
+      value: tdc,
+      unit: "$",
+      formula: `TDC = land ${money(input.budget.land)} + hard ${money(input.budget.hard)} + soft ${money(input.budget.soft)} + contingency ${money(input.budget.contingency)}${input.budget.other ? ` + reserves ${money(num(input.budget.other))}` : ""} + financing ${money(interestReserve)} = ${money(tdc)}`,
+    },
+    {
+      key: "gpr",
+      label: "Gross Potential Rent",
+      value: gpr,
+      unit: "$",
+      formula: `GPR = ${input.revenueProgram.map((r) => `${r.unitType} ${money(componentGpr(r))}`).join(" + ")} = ${money(gpr)}`,
+    },
+    {
+      key: "projected_revenue",
+      label: "Effective Gross Income",
+      value: egi,
+      unit: "$",
+      formula: `EGI = ${input.revenueProgram.map((r) => `${r.unitType} ${money(componentGpr(r))} x ${(r.occupancyPct ?? input.stabilizedOccupancyPct).toFixed(0)}%`).join(" + ")} + other income ${money(input.otherIncomeAnnual)} = ${money(egi)}`,
+    },
+    {
+      key: "stabilized_noi",
+      label: "Stabilized NOI",
+      value: noi,
+      unit: "$",
+      formula: `NOI = EGI ${money(egi)} - OpEx ${money(opex)} (${input.expenseRatioPct}%) = ${money(noi)}`,
+    },
+    {
+      key: "projected_profit",
+      label: "Development Profit",
+      value: developmentProfit,
+      unit: "$",
+      formula: `Development profit = exit value ${money(exitValue)} - TDC ${money(tdc)} = ${money(developmentProfit)}`,
+    },
+    {
+      key: "profit_margin",
+      label: "Profit on Cost",
+      value: profitOnCostPct,
+      unit: "%",
+      formula: `Profit on cost = ${money(developmentProfit)} / ${money(tdc)} = ${profitOnCostPct.toFixed(2)}%`,
+    },
+    {
+      key: "equity_requirement",
+      label: "Equity Requirement",
+      value: impliedEquity,
+      unit: "$",
+      formula: `Required equity = TDC ${money(tdc)} - loan ${money(input.loanAmount)} = ${money(impliedEquity)}`,
+    },
+    {
+      key: "loan_to_cost",
+      label: "Loan-to-Cost",
+      value: ltcPct,
+      unit: "%",
+      formula: `LTC = loan ${money(input.loanAmount)} / TDC ${money(tdc)} = ${ltcPct.toFixed(2)}%`,
+    },
+    {
+      key: "annual_debt_service",
+      label: "Annual Debt Service (amortizing)",
+      value: annualDs,
+      unit: "$",
+      formula: `ADS = standard mortgage payment on ${money(input.loanAmount)} @ ${input.interestRatePct}% / ${input.amortYears}yr = ${money(annualDs)}`,
+    },
+    {
+      key: "dscr",
+      label: "DSCR (amortizing)",
+      value: dscr,
+      unit: "x",
+      formula: `DSCR = NOI ${money(noi)} / amortizing debt service ${money(annualDs)} = ${dscr.toFixed(2)}x`,
+    },
+    {
+      key: "interest_only_dscr",
+      label: "DSCR (interest-only, secondary)",
+      value: interestOnlyDscr,
+      unit: "x",
+      formula: `Interest-only DSCR (secondary) = NOI ${money(noi)} / interest ${money(ioDebtService)} = ${interestOnlyDscr.toFixed(2)}x`,
+    },
     { key: "irr_estimate", label: "Levered IRR", value: irrPct, unit: "%", formula: irrFormula },
-    { key: "cash_on_cash", label: "Cash-on-Cash", value: cashOnCashPct, unit: "%", formula: `Cash-on-cash = stabilized levered CF ${money(stabilizedLeveredCf)} / committed equity ${money(equity)} = ${cashOnCashPct.toFixed(2)}%` },
-    { key: "debt_yield", label: "Debt Yield", value: debtYieldPct, unit: "%", formula: `Debt yield = NOI ${money(noi)} / loan ${money(input.loanAmount)} = ${debtYieldPct.toFixed(2)}%` },
-    { key: "break_even_occupancy", label: "Break-even Occupancy", value: breakEvenOccupancyPct, unit: "%", formula: `Break-even occupancy = (in-force debt service ${money(year1DebtService)} / (1 - opex ${input.expenseRatioPct}%) - other income ${money(input.otherIncomeAnnual)}) / GPR ${money(gpr)} = ${breakEvenOccupancyPct.toFixed(1)}%` },
-    { key: "cumulative_cash_shortfall", label: "Cumulative Cash Shortfall", value: cumulativeCashShortfall, unit: "$", formula: `Cumulative cash shortfall during hold = sum of negative annual levered cash flow over ${exitYear} years = ${money(cumulativeCashShortfall)}` },
-    { key: "yield_on_cost", label: "Going-in Yield on Cost", value: yieldOnCostPct, unit: "%", formula: `Yield on cost = NOI ${money(noi)} / TDC ${money(tdc)} = ${yieldOnCostPct.toFixed(2)}%` },
-    { key: "development_spread", label: "Development Spread", value: developmentSpreadBps, unit: "bps", formula: `Development spread = yield ${yieldOnCostPct.toFixed(2)}% - exit cap ${input.exitCapRatePct.toFixed(2)}% = ${developmentSpreadBps.toFixed(0)} bps` },
-    { key: "exit_value", label: "Exit Value", value: exitValue, unit: "$", formula: `Exit value = NOI ${money(noi)} / exit cap ${input.exitCapRatePct.toFixed(2)}% = ${money(exitValue)}` },
-    { key: "net_sale_proceeds", label: "Net Sale Proceeds", value: netSaleBeforeDebt, unit: "$", formula: `Net sale = exit value ${money(exitValue)} x (1 - selling costs ${input.sellingCostsPct}%) = ${money(netSaleBeforeDebt)}` },
-    { key: "loan_payoff_at_exit", label: "Loan Payoff at Exit", value: loanPayoffAtExit, unit: "$", formula: `Loan balance after ${input.holdYears}yr (${input.ioMonths}mo IO, ${input.amortYears}yr amort) = ${money(loanPayoffAtExit)}` },
-    { key: "equity_multiple", label: "Equity Multiple", value: equityMultiple, unit: "x", formula: equityWipeout ? `Equity wipeout: sale proceeds ${money(netSaleBeforeDebt)} < loan payoff ${money(loanPayoffAtExit)} → EM ≈ 0.0x` : `Equity multiple = distributions ${money(finalEquityFlow + interimSum)} / equity ${money(equity)} = ${equityMultiple.toFixed(2)}x` },
-    { key: "cost_per_unit", label: "Cost / Unit", value: costPerUnit, unit: "$", formula: `Cost per unit = TDC ${money(tdc)} / ${unitCount} units = ${money(costPerUnit)}` },
+    {
+      key: "cash_on_cash",
+      label: "Cash-on-Cash",
+      value: cashOnCashPct,
+      unit: "%",
+      formula: `Cash-on-cash = stabilized levered CF ${money(stabilizedLeveredCf)} / committed equity ${money(equity)} = ${cashOnCashPct.toFixed(2)}%`,
+    },
+    {
+      key: "debt_yield",
+      label: "Debt Yield",
+      value: debtYieldPct,
+      unit: "%",
+      formula: `Debt yield = NOI ${money(noi)} / loan ${money(input.loanAmount)} = ${debtYieldPct.toFixed(2)}%`,
+    },
+    {
+      key: "break_even_occupancy",
+      label: "Break-even Occupancy",
+      value: breakEvenOccupancyPct,
+      unit: "%",
+      formula: `Break-even occupancy = (in-force debt service ${money(year1DebtService)} / (1 - opex ${input.expenseRatioPct}%) - other income ${money(input.otherIncomeAnnual)}) / GPR ${money(gpr)} = ${breakEvenOccupancyPct.toFixed(1)}%`,
+    },
+    {
+      key: "cumulative_cash_shortfall",
+      label: "Cumulative Cash Shortfall",
+      value: cumulativeCashShortfall,
+      unit: "$",
+      formula: `Cumulative cash shortfall during hold = sum of negative annual levered cash flow over ${exitYear} years = ${money(cumulativeCashShortfall)}`,
+    },
+    {
+      key: "yield_on_cost",
+      label: "Going-in Yield on Cost",
+      value: yieldOnCostPct,
+      unit: "%",
+      formula: `Yield on cost = NOI ${money(noi)} / TDC ${money(tdc)} = ${yieldOnCostPct.toFixed(2)}%`,
+    },
+    {
+      key: "development_spread",
+      label: "Development Spread",
+      value: developmentSpreadBps,
+      unit: "bps",
+      formula: `Development spread = yield ${yieldOnCostPct.toFixed(2)}% - exit cap ${input.exitCapRatePct.toFixed(2)}% = ${developmentSpreadBps.toFixed(0)} bps`,
+    },
+    {
+      key: "exit_value",
+      label: "Exit Value",
+      value: exitValue,
+      unit: "$",
+      formula: `Exit value = NOI ${money(noi)} / exit cap ${input.exitCapRatePct.toFixed(2)}% = ${money(exitValue)}`,
+    },
+    {
+      key: "net_sale_proceeds",
+      label: "Net Sale Proceeds",
+      value: netSaleBeforeDebt,
+      unit: "$",
+      formula: `Net sale = exit value ${money(exitValue)} x (1 - selling costs ${input.sellingCostsPct}%) = ${money(netSaleBeforeDebt)}`,
+    },
+    {
+      key: "loan_payoff_at_exit",
+      label: "Loan Payoff at Exit",
+      value: loanPayoffAtExit,
+      unit: "$",
+      formula: `Loan balance after ${input.holdYears}yr (${input.ioMonths}mo IO, ${input.amortYears}yr amort) = ${money(loanPayoffAtExit)}`,
+    },
+    {
+      key: "equity_multiple",
+      label: "Equity Multiple",
+      value: equityMultiple,
+      unit: "x",
+      formula: equityWipeout
+        ? `Equity wipeout: sale proceeds ${money(netSaleBeforeDebt)} < loan payoff ${money(loanPayoffAtExit)} → EM ≈ 0.0x`
+        : `Equity multiple = distributions ${money(finalEquityFlow + interimSum)} / equity ${money(equity)} = ${equityMultiple.toFixed(2)}x`,
+    },
+    {
+      key: "cost_per_unit",
+      label: "Cost / Unit",
+      value: costPerUnit,
+      unit: "$",
+      formula: `Cost per unit = TDC ${money(tdc)} / ${unitCount} units = ${money(costPerUnit)}`,
+    },
     // ---- Multi-tranche debt (1B). Equal the senior figures when no mezzanine. ----
-    { key: "total_debt", label: "Total Debt", value: totalDebt, unit: "$", formula: mezz ? `Total debt = senior ${money(input.loanAmount)} + mezzanine ${money(mezz.amount)} = ${money(totalDebt)}` : `Total debt = senior loan ${money(input.loanAmount)} (no subordinate debt) = ${money(totalDebt)}` },
-    { key: "total_debt_service", label: "All-in Annual Debt Service", value: totalDebtService, unit: "$", formula: mezz ? `All-in annual debt service = senior ${money(annualDs)} + mezzanine ${money(mezzDebtService)} = ${money(totalDebtService)}` : `All-in annual debt service = senior ${money(totalDebtService)} (no subordinate debt)` },
-    { key: "senior_dscr", label: "Senior DSCR", value: seniorDscr, unit: "x", formula: `Senior DSCR = NOI ${money(noi)} / senior debt service ${money(annualDs)} = ${seniorDscr.toFixed(2)}x` },
-    { key: "all_in_dscr", label: "All-in DSCR", value: allInDscr, unit: "x", formula: mezz ? `All-in DSCR = NOI ${money(noi)} / all-in debt service ${money(totalDebtService)} = ${allInDscr.toFixed(2)}x` : `All-in DSCR = senior DSCR ${allInDscr.toFixed(2)}x (no subordinate debt)` },
+    {
+      key: "total_debt",
+      label: "Total Debt",
+      value: totalDebt,
+      unit: "$",
+      formula: mezz
+        ? `Total debt = senior ${money(input.loanAmount)} + mezzanine ${money(mezz.amount)} = ${money(totalDebt)}`
+        : `Total debt = senior loan ${money(input.loanAmount)} (no subordinate debt) = ${money(totalDebt)}`,
+    },
+    {
+      key: "total_debt_service",
+      label: "All-in Annual Debt Service",
+      value: totalDebtService,
+      unit: "$",
+      formula: mezz
+        ? `All-in annual debt service = senior ${money(annualDs)} + mezzanine ${money(mezzDebtService)} = ${money(totalDebtService)}`
+        : `All-in annual debt service = senior ${money(totalDebtService)} (no subordinate debt)`,
+    },
+    {
+      key: "senior_dscr",
+      label: "Senior DSCR",
+      value: seniorDscr,
+      unit: "x",
+      formula: `Senior DSCR = NOI ${money(noi)} / senior debt service ${money(annualDs)} = ${seniorDscr.toFixed(2)}x`,
+    },
+    {
+      key: "all_in_dscr",
+      label: "All-in DSCR",
+      value: allInDscr,
+      unit: "x",
+      formula: mezz
+        ? `All-in DSCR = NOI ${money(noi)} / all-in debt service ${money(totalDebtService)} = ${allInDscr.toFixed(2)}x`
+        : `All-in DSCR = senior DSCR ${allInDscr.toFixed(2)}x (no subordinate debt)`,
+    },
     // ---- LP/GP waterfall (1C). Equal the deal figures when no promote. ----
-    { key: "lp_irr", label: "LP Levered IRR", value: lpIrrPct, unit: "%", formula: Number.isFinite(lpIrrPct) ? `LP IRR = ${lpIrrPct.toFixed(2)}% from LP equity cash flows after the distribution waterfall. ${wf.formulaText}` : `LP IRR not meaningful (no positive LP distribution). ${wf.formulaText}` },
-    { key: "lp_equity_multiple", label: "LP Equity Multiple", value: lpEquityMultiple, unit: "x", formula: wf.active ? `LP equity multiple = LP distributions ${money(wf.lp.distributed)} / LP capital ${money(wf.lp.contributed)} = ${lpEquityMultiple.toFixed(2)}x` : `LP equity multiple = deal equity multiple ${equityMultiple.toFixed(2)}x (LP holds the entire deal)` },
-    { key: "lp_preferred_return", label: "LP Preferred Return Distributed", value: lpPreferredReturn, unit: "$", formula: `LP preferred return distributed = ${money(lpPreferredReturn)} (return of capital excluded)` },
-    { key: "gp_irr", label: "GP Levered IRR", value: gpIrrPct, unit: "%", formula: Number.isFinite(gpIrrPct) ? `GP IRR = ${gpIrrPct.toFixed(2)}% from GP equity cash flows (co-invest plus promote).` : `GP IRR not meaningful (GP contributed no co-invest capital).` },
-    { key: "gp_equity_multiple", label: "GP Equity Multiple", value: gpEquityMultiple, unit: "x", formula: wf.gp.contributed > 0 ? `GP equity multiple = GP distributions ${money(wf.gp.distributed)} / GP capital ${money(wf.gp.contributed)} = ${gpEquityMultiple.toFixed(2)}x` : `GP equity multiple not applicable: GP contributed no co-invest capital` },
-    { key: "gp_promote", label: "GP Promote", value: gpPromote, unit: "$", formula: `GP promote (carried interest) = GP distributions ${money(wf.gp.distributed)} less a pari-passu split by ownership = ${money(gpPromote)}` },
+    {
+      key: "lp_irr",
+      label: "LP Levered IRR",
+      value: lpIrrPct,
+      unit: "%",
+      formula: Number.isFinite(lpIrrPct)
+        ? `LP IRR = ${lpIrrPct.toFixed(2)}% from LP equity cash flows after the distribution waterfall. ${wf.formulaText}`
+        : `LP IRR not meaningful (no positive LP distribution). ${wf.formulaText}`,
+    },
+    {
+      key: "lp_equity_multiple",
+      label: "LP Equity Multiple",
+      value: lpEquityMultiple,
+      unit: "x",
+      formula: wf.active
+        ? `LP equity multiple = LP distributions ${money(wf.lp.distributed)} / LP capital ${money(wf.lp.contributed)} = ${lpEquityMultiple.toFixed(2)}x`
+        : `LP equity multiple = deal equity multiple ${equityMultiple.toFixed(2)}x (LP holds the entire deal)`,
+    },
+    {
+      key: "lp_preferred_return",
+      label: "LP Preferred Return Distributed",
+      value: lpPreferredReturn,
+      unit: "$",
+      formula: `LP preferred return distributed = ${money(lpPreferredReturn)} (return of capital excluded)`,
+    },
+    {
+      key: "gp_irr",
+      label: "GP Levered IRR",
+      value: gpIrrPct,
+      unit: "%",
+      formula: Number.isFinite(gpIrrPct)
+        ? `GP IRR = ${gpIrrPct.toFixed(2)}% from GP equity cash flows (co-invest plus promote).`
+        : `GP IRR not meaningful (GP contributed no co-invest capital).`,
+    },
+    {
+      key: "gp_equity_multiple",
+      label: "GP Equity Multiple",
+      value: gpEquityMultiple,
+      unit: "x",
+      formula:
+        wf.gp.contributed > 0
+          ? `GP equity multiple = GP distributions ${money(wf.gp.distributed)} / GP capital ${money(wf.gp.contributed)} = ${gpEquityMultiple.toFixed(2)}x`
+          : `GP equity multiple not applicable: GP contributed no co-invest capital`,
+    },
+    {
+      key: "gp_promote",
+      label: "GP Promote",
+      value: gpPromote,
+      unit: "$",
+      formula: `GP promote (carried interest) = GP distributions ${money(wf.gp.distributed)} less a pari-passu split by ownership = ${money(gpPromote)}`,
+    },
     // 1D. Emitted only when lease-up absorption is active, so deals without it
     // (every golden fixture) are byte-identical and carry no extra metric row.
     ...(leaseUpActive
-      ? [{
-          key: "lease_up_adjusted_irr", label: "Lease-up Adjusted IRR", value: leaseUpAdjustedIrrPct, unit: "%" as const,
-          formula: `Lease-up adjusted IRR = ${leaseUpAdjustedIrrPct.toFixed(2)}%, crediting partial operating income across the ${input.leaseUpMonths}-month lease-up (linear absorption) vs the ${irrPct.toFixed(2)}% full-delay deal IRR`,
-        }]
+      ? [
+          {
+            key: "lease_up_adjusted_irr",
+            label: "Lease-up Adjusted IRR",
+            value: leaseUpAdjustedIrrPct,
+            unit: "%" as const,
+            formula: `Lease-up adjusted IRR = ${leaseUpAdjustedIrrPct.toFixed(2)}%, crediting partial operating income across the ${input.leaseUpMonths}-month lease-up (linear absorption) vs the ${irrPct.toFixed(2)}% full-delay deal IRR`,
+          },
+        ]
       : []),
   ];
 

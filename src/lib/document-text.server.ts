@@ -21,6 +21,9 @@ export type PdfTextMeta = {
   recoveredViaOcr: boolean;
   // Tesseract mean confidence (0-100) when OCR ran, else null.
   ocrConfidence: number | null;
+  ocrPagesProcessed: number | null;
+  ocrTotalPages: number | null;
+  ocrTruncated: boolean;
   embeddedChars: number;
 };
 
@@ -44,7 +47,15 @@ export async function pdfBufferToTextWithMeta(
   }
   const embeddedChars = embedded.replace(/\s/g, "").length;
   if (embeddedChars >= MIN_EMBEDDED_TEXT_CHARS) {
-    return { text: embedded, recoveredViaOcr: false, ocrConfidence: null, embeddedChars };
+    return {
+      text: embedded,
+      recoveredViaOcr: false,
+      ocrConfidence: null,
+      ocrPagesProcessed: null,
+      ocrTotalPages: null,
+      ocrTruncated: false,
+      embeddedChars,
+    };
   }
 
   // Empty / near-empty text layer: attempt OCR.
@@ -52,12 +63,30 @@ export async function pdfBufferToTextWithMeta(
   try {
     const ocr = await runner(buf);
     if (ocr.text.trim()) {
-      return { text: ocr.text, recoveredViaOcr: true, ocrConfidence: ocr.confidence, embeddedChars };
+      return {
+        text: ocr.text,
+        recoveredViaOcr: true,
+        ocrConfidence: ocr.confidence,
+        ocrPagesProcessed: ocr.pagesProcessed ?? null,
+        ocrTotalPages: ocr.totalPages ?? null,
+        ocrTruncated: Boolean(ocr.truncated),
+        embeddedChars,
+      };
     }
   } catch (error) {
-    console.warn(`[document-text] OCR fallback failed: ${error instanceof Error ? error.message : String(error)}`);
+    console.warn(
+      `[document-text] OCR fallback failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
-  return { text: embedded, recoveredViaOcr: false, ocrConfidence: null, embeddedChars };
+  return {
+    text: embedded,
+    recoveredViaOcr: false,
+    ocrConfidence: null,
+    ocrPagesProcessed: null,
+    ocrTotalPages: null,
+    ocrTruncated: false,
+    embeddedChars,
+  };
 }
 
 export async function pdfBufferToText(buf: ArrayBuffer): Promise<string> {
@@ -82,7 +111,15 @@ export async function xlsxBufferToText(buf: ArrayBuffer): Promise<string> {
     // A "$ in thousands / millions" declaration in the sheet name or a caption
     // row applies to every money cell; a column header can override it per
     // column. Honoring it stops a raw 34,500 from being read as $34.5k.
-    const sheetScale = detectMoneyScale([name, ...rows.slice(0, 3).flat().map((c) => String(c ?? ""))].join(" "));
+    const sheetScale = detectMoneyScale(
+      [
+        name,
+        ...rows
+          .slice(0, 3)
+          .flat()
+          .map((c) => String(c ?? "")),
+      ].join(" "),
+    );
     // Apply the sheet scale only to columns that are clearly money columns (by
     // header), so a percent / count / SF column is never rescaled even when the
     // sheet declares a dollar scale. An explicit per-column scale always wins.
@@ -97,7 +134,14 @@ export async function xlsxBufferToText(buf: ArrayBuffer): Promise<string> {
     });
     rows.forEach((row, index) => {
       const cells = row
-        .map((cell, columnIndex) => formatSpreadsheetCell(cell, headers[columnIndex], row, columnScales[columnIndex] ?? sheetScale))
+        .map((cell, columnIndex) =>
+          formatSpreadsheetCell(
+            cell,
+            headers[columnIndex],
+            row,
+            columnScales[columnIndex] ?? sheetScale,
+          ),
+        )
         .filter(Boolean)
         .join(" | ");
       out.push(`Sheet ${name} row ${index + 1}: ${cells}`);
@@ -106,7 +150,12 @@ export async function xlsxBufferToText(buf: ArrayBuffer): Promise<string> {
   return out.join("\n");
 }
 
-function formatSpreadsheetCell(cell: unknown, header: string | undefined, row: unknown[], scale = 1): string {
+function formatSpreadsheetCell(
+  cell: unknown,
+  header: string | undefined,
+  row: unknown[],
+  scale = 1,
+): string {
   if (cell == null) return "";
   const label = String(header ?? "").trim();
   const prefix = label ? `${label}=` : "";
@@ -117,7 +166,8 @@ function formatSpreadsheetCell(cell: unknown, header: string | undefined, row: u
     .map((value) => String(value ?? "").toLowerCase())
     .join(" ");
   const financialContext = [label.toLowerCase(), rowLabel].join(" ");
-  const looksLikePercent = /\b(occupancy|occupanc|occ\.?|percent|pct|%)\b/.test(financialContext) && Math.abs(cell) <= 1;
+  const looksLikePercent =
+    /\b(occupancy|occupanc|occ\.?|percent|pct|%)\b/.test(financialContext) && Math.abs(cell) <= 1;
 
   const looksLikeMoney =
     /\b(amount|budget|cost|price|value|loan|equity|debt|proceeds|income|revenue|rent|noi|opex|expense|tdc|total|contingency|financing|acquisition|land|soft|hard|capital|reserve|fee)\b/.test(
@@ -143,7 +193,10 @@ export async function docxBufferToText(buf: ArrayBuffer): Promise<string> {
     // Find End Of Central Directory record (signature 0x06054b50), scanning back.
     let eocd = -1;
     for (let i = bytes.length - 22; i >= 0 && i >= bytes.length - 22 - 65536; i--) {
-      if (bytes.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+      if (bytes.readUInt32LE(i) === 0x06054b50) {
+        eocd = i;
+        break;
+      }
     }
     if (eocd < 0) return "";
     const cdOffset = bytes.readUInt32LE(eocd + 16);
@@ -180,7 +233,11 @@ export async function docxBufferToText(buf: ArrayBuffer): Promise<string> {
           .replace(/<\/w:tr>/g, "\n")
           .replace(/<\/w:p>/g, "\n")
           .replace(/<[^>]+>/g, "")
-          .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
           .replace(/[ \t]{2,}/g, " ")
           .replace(/[ \t]+\n/g, "\n")
           .trim();
@@ -190,7 +247,9 @@ export async function docxBufferToText(buf: ArrayBuffer): Promise<string> {
     }
     return "";
   } catch (error) {
-    console.warn(`[document-text] docx parse failed: ${error instanceof Error ? error.message : String(error)}`);
+    console.warn(
+      `[document-text] docx parse failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
     return "";
   }
 }
@@ -201,6 +260,9 @@ export type ExtractedText = {
   recoveredViaOcr: boolean;
   // Tesseract mean confidence (0-100) when OCR ran, else null.
   ocrConfidence: number | null;
+  ocrPagesProcessed: number | null;
+  ocrTotalPages: number | null;
+  ocrTruncated: boolean;
 };
 
 // Extract text from any supported document, returning OCR metadata alongside it
@@ -213,14 +275,44 @@ export async function extractFileTextWithMeta(
 ): Promise<ExtractedText> {
   const lower = name.toLowerCase();
   const type = (fileType ?? "").toLowerCase();
-  const plain = (text: string): ExtractedText => ({ text, recoveredViaOcr: false, ocrConfidence: null });
+  const plain = (text: string): ExtractedText => ({
+    text,
+    recoveredViaOcr: false,
+    ocrConfidence: null,
+    ocrPagesProcessed: null,
+    ocrTotalPages: null,
+    ocrTruncated: false,
+  });
   try {
     if (lower.endsWith(".pdf") || type.includes("pdf")) {
       const meta = await pdfBufferToTextWithMeta(buf, opts);
-      log(name, "pdf", meta.text.length, meta.recoveredViaOcr ? `recovered via OCR, confidence ${Math.round(meta.ocrConfidence ?? 0)}%` : "");
-      return { text: meta.text, recoveredViaOcr: meta.recoveredViaOcr, ocrConfidence: meta.ocrConfidence };
+      log(
+        name,
+        "pdf",
+        meta.text.length,
+        meta.recoveredViaOcr
+          ? `recovered via OCR, confidence ${Math.round(meta.ocrConfidence ?? 0)}%${
+              meta.ocrTruncated
+                ? `, first ${meta.ocrPagesProcessed}/${meta.ocrTotalPages} pages`
+                : ""
+            }`
+          : "",
+      );
+      return {
+        text: meta.text,
+        recoveredViaOcr: meta.recoveredViaOcr,
+        ocrConfidence: meta.ocrConfidence,
+        ocrPagesProcessed: meta.ocrPagesProcessed,
+        ocrTotalPages: meta.ocrTotalPages,
+        ocrTruncated: meta.ocrTruncated,
+      };
     }
-    if (lower.endsWith(".xlsx") || lower.endsWith(".xls") || type.includes("sheet") || type.includes("excel")) {
+    if (
+      lower.endsWith(".xlsx") ||
+      lower.endsWith(".xls") ||
+      type.includes("sheet") ||
+      type.includes("excel")
+    ) {
       const text = await xlsxBufferToText(buf);
       log(name, "xlsx", text.length);
       return plain(text);
@@ -240,11 +332,17 @@ export async function extractFileTextWithMeta(
     log(name, "text", text.length);
     return plain(text);
   } catch (error) {
-    console.warn(`[document-text] extractFileText failed for "${name}" (${type}): ${error instanceof Error ? error.message : String(error)}`);
+    console.warn(
+      `[document-text] extractFileText failed for "${name}" (${type}): ${error instanceof Error ? error.message : String(error)}`,
+    );
     return plain("");
   }
 }
 
-export async function extractFileText(name: string, fileType: string | null | undefined, buf: ArrayBuffer): Promise<string> {
+export async function extractFileText(
+  name: string,
+  fileType: string | null | undefined,
+  buf: ArrayBuffer,
+): Promise<string> {
   return (await extractFileTextWithMeta(name, fileType, buf)).text;
 }

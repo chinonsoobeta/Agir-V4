@@ -16,7 +16,10 @@ export type TimedFlow = { t: number; amount: number };
 // the average annualized cash flow is half the stabilized level, applied over
 // the lease-up duration in years. A non-positive stabilized cash flow or zero
 // lease-up window contributes nothing.
-export function leaseUpAbsorptionIncome(stabilizedLeveredCf: number, leaseUpMonths: number): number {
+export function leaseUpAbsorptionIncome(
+  stabilizedLeveredCf: number,
+  leaseUpMonths: number,
+): number {
   const years = Math.max(0, leaseUpMonths) / 12;
   if (years <= 0 || stabilizedLeveredCf <= 0) return 0;
   return stabilizedLeveredCf * years * 0.5;
@@ -33,7 +36,13 @@ export function leaseUpAdjustedIrr(args: {
   constructionMonths: number;
   leaseUpMonths: number;
 }): number {
-  const { equityContributions, distributionFlows, stabilizedLeveredCf, constructionMonths, leaseUpMonths } = args;
+  const {
+    equityContributions,
+    distributionFlows,
+    stabilizedLeveredCf,
+    constructionMonths,
+    leaseUpMonths,
+  } = args;
   const income = leaseUpAbsorptionIncome(stabilizedLeveredCf, leaseUpMonths);
   if (income <= 0) return xirr([...equityContributions, ...distributionFlows]);
   const midLeaseUp = constructionMonths / 12 + leaseUpMonths / 12 / 2;

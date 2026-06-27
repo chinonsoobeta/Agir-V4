@@ -30,7 +30,9 @@ export function hasAnthropicKey(): boolean {
 
 export function getAgirModel(modelName = process.env.AGIR_AI_MODEL || DEFAULT_AI_MODEL) {
   const apiKey = getValidatedAnthropicKey();
-  if (!apiKey) throw new Error("Missing or malformed API_KEY/ANTHROPIC_API_KEY (expected an ASCII key starting with 'sk-')");
+  if (!apiKey)
+    throw new Error(
+      "Missing or malformed API_KEY/ANTHROPIC_API_KEY (expected an ASCII key starting with 'sk-')",
+    );
   return createAnthropic({ apiKey })(modelName);
 }
-

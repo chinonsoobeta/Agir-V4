@@ -38,7 +38,13 @@ export type Connector = {
 };
 
 export const DEAL_FIELDS: Array<keyof DealRecord> = [
-  "external_id", "name", "location", "type", "source", "probability", "target_close_date",
+  "external_id",
+  "name",
+  "location",
+  "type",
+  "source",
+  "probability",
+  "target_close_date",
 ];
 
 // ---- Minimal RFC-4180 CSV parse / stringify (quotes, embedded commas, CRLF) ----
@@ -51,20 +57,29 @@ export function parseCsv(text: string): string[][] {
     const ch = text[i];
     if (inQuotes) {
       if (ch === '"') {
-        if (text[i + 1] === '"') { field += '"'; i++; } else inQuotes = false;
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else inQuotes = false;
       } else field += ch;
     } else if (ch === '"') {
       inQuotes = true;
     } else if (ch === ",") {
-      row.push(field); field = "";
+      row.push(field);
+      field = "";
     } else if (ch === "\n" || ch === "\r") {
       if (ch === "\r" && text[i + 1] === "\n") i++;
-      row.push(field); field = "";
-      rows.push(row); row = [];
+      row.push(field);
+      field = "";
+      rows.push(row);
+      row = [];
     } else field += ch;
   }
   // Flush the trailing field/row unless the file ended on a clean newline.
-  if (field !== "" || row.length) { row.push(field); rows.push(row); }
+  if (field !== "" || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
   return rows.filter((r) => r.some((c) => c.trim() !== ""));
 }
 
@@ -82,7 +97,11 @@ export const csvConnector: Connector = {
   parseInbound(payload, mapping) {
     const errors: string[] = [];
     const rows = parseCsv(payload);
-    if (rows.length < 2) return { records: [], errors: rows.length === 0 ? ["Empty CSV payload."] : ["CSV has a header but no data rows."] };
+    if (rows.length < 2)
+      return {
+        records: [],
+        errors: rows.length === 0 ? ["Empty CSV payload."] : ["CSV has a header but no data rows."],
+      };
     const header = rows[0].map((h) => h.trim());
     // Invert the mapping: external column header -> internal field.
     const colToField = new Map<number, keyof DealRecord>();
@@ -97,7 +116,8 @@ export const csvConnector: Connector = {
       // Collect the mapped raw strings, then build a fully-typed record.
       const raw: Partial<Record<keyof DealRecord, string>> = {};
       for (const [idx, field] of colToField) raw[field] = (cells[idx] ?? "").trim();
-      const probNum = raw.probability != null ? Number(raw.probability.replace(/[%\s]/g, "")) : Number.NaN;
+      const probNum =
+        raw.probability != null ? Number(raw.probability.replace(/[%\s]/g, "")) : Number.NaN;
       const rec: DealRecord = {
         external_id: raw.external_id ?? "",
         name: raw.name ?? "",
@@ -107,15 +127,23 @@ export const csvConnector: Connector = {
         probability: Number.isFinite(probNum) ? probNum : null,
         target_close_date: raw.target_close_date ? raw.target_close_date : null,
       };
-      if (!rec.external_id) { errors.push(`Row ${i + 2}: missing external id (mapped column empty).`); return; }
-      if (!rec.name) { errors.push(`Row ${i + 2}: missing deal name.`); return; }
+      if (!rec.external_id) {
+        errors.push(`Row ${i + 2}: missing external id (mapped column empty).`);
+        return;
+      }
+      if (!rec.name) {
+        errors.push(`Row ${i + 2}: missing deal name.`);
+        return;
+      }
       records.push(rec);
     });
     return { records, errors };
   },
   formatOutbound(records, mapping) {
     // Stable column order: the mapping's external columns in insertion order.
-    const cols = Object.entries(mapping).filter(([, f]) => DEAL_FIELDS.includes(f as keyof DealRecord));
+    const cols = Object.entries(mapping).filter(([, f]) =>
+      DEAL_FIELDS.includes(f as keyof DealRecord),
+    );
     const header = cols.map(([externalCol]) => externalCol);
     const body = records.map((rec) =>
       cols.map(([, field]) => {
@@ -127,7 +155,12 @@ export const csvConnector: Connector = {
   },
 };
 
-export type ConnectorMeta = { provider: string; label: string; category: string; status: "live" | "planned" };
+export type ConnectorMeta = {
+  provider: string;
+  label: string;
+  category: string;
+  status: "live" | "planned";
+};
 
 // The provider registry: exactly which connectors are LIVE versus PLANNED. The
 // UI reads this so it never advertises a connection it cannot actually run.

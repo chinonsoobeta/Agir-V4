@@ -28,13 +28,24 @@ beforeAll(async () => {
   }
 }, 30_000);
 
-const hasCurrency = (v: number) => allCandidates.some((c) => c.kind === "currency" && Math.round(c.value_numeric ?? -1) === v);
-const hasPercent = (v: number) => allCandidates.some((c) => c.kind === "percent" && Math.abs((c.value_numeric ?? -1) - v) < 1e-6);
-const hasRent = (v: number, unit: string) => allCandidates.some((c) => c.kind === "rent" && c.unit === unit && Math.round(c.value_numeric ?? -1) === v);
-const hasSf = (v: number) => allCandidates.some((c) => c.kind === "sf" && Math.round(c.value_numeric ?? -1) === v);
-const hasUnits = (v: number) => allCandidates.some((c) => c.kind === "units" && Math.round(c.value_numeric ?? -1) === v);
-const hasDuration = (v: number, unit: string) => allCandidates.some((c) => c.kind === "duration" && c.unit === unit && Math.round(c.value_numeric ?? -1) === v);
-const hasRatio = (v: number) => allCandidates.some((c) => c.kind === "ratio" && Math.abs((c.value_numeric ?? -1) - v) < 1e-6);
+const hasCurrency = (v: number) =>
+  allCandidates.some((c) => c.kind === "currency" && Math.round(c.value_numeric ?? -1) === v);
+const hasPercent = (v: number) =>
+  allCandidates.some((c) => c.kind === "percent" && Math.abs((c.value_numeric ?? -1) - v) < 1e-6);
+const hasRent = (v: number, unit: string) =>
+  allCandidates.some(
+    (c) => c.kind === "rent" && c.unit === unit && Math.round(c.value_numeric ?? -1) === v,
+  );
+const hasSf = (v: number) =>
+  allCandidates.some((c) => c.kind === "sf" && Math.round(c.value_numeric ?? -1) === v);
+const hasUnits = (v: number) =>
+  allCandidates.some((c) => c.kind === "units" && Math.round(c.value_numeric ?? -1) === v);
+const hasDuration = (v: number, unit: string) =>
+  allCandidates.some(
+    (c) => c.kind === "duration" && c.unit === unit && Math.round(c.value_numeric ?? -1) === v,
+  );
+const hasRatio = (v: number) =>
+  allCandidates.some((c) => c.kind === "ratio" && Math.abs((c.value_numeric ?? -1) - v) < 1e-6);
 
 describe("Harbour Centre extraction pipeline", () => {
   // ---- Test A: storage / text extraction ----
@@ -133,8 +144,11 @@ describe("Harbour Centre extraction pipeline", () => {
 
     // All other required keys are present and unconflicted; stabilized occupancy
     // is satisfied by the three component occupancies.
-    const componentOccupancyPresent = ["residential_occupancy", "retail_occupancy", "office_occupancy"]
-      .every((k) => grouped.get(k)?.status === "extracted");
+    const componentOccupancyPresent = [
+      "residential_occupancy",
+      "retail_occupancy",
+      "office_occupancy",
+    ].every((k) => grouped.get(k)?.status === "extracted");
     expect(componentOccupancyPresent).toBe(true);
 
     for (const key of REQUIRED_KEYS) {
@@ -153,7 +167,9 @@ describe("Harbour Centre extraction pipeline", () => {
     const interest = allCandidates.find((c) => c.kind === "percent" && c.value_numeric === 6.25)!;
     expect(mapCandidateToKey(interest)?.field_key).toBe("interest_rate");
     // $162,500,000 (currency) must map to debt_amount.
-    const loan = allCandidates.find((c) => c.kind === "currency" && c.value_numeric === 162_500_000)!;
+    const loan = allCandidates.find(
+      (c) => c.kind === "currency" && c.value_numeric === 162_500_000,
+    )!;
     expect(mapCandidateToKey(loan)?.field_key).toBe("debt_amount");
   });
 });

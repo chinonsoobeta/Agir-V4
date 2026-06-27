@@ -8,7 +8,12 @@ import { mapRevenueProgramRowToAssumptions } from "@/lib/revenue-assumption-mapp
 import { mapCandidateToKey, groupAndResolve, type MappedCandidate } from "@/lib/assumption-mapping";
 import type { Candidate } from "@/lib/assumption-candidates.server";
 import { componentGpr, runUnderwriting } from "@/lib/engine/proforma";
-import { assembleEngineInput, computeReadiness, conservativePick, type ProjectInputRows } from "@/lib/engine";
+import {
+  assembleEngineInput,
+  computeReadiness,
+  conservativePick,
+  type ProjectInputRows,
+} from "@/lib/engine";
 import { generateFindings } from "@/lib/findings";
 import { industrialFindings } from "@/lib/findings/modules/industrial";
 import type { NormalizedFindingsInput } from "@/lib/findings/findings-types";
@@ -23,7 +28,15 @@ async function buf(filePath: string): Promise<ArrayBuffer> {
 }
 
 const pct = (cands: Partial<Candidate>): Candidate => ({
-  kind: "percent", value_numeric: 0, value_text: "", unit: "%", context: "", doc_name: "doc", label_hint: "", source_location: null, ...cands,
+  kind: "percent",
+  value_numeric: 0,
+  value_text: "",
+  unit: "%",
+  context: "",
+  doc_name: "doc",
+  label_hint: "",
+  source_location: null,
+  ...cands,
 });
 
 // ---------- Test 1: rent roll parsing ----------
@@ -31,7 +44,9 @@ describe("Summit Point rent roll parsing", () => {
   test("parses four components with per-SF rent and component occupancy", async () => {
     const { inserted } = parseRentRollWorkbook(await buf(rentRollPath));
     const names = inserted.map((r) => r.unitType);
-    expect(names).toEqual(expect.arrayContaining(["Dry Warehouse", "Cold Storage", "Last-Mile Flex", "Other Income"]));
+    expect(names).toEqual(
+      expect.arrayContaining(["Dry Warehouse", "Cold Storage", "Last-Mile Flex", "Other Income"]),
+    );
     expect(inserted).toHaveLength(4); // Total row rejected
 
     const dry = inserted.find((r) => r.unitType === "Dry Warehouse")!;
@@ -47,7 +62,9 @@ describe("Summit Point rent roll parsing", () => {
 describe("Summit Point revenue mapping + engine math", () => {
   test("maps industrial components to canonical keys and Other Income to a scalar", async () => {
     const { inserted } = parseRentRollWorkbook(await buf(rentRollPath));
-    const mapped = inserted.flatMap((r) => mapRevenueProgramRowToAssumptions(r, { name: "rentroll" }));
+    const mapped = inserted.flatMap((r) =>
+      mapRevenueProgramRowToAssumptions(r, { name: "rentroll" }),
+    );
     const byKey = Object.fromEntries(mapped.map((m) => [m.field_key, m.value_numeric]));
     expect(byKey.dry_warehouse_sf).toBe(760000);
     expect(byKey.dry_warehouse_rent_psf).toBe(18.5);
@@ -59,7 +76,13 @@ describe("Summit Point revenue mapping + engine math", () => {
   });
 
   test("componentGpr computes per-SF annual GPR and occupancy-adjusted EGI", () => {
-    const dryGpr = componentGpr({ unitType: "Dry Warehouse", unitCount: 1, avgSf: 760000, rent: 18.5, rentBasis: "per_sf" });
+    const dryGpr = componentGpr({
+      unitType: "Dry Warehouse",
+      unitCount: 1,
+      avgSf: 760000,
+      rent: 18.5,
+      rentBasis: "per_sf",
+    });
     expect(dryGpr).toBeCloseTo(14_060_000, 0);
     expect(dryGpr * 0.96).toBeCloseTo(13_497_600, 0);
   });
@@ -93,9 +116,23 @@ describe("Summit Point budget aggregation", () => {
 
 // ---------- Test 4 + 5: conflict vs aggregation, structured precedence ----------
 describe("Summit Point conflict semantics", () => {
-  const cat = (key: string, value: number, role: MappedCandidate["candidate_role"], source: string): MappedCandidate => ({
-    field_key: key, value_numeric: value, value_text: null, unit: "$", confidence: 99,
-    source_doc_name: source, source_text: "", source_location: null, matched_alias: "", via: "alias", candidate_role: role,
+  const cat = (
+    key: string,
+    value: number,
+    role: MappedCandidate["candidate_role"],
+    source: string,
+  ): MappedCandidate => ({
+    field_key: key,
+    value_numeric: value,
+    value_text: null,
+    unit: "$",
+    confidence: 99,
+    source_doc_name: source,
+    source_text: "",
+    source_location: null,
+    matched_alias: "",
+    via: "alias",
+    candidate_role: role,
   });
 
   test("aggregated category total wins over loose line-item scalars (no false conflict)", () => {
@@ -116,27 +153,49 @@ describe("Summit Point conflict semantics", () => {
     const tdc = resolved.get("total_project_cost")!;
     expect(tdc.status).toBe("conflicting");
     expect(tdc.value_numeric).toBeNull();
-    expect(tdc.conflict_values?.map((c) => c.value)).toEqual(expect.arrayContaining([334_000_000, 346_250_000]));
+    expect(tdc.conflict_values?.map((c) => c.value)).toEqual(
+      expect.arrayContaining([334_000_000, 346_250_000]),
+    );
   });
 });
 
 // ---------- Test 5b: mapping contamination guards ----------
 describe("Summit Point mapping contamination guards", () => {
   test("an exit-cap value of 5.75% never maps to operating expense ratio", () => {
-    const c = pct({ value_numeric: 5.75, value_text: "5.75%", label_hint: "appraisal exit cap rate", context: "appraisal exit cap rate 5.75%" });
+    const c = pct({
+      value_numeric: 5.75,
+      value_text: "5.75%",
+      label_hint: "appraisal exit cap rate",
+      context: "appraisal exit cap rate 5.75%",
+    });
     expect(mapCandidateToKey(c)?.field_key).not.toBe("opex_ratio");
     expect(mapCandidateToKey(c)?.field_key).toBe("exit_cap_rate");
   });
 
   test("an operating expense ratio of 27% maps to opex_ratio", () => {
-    const c = pct({ value_numeric: 27, value_text: "27%", label_hint: "operating expense ratio", context: "appraisal operating expense ratio 27%" });
+    const c = pct({
+      value_numeric: 27,
+      value_text: "27%",
+      label_hint: "operating expense ratio",
+      context: "appraisal operating expense ratio 27%",
+    });
     expect(mapCandidateToKey(c)?.field_key).toBe("opex_ratio");
   });
 
   test("component occupancy does not collapse into stabilized occupancy", () => {
-    const c = pct({ value_numeric: 96, value_text: "96%", label_hint: "dry warehouse occupancy", context: "dry warehouse occupancy 96%" });
+    const c = pct({
+      value_numeric: 96,
+      value_text: "96%",
+      label_hint: "dry warehouse occupancy",
+      context: "dry warehouse occupancy 96%",
+    });
     expect(mapCandidateToKey(c)?.field_key).not.toBe("stabilized_occupancy");
-    const sponsor = pct({ value_numeric: 95, value_text: "95%", label_hint: "stabilized occupancy", context: "sponsor stabilized occupancy 95%" });
+    const sponsor = pct({
+      value_numeric: 95,
+      value_text: "95%",
+      label_hint: "stabilized occupancy",
+      context: "sponsor stabilized occupancy 95%",
+    });
     expect(mapCandidateToKey(sponsor)?.field_key).toBe("stabilized_occupancy");
   });
 });
@@ -176,9 +235,33 @@ function summitRows(): ProjectInputRows {
       { category: "other", amount: 9_000_000, status: "approved" },
     ],
     revenue: [
-      { unit_type: "Dry Warehouse", unit_count: 1, avg_sf: 760000, rent: 18.5, rent_basis: "per_sf", occupancy_pct: 96, status: "approved" },
-      { unit_type: "Cold Storage", unit_count: 1, avg_sf: 280000, rent: 31, rent_basis: "per_sf", occupancy_pct: 94, status: "approved" },
-      { unit_type: "Last-Mile Flex", unit_count: 1, avg_sf: 200000, rent: 23.5, rent_basis: "per_sf", occupancy_pct: 92, status: "approved" },
+      {
+        unit_type: "Dry Warehouse",
+        unit_count: 1,
+        avg_sf: 760000,
+        rent: 18.5,
+        rent_basis: "per_sf",
+        occupancy_pct: 96,
+        status: "approved",
+      },
+      {
+        unit_type: "Cold Storage",
+        unit_count: 1,
+        avg_sf: 280000,
+        rent: 31,
+        rent_basis: "per_sf",
+        occupancy_pct: 94,
+        status: "approved",
+      },
+      {
+        unit_type: "Last-Mile Flex",
+        unit_count: 1,
+        avg_sf: 200000,
+        rent: 23.5,
+        rent_basis: "per_sf",
+        occupancy_pct: 92,
+        status: "approved",
+      },
     ],
   };
 }
@@ -206,12 +289,31 @@ describe("Summit Point industrial findings", () => {
         { field_key: "cold_storage_sf", value_numeric: 280000, status: "approved" },
         { field_key: "offsite_improvements", value_numeric: 9_000_000, status: "approved" },
         { field_key: "tenant_termination_option_year", value_numeric: 6, status: "approved" },
-        { field_key: "interest_rate", value_numeric: 7.15, status: "approved", source_location: "Summit_Point_Rate_Lock_Addendum.pdf" },
+        {
+          field_key: "interest_rate",
+          value_numeric: 7.15,
+          status: "approved",
+          source_location: "Summit_Point_Rate_Lock_Addendum.pdf",
+        },
       ],
       input: {
         revenueProgram: [
-          { unitType: "Dry Warehouse", unitCount: 1, avgSf: 760000, rent: 18.5, rentBasis: "per_sf", occupancyPct: 96 },
-          { unitType: "Cold Storage", unitCount: 1, avgSf: 280000, rent: 31, rentBasis: "per_sf", occupancyPct: 94 },
+          {
+            unitType: "Dry Warehouse",
+            unitCount: 1,
+            avgSf: 760000,
+            rent: 18.5,
+            rentBasis: "per_sf",
+            occupancyPct: 96,
+          },
+          {
+            unitType: "Cold Storage",
+            unitCount: 1,
+            avgSf: 280000,
+            rent: 31,
+            rentBasis: "per_sf",
+            occupancyPct: 94,
+          },
         ],
         holdYears: 5,
       } as NormalizedFindingsInput["input"],
@@ -219,22 +321,29 @@ describe("Summit Point industrial findings", () => {
       reconciliation: [],
     };
     const ids = industrialFindings(normalized).map((f) => f.id);
-    expect(ids).toEqual(expect.arrayContaining([
-      "industrial.tenant_concentration",
-      "industrial.cap_sensitivity",
-      "industrial.cold_storage_retenanting",
-      "industrial.rate_lock",
-      "industrial.infrastructure_timing",
-      "industrial.termination_option",
-    ]));
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        "industrial.tenant_concentration",
+        "industrial.cap_sensitivity",
+        "industrial.cold_storage_retenanting",
+        "industrial.rate_lock",
+        "industrial.infrastructure_timing",
+        "industrial.termination_option",
+      ]),
+    );
   });
 
   test("generateFindings runs end-to-end on Summit engine output without throwing", () => {
     const out = runUnderwriting(assembleEngineInput(summitRows()));
-    const report = generateFindings(out, [
-      { field_key: "tenant_concentration_pct", value_numeric: 64, status: "approved" },
-      { field_key: "cold_storage_sf", value_numeric: 280000, status: "approved" },
-    ], [], { input: assembleEngineInput(summitRows()) });
+    const report = generateFindings(
+      out,
+      [
+        { field_key: "tenant_concentration_pct", value_numeric: 64, status: "approved" },
+        { field_key: "cold_storage_sf", value_numeric: 280000, status: "approved" },
+      ],
+      [],
+      { input: assembleEngineInput(summitRows()) },
+    );
     expect(report.recommendation).toBeDefined();
     expect(Array.isArray(report.risks)).toBe(true);
   });

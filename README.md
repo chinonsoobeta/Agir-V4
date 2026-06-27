@@ -19,6 +19,7 @@ The defining principle: **every financial number is deterministic and traceable.
 ## What it does
 
 ### 1. Assumption extraction (deterministic)
+
 - Parses uploaded documents (PDF, XLSX/XLS, CSV, TXT, best-effort DOCX) into text.
 - A regex candidate extractor lifts currency, percent, bps, ratios, units, SF, rents, and durations with their surrounding label/context.
 - A deterministic **alias mapper** (no LLM) maps each candidate to a canonical assumption key using line-scoped label proximity and unit/kind compatibility. An optional AI pass only classifies candidates the deterministic mapper leaves unresolved, and can never override it or mint a value.
@@ -26,26 +27,30 @@ The defining principle: **every financial number is deterministic and traceable.
 - "Run Extraction" returns a structured **debug trace** (per-document download/parse/candidate counts) surfaced in the UI.
 
 ### 2. Deterministic underwriting engine (`src/lib/engine`)
+
 Pure TypeScript. Computes TDC, GPR/EGI/NOI, yield on cost, development spread, exit value, DSCR, equity multiple, IRR (or "not meaningful" on an equity wipeout: never a misleading 0.00%), plus a base case and five stress scenarios, reconciliation flags, a risk register, and a verdict. It is **fail-closed**: it reads only `approved` / `default_accepted` rows.
 
 ### 3. Investment memo generator
+
 - A deterministic IC memorandum built from approved assumptions + engine outputs (stat strip, verdict banner, KPI cards, sources & uses, revenue build, scenario analysis, covenant compliance, risks, reconciliation flags, required actions, document sources, footnotes).
 - Optional AI-assisted prose when `ANTHROPIC_API_KEY` is set; numbers stay deterministic either way and are provenance-verified.
 - Exports to **PDF** (jsPDF) and **DOCX** (`docx`).
 
 ### 4. Reports
+
 Four stakeholder reports generated from deterministic outputs only, each with a readiness check, in-app preview, and persisted history:
 
-| Report | PDF | DOCX | XLSX |
-| --- | :-: | :-: | :-: |
-| Investor Report | ✓ | ✓ | ✓ |
-| Lender Package | ✓ | ✓ | ✓ |
-| Executive Summary | ✓ | ✓ | |
-| Internal Team Report | ✓ | | ✓ |
+| Report               | PDF | DOCX | XLSX |
+| -------------------- | :-: | :--: | :--: |
+| Investor Report      |  ✓  |  ✓   |  ✓   |
+| Lender Package       |  ✓  |  ✓   |  ✓   |
+| Executive Summary    |  ✓  |  ✓   |      |
+| Internal Team Report |  ✓  |      |  ✓   |
 
 Reports fail closed (e.g. "Run deterministic underwriting before generating this report"), surface unresolved reconciliation errors prominently, and disclose default-accepted inputs.
 
 ### 5. Investment operating console
+
 - A live executive overview for pipeline capital, weighted opportunity value, decision scores, risk exceptions, velocity, and upcoming close dates.
 - Searchable deal flow with source, probability, target-close tracking, status management, and realtime refresh.
 - Deal-execution milestones for diligence, financing, legal, and closing work, including blockers and overdue items.
@@ -93,6 +98,7 @@ npm run dev                       # http://127.0.0.1:8080
 ```
 
 ### Running fully locally with no cloud account
+
 A local Supabase stack provides auth, Postgres, and Storage with no cloud credentials:
 
 ```bash
@@ -106,11 +112,13 @@ supabase db reset                 # applies migrations + seed
 Put the values from `supabase status -o env` into `.env.local`: both the `SUPABASE_*` and the browser-side `VITE_SUPABASE_*` copies. Seeded demo login: `maple.heights@example.com` / `password123`.
 
 Notes:
+
 - `supabase/config.toml` disables the analytics/vector service, which otherwise fails under colima's Docker socket.
 - The `documents` storage bucket is not created by migrations: create it once: `insert into storage.buckets (id,name,public) values ('documents','documents',false)`.
 - The dev server launches on Node 22 via `.claude/dev-node22.sh`.
 
 ### AI is optional
+
 Leave `ANTHROPIC_API_KEY` unset and the memo/report generators use the deterministic template. Set it to enable AI-assisted prose: financial figures remain deterministic and provenance-verified.
 
 ---
@@ -136,4 +144,4 @@ src/routes/                App routes (dashboard, projects, assumptions, underwr
 supabase/                  Migrations, seed, config
 ```
 
-> The deterministic underwriting engine in `src/lib/engine` is the source of truth for every financial number. Treat it as fixed: features build *around* it, never inside it.
+> The deterministic underwriting engine in `src/lib/engine` is the source of truth for every financial number. Treat it as fixed: features build _around_ it, never inside it.

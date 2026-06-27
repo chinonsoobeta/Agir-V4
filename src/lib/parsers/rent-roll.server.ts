@@ -27,7 +27,8 @@ export type RentRollParseResult = {
 
 // Match the rent/rate column but NOT lookalike headers such as "Rentable SF"
 // (contains "rent"), "Rent Basis", or count columns.
-const isRentHeader = (h: string) => /rent|rate/.test(h) && !/\bsf\b|square|basis|count|units|qty|gpr|egi/.test(h);
+const isRentHeader = (h: string) =>
+  /rent|rate/.test(h) && !/\bsf\b|square|basis|count|units|qty|gpr|egi/.test(h);
 
 // Header heuristic for rent-roll tabs: a unit-type/component column, a count
 // column, and a rent/rate column. A budget tab scores 0.
@@ -78,18 +79,24 @@ function parseRentRollSheet(
     const rent = parseNumeric(row[rentIndex]);
     const occupancyRaw = occupancyIndex >= 0 ? parseNumeric(row[occupancyIndex]) : NaN;
     // Accept either 0-1 fractions or 0-100 percents from the sheet.
-    const occupancyPct = Number.isFinite(occupancyRaw) && occupancyRaw > 0
-      ? (occupancyRaw <= 1 ? occupancyRaw * 100 : occupancyRaw)
-      : null;
+    const occupancyPct =
+      Number.isFinite(occupancyRaw) && occupancyRaw > 0
+        ? occupancyRaw <= 1
+          ? occupancyRaw * 100
+          : occupancyRaw
+        : null;
     if (!unitType || !Number.isFinite(unitCount) || !Number.isFinite(rent) || rent <= 0) {
       rejected.push({ row: rowNumber, reason: "Missing unit type, count, or rent.", values: row });
       return;
     }
     const basisText = rentBasisIndex >= 0 ? String(row[rentBasisIndex] ?? "").toLowerCase() : "";
-    const rentBasis: ParsedRentRollRow["rentBasis"] =
-      /per[_\s-]*sf|psf|square/.test(basisText) ? "per_sf"
-      : /per[_\s-]*unit|unit|month|mo/.test(basisText) ? "per_unit"
-      : perSfRent && avgSf ? "per_sf" : "per_unit";
+    const rentBasis: ParsedRentRollRow["rentBasis"] = /per[_\s-]*sf|psf|square/.test(basisText)
+      ? "per_sf"
+      : /per[_\s-]*unit|unit|month|mo/.test(basisText)
+        ? "per_unit"
+        : perSfRent && avgSf
+          ? "per_sf"
+          : "per_unit";
     inserted.push({
       unitType,
       tenant,
@@ -132,7 +139,9 @@ export function parseRentRollWorkbook(buffer: ArrayBuffer): RentRollParseResult 
     rejected,
     meta: {
       sheetsScanned: workbook.SheetNames.length,
-      sheetsSelected: sheetsSelected.length ? sheetsSelected : [selected[0]?.name].filter(Boolean) as string[],
+      sheetsSelected: sheetsSelected.length
+        ? sheetsSelected
+        : ([selected[0]?.name].filter(Boolean) as string[]),
       mergedCellsFilled,
     },
   };

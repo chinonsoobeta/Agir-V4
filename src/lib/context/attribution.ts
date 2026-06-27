@@ -6,7 +6,8 @@ import type { EngineOutput, UnderwritingInput } from "../engine/types";
 import { resolveBenchmark } from "./benchmarks";
 import type { BenchmarkInputs, DealContext } from "./types";
 
-const money = (n: number) => `$${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(n))}`;
+const money = (n: number) =>
+  `$${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(n))}`;
 
 export type Driver = { factor: string; detail: string; magnitude: number };
 export type WhatIfLever = { gate: string; passing: boolean; target: number; lever: string };
@@ -34,10 +35,14 @@ function spreadDrivers(output: EngineOutput, input: UnderwritingInput): Driver[]
   // Which lever moves the spread more: cost basis or exit cap.
   const costSensitivity = v.tdc > 0 ? (v.noi / v.tdc) * 100 : 0; // yoc; cutting cost lifts this
   drivers.push({
-    factor: v.yieldOnCostPct < input.exitCapRatePct + 1 ? "Cost basis is the binding constraint" : "Exit assumption is the binding constraint",
-    detail: v.yieldOnCostPct < input.exitCapRatePct + 1
-      ? `Going-in yield (${v.yieldOnCostPct.toFixed(2)}%) sits close to the exit cap (${input.exitCapRatePct.toFixed(2)}%); the deal is priced thin to cost`
-      : `Going-in yield clears the exit cap comfortably; spread is driven by favorable cost-to-NOI`,
+    factor:
+      v.yieldOnCostPct < input.exitCapRatePct + 1
+        ? "Cost basis is the binding constraint"
+        : "Exit assumption is the binding constraint",
+    detail:
+      v.yieldOnCostPct < input.exitCapRatePct + 1
+        ? `Going-in yield (${v.yieldOnCostPct.toFixed(2)}%) sits close to the exit cap (${input.exitCapRatePct.toFixed(2)}%); the deal is priced thin to cost`
+        : `Going-in yield clears the exit cap comfortably; spread is driven by favorable cost-to-NOI`,
     magnitude: costSensitivity,
   });
   return drivers;
@@ -54,10 +59,13 @@ export function buildAttribution(
   const drivers = spreadDrivers(output, input);
   const levers: WhatIfLever[] = [];
   const derivedValues: number[] = [];
-  const push = (...ns: number[]) => { for (const n of ns) if (Number.isFinite(n)) derivedValues.push(Math.round(n)); };
+  const push = (...ns: number[]) => {
+    for (const n of ns) if (Number.isFinite(n)) derivedValues.push(Math.round(n));
+  };
   push(v.noi, v.tdc); // appear in driver detail
 
-  const benchTarget = (key: string): number | null => resolveBenchmark(key, ctx, benchInputs)?.target ?? null;
+  const benchTarget = (key: string): number | null =>
+    resolveBenchmark(key, ctx, benchInputs)?.target ?? null;
 
   // DSCR: target is the stricter of the covenant and the contextual norm.
   const dscrTarget = Math.max(covenants?.minDscr ?? 0, benchTarget("dscr") ?? 0);

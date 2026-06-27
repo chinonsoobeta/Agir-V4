@@ -20,7 +20,13 @@
 
 import { annualDebtService, interestOnlyDebtService, loanBalanceAfterMonths } from "./debt";
 import { xirr } from "./metrics";
-import { collectLiterals, collectReferences, evaluate, ExpressionError, parseExpression } from "./expression";
+import {
+  collectLiterals,
+  collectReferences,
+  evaluate,
+  ExpressionError,
+  parseExpression,
+} from "./expression";
 import { trancheDebtServiceForYear, type DebtStack, type DebtTranche } from "./tranches";
 import type {
   CustomLineInput,
@@ -83,13 +89,21 @@ export function cumulativeDrawFraction(t: number, curve: "straight_line" | "s_cu
 
 // The fraction outstanding (drawn) at the MIDDLE of construction month m, used
 // as the interest-bearing balance for that month.
-function drawFractionAtMonthMid(m: number, constructionMonths: number, curve: "straight_line" | "s_curve"): number {
+function drawFractionAtMonthMid(
+  m: number,
+  constructionMonths: number,
+  curve: "straight_line" | "s_curve",
+): number {
   if (constructionMonths <= 0) return 1;
   return cumulativeDrawFraction((m + 0.5) / constructionMonths, curve);
 }
 
 // Spend drawn DURING month m (the increment of the cumulative curve over the month).
-function drawIncrement(m: number, constructionMonths: number, curve: "straight_line" | "s_curve"): number {
+function drawIncrement(
+  m: number,
+  constructionMonths: number,
+  curve: "straight_line" | "s_curve",
+): number {
   if (constructionMonths <= 0) return m === 0 ? 1 : 0;
   const end = cumulativeDrawFraction((m + 1) / constructionMonths, curve);
   const start = cumulativeDrawFraction(m / constructionMonths, curve);
@@ -105,13 +119,20 @@ function monthlyTrancheDebtService(t: DebtTranche, monthsSinceStart: number): nu
   if (t.amount <= 0) return 0;
   const io = interestOnlyDebtService(t.amount, t.ratePct) / 12;
   if (t.amortYears <= 0) return io;
-  return monthsSinceStart < Math.round(t.ioMonths) ? io : annualDebtService(t.amount, t.ratePct, t.amortYears) / 12;
+  return monthsSinceStart < Math.round(t.ioMonths)
+    ? io
+    : annualDebtService(t.amount, t.ratePct, t.amortYears) / 12;
 }
 
 // ---- The spine -------------------------------------------------------------
 
 export function applyMonthlySchedule(
-  input: { constructionDrawCurve?: "straight_line" | "s_curve" | null; leaseUpCurve?: boolean | null; refinance?: RefinanceInput | null; customLines?: CustomLineInput[] | null },
+  input: {
+    constructionDrawCurve?: "straight_line" | "s_curve" | null;
+    leaseUpCurve?: boolean | null;
+    refinance?: RefinanceInput | null;
+    customLines?: CustomLineInput[] | null;
+  },
   baseOutput: EngineOutput,
   ctx: ScheduleContext,
 ): EngineOutput {
@@ -132,7 +153,11 @@ export function applyMonthlySchedule(
   const warnings = [...baseOutput.warnings];
 
   // ---- Construction phase: draws + interest carry --------------------------
-  const drawCategories: { key: "land_draw" | "hard_draw" | "soft_draw" | "contingency_draw"; label: string; total: number }[] = [
+  const drawCategories: {
+    key: "land_draw" | "hard_draw" | "soft_draw" | "contingency_draw";
+    label: string;
+    total: number;
+  }[] = [
     { key: "land_draw", label: "Land draw", total: ctx.budget.land },
     { key: "hard_draw", label: "Hard cost draw", total: ctx.budget.hard },
     { key: "soft_draw", label: "Soft cost draw", total: ctx.budget.soft },
@@ -148,7 +173,10 @@ export function applyMonthlySchedule(
   if (sCurveActive) {
     for (let m = 0; m < carryMonths; m += 1) {
       const fraction = m < C ? drawFractionAtMonthMid(m, C, curve) : 1;
-      const interest = ctx.debtStack.tranches.reduce((sum, t) => sum + t.amount * fraction * (t.ratePct / 100 / 12), 0);
+      const interest = ctx.debtStack.tranches.reduce(
+        (sum, t) => sum + t.amount * fraction * (t.ratePct / 100 / 12),
+        0,
+      );
       scheduleConstructionInterest += interest;
       nodes.push({
         period: m,
@@ -199,9 +227,10 @@ export function applyMonthlySchedule(
         key: cat.key,
         label: cat.label,
         amount: -spend,
-        formula_text: C > 0
-          ? `${cat.label} month ${m + 1} = ${money(cat.total)} x draw increment (${curve}) = ${money(spend)}`
-          : `${cat.label} at t0 = ${money(cat.total)}`,
+        formula_text:
+          C > 0
+            ? `${cat.label} month ${m + 1} = ${money(cat.total)} x draw increment (${curve}) = ${money(spend)}`
+            : `${cat.label} at t0 = ${money(cat.total)}`,
       });
     }
   }
@@ -223,7 +252,13 @@ export function applyMonthlySchedule(
   const refiMonth = refi ? Math.round(refi.month) : 0;
   const monthsSeniorStartAtRefi = Math.max(0, refiMonth - stabilizationStart);
   const seniorBalanceAtRefi = refi
-    ? loanBalanceAfterMonths(senior.amount, senior.ratePct, senior.amortYears, senior.ioMonths, monthsSeniorStartAtRefi)
+    ? loanBalanceAfterMonths(
+        senior.amount,
+        senior.ratePct,
+        senior.amortYears,
+        senior.ioMonths,
+        monthsSeniorStartAtRefi,
+      )
     : 0;
   const refiValue = ctx.exitCapRatePct > 0 ? ctx.noi / (ctx.exitCapRatePct / 100) : 0;
   const refiNewLoanAmount = refi
@@ -235,18 +270,36 @@ export function applyMonthlySchedule(
     : 0;
   const refiCashOut = refi ? refiNewLoanAmount - seniorBalanceAtRefi : 0;
   const newSenior: DebtTranche | null = refi
-    ? { key: "senior_refi", label: "Refinanced senior", amount: refiNewLoanAmount, ratePct: refi.ratePct, amortYears: refi.amortYears, ioMonths: refi.ioMonths }
+    ? {
+        key: "senior_refi",
+        label: "Refinanced senior",
+        amount: refiNewLoanAmount,
+        ratePct: refi.ratePct,
+        amortYears: refi.amortYears,
+        ioMonths: refi.ioMonths,
+      }
     : null;
   const refiNewAnnualDebtService =
     refi && newSenior
-      ? (newSenior.amortYears > 0 ? annualDebtService(newSenior.amount, newSenior.ratePct, newSenior.amortYears) : interestOnlyDebtService(newSenior.amount, newSenior.ratePct)) +
-        (mezz ? (mezz.amortYears > 0 ? annualDebtService(mezz.amount, mezz.ratePct, mezz.amortYears) : interestOnlyDebtService(mezz.amount, mezz.ratePct)) : 0)
+      ? (newSenior.amortYears > 0
+          ? annualDebtService(newSenior.amount, newSenior.ratePct, newSenior.amortYears)
+          : interestOnlyDebtService(newSenior.amount, newSenior.ratePct)) +
+        (mezz
+          ? mezz.amortYears > 0
+            ? annualDebtService(mezz.amount, mezz.ratePct, mezz.amortYears)
+            : interestOnlyDebtService(mezz.amount, mezz.ratePct)
+          : 0)
       : 0;
-  const postRefiDscr = refi && refiNewAnnualDebtService > 0 ? ctx.noi / refiNewAnnualDebtService : 0;
+  const postRefiDscr =
+    refi && refiNewAnnualDebtService > 0 ? ctx.noi / refiNewAnnualDebtService : 0;
 
   if (refi && newSenior) {
     if (refiMonth <= C) {
-      warnings.push({ key: "refinance_during_construction", message: "Refinance month falls during construction; modeled at the senior balance then outstanding." });
+      warnings.push({
+        key: "refinance_during_construction",
+        message:
+          "Refinance month falls during construction; modeled at the senior balance then outstanding.",
+      });
     }
     nodes.push({
       period: refiMonth,
@@ -296,11 +349,39 @@ export function applyMonthlySchedule(
     const monthlyNoi = (ctx.noi / 12) * fraction;
     const monthlyEgi = (ctx.egi / 12) * fraction;
     const monthlyOpex = (ctx.opex / 12) * fraction;
-    nodes.push({ period: globalMonth, lineKey: "egi", key: "egi", label: "Effective gross income", amount: monthlyEgi, formula_text: `Lease-up EGI month ${k + 1} = stabilized monthly EGI ${money(ctx.egi / 12)} x absorption ${(fraction * 100).toFixed(1)}% = ${money(monthlyEgi)}` });
-    nodes.push({ period: globalMonth, lineKey: "opex", key: "opex", label: "Operating expense", amount: -monthlyOpex, formula_text: `Lease-up OpEx month ${k + 1} = stabilized monthly OpEx ${money(ctx.opex / 12)} x absorption ${(fraction * 100).toFixed(1)}% = ${money(monthlyOpex)}` });
-    nodes.push({ period: globalMonth, lineKey: "noi", key: "noi", label: "Net operating income", amount: monthlyNoi, formula_text: `Lease-up NOI month ${k + 1} = stabilized monthly NOI ${money(ctx.noi / 12)} x absorption ${(fraction * 100).toFixed(1)}% = ${money(monthlyNoi)}` });
+    nodes.push({
+      period: globalMonth,
+      lineKey: "egi",
+      key: "egi",
+      label: "Effective gross income",
+      amount: monthlyEgi,
+      formula_text: `Lease-up EGI month ${k + 1} = stabilized monthly EGI ${money(ctx.egi / 12)} x absorption ${(fraction * 100).toFixed(1)}% = ${money(monthlyEgi)}`,
+    });
+    nodes.push({
+      period: globalMonth,
+      lineKey: "opex",
+      key: "opex",
+      label: "Operating expense",
+      amount: -monthlyOpex,
+      formula_text: `Lease-up OpEx month ${k + 1} = stabilized monthly OpEx ${money(ctx.opex / 12)} x absorption ${(fraction * 100).toFixed(1)}% = ${money(monthlyOpex)}`,
+    });
+    nodes.push({
+      period: globalMonth,
+      lineKey: "noi",
+      key: "noi",
+      label: "Net operating income",
+      amount: monthlyNoi,
+      formula_text: `Lease-up NOI month ${k + 1} = stabilized monthly NOI ${money(ctx.noi / 12)} x absorption ${(fraction * 100).toFixed(1)}% = ${money(monthlyNoi)}`,
+    });
     const leveredCf = leaseUpActive ? stabilizedMonthlyLeveredCf * fraction : 0;
-    nodes.push({ period: globalMonth, lineKey: "levered_cf", key: "levered_cf", label: "Levered cash flow", amount: leveredCf, formula_text: `Lease-up levered CF month ${k + 1} = stabilized monthly levered CF ${money(stabilizedMonthlyLeveredCf)} x absorption ${(fraction * 100).toFixed(1)}% = ${money(leveredCf)}` });
+    nodes.push({
+      period: globalMonth,
+      lineKey: "levered_cf",
+      key: "levered_cf",
+      label: "Levered cash flow",
+      amount: leveredCf,
+      formula_text: `Lease-up levered CF month ${k + 1} = stabilized monthly levered CF ${money(stabilizedMonthlyLeveredCf)} x absorption ${(fraction * 100).toFixed(1)}% = ${money(leveredCf)}`,
+    });
   }
 
   // Stabilized operating months. NOI grows annually exactly as the annual model
@@ -323,12 +404,55 @@ export function applyMonthlySchedule(
       yearMezzDs += mezzDs;
       const monthlyNoi = yearNoi / 12;
       const leveredCf = monthlyNoi - seniorDs - mezzDs;
-      nodes.push({ period: globalMonth, lineKey: "egi", key: "egi", label: "Effective gross income", amount: yearEgi / 12, formula_text: `EGI year ${y} month ${j + 1} = ${money(yearEgi)} / 12 = ${money(yearEgi / 12)}` });
-      nodes.push({ period: globalMonth, lineKey: "opex", key: "opex", label: "Operating expense", amount: -yearOpex / 12, formula_text: `OpEx year ${y} month ${j + 1} = ${money(yearOpex)} / 12 = ${money(yearOpex / 12)}` });
-      nodes.push({ period: globalMonth, lineKey: "noi", key: "noi", label: "Net operating income", amount: monthlyNoi, formula_text: `NOI year ${y} month ${j + 1} = ${money(yearNoi)} / 12 = ${money(monthlyNoi)}` });
-      nodes.push({ period: globalMonth, lineKey: "senior_debt_service", key: "senior_debt_service", label: "Senior debt service", amount: -seniorDs, formula_text: `Senior debt service year ${y} month ${j + 1} = ${money(seniorDs)}` });
-      if (mezz) nodes.push({ period: globalMonth, lineKey: "mezz_debt_service", key: "mezz_debt_service", label: "Mezzanine debt service", amount: -mezzDs, formula_text: `Mezzanine debt service year ${y} month ${j + 1} = ${money(mezzDs)}` });
-      nodes.push({ period: globalMonth, lineKey: "levered_cf", key: "levered_cf", label: "Levered cash flow", amount: leveredCf, formula_text: `Levered CF year ${y} month ${j + 1} = NOI ${money(monthlyNoi)} - debt service ${money(seniorDs + mezzDs)} = ${money(leveredCf)}` });
+      nodes.push({
+        period: globalMonth,
+        lineKey: "egi",
+        key: "egi",
+        label: "Effective gross income",
+        amount: yearEgi / 12,
+        formula_text: `EGI year ${y} month ${j + 1} = ${money(yearEgi)} / 12 = ${money(yearEgi / 12)}`,
+      });
+      nodes.push({
+        period: globalMonth,
+        lineKey: "opex",
+        key: "opex",
+        label: "Operating expense",
+        amount: -yearOpex / 12,
+        formula_text: `OpEx year ${y} month ${j + 1} = ${money(yearOpex)} / 12 = ${money(yearOpex / 12)}`,
+      });
+      nodes.push({
+        period: globalMonth,
+        lineKey: "noi",
+        key: "noi",
+        label: "Net operating income",
+        amount: monthlyNoi,
+        formula_text: `NOI year ${y} month ${j + 1} = ${money(yearNoi)} / 12 = ${money(monthlyNoi)}`,
+      });
+      nodes.push({
+        period: globalMonth,
+        lineKey: "senior_debt_service",
+        key: "senior_debt_service",
+        label: "Senior debt service",
+        amount: -seniorDs,
+        formula_text: `Senior debt service year ${y} month ${j + 1} = ${money(seniorDs)}`,
+      });
+      if (mezz)
+        nodes.push({
+          period: globalMonth,
+          lineKey: "mezz_debt_service",
+          key: "mezz_debt_service",
+          label: "Mezzanine debt service",
+          amount: -mezzDs,
+          formula_text: `Mezzanine debt service year ${y} month ${j + 1} = ${money(mezzDs)}`,
+        });
+      nodes.push({
+        period: globalMonth,
+        lineKey: "levered_cf",
+        key: "levered_cf",
+        label: "Levered cash flow",
+        amount: leveredCf,
+        formula_text: `Levered CF year ${y} month ${j + 1} = NOI ${money(monthlyNoi)} - debt service ${money(seniorDs + mezzDs)} = ${money(leveredCf)}`,
+      });
     }
     holdLeveredRefi.push(yearNoi - yearSeniorDs - yearMezzDs);
   }
@@ -337,35 +461,81 @@ export function applyMonthlySchedule(
   const exitMonth = totalMonths - 1;
   const seniorPayoffAtExit =
     refi && newSenior
-      ? loanBalanceAfterMonths(newSenior.amount, newSenior.ratePct, newSenior.amortYears, newSenior.ioMonths, holdMonths - monthsSeniorStartAtRefi)
-      : loanBalanceAfterMonths(senior.amount, senior.ratePct, senior.amortYears, senior.ioMonths, holdMonths);
-  const mezzPayoffAtExit = mezz ? loanBalanceAfterMonths(mezz.amount, mezz.ratePct, mezz.amortYears, mezz.ioMonths, holdMonths) : 0;
+      ? loanBalanceAfterMonths(
+          newSenior.amount,
+          newSenior.ratePct,
+          newSenior.amortYears,
+          newSenior.ioMonths,
+          holdMonths - monthsSeniorStartAtRefi,
+        )
+      : loanBalanceAfterMonths(
+          senior.amount,
+          senior.ratePct,
+          senior.amortYears,
+          senior.ioMonths,
+          holdMonths,
+        );
+  const mezzPayoffAtExit = mezz
+    ? loanBalanceAfterMonths(mezz.amount, mezz.ratePct, mezz.amortYears, mezz.ioMonths, holdMonths)
+    : 0;
   const payoffAtExit = refi ? seniorPayoffAtExit + mezzPayoffAtExit : ctx.loanPayoffAtExit;
   if (!ctx.equityWipeout) {
-    nodes.push({ period: exitMonth, lineKey: "sale", key: "sale", label: "Net sale proceeds", amount: ctx.netSaleBeforeDebt, formula_text: `Net sale proceeds at month ${exitMonth + 1} = ${money(ctx.netSaleBeforeDebt)}` });
-    nodes.push({ period: exitMonth, lineKey: "loan_payoff", key: "loan_payoff", label: "Loan payoff at exit", amount: -payoffAtExit, formula_text: `Loan payoff at exit = ${money(payoffAtExit)}` });
+    nodes.push({
+      period: exitMonth,
+      lineKey: "sale",
+      key: "sale",
+      label: "Net sale proceeds",
+      amount: ctx.netSaleBeforeDebt,
+      formula_text: `Net sale proceeds at month ${exitMonth + 1} = ${money(ctx.netSaleBeforeDebt)}`,
+    });
+    nodes.push({
+      period: exitMonth,
+      lineKey: "loan_payoff",
+      key: "loan_payoff",
+      label: "Loan payoff at exit",
+      amount: -payoffAtExit,
+      formula_text: `Loan payoff at exit = ${money(payoffAtExit)}`,
+    });
   }
 
   // ---- Custom line items (sandboxed) ---------------------------------------
   // Context exposed to a custom expression for each operating month. References
   // outside this set fail closed (expression.ts).
   const customMetrics: MetricOutput[] = [];
-  const customNodeKeys = ["noi", "egi", "opex", "gpr", "senior_debt_service", "mezz_debt_service", "debt_service", "levered_cf", "annual_noi", "annual_egi", "stabilized_noi"];
+  const customNodeKeys = [
+    "noi",
+    "egi",
+    "opex",
+    "gpr",
+    "senior_debt_service",
+    "mezz_debt_service",
+    "debt_service",
+    "levered_cf",
+    "annual_noi",
+    "annual_egi",
+    "stabilized_noi",
+  ];
   for (const line of input.customLines ?? []) {
     let ast;
     try {
       ast = parseExpression(line.expression);
       for (const ref of collectReferences(ast)) {
-        if (!customNodeKeys.includes(ref)) throw new ExpressionError(`Reference '${ref}' is not an allowed node.`);
+        if (!customNodeKeys.includes(ref))
+          throw new ExpressionError(`Reference '${ref}' is not an allowed node.`);
       }
     } catch (err) {
       // Fail closed: an invalid or unsafe expression yields NO value and a
       // warning, never a fabricated number.
-      warnings.push({ key: `custom_invalid_${line.key}`, message: `Custom line "${line.label}" was not applied: ${err instanceof Error ? err.message : "invalid expression"}.` });
+      warnings.push({
+        key: `custom_invalid_${line.key}`,
+        message: `Custom line "${line.label}" was not applied: ${err instanceof Error ? err.message : "invalid expression"}.`,
+      });
       continue;
     }
-    const from = line.fromMonth != null ? Math.max(0, Math.round(line.fromMonth)) : stabilizationStart;
-    const to = line.toMonth != null ? Math.min(totalMonths - 1, Math.round(line.toMonth)) : totalMonths - 1;
+    const from =
+      line.fromMonth != null ? Math.max(0, Math.round(line.fromMonth)) : stabilizationStart;
+    const to =
+      line.toMonth != null ? Math.min(totalMonths - 1, Math.round(line.toMonth)) : totalMonths - 1;
     let total = 0;
     let applied = false;
     for (let m = from; m <= to; m += 1) {
@@ -388,7 +558,10 @@ export function applyMonthlySchedule(
       try {
         value = evaluate(ast, refContext);
       } catch (err) {
-        warnings.push({ key: `custom_eval_${line.key}_${m}`, message: `Custom line "${line.label}" failed at month ${m + 1}: ${err instanceof Error ? err.message : "evaluation error"}.` });
+        warnings.push({
+          key: `custom_eval_${line.key}_${m}`,
+          message: `Custom line "${line.label}" failed at month ${m + 1}: ${err instanceof Error ? err.message : "evaluation error"}.`,
+        });
         continue;
       }
       total += value;
@@ -436,25 +609,81 @@ export function applyMonthlySchedule(
 
   const hasNeg = irrFlows.some((f) => f.amount < 0);
   const hasPos = irrFlows.some((f) => f.amount > 0);
-  const scheduleLeveredIrrPct = ctx.equityWipeout || !hasNeg || !hasPos ? Number.NaN : xirr(irrFlows);
+  const scheduleLeveredIrrPct =
+    ctx.equityWipeout || !hasNeg || !hasPos ? Number.NaN : xirr(irrFlows);
 
   // ---- Roll-up reconciliation ----------------------------------------------
-  const sumNodes = (predicate: (n: PeriodNode) => boolean) => nodes.filter(predicate).reduce((s, n) => s + n.amount, 0);
+  const sumNodes = (predicate: (n: PeriodNode) => boolean) =>
+    nodes.filter(predicate).reduce((s, n) => s + n.amount, 0);
   const tol = (annual: number) => Math.max(1, Math.abs(annual) * 1e-6);
-  const recon = (key: string, label: string, annual: number, rolledUp: number): ScheduleReconciliation => {
+  const recon = (
+    key: string,
+    label: string,
+    annual: number,
+    rolledUp: number,
+  ): ScheduleReconciliation => {
     const diff = rolledUp - annual;
     return { key, label, annual, rolledUp, diff, withinTolerance: Math.abs(diff) <= tol(annual) };
   };
-  const year1SeniorDs = trancheDebtServiceForYear(senior, 1) + (mezz ? trancheDebtServiceForYear(mezz, 1) : 0);
+  const year1SeniorDs =
+    trancheDebtServiceForYear(senior, 1) + (mezz ? trancheDebtServiceForYear(mezz, 1) : 0);
   const reconciliation: ScheduleReconciliation[] = [
-    recon("construction_draws", "Construction draws", -(ctx.budget.land + ctx.budget.hard + ctx.budget.soft + ctx.budget.contingency), sumNodes((n) => n.lineKey === "land_draw" || n.lineKey === "hard_draw" || n.lineKey === "soft_draw" || n.lineKey === "contingency_draw")),
-    recon("construction_interest", "Construction interest", -scheduleConstructionInterest, sumNodes((n) => n.lineKey === "construction_interest")),
-    recon("equity", "Equity contributions", -ctx.equity, sumNodes((n) => n.lineKey === "equity_contribution")),
-    recon("noi_year1", "Stabilized NOI (year 1)", ctx.noi, sumNodes((n) => n.lineKey === "noi" && n.period >= stabilizationStart && n.period < stabilizationStart + 12)),
-    recon("debt_service_year1", "Debt service (year 1)", -year1SeniorDs, sumNodes((n) => (n.lineKey === "senior_debt_service" || n.lineKey === "mezz_debt_service") && n.period >= stabilizationStart && n.period < stabilizationStart + 12)),
+    recon(
+      "construction_draws",
+      "Construction draws",
+      -(ctx.budget.land + ctx.budget.hard + ctx.budget.soft + ctx.budget.contingency),
+      sumNodes(
+        (n) =>
+          n.lineKey === "land_draw" ||
+          n.lineKey === "hard_draw" ||
+          n.lineKey === "soft_draw" ||
+          n.lineKey === "contingency_draw",
+      ),
+    ),
+    recon(
+      "construction_interest",
+      "Construction interest",
+      -scheduleConstructionInterest,
+      sumNodes((n) => n.lineKey === "construction_interest"),
+    ),
+    recon(
+      "equity",
+      "Equity contributions",
+      -ctx.equity,
+      sumNodes((n) => n.lineKey === "equity_contribution"),
+    ),
+    recon(
+      "noi_year1",
+      "Stabilized NOI (year 1)",
+      ctx.noi,
+      sumNodes(
+        (n) =>
+          n.lineKey === "noi" &&
+          n.period >= stabilizationStart &&
+          n.period < stabilizationStart + 12,
+      ),
+    ),
+    recon(
+      "debt_service_year1",
+      "Debt service (year 1)",
+      -year1SeniorDs,
+      sumNodes(
+        (n) =>
+          (n.lineKey === "senior_debt_service" || n.lineKey === "mezz_debt_service") &&
+          n.period >= stabilizationStart &&
+          n.period < stabilizationStart + 12,
+      ),
+    ),
   ];
 
-  const schedule: MonthlySchedule = { months: totalMonths, constructionMonths: C, leaseUpMonths: L, holdMonths, nodes, reconciliation };
+  const schedule: MonthlySchedule = {
+    months: totalMonths,
+    constructionMonths: C,
+    leaseUpMonths: L,
+    holdMonths,
+    nodes,
+    reconciliation,
+  };
 
   // ---- New precision metrics (each carries a provenance-clean formula) ------
   const newMetrics: MetricOutput[] = [];
@@ -477,10 +706,34 @@ export function applyMonthlySchedule(
     });
   }
   if (refi && newSenior) {
-    newMetrics.push({ key: "refi_new_loan", label: "Refinance New Senior Loan", value: refiNewLoanAmount, unit: "$", formula: `New senior loan at refinance = ${money(refiNewLoanAmount)}` });
-    newMetrics.push({ key: "refi_cash_out", label: "Refinance Cash-out", value: refiCashOut, unit: "$", formula: `Refinance cash-out to equity = ${money(refiCashOut)}` });
-    newMetrics.push({ key: "refi_new_debt_service", label: "Post-refinance Annual Debt Service", value: refiNewAnnualDebtService, unit: "$", formula: `Post-refinance annual debt service = ${money(refiNewAnnualDebtService)}` });
-    newMetrics.push({ key: "post_refi_dscr", label: "Post-refinance DSCR", value: postRefiDscr, unit: "x", formula: `Post-refinance DSCR = NOI ${money(ctx.noi)} / post-refinance debt service ${money(refiNewAnnualDebtService)} = ${postRefiDscr.toFixed(2)}x` });
+    newMetrics.push({
+      key: "refi_new_loan",
+      label: "Refinance New Senior Loan",
+      value: refiNewLoanAmount,
+      unit: "$",
+      formula: `New senior loan at refinance = ${money(refiNewLoanAmount)}`,
+    });
+    newMetrics.push({
+      key: "refi_cash_out",
+      label: "Refinance Cash-out",
+      value: refiCashOut,
+      unit: "$",
+      formula: `Refinance cash-out to equity = ${money(refiCashOut)}`,
+    });
+    newMetrics.push({
+      key: "refi_new_debt_service",
+      label: "Post-refinance Annual Debt Service",
+      value: refiNewAnnualDebtService,
+      unit: "$",
+      formula: `Post-refinance annual debt service = ${money(refiNewAnnualDebtService)}`,
+    });
+    newMetrics.push({
+      key: "post_refi_dscr",
+      label: "Post-refinance DSCR",
+      value: postRefiDscr,
+      unit: "x",
+      formula: `Post-refinance DSCR = NOI ${money(ctx.noi)} / post-refinance debt service ${money(refiNewAnnualDebtService)} = ${postRefiDscr.toFixed(2)}x`,
+    });
   }
 
   // Augment the output. The base values literal is preserved; new keys are added
@@ -494,9 +747,7 @@ export function applyMonthlySchedule(
       ...baseOutput.values,
       scheduleConstructionInterest,
       scheduleLeveredIrrPct,
-      ...(refi
-        ? { refiCashOut, refiNewLoanAmount, refiNewAnnualDebtService, postRefiDscr }
-        : {}),
+      ...(refi ? { refiCashOut, refiNewLoanAmount, refiNewAnnualDebtService, postRefiDscr } : {}),
     },
   };
 }
@@ -506,7 +757,14 @@ export function applyMonthlySchedule(
 function monthFinancials(
   nodes: PeriodNode[],
   month: number,
-): { noi: number; egi: number; opex: number; seniorDs: number; mezzDs: number; leveredCf: number } | null {
+): {
+  noi: number;
+  egi: number;
+  opex: number;
+  seniorDs: number;
+  mezzDs: number;
+  leveredCf: number;
+} | null {
   let noi = 0;
   let egi = 0;
   let opex = 0;

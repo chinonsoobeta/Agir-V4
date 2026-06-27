@@ -3,20 +3,54 @@
 // project; anything else (a 5.35% cap, a shrunken budget, 222 units, phantom
 // other income) is a fabrication and a test failure.
 
-import type { BudgetLineRow, ProjectInputRows, RevenueComponentRow, ScalarInputRow } from "./input-assembly";
+import type {
+  BudgetLineRow,
+  ProjectInputRows,
+  RevenueComponentRow,
+  ScalarInputRow,
+} from "./input-assembly";
 
 export const HARBOUR_BUDGET_LINES: BudgetLineRow[] = [
   { category: "land", label: "Land acquisition", amount: 34_500_000, status: "approved" },
   { category: "hard", label: "Hard costs", amount: 162_000_000, status: "approved" },
   { category: "soft", label: "Soft costs", amount: 27_500_000, status: "approved" },
-  { category: "financing_interest", label: "Financing costs", amount: 18_000_000, status: "approved" },
+  {
+    category: "financing_interest",
+    label: "Financing costs",
+    amount: 18_000_000,
+    status: "approved",
+  },
   { category: "contingency", label: "Contingency", amount: 8_000_000, status: "approved" },
 ];
 
 export const HARBOUR_REVENUE_COMPONENTS: RevenueComponentRow[] = [
-  { unit_type: "Residential", unit_count: 220, avg_sf: null, rent: 3_050, rent_basis: "per_unit", occupancy_pct: 96, status: "approved" },
-  { unit_type: "Retail", unit_count: 1, avg_sf: 18_000, rent: 42, rent_basis: "per_sf", occupancy_pct: 92, status: "approved" },
-  { unit_type: "Office", unit_count: 1, avg_sf: 32_000, rent: 36, rent_basis: "per_sf", occupancy_pct: 85, status: "approved" },
+  {
+    unit_type: "Residential",
+    unit_count: 220,
+    avg_sf: null,
+    rent: 3_050,
+    rent_basis: "per_unit",
+    occupancy_pct: 96,
+    status: "approved",
+  },
+  {
+    unit_type: "Retail",
+    unit_count: 1,
+    avg_sf: 18_000,
+    rent: 42,
+    rent_basis: "per_sf",
+    occupancy_pct: 92,
+    status: "approved",
+  },
+  {
+    unit_type: "Office",
+    unit_count: 1,
+    avg_sf: 32_000,
+    rent: 36,
+    rent_basis: "per_sf",
+    occupancy_pct: 85,
+    status: "approved",
+  },
 ];
 
 // Exit cap is a documented CONFLICT: broker opinion 4.75% vs lender term sheet
@@ -49,7 +83,10 @@ export const HARBOUR_SCALARS: ScalarInputRow[] = [
 
 export function harbourSeedRows(): ProjectInputRows {
   return {
-    scalars: HARBOUR_SCALARS.map((r) => ({ ...r, conflict_values: r.conflict_values?.map((c) => ({ ...c })) })),
+    scalars: HARBOUR_SCALARS.map((r) => ({
+      ...r,
+      conflict_values: r.conflict_values?.map((c) => ({ ...c })),
+    })),
     budget: HARBOUR_BUDGET_LINES.map((r) => ({ ...r })),
     revenue: HARBOUR_REVENUE_COMPONENTS.map((r) => ({ ...r })),
   };

@@ -1,5 +1,10 @@
 import { describe, test, expect } from "vitest";
-import { runUnderwriting, mapleHeightsInput, buildScheduleGrid, phaseForPeriod } from "@/lib/engine";
+import {
+  runUnderwriting,
+  mapleHeightsInput,
+  buildScheduleGrid,
+  phaseForPeriod,
+} from "@/lib/engine";
 
 describe("WS3 3A schedule grid data contract", () => {
   const out = runUnderwriting({ ...mapleHeightsInput(), monthlyModel: true });

@@ -6,7 +6,10 @@ export const listDocuments = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { project_id?: string }) => d)
   .handler(async ({ data, context }) => {
-    let q = context.supabase.from("documents").select("*").order("upload_date", { ascending: false });
+    let q = context.supabase
+      .from("documents")
+      .select("*")
+      .order("upload_date", { ascending: false });
     if (data?.project_id) q = q.eq("project_id", data.project_id);
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
@@ -27,7 +30,10 @@ export const createDocument = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => CreateDocSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
-      .from("documents").insert({ ...data, owner_id: context.userId }).select().single();
+      .from("documents")
+      .insert({ ...data, owner_id: context.userId })
+      .select()
+      .single();
     if (error) throw new Error(error.message);
     return row;
   });
@@ -36,8 +42,13 @@ export const deleteDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { data: doc } = await context.supabase.from("documents").select("storage_path").eq("id", data.id).single();
-    if (doc?.storage_path) await context.supabase.storage.from("documents").remove([doc.storage_path]);
+    const { data: doc } = await context.supabase
+      .from("documents")
+      .select("storage_path")
+      .eq("id", data.id)
+      .single();
+    if (doc?.storage_path)
+      await context.supabase.storage.from("documents").remove([doc.storage_path]);
     const { error } = await context.supabase.from("documents").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -47,17 +58,31 @@ export const getDocumentUrl = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { data: doc, error } = await context.supabase.from("documents").select("storage_path").eq("id", data.id).single();
+    const { data: doc, error } = await context.supabase
+      .from("documents")
+      .select("storage_path")
+      .eq("id", data.id)
+      .single();
     if (error) throw new Error(error.message);
-    const { data: signed } = await context.supabase.storage.from("documents")
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: signed, error: signedError } = await supabaseAdmin.storage
+      .from("documents")
       .createSignedUrl(doc.storage_path, 3600);
+    if (signedError) throw new Error(signedError.message);
     return { url: signed?.signedUrl ?? null };
   });
 
 export const analyzeDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string; name: string; category?: string | null }) =>
-    z.object({ id: z.string().uuid(), name: z.string(), category: z.string().nullable().optional() }).parse(d))
+    z
+      .object({
+        id: z.string().uuid(),
+        name: z.string(),
+        category: z.string().nullable().optional(),
+      })
+      .parse(d),
+  )
   .handler(async ({ data, context }) => {
     const { data: doc, error: docErr } = await context.supabase
       .from("documents")
@@ -76,7 +101,8 @@ export const analyzeDocument = createServerFn({ method: "POST" })
 
     const { downloadDocumentBlob } = await import("./storage-download.server");
     const dl = await downloadDocumentBlob(context.supabase, doc.storage_path);
-    if (dl.error || !dl.data) await failExtraction(dl.error?.message ?? "Unable to download document for extraction.");
+    if (dl.error || !dl.data)
+      await failExtraction(dl.error?.message ?? "Unable to download document for extraction.");
     const { extractFileText } = await import("./document-text.server");
     const text = await extractFileText(doc.name, doc.file_type, await dl.data.arrayBuffer());
     if (!text.trim()) await failExtraction("No extractable text was found in this document.");
@@ -99,22 +125,43 @@ Respond as compact JSON only with keys: summary, key_assumptions, risks, importa
       });
     } catch (e: any) {
       // AI gateway / key failures must persist a clear, retryable failed status.
-      await failExtraction(e?.message ?? "AI extraction is unavailable. Check the model configuration.");
+      await failExtraction(
+        e?.message ?? "AI extraction is unavailable. Check the model configuration.",
+      );
       return { summary: "", assumptions: "", risks: "" }; // unreachable: failExtraction throws
     }
-    let parsed: { summary?: string; key_assumptions?: string; risks?: string; important_dates?: string; financial_highlights?: string } = {};
+    let parsed: {
+      summary?: string;
+      key_assumptions?: string;
+      risks?: string;
+      important_dates?: string;
+      financial_highlights?: string;
+    } = {};
     try {
       const m = result.text.match(/\{[\s\S]*\}/);
       if (m) parsed = JSON.parse(m[0]);
-    } catch { /* keep empty */ }
+    } catch {
+      /* keep empty */
+    }
     const summary = parsed.summary ?? text.slice(0, 500);
-    const assumptions = [parsed.key_assumptions, parsed.financial_highlights, parsed.important_dates]
-      .filter(Boolean).join("\n\n");
+    const assumptions = [
+      parsed.key_assumptions,
+      parsed.financial_highlights,
+      parsed.important_dates,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
     const risks = parsed.risks ?? "";
-    const { error } = await context.supabase.from("documents").update({
-      ai_summary: summary, ai_assumptions: assumptions, ai_risks: risks,
-      status: "analyzed", extraction_error: null,
-    }).eq("id", data.id);
+    const { error } = await context.supabase
+      .from("documents")
+      .update({
+        ai_summary: summary,
+        ai_assumptions: assumptions,
+        ai_risks: risks,
+        status: "analyzed",
+        extraction_error: null,
+      })
+      .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { summary, assumptions, risks };
   });

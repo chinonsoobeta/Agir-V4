@@ -10,7 +10,8 @@ import {
   STRESS_PRESETS,
 } from "@/lib/engine";
 
-const closeToDollars = (actual: number, expected: number) => expect(Math.round(actual)).toBe(expected);
+const closeToDollars = (actual: number, expected: number) =>
+  expect(Math.round(actual)).toBe(expected);
 const closeToPct = (actual: number, expected: number) => expect(actual).toBeCloseTo(expected, 2);
 
 describe("development underwriting engine", () => {
@@ -65,7 +66,9 @@ describe("development underwriting engine", () => {
       expect(out.values.annualDebtService).toBeGreaterThan(0);
       expect(out.values.dscr).toBeGreaterThan(0);
       // stress never improves development profit
-      expect(out.values.developmentProfit).toBeLessThanOrEqual(baseOut.values.developmentProfit + 1);
+      expect(out.values.developmentProfit).toBeLessThanOrEqual(
+        baseOut.values.developmentProfit + 1,
+      );
     }
     expect(STRESS_PRESETS.map((p) => p.key)).toEqual([
       "cap_expansion",
@@ -162,7 +165,9 @@ describe("reconciliation gates", () => {
     expect(ok.some((f) => f.check_key === "unit_count_consistency")).toBe(false);
     // A genuine disagreement (rent roll 218 vs stated 220) still flags.
     const bad = runReconciliationChecks({ ...ctxBase, unitCounts: [218, 220] });
-    expect(bad.some((f) => f.check_key === "unit_count_consistency" && f.severity === "error")).toBe(true);
+    expect(
+      bad.some((f) => f.check_key === "unit_count_consistency" && f.severity === "error"),
+    ).toBe(true);
   });
 
   test("covenant feasibility uses the interest-only payment when the loan is IO for the whole hold", () => {
@@ -179,6 +184,8 @@ describe("reconciliation gates", () => {
     const pass = runReconciliationChecks({ ...ctxBase, minDebtYield: 8, debtYieldPct: 9 });
     expect(pass.some((f) => f.check_key === "debt_yield_covenant")).toBe(false);
     const fail = runReconciliationChecks({ ...ctxBase, minDebtYield: 9, debtYieldPct: 8 });
-    expect(fail.some((f) => f.check_key === "debt_yield_covenant" && f.severity === "error")).toBe(true);
+    expect(fail.some((f) => f.check_key === "debt_yield_covenant" && f.severity === "error")).toBe(
+      true,
+    );
   });
 });

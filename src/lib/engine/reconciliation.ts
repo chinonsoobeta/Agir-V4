@@ -38,7 +38,8 @@ export type ReconciliationContext = {
   unitCounts?: number[]; // unit counts seen across documents; must agree
 };
 
-const fmt = (n: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(n));
+const fmt = (n: number) =>
+  new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(n));
 
 export function runReconciliationChecks(ctx: ReconciliationContext): ReconciliationFlag[] {
   const flags: ReconciliationFlag[] = [];
@@ -78,8 +79,12 @@ export function runReconciliationChecks(ctx: ReconciliationContext): Reconciliat
   // against the interest-only payment (the payment actually due); only when the
   // loan amortizes within the hold is it tested against the amortizing constant.
   const ioCoversHold =
-    ctx.ioCoversHold === true && ctx.interestOnlyAnnualDebtService != null && ctx.interestOnlyAnnualDebtService > 0;
-  const covenantDebtService = ioCoversHold ? ctx.interestOnlyAnnualDebtService! : ctx.amortizingAnnualDebtService;
+    ctx.ioCoversHold === true &&
+    ctx.interestOnlyAnnualDebtService != null &&
+    ctx.interestOnlyAnnualDebtService > 0;
+  const covenantDebtService = ioCoversHold
+    ? ctx.interestOnlyAnnualDebtService!
+    : ctx.amortizingAnnualDebtService;
   const covenantBasis = ioCoversHold ? "interest-only payment" : "amortizing ADS";
   if (ctx.minDscr != null && ctx.minDscr > 0 && covenantDebtService > 0) {
     const requiredNoi = ctx.minDscr * covenantDebtService;
@@ -98,8 +103,10 @@ export function runReconciliationChecks(ctx: ReconciliationContext): Reconciliat
   // 3b. Debt-yield covenant: NOI / loan must clear the lender's minimum debt
   // yield. Like the DSCR covenant, a breach is a hard (error) feasibility flag.
   if (
-    ctx.minDebtYield != null && ctx.minDebtYield > 0 &&
-    ctx.debtYieldPct != null && ctx.debtYieldPct > 0 &&
+    ctx.minDebtYield != null &&
+    ctx.minDebtYield > 0 &&
+    ctx.debtYieldPct != null &&
+    ctx.debtYieldPct > 0 &&
     ctx.debtYieldPct < ctx.minDebtYield
   ) {
     flags.push({
@@ -114,7 +121,10 @@ export function runReconciliationChecks(ctx: ReconciliationContext): Reconciliat
   // 4. Component occupancy vs lender stabilization requirement.
   if (ctx.lenderStabilizedOccupancyPct != null && ctx.componentOccupancies?.length) {
     for (const component of ctx.componentOccupancies) {
-      if (component.occupancyPct != null && component.occupancyPct < ctx.lenderStabilizedOccupancyPct) {
+      if (
+        component.occupancyPct != null &&
+        component.occupancyPct < ctx.lenderStabilizedOccupancyPct
+      ) {
         flags.push({
           check_key: `occupancy_vs_lender:${component.unitType}`,
           severity: "warning",
@@ -127,8 +137,14 @@ export function runReconciliationChecks(ctx: ReconciliationContext): Reconciliat
   }
 
   // 5. Budget-line sums vs any stated total.
-  if (ctx.statedTotalProjectCost != null && ctx.budgetSum != null && ctx.statedTotalProjectCost > 0) {
-    const source = ctx.statedTotalSource ? ` Stated total sourced from: ${ctx.statedTotalSource}.` : "";
+  if (
+    ctx.statedTotalProjectCost != null &&
+    ctx.budgetSum != null &&
+    ctx.statedTotalProjectCost > 0
+  ) {
+    const source = ctx.statedTotalSource
+      ? ` Stated total sourced from: ${ctx.statedTotalSource}.`
+      : "";
     if (ctx.statedTotalProjectCost < 0.5 * ctx.budgetSum) {
       // Suspect extraction: a stated total below half the budget sum is almost
       // always a mis-mapped line (e.g. a loan amount read as the total). Surface
@@ -140,7 +156,10 @@ export function runReconciliationChecks(ctx: ReconciliationContext): Reconciliat
         expected: ctx.statedTotalProjectCost,
         actual: ctx.budgetSum,
       });
-    } else if (Math.abs(ctx.budgetSum - ctx.statedTotalProjectCost) / ctx.statedTotalProjectCost > 0.005) {
+    } else if (
+      Math.abs(ctx.budgetSum - ctx.statedTotalProjectCost) / ctx.statedTotalProjectCost >
+      0.005
+    ) {
       flags.push({
         check_key: "budget_vs_stated_total",
         severity: "error",

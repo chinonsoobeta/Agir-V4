@@ -50,6 +50,35 @@ const personalWorkspace = (): Workspace => ({
 
 const roleSchema = z.enum(["owner", "admin", "member", "viewer"]);
 
+async function requireWorkspaceAdminForMember(
+  supabase: any,
+  memberId: string,
+): Promise<{ id: string; workspace_id: string; role: WorkspaceRole; user_id: string }> {
+  const { data: member, error: memberError } = await supabase
+    .from("workspace_members")
+    .select("id, workspace_id, role, user_id")
+    .eq("id", memberId)
+    .single();
+  if (isMissingRelation(memberError)) {
+    throw new Error("Workspaces need the latest database migration to be applied.");
+  }
+  if (memberError) throw new Error(memberError.message);
+  const { data: role, error: roleError } = await supabase.rpc("workspace_role", {
+    ws: member.workspace_id,
+  });
+  if (roleError) throw new Error(roleError.message);
+  if (role !== "owner" && role !== "admin") {
+    throw new Error("Only workspace owners and admins can manage members.");
+  }
+  return member;
+}
+
+function assertSingleMutation(rows: unknown[] | null | undefined, action: string) {
+  if ((rows ?? []).length !== 1) {
+    throw new Error(`${action} changed ${(rows ?? []).length} rows; expected exactly one.`);
+  }
+}
+
 export const listMyWorkspaces = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<Workspace[]> => {
@@ -198,11 +227,14 @@ export const updateMemberRole = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ data, context }) => {
     const supabase = context.supabase as any;
-    const { error } = await supabase
+    await requireWorkspaceAdminForMember(supabase, data.member_id);
+    const { data: rows, error } = await supabase
       .from("workspace_members")
       .update({ role: data.role })
-      .eq("id", data.member_id);
+      .eq("id", data.member_id)
+      .select("id");
     if (error) throw new Error(error.message);
+    assertSingleMutation(rows, "Updating a workspace member");
     return { ok: true };
   });
 
@@ -211,8 +243,14 @@ export const removeMember = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ data, context }) => {
     const supabase = context.supabase as any;
-    const { error } = await supabase.from("workspace_members").delete().eq("id", data.member_id);
+    await requireWorkspaceAdminForMember(supabase, data.member_id);
+    const { data: rows, error } = await supabase
+      .from("workspace_members")
+      .delete()
+      .eq("id", data.member_id)
+      .select("id");
     if (error) throw new Error(error.message);
+    assertSingleMutation(rows, "Removing a workspace member");
     return { ok: true };
   });
 

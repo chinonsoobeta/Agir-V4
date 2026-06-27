@@ -5,24 +5,47 @@
 import { computeInvestmentVerdict } from "../verdict";
 import { ENGINE_SCALAR_TO_TAXONOMY } from "../taxonomy-engine-map";
 import { ASSUMPTION_BY_KEY } from "../assumption-taxonomy";
-import { money, pct, x, bps, sanitizeSymbols, displaySourceLabel, type ReportStat } from "../memo-report";
+import {
+  money,
+  pct,
+  x,
+  bps,
+  sanitizeSymbols,
+  displaySourceLabel,
+  type ReportStat,
+} from "../memo-report";
 import type { ReportData } from "./report-data.server";
 import type { AllowedValue, TokenUnit } from "../engine/provenance";
 
 import type { ReportDefinition } from "./report-definitions";
 
 export type ReportStatus =
-  | "ready" | "needs_underwriting" | "needs_memo" | "has_unresolved_errors" | "missing_project" | "missing_required_data";
+  | "ready"
+  | "needs_underwriting"
+  | "needs_memo"
+  | "has_unresolved_errors"
+  | "missing_project"
+  | "missing_required_data";
 
 // Pure readiness decision, shared by the server fn and unit tests.
 export function computeReportStatus(
   def: ReportDefinition,
-  ctx: { projectExists: boolean; baseOutputs: number; financialOutputs: number; reconErrors: number },
+  ctx: {
+    projectExists: boolean;
+    baseOutputs: number;
+    financialOutputs: number;
+    reconErrors: number;
+  },
 ): { ready: boolean; status: ReportStatus; blocking_reasons: string[]; warnings: string[] } {
   const blocking_reasons: string[] = [];
   const warnings: string[] = [];
   if (!ctx.projectExists) {
-    return { ready: false, status: "missing_project", blocking_reasons: ["No project found."], warnings: [] };
+    return {
+      ready: false,
+      status: "missing_project",
+      blocking_reasons: ["No project found."],
+      warnings: [],
+    };
   }
   let status: ReportStatus = "ready";
   if (def.requiresUnderwriting && ctx.baseOutputs === 0) {
@@ -34,7 +57,9 @@ export function computeReportStatus(
   } else {
     if (ctx.reconErrors > 0) {
       status = "has_unresolved_errors";
-      warnings.push(`This report can be generated, but it will include ${ctx.reconErrors} unresolved reconciliation error(s).`);
+      warnings.push(
+        `This report can be generated, but it will include ${ctx.reconErrors} unresolved reconciliation error(s).`,
+      );
     }
     if (!def.requiresUnderwriting && ctx.baseOutputs === 0) {
       warnings.push("Underwriting has not run; model outputs and cash flows will be empty.");
@@ -51,7 +76,8 @@ export const VERDICT_BANNER: Record<string, string> = {
 };
 
 export function makeAccessors(data: ReportData) {
-  const oRow = (s: string, k: string) => data.outputs.find((o) => o.scenario_key === s && o.metric_key === k);
+  const oRow = (s: string, k: string) =>
+    data.outputs.find((o) => o.scenario_key === s && o.metric_key === k);
   const oVal = (s: string, k: string): number | null => {
     const r = oRow(s, k);
     return r && r.value_numeric != null ? Number(r.value_numeric) : null;
@@ -84,7 +110,19 @@ export function deriveCore(data: ReportData) {
   const exitCap = eVal("exit_cap_rate_pct") ?? aVal("exit_cap_rate");
   const ltc = oVal("base", "loan_to_cost");
   const lenderOcc = eVal("lender_stabilized_occupancy_pct") ?? aVal("lender_stabilized_occupancy");
-  return { tdc, loan, committedEquity, requiredEquity, fundingGap, noi, dscr, minDscr, exitCap, ltc, lenderOcc };
+  return {
+    tdc,
+    loan,
+    committedEquity,
+    requiredEquity,
+    fundingGap,
+    noi,
+    dscr,
+    minDscr,
+    exitCap,
+    ltc,
+    lenderOcc,
+  };
 }
 
 export function reportVerdict(data: ReportData) {
@@ -106,7 +144,12 @@ export function irrStatusText(data: ReportData): string {
   const { oRow, oVal } = makeAccessors(data);
   const row = oRow("base", "irr_estimate");
   const v = oVal("base", "irr_estimate");
-  if (!row || v == null || !Number.isFinite(v) || /not meaningful/i.test(String(row.formula_text ?? ""))) {
+  if (
+    !row ||
+    v == null ||
+    !Number.isFinite(v) ||
+    /not meaningful/i.test(String(row.formula_text ?? ""))
+  ) {
     return "Not meaningful";
   }
   return pct(v);
@@ -119,12 +162,16 @@ export function generationLabel(generatedAt?: string): string {
 }
 
 // Short provenance label for body tables (full filenames stay in appendices).
-export function assumptionSourceLabel(data: ReportData, a: Record<string, any> | undefined): string {
+export function assumptionSourceLabel(
+  data: ReportData,
+  a: Record<string, any> | undefined,
+): string {
   if (!a) return "Approved assumption";
   const docName = a.documents?.name as string | undefined;
   if (docName) return displaySourceLabel(null, docName);
   const loc = a.source_location;
-  if (loc && /\.(pdf|xlsx|xls|docx|csv)$/i.test(String(loc))) return displaySourceLabel(String(loc));
+  if (loc && /\.(pdf|xlsx|xls|docx|csv)$/i.test(String(loc)))
+    return displaySourceLabel(String(loc));
   return "Approved assumption";
 }
 
@@ -137,7 +184,9 @@ export function defaultAcceptedFields(data: ReportData): string[] {
 }
 
 export function inputCounts(data: ReportData) {
-  const approved = data.assumptions.filter((a) => a.status === "approved" || a.status === "modified").length;
+  const approved = data.assumptions.filter(
+    (a) => a.status === "approved" || a.status === "modified",
+  ).length;
   const calculated = data.assumptions.filter((a) => a.status === "calculated").length;
   const defaultAccepted = data.engineInputs.filter((i) => i.status === "default_accepted").length;
   return { approved, calculated, defaultAccepted };
@@ -156,7 +205,9 @@ export function disclosureFootnotes(data: ReportData): { footnotes: string[]; de
     footnotes: [
       "All figures were produced deterministically from approved, calculated, or explicitly default-accepted inputs. No AI-generated financial values were used.",
       `Inputs used: ${counts.approved} approved, ${counts.calculated} calculated, ${counts.defaultAccepted} default-accepted.`,
-      names.length ? `Default-accepted inputs: ${names.join(", ")}.` : "Default-accepted inputs: none.",
+      names.length
+        ? `Default-accepted inputs: ${names.join(", ")}.`
+        : "Default-accepted inputs: none.",
       `Reconciliation exceptions: ${errorCount} error(s) and ${warningCount} warning(s) remain open.`,
     ],
   };
@@ -166,16 +217,25 @@ export function disclosureFootnotes(data: ReportData): { footnotes: string[]; de
 export function requiredActions(data: ReportData, core: DerivedCore): string[] {
   const flags = data.flags;
   const occShortfalls = flags.filter((f) => String(f.check_key).startsWith("occupancy_vs_lender"));
-  const sourcesError = flags.some((f) => f.check_key === "sources_vs_uses" && f.severity === "error");
+  const sourcesError = flags.some(
+    (f) => f.check_key === "sources_vs_uses" && f.severity === "error",
+  );
   const equityMismatch = flags.some((f) => f.check_key === "equity_mismatch");
   const actions: string[] = [];
   if (Math.abs(core.fundingGap) > 1) actions.push("- Resolve the sources-and-uses funding gap.");
   if (sourcesError || equityMismatch || core.committedEquity < core.requiredEquity) {
-    actions.push(`- Confirm whether the ${money(core.committedEquity)} committed equity is capped or whether additional sponsor/JV equity is available.`);
+    actions.push(
+      `- Confirm whether the ${money(core.committedEquity)} committed equity is capped or whether additional sponsor/JV equity is available.`,
+    );
   }
-  if (flags.some((f) => f.check_key === "budget_vs_stated_total")) actions.push("- Correct or remove any erroneous stated total project cost reconciliation input.");
-  if (core.dscr != null && core.minDscr != null && core.dscr < core.minDscr) actions.push("- Cure the DSCR covenant breach or resize the senior debt.");
-  if (occShortfalls.length) actions.push("- Resolve lender stabilization shortfalls for retail and office.");
+  if (flags.some((f) => f.check_key === "budget_vs_stated_total"))
+    actions.push(
+      "- Correct or remove any erroneous stated total project cost reconciliation input.",
+    );
+  if (core.dscr != null && core.minDscr != null && core.dscr < core.minDscr)
+    actions.push("- Cure the DSCR covenant breach or resize the senior debt.");
+  if (occShortfalls.length)
+    actions.push("- Resolve lender stabilization shortfalls for retail and office.");
   actions.push("- Re-run deterministic underwriting after corrections.");
   return actions;
 }
@@ -185,8 +245,19 @@ export function requiredActions(data: ReportData, core: DerivedCore): string[] {
 // the `derived` numbers the prose uses (so the provenance verifier admits them).
 // Null-safe: deals underwritten before the Insight Layer simply return null and
 // the report falls back to its templated prose.
-export type ReportInsight = { thesis: string; narrative: string; bullets: string[]; levers: any[]; interpretations: any[]; derived: number[]; recommendation: string | null };
-export function insightFor(data: ReportData, audience: "ic" | "lender" | "investor" | "internal"): ReportInsight | null {
+export type ReportInsight = {
+  thesis: string;
+  narrative: string;
+  bullets: string[];
+  levers: any[];
+  interpretations: any[];
+  derived: number[];
+  recommendation: string | null;
+};
+export function insightFor(
+  data: ReportData,
+  audience: "ic" | "lender" | "investor" | "internal",
+): ReportInsight | null {
   const row = data.outputs.find((o) => o.metric_key === "insight" && o.scenario_key === "base");
   if (!row) return null;
   const i = (row.inputs ?? {}) as Record<string, any>;
@@ -196,14 +267,20 @@ export function insightFor(data: ReportData, audience: "ic" | "lender" | "invest
     bullets: Array.isArray(i.bullets) ? i.bullets : [],
     levers: Array.isArray(i.levers) ? i.levers : [],
     interpretations: Array.isArray(i.interpretations) ? i.interpretations : [],
-    derived: Array.isArray(i.derivedValues) ? i.derivedValues.map(Number).filter((n: number) => Number.isFinite(n)) : [],
+    derived: Array.isArray(i.derivedValues)
+      ? i.derivedValues.map(Number).filter((n: number) => Number.isFinite(n))
+      : [],
     recommendation: i.recommendation ? String(i.recommendation) : null,
   };
 }
 
 // Numbers a report may reference (for provenance), gathered from every
 // deterministic source plus simple pure-function derivations.
-export function reportAllowedValues(data: ReportData, core: DerivedCore, extra: number[] = []): AllowedValue[] {
+export function reportAllowedValues(
+  data: ReportData,
+  core: DerivedCore,
+  extra: number[] = [],
+): AllowedValue[] {
   const out: AllowedValue[] = [];
   const asUnit = (u: unknown): TokenUnit | undefined =>
     u === "$" || u === "%" || u === "x" || u === "bps" ? u : undefined;
@@ -238,10 +315,17 @@ export function reportAllowedValues(data: ReportData, core: DerivedCore, extra: 
     // coverage). The provenance hardening here is UNIT-AWARENESS -- a rate token
     // can no longer be validated by a coincidental dollar magnitude -- not
     // narrowing this derivable set.
-    if (e != null && a != null) { push(e - a); push(a - e); if (a !== 0) push(e / a); if (e !== 0) push(a / e); }
+    if (e != null && a != null) {
+      push(e - a);
+      push(a - e);
+      if (a !== 0) push(e / a);
+      if (e !== 0) push(a / e);
+    }
     if (Array.isArray(f.conflict_values)) f.conflict_values.forEach((c: any) => push(c.value));
   }
-  data.engineInputs.forEach((i) => { if (Array.isArray(i.conflict_values)) i.conflict_values.forEach((c: any) => push(c.value)); });
+  data.engineInputs.forEach((i) => {
+    if (Array.isArray(i.conflict_values)) i.conflict_values.forEach((c: any) => push(c.value));
+  });
   // Fixed verdict thresholds (left untyped: they surface as both % and x).
   [1.5, 15, 100, 1.2, 1.0].forEach((n) => push(n));
   extra.forEach((n) => push(n));

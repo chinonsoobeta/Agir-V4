@@ -435,7 +435,9 @@ describe("missing-relation detection", () => {
   it("detects a missing column (older schema vs newer code)", () => {
     expect(isMissingColumn({ code: "PGRST204" })).toBe(true);
     expect(
-      isMissingColumn({ message: "Could not find the 'probability' column of 'projects' in the schema cache" }),
+      isMissingColumn({
+        message: "Could not find the 'probability' column of 'projects' in the schema cache",
+      }),
     ).toBe(true);
     expect(isMissingColumn({ message: "permission denied" })).toBe(false);
     expect(isMissingColumn(null)).toBe(false);

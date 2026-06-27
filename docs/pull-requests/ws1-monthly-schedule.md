@@ -121,16 +121,16 @@ year-1 NOI, year-1 debt service) within a documented tolerance
 
 ## New assumption keys (taxonomy -> engine), defaults, units
 
-| Taxonomy key | Engine key | Unit | Default (absent) |
-| --- | --- | --- | --- |
-| `monthly_model` | `monthly_model` | flag (count) | off = annual path (byte-identical) |
-| `construction_s_curve` | `construction_s_curve` | flag (count) | off = straight-line draws |
-| `refinance_month` | `refinance_month` | months from t0 | 0 = no refinance |
-| `refinance_amount` | `refinance_amount` | $ | none (LTV or rate-and-term sizing) |
-| `refinance_ltv_pct` | `refinance_ltv_pct` | % | none |
-| `refinance_rate` | `refinance_rate_pct` | % | senior rate (rate-and-term) |
-| `refinance_amort_years` | `refinance_amort_years` | years | senior amortization |
-| `refinance_io_months` | `refinance_io_months` | months | 0 |
+| Taxonomy key            | Engine key              | Unit           | Default (absent)                   |
+| ----------------------- | ----------------------- | -------------- | ---------------------------------- |
+| `monthly_model`         | `monthly_model`         | flag (count)   | off = annual path (byte-identical) |
+| `construction_s_curve`  | `construction_s_curve`  | flag (count)   | off = straight-line draws          |
+| `refinance_month`       | `refinance_month`       | months from t0 | 0 = no refinance                   |
+| `refinance_amount`      | `refinance_amount`      | $              | none (LTV or rate-and-term sizing) |
+| `refinance_ltv_pct`     | `refinance_ltv_pct`     | %              | none                               |
+| `refinance_rate`        | `refinance_rate_pct`    | %              | senior rate (rate-and-term)        |
+| `refinance_amort_years` | `refinance_amort_years` | years          | senior amortization                |
+| `refinance_io_months`   | `refinance_io_months`   | months         | 0                                  |
 
 `lease_up_curve` (already in the taxonomy) is reused for 1B; with monthly mode on it
 drives the real per-period ramp, and with monthly mode off it keeps its existing

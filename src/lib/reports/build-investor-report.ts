@@ -7,7 +7,10 @@ import { buildMemoReport, type MemoReport } from "../memo-report";
 import type { ReportData } from "./report-data.server";
 import { makeAccessors, reportVerdict, irrStatusText, money, pct, bps, x } from "./report-common";
 
-export function buildInvestorReport(data: ReportData, opts: { generatedLabel: string }): MemoReport {
+export function buildInvestorReport(
+  data: ReportData,
+  opts: { generatedLabel: string },
+): MemoReport {
   const verdict = reportVerdict(data);
   const report = buildMemoReport({
     project: data.project ?? {},
@@ -25,8 +28,20 @@ export function buildInvestorReport(data: ReportData, opts: { generatedLabel: st
   const { oVal } = makeAccessors(data);
   const row = (label: string, key: string, unit: string): string[] => {
     const v = oVal("base", key);
-    return [label, v == null ? "Not available"
-      : unit === "$" ? money(v) : unit === "%" ? pct(v) : unit === "x" ? x(v) : unit === "bps" ? bps(v) : String(v)];
+    return [
+      label,
+      v == null
+        ? "Not available"
+        : unit === "$"
+          ? money(v)
+          : unit === "%"
+            ? pct(v)
+            : unit === "x"
+              ? x(v)
+              : unit === "bps"
+                ? bps(v)
+                : String(v),
+    ];
   };
   const keyReturns: string[][] = [
     row("Going-in Yield on Cost", "yield_on_cost", "%"),
@@ -43,7 +58,10 @@ export function buildInvestorReport(data: ReportData, opts: { generatedLabel: st
 
   // Insert Key Returns right after the revenue build (or near the front).
   const idx = report.sections.findIndex((s) => s.heading.startsWith("Scenario Analysis"));
-  const keyReturnsSection = { heading: "Key Returns", table: { columns: ["Metric", "Value"], rows: keyReturns } };
+  const keyReturnsSection = {
+    heading: "Key Returns",
+    table: { columns: ["Metric", "Value"], rows: keyReturns },
+  };
   if (idx >= 0) report.sections.splice(idx, 0, keyReturnsSection);
   else report.sections.push(keyReturnsSection);
 

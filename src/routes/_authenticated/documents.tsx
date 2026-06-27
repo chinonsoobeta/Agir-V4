@@ -127,7 +127,7 @@ function DocumentsPage() {
                   <SelectValue placeholder="Unassigned" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={UNASSIGNED}>:  Unassigned : </SelectItem>
+                  <SelectItem value={UNASSIGNED}>: Unassigned : </SelectItem>
                   {validProjects.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name}
@@ -179,7 +179,8 @@ function DocumentsPage() {
                     <div className="min-w-0">
                       <div className="font-medium text-sm truncate">{d.name}</div>
                       <div className="text-[11px] text-muted-foreground mt-0.5">
-                        {d.category || "Not available"} · {new Date(d.upload_date).toLocaleDateString()}
+                        {d.category || "Not available"} ·{" "}
+                        {new Date(d.upload_date).toLocaleDateString()}
                       </div>
                       {contributions.has(d.id) ? (
                         <Badge

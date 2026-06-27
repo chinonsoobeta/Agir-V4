@@ -179,13 +179,21 @@ function CriticalPathPanel({ projects, milestones }: { projects: any[]; mileston
     arr.push(m);
     byProject.set(m.project_id, arr);
   }
-  const rows: { project: any; titleOf: (id: string) => string; result: ReturnType<typeof computeCriticalPath> }[] = [];
+  const rows: {
+    project: any;
+    titleOf: (id: string) => string;
+    result: ReturnType<typeof computeCriticalPath>;
+  }[] = [];
   for (const [pid, ms] of byProject) {
     const project = projects.find((p) => p.id === pid);
     if (!project) continue;
     const exec: ExecMilestone[] = ms.map((m) => ({
-      id: m.id, title: m.title, dueDate: m.due_date ?? null, status: m.status,
-      dependsOn: Array.isArray(m.depends_on) ? m.depends_on : [], priority: m.priority,
+      id: m.id,
+      title: m.title,
+      dueDate: m.due_date ?? null,
+      status: m.status,
+      dependsOn: Array.isArray(m.depends_on) ? m.depends_on : [],
+      priority: m.priority,
     }));
     const result = computeCriticalPath(exec, project.target_close_date ?? null, today);
     if (!result.blocking.length) continue;
@@ -193,14 +201,18 @@ function CriticalPathPanel({ projects, milestones }: { projects: any[]; mileston
     rows.push({ project, titleOf: (id) => titleMap.get(id) ?? id, result });
   }
   if (!rows.length) return null;
-  rows.sort((a, b) => (a.result.blocking[0]?.slackDays ?? 0) - (b.result.blocking[0]?.slackDays ?? 0));
+  rows.sort(
+    (a, b) => (a.result.blocking[0]?.slackDays ?? 0) - (b.result.blocking[0]?.slackDays ?? 0),
+  );
 
   return (
     <Card className="elevated border-warning/35">
       <div className="px-4 py-3 border-b border-border flex items-center gap-2">
         <ListChecks className="size-4 text-warning" />
         <span className="text-sm font-semibold">Critical path to close</span>
-        <span className="text-xs text-muted-foreground">deals whose open milestones threaten the target close</span>
+        <span className="text-xs text-muted-foreground">
+          deals whose open milestones threaten the target close
+        </span>
       </div>
       <ul className="divide-y divide-border">
         {rows.map(({ project, titleOf, result }) => (
@@ -226,7 +238,8 @@ function CriticalPathPanel({ projects, milestones }: { projects: any[]; mileston
                   }`}
                   title={b.reasons.join(", ")}
                 >
-                  {b.title}{b.slackDays != null ? ` (${b.slackDays >= 0 ? "+" : ""}${b.slackDays}d)` : ""}
+                  {b.title}
+                  {b.slackDays != null ? ` (${b.slackDays >= 0 ? "+" : ""}${b.slackDays}d)` : ""}
                 </span>
               ))}
             </div>

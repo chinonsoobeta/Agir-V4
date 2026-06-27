@@ -16,7 +16,12 @@ export type ScheduleGridRow = {
   total: number; // sum of the row's node amounts (audit aid)
 };
 
-export type SchedulePhase = { key: "construction" | "lease_up" | "hold"; label: string; startMonth: number; endMonth: number };
+export type SchedulePhase = {
+  key: "construction" | "lease_up" | "hold";
+  label: string;
+  startMonth: number;
+  endMonth: number;
+};
 
 export type ScheduleGrid = {
   months: number;
@@ -91,9 +96,11 @@ export function buildScheduleGrid(schedule: MonthlySchedule): ScheduleGrid {
 function buildPhases(schedule: MonthlySchedule): SchedulePhase[] {
   const { constructionMonths: c, leaseUpMonths: l, holdMonths: h } = schedule;
   const phases: SchedulePhase[] = [];
-  if (c > 0) phases.push({ key: "construction", label: "Construction", startMonth: 0, endMonth: c });
+  if (c > 0)
+    phases.push({ key: "construction", label: "Construction", startMonth: 0, endMonth: c });
   if (l > 0) phases.push({ key: "lease_up", label: "Lease-up", startMonth: c, endMonth: c + l });
-  if (h > 0) phases.push({ key: "hold", label: "Stabilized hold", startMonth: c + l, endMonth: c + l + h });
+  if (h > 0)
+    phases.push({ key: "hold", label: "Stabilized hold", startMonth: c + l, endMonth: c + l + h });
   return phases;
 }
 

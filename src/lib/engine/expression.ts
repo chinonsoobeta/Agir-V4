@@ -83,7 +83,10 @@ function tokenize(src: string): Token[] {
     // Number: digits with an optional single decimal point. A leading point
     // (".5") is accepted. No exponent syntax, so "1e9" is never mistaken for a
     // number (the "e9" would parse as an unknown identifier and fail closed).
-    if ((c >= "0" && c <= "9") || (c === "." && i + 1 < n && src[i + 1] >= "0" && src[i + 1] <= "9")) {
+    if (
+      (c >= "0" && c <= "9") ||
+      (c === "." && i + 1 < n && src[i + 1] >= "0" && src[i + 1] <= "9")
+    ) {
       let j = i;
       let seenDot = false;
       while (j < n) {
@@ -110,7 +113,12 @@ function tokenize(src: string): Token[] {
       let j = i;
       while (j < n) {
         const d = src[j];
-        if ((d >= "a" && d <= "z") || (d >= "A" && d <= "Z") || (d >= "0" && d <= "9") || d === "_") {
+        if (
+          (d >= "a" && d <= "z") ||
+          (d >= "A" && d <= "Z") ||
+          (d >= "0" && d <= "9") ||
+          d === "_"
+        ) {
           j += 1;
         } else {
           break;
@@ -235,7 +243,8 @@ class Parser {
         return { kind: "call", fn, args };
       }
       // A whitelisted function name used without a call is not a value.
-      if (t.name in WHITELIST_FNS) throw new ExpressionError(`'${t.name}' is a function and must be called.`);
+      if (t.name in WHITELIST_FNS)
+        throw new ExpressionError(`'${t.name}' is a function and must be called.`);
       return { kind: "ref", name: t.name };
     }
     throw new ExpressionError("Unexpected token.");
@@ -313,7 +322,8 @@ export function collectLiterals(node: ExprNode): number[] {
 // rather than letting NaN/Infinity leak into a displayed figure.
 export function evaluate(node: ExprNode, context: Map<string, number>): number {
   const result = evalNode(node, context);
-  if (!Number.isFinite(result)) throw new ExpressionError("Expression did not produce a finite number.");
+  if (!Number.isFinite(result))
+    throw new ExpressionError("Expression did not produce a finite number.");
   return result;
 }
 
@@ -324,7 +334,8 @@ function evalNode(node: ExprNode, ctx: Map<string, number>): number {
     case "ref": {
       const v = ctx.get(node.name);
       if (v == null) throw new ExpressionError(`Unknown reference '${node.name}'.`);
-      if (!Number.isFinite(v)) throw new ExpressionError(`Reference '${node.name}' is not a finite number.`);
+      if (!Number.isFinite(v))
+        throw new ExpressionError(`Reference '${node.name}' is not a finite number.`);
       return v;
     }
     case "unary":
@@ -376,7 +387,8 @@ export function evaluateExpression(
   if (allowedRefs) {
     const allowed = new Set(allowedRefs);
     for (const ref of collectReferences(ast)) {
-      if (!allowed.has(ref)) throw new ExpressionError(`Reference '${ref}' is not an allowed node.`);
+      if (!allowed.has(ref))
+        throw new ExpressionError(`Reference '${ref}' is not an allowed node.`);
     }
   }
   return evaluate(ast, context);

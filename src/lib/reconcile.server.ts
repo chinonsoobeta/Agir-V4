@@ -43,9 +43,14 @@ export function reconcileDevelopmentInputs(input: {
   computedGpr?: number | null;
 }) {
   const flags: ReconciliationFlag[] = [];
-  const compare = (check_key: string, label: string, expected?: number | null, actual?: number | null) => {
+  const compare = (
+    check_key: string,
+    label: string,
+    expected?: number | null,
+    actual?: number | null,
+  ) => {
     if (!expected || !actual) return;
-    const deltaPct = Math.abs(actual - expected) / Math.abs(expected) * 100;
+    const deltaPct = (Math.abs(actual - expected) / Math.abs(expected)) * 100;
     if (deltaPct <= 5) return;
     flags.push({
       check_key,
@@ -56,8 +61,17 @@ export function reconcileDevelopmentInputs(input: {
     });
   };
   compare("budget_vs_tdc", "Budget total and stated TDC", input.statedTdc, input.budgetTotal);
-  compare("sources_vs_uses", "Equity plus loan and stated TDC", input.statedTdc, (input.equity ?? 0) + (input.loan ?? 0));
-  compare("gpr_vs_revenue", "Rent program GPR and stated revenue", input.statedRevenue, input.computedGpr);
+  compare(
+    "sources_vs_uses",
+    "Equity plus loan and stated TDC",
+    input.statedTdc,
+    (input.equity ?? 0) + (input.loan ?? 0),
+  );
+  compare(
+    "gpr_vs_revenue",
+    "Rent program GPR and stated revenue",
+    input.statedRevenue,
+    input.computedGpr,
+  );
   return flags;
 }
-

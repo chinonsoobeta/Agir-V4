@@ -25,7 +25,8 @@ describe("WS3 3B tornado", () => {
     const keys = ["exit_cap_rate", "cost_level", "rent_level", "interest_rate"];
     const bars = tornado(base, keys, 10, "profit_on_cost");
     // Sorted widest-first.
-    for (let i = 1; i < bars.length; i++) expect(bars[i - 1].swing).toBeGreaterThanOrEqual(bars[i].swing);
+    for (let i = 1; i < bars.length; i++)
+      expect(bars[i - 1].swing).toBeGreaterThanOrEqual(bars[i].swing);
     // Interest rate does not enter development profit / profit-on-cost, so ~0 swing,
     // and it must sort last.
     const rate = bars.find((b) => b.key === "interest_rate")!;
@@ -83,7 +84,8 @@ describe("WS3 3B provenance: sensitivity numbers trace to engine outputs", () =>
     const bars = tornado(base, ["exit_cap_rate", "rent_level"], 10, "irr");
     for (const b of bars) {
       if (Number.isFinite(b.lowValue)) expect(b.lowValue).toBe(runPoint(base, b.key, b.low, "irr"));
-      if (Number.isFinite(b.highValue)) expect(b.highValue).toBe(runPoint(base, b.key, b.high, "irr"));
+      if (Number.isFinite(b.highValue))
+        expect(b.highValue).toBe(runPoint(base, b.key, b.high, "irr"));
     }
   });
 });

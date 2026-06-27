@@ -93,7 +93,11 @@ class Claims {
 export function extractCandidates(docName: string, text: string): Candidate[] {
   const out: Array<Candidate & { _idx: number }> = [];
   const claims = new Claims();
-  const push = (idx: number, len: number, c: Omit<Candidate, "doc_name" | "context" | "label_hint" | "source_location">) => {
+  const push = (
+    idx: number,
+    len: number,
+    c: Omit<Candidate, "doc_name" | "context" | "label_hint" | "source_location">,
+  ) => {
     out.push({
       ...c,
       doc_name: docName,
@@ -106,7 +110,12 @@ export function extractCandidates(docName: string, text: string): Candidate[] {
 
   // Run patterns in priority order; the most specific (rent) claims its span
   // first so the generic currency/sf passes skip it.
-  type Pass = { re: RegExp; handle: (m: RegExpMatchArray) => Omit<Candidate, "doc_name" | "context" | "label_hint" | "source_location"> | null };
+  type Pass = {
+    re: RegExp;
+    handle: (
+      m: RegExpMatchArray,
+    ) => Omit<Candidate, "doc_name" | "context" | "label_hint" | "source_location"> | null;
+  };
 
   const passes: Pass[] = [
     // Rent: monthly: "$3,050/month", "$3,050 per unit per month", "$3,050/unit/month".
@@ -142,7 +151,12 @@ export function extractCandidates(docName: string, text: string): Candidate[] {
       handle: (m) => {
         const n = toNumber(m[1]);
         if (!isFinite(n)) return null;
-        return { kind: "currency", value_numeric: n * scaleMultiplier(m[2]), value_text: m[0].trim(), unit: "$" };
+        return {
+          kind: "currency",
+          value_numeric: n * scaleMultiplier(m[2]),
+          value_text: m[0].trim(),
+          unit: "$",
+        };
       },
     },
     // Basis points: "625 bps" → 6.25%.
@@ -169,7 +183,13 @@ export function extractCandidates(docName: string, text: string): Candidate[] {
       handle: (m) => {
         const n = toNumber(m[1]);
         if (!isFinite(n)) return null;
-        return { kind: "currency", value_numeric: n * scaleMultiplier(m[2]), value_text: m[0].trim(), unit: "$", __needsMoneyLabel: true } as any;
+        return {
+          kind: "currency",
+          value_numeric: n * scaleMultiplier(m[2]),
+          value_text: m[0].trim(),
+          unit: "$",
+          __needsMoneyLabel: true,
+        } as any;
       },
     },
     // Square footage: "18,000 SF", "32,000 square feet".

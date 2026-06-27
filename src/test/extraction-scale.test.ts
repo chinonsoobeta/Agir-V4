@@ -2,7 +2,11 @@ import { describe, expect, test } from "vitest";
 import * as XLSX from "xlsx";
 import { detectMoneyScale } from "@/lib/money-scale";
 import { parseBudgetWorkbook } from "@/lib/parsers/budget.server";
-import { xlsxBufferToText, extractFileTextWithMeta, pdfBufferToTextWithMeta } from "@/lib/document-text.server";
+import {
+  xlsxBufferToText,
+  extractFileTextWithMeta,
+  pdfBufferToTextWithMeta,
+} from "@/lib/document-text.server";
 import { extractCandidates } from "@/lib/assumption-candidates.server";
 import { groupAndResolve, type MappedCandidate } from "@/lib/assumption-mapping";
 
@@ -137,7 +141,12 @@ describe("2A: OCR fallback for scanned / image-only PDFs (mocked boundary)", () 
     expect(meta.ocrConfidence).toBe(87);
     expect(meta.text).toContain("$34,500,000");
 
-    const extracted = await extractFileTextWithMeta("Scanned_Term_Sheet.pdf", "application/pdf", scanned, { ocr: mockOcr });
+    const extracted = await extractFileTextWithMeta(
+      "Scanned_Term_Sheet.pdf",
+      "application/pdf",
+      scanned,
+      { ocr: mockOcr },
+    );
     expect(extracted.recoveredViaOcr).toBe(true);
     const cands = extractCandidates("Scanned_Term_Sheet.pdf", extracted.text);
     expect(cands.length).toBeGreaterThan(0);
@@ -145,18 +154,47 @@ describe("2A: OCR fallback for scanned / image-only PDFs (mocked boundary)", () 
     expect(cands.some((c) => c.kind === "units" && c.value_numeric === 220)).toBe(true);
   });
 
+  test("OCR page-cap metadata is surfaced for scanned PDFs", async () => {
+    const capped = async () => ({
+      text: "Hard costs $162,000,000.",
+      confidence: 83,
+      pagesProcessed: 10,
+      totalPages: 24,
+      truncated: true,
+    });
+    const extracted = await extractFileTextWithMeta(
+      "Long_Scanned_Appraisal.pdf",
+      "application/pdf",
+      scanned,
+      {
+        ocr: capped,
+      },
+    );
+    expect(extracted.recoveredViaOcr).toBe(true);
+    expect(extracted.ocrTruncated).toBe(true);
+    expect(extracted.ocrPagesProcessed).toBe(10);
+    expect(extracted.ocrTotalPages).toBe(24);
+  });
+
   test("OCR that recovers nothing degrades gracefully to no-text (not a crash)", async () => {
-    const meta = await pdfBufferToTextWithMeta(scanned, { ocr: async () => ({ text: "", confidence: 0 }) });
+    const meta = await pdfBufferToTextWithMeta(scanned, {
+      ocr: async () => ({ text: "", confidence: 0 }),
+    });
     expect(meta.recoveredViaOcr).toBe(false);
     expect(meta.text).toBe("");
   });
 
   test("non-PDF documents never invoke the PDF OCR runner", async () => {
-    const ws = XLSX.utils.aoa_to_sheet([["Category", "Line Item", "Amount"], ["land", "Land", 34_500_000]]);
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["Category", "Line Item", "Amount"],
+      ["land", "Land", 34_500_000],
+    ]);
     const book = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(book, ws, "Budget");
     const buf = XLSX.write(book, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
-    const throwing = async () => { throw new Error("OCR must not run for a spreadsheet"); };
+    const throwing = async () => {
+      throw new Error("OCR must not run for a spreadsheet");
+    };
     const extracted = await extractFileTextWithMeta("budget.xlsx", null, buf, { ocr: throwing });
     expect(extracted.recoveredViaOcr).toBe(false);
     expect(extracted.text.toLowerCase()).toContain("land");

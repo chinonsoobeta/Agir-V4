@@ -95,7 +95,14 @@ export function stackPayoffAfterYears(stack: DebtStack, years: number): number {
 // Interest carried during the construction + lease-up window, summed across
 // tranches. Used only when the financing line is computed rather than pinned to
 // an extracted figure, so a senior-only deal keeps its existing interest reserve.
-export function stackInterestCarry(stack: DebtStack, monthsOutstanding: number, avgOutstandingFactor: number): number {
+export function stackInterestCarry(
+  stack: DebtStack,
+  monthsOutstanding: number,
+  avgOutstandingFactor: number,
+): number {
   const years = monthsOutstanding / 12;
-  return stack.tranches.reduce((sum, t) => sum + t.amount * (t.ratePct / 100) * years * avgOutstandingFactor, 0);
+  return stack.tranches.reduce(
+    (sum, t) => sum + t.amount * (t.ratePct / 100) * years * avgOutstandingFactor,
+    0,
+  );
 }

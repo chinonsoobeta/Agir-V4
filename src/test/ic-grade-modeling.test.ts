@@ -23,14 +23,22 @@ import { buildMemoReport, memoReportText } from "@/lib/memo-report";
 import { computeInvestmentVerdict } from "@/lib/verdict";
 import { ASSUMPTION_BY_KEY } from "@/lib/assumption-taxonomy";
 
-const NEUTRAL_WF: WaterfallConfig = { lpEquityPct: 100, gpEquityPct: 0, preferredReturnPct: 0, gpCatchUpPct: 0, tiers: [] };
+const NEUTRAL_WF: WaterfallConfig = {
+  lpEquityPct: 100,
+  gpEquityPct: 0,
+  preferredReturnPct: 0,
+  gpCatchUpPct: 0,
+  tiers: [],
+};
 
 // A turnkey, comfortably profitable deal: no construction delay, no financing
 // reserve, so its returns are easy to reason about for waterfall + timing tests.
 function profitableInput(overrides: Partial<UnderwritingInput> = {}): UnderwritingInput {
   return {
     budget: { land: 10_000_000, hard: 0, soft: 0, contingency: 0, financingInterest: 0 },
-    revenueProgram: [{ unitType: "Residential", unitCount: 100, rent: 2_000, rentBasis: "per_unit" }],
+    revenueProgram: [
+      { unitType: "Residential", unitCount: 100, rent: 2_000, rentBasis: "per_unit" },
+    ],
     constructionMonths: 0,
     leaseUpMonths: 0,
     stabilizedOccupancyPct: 100,
@@ -134,7 +142,10 @@ describe("WS1.1C LP/GP waterfall and promote (hand-computed)", () => {
       { t: 5, amount: 2_000_000 },
     ];
     const cfg: WaterfallConfig = {
-      lpEquityPct: 100, gpEquityPct: 0, preferredReturnPct: 8, gpCatchUpPct: 0,
+      lpEquityPct: 100,
+      gpEquityPct: 0,
+      preferredReturnPct: 8,
+      gpCatchUpPct: 0,
       tiers: [{ hurdlePct: null, gpPct: 20 }],
     };
     expect(isWaterfallActive(cfg)).toBe(true);
@@ -166,7 +177,10 @@ describe("WS1.1C LP/GP waterfall and promote (hand-computed)", () => {
       { t: 5, amount: 2_000_000 },
     ];
     const cfg: WaterfallConfig = {
-      lpEquityPct: 90, gpEquityPct: 10, preferredReturnPct: 0, gpCatchUpPct: 0,
+      lpEquityPct: 90,
+      gpEquityPct: 10,
+      preferredReturnPct: 0,
+      gpCatchUpPct: 0,
       tiers: [{ hurdlePct: null, gpPct: 20 }],
     };
     const wf = runWaterfall(events, cfg);
@@ -194,7 +208,10 @@ describe("WS1.1C LP/GP waterfall and promote (hand-computed)", () => {
       { t: 5, amount: 3_000_000 },
     ];
     const cfg: WaterfallConfig = {
-      lpEquityPct: 100, gpEquityPct: 0, preferredReturnPct: 8, gpCatchUpPct: 100,
+      lpEquityPct: 100,
+      gpEquityPct: 0,
+      preferredReturnPct: 8,
+      gpCatchUpPct: 100,
       tiers: [{ hurdlePct: null, gpPct: 20 }],
     };
     const wf = runWaterfall(events, cfg);
@@ -220,35 +237,77 @@ describe("WS1.1C LP/GP waterfall and promote (hand-computed)", () => {
     const input = profitableInput({
       expenseRatioPct: 30,
       waterfall: {
-        lpEquityPct: 90, gpEquityPct: 10, preferredReturnPct: 8, gpCatchUpPct: 0,
+        lpEquityPct: 90,
+        gpEquityPct: 10,
+        preferredReturnPct: 8,
+        gpCatchUpPct: 0,
         tiers: [{ hurdlePct: null, gpPct: 20 }],
       },
     });
     const base = runUnderwriting(input);
     const combined = runUnderwriting(applyStress(input, STRESS_PRESETS[6]));
     const toRows = (scenario: string, out: ReturnType<typeof runUnderwriting>) =>
-      out.metrics.map((m) => ({ scenario_key: scenario, metric_key: m.key, metric_label: m.label, value_numeric: m.value, unit: m.unit, formula_text: m.formula }));
+      out.metrics.map((m) => ({
+        scenario_key: scenario,
+        metric_key: m.key,
+        metric_label: m.label,
+        value_numeric: m.value,
+        unit: m.unit,
+        formula_text: m.formula,
+      }));
     const outputs = [...toRows("base", base), ...toRows("combined", combined)];
 
     const A = (key: string, value: number) => {
       const def = ASSUMPTION_BY_KEY[key];
-      return { field_key: key, value_numeric: value, field_label: def.label, unit: def.unit, status: "approved", source_location: "Demo" };
+      return {
+        field_key: key,
+        value_numeric: value,
+        field_label: def.label,
+        unit: def.unit,
+        status: "approved",
+        source_location: "Demo",
+      };
     };
     const assumptions = [
-      A("land_cost", 10_000_000), A("debt_amount", 5_000_000), A("equity_amount", 5_000_000),
-      A("residential_units", 100), A("residential_rent_monthly", 2_000), A("residential_occupancy", 100),
-      A("interest_rate", 5), A("amortization_years", 30), A("exit_cap_rate", 5), A("opex_ratio", 30),
-      A("lp_equity_pct", 90), A("gp_equity_pct", 10), A("preferred_return_pct", 8), A("promote_tier1_gp_pct", 20),
+      A("land_cost", 10_000_000),
+      A("debt_amount", 5_000_000),
+      A("equity_amount", 5_000_000),
+      A("residential_units", 100),
+      A("residential_rent_monthly", 2_000),
+      A("residential_occupancy", 100),
+      A("interest_rate", 5),
+      A("amortization_years", 30),
+      A("exit_cap_rate", 5),
+      A("opex_ratio", 30),
+      A("lp_equity_pct", 90),
+      A("gp_equity_pct", 10),
+      A("preferred_return_pct", 8),
+      A("promote_tier1_gp_pct", 20),
     ];
     const verdict = computeInvestmentVerdict({
-      equity_multiple: base.values.equityMultiple, profit_margin: base.values.profitOnCostPct,
-      development_spread: base.values.developmentSpreadBps, stress_dscr: combined.values.dscr,
-      stress_equity_multiple: combined.values.equityMultiple, error_flag_count: 0,
+      equity_multiple: base.values.equityMultiple,
+      profit_margin: base.values.profitOnCostPct,
+      development_spread: base.values.developmentSpreadBps,
+      stress_dscr: combined.values.dscr,
+      stress_equity_multiple: combined.values.equityMultiple,
+      error_flag_count: 0,
     });
     const report = buildMemoReport({
-      project: { name: "Promote Demo", location: "Test City", type: "multifamily", status: "underwriting" },
-      assumptions, engineInputs: [], outputs, flags: [], risks: [], documents: [], verdict,
-      generationMode: "deterministic", generatedLabel: "June 2026",
+      project: {
+        name: "Promote Demo",
+        location: "Test City",
+        type: "multifamily",
+        status: "underwriting",
+      },
+      assumptions,
+      engineInputs: [],
+      outputs,
+      flags: [],
+      risks: [],
+      documents: [],
+      verdict,
+      generationMode: "deterministic",
+      generatedLabel: "June 2026",
     });
 
     // The LP / GP Returns section is present (the promote is active).
@@ -277,7 +336,10 @@ describe("WS1.1C LP/GP waterfall and promote (hand-computed)", () => {
     const withWaterfall = runUnderwriting(
       profitableInput({
         waterfall: {
-          lpEquityPct: 90, gpEquityPct: 10, preferredReturnPct: 8, gpCatchUpPct: 0,
+          lpEquityPct: 90,
+          gpEquityPct: 10,
+          preferredReturnPct: 8,
+          gpCatchUpPct: 0,
           tiers: [{ hurdlePct: null, gpPct: 20 }],
         },
       }),
@@ -293,7 +355,9 @@ describe("WS1.1C LP/GP waterfall and promote (hand-computed)", () => {
 
 describe("WS1.1D lease-up absorption curve", () => {
   test("off by default: the lease-up adjusted IRR equals the deal IRR and adds no metric", () => {
-    const out = runUnderwriting(profitableInput({ constructionMonths: 12, leaseUpMonths: 12, holdYears: 5 }));
+    const out = runUnderwriting(
+      profitableInput({ constructionMonths: 12, leaseUpMonths: 12, holdYears: 5 }),
+    );
     expect(out.values.leaseUpAdjustedIrrPct).toBe(out.values.irrPct);
     expect(out.metrics.some((m) => m.key === "lease_up_adjusted_irr")).toBe(false);
   });

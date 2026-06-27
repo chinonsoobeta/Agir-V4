@@ -15,7 +15,10 @@ import { DEFAULT_AI_MODEL } from "./ai-gateway.server";
 // Harden model output parsing: strip markdown fences, take the first JSON
 // object, and on any failure fall back to a memo whose executive_summary is the
 // raw text (with a parse_warning recorded in verification_report).
-function parseMemoJson(text: string): { memo: Record<string, unknown>; parse_warning: string | null } {
+function parseMemoJson(text: string): {
+  memo: Record<string, unknown>;
+  parse_warning: string | null;
+} {
   let cleaned = text.trim();
   const fenced = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced) cleaned = fenced[1].trim();
@@ -23,7 +26,8 @@ function parseMemoJson(text: string): { memo: Record<string, unknown>; parse_war
   if (obj) {
     try {
       const parsed = JSON.parse(obj[0]);
-      if (parsed && typeof parsed === "object") return { memo: parsed as Record<string, unknown>, parse_warning: null };
+      if (parsed && typeof parsed === "object")
+        return { memo: parsed as Record<string, unknown>, parse_warning: null };
     } catch {
       /* fall through to fallback */
     }
@@ -36,10 +40,15 @@ function parseMemoJson(text: string): { memo: Record<string, unknown>; parse_war
 
 export const generateMemo = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
+  .inputValidator((d: { project_id: string }) =>
+    z.object({ project_id: z.string().uuid() }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     const { data: project, error: projErr } = await context.supabase
-      .from("projects").select("*").eq("id", data.project_id).single();
+      .from("projects")
+      .select("*")
+      .eq("id", data.project_id)
+      .single();
     if (projErr) throw new Error(`Memo generation failed loading project: ${projErr.message}`);
     if (!project) throw new Error("Project not found.");
 
@@ -47,48 +56,65 @@ export const generateMemo = createServerFn({ method: "POST" })
     // array: the memo must never be written against partial data.
     const assumptionsRes = await context.supabase
       .from("assumptions")
-      .select("field_key,field_label,value_numeric,value_text,unit,status,confidence_score,source_document_id,source_text,formula_text,approved_by,approved_at")
+      .select(
+        "field_key,field_label,value_numeric,value_text,unit,status,confidence_score,source_document_id,source_text,formula_text,approved_by,approved_at",
+      )
       .eq("project_id", data.project_id)
       .in("status", ["approved", "modified", "default_accepted", "calculated"]);
-    if (assumptionsRes.error) throw new Error(`Memo generation failed loading assumptions: ${assumptionsRes.error.message}`);
+    if (assumptionsRes.error)
+      throw new Error(
+        `Memo generation failed loading assumptions: ${assumptionsRes.error.message}`,
+      );
 
     const engineInputsRes = await context.supabase
       .from("underwriting_inputs")
       .select("key,value_numeric,status,source,formula_text,resolution_note,conflict_values")
       .eq("project_id", data.project_id)
       .in("status", ["approved", "default_accepted", "calculated"]);
-    if (engineInputsRes.error) throw new Error(`Memo generation failed loading underwriting_inputs: ${engineInputsRes.error.message}`);
+    if (engineInputsRes.error)
+      throw new Error(
+        `Memo generation failed loading underwriting_inputs: ${engineInputsRes.error.message}`,
+      );
 
     const outputsRes = await context.supabase
       .from("financial_outputs")
       .select("scenario_key,metric_key,metric_label,value_numeric,unit,formula_text,inputs")
       .eq("project_id", data.project_id);
-    if (outputsRes.error) throw new Error(`Memo generation failed loading financial_outputs: ${outputsRes.error.message}`);
+    if (outputsRes.error)
+      throw new Error(
+        `Memo generation failed loading financial_outputs: ${outputsRes.error.message}`,
+      );
 
     const cashFlowsRes = await context.supabase
       .from("cash_flows")
       .select("scenario_key,period_year,line_key,amount")
       .eq("project_id", data.project_id)
       .limit(400);
-    if (cashFlowsRes.error) throw new Error(`Memo generation failed loading cash_flows: ${cashFlowsRes.error.message}`);
+    if (cashFlowsRes.error)
+      throw new Error(`Memo generation failed loading cash_flows: ${cashFlowsRes.error.message}`);
 
     const flagsRes = await context.supabase
       .from("reconciliation_flags")
       .select("check_key,severity,message,expected,actual,resolved")
       .eq("project_id", data.project_id);
-    if (flagsRes.error) throw new Error(`Memo generation failed loading reconciliation_flags: ${flagsRes.error.message}`);
+    if (flagsRes.error)
+      throw new Error(
+        `Memo generation failed loading reconciliation_flags: ${flagsRes.error.message}`,
+      );
 
     const risksRes = await context.supabase
       .from("risk_register")
       .select("title,description,severity")
       .eq("project_id", data.project_id);
-    if (risksRes.error) throw new Error(`Memo generation failed loading risk_register: ${risksRes.error.message}`);
+    if (risksRes.error)
+      throw new Error(`Memo generation failed loading risk_register: ${risksRes.error.message}`);
 
     const documentsRes = await context.supabase
       .from("documents")
       .select("id,name,category")
       .eq("project_id", data.project_id);
-    if (documentsRes.error) throw new Error(`Memo generation failed loading documents: ${documentsRes.error.message}`);
+    if (documentsRes.error)
+      throw new Error(`Memo generation failed loading documents: ${documentsRes.error.message}`);
 
     const assumptions = assumptionsRes.data ?? [];
     const engineInputs = engineInputsRes.data ?? [];
@@ -99,13 +125,20 @@ export const generateMemo = createServerFn({ method: "POST" })
     const documents = documentsRes.data ?? [];
 
     if (!outputs.length) {
-      throw new Error("Run deterministic underwriting before generating a memo: the memo presents engine output, never numbers of its own.");
+      throw new Error(
+        "Run deterministic underwriting before generating a memo: the memo presents engine output, never numbers of its own.",
+      );
     }
 
     const outputValue = (scenario: string, key: string) =>
-      Number(outputs.find((row: any) => row.scenario_key === scenario && row.metric_key === key)?.value_numeric ?? 0);
+      Number(
+        outputs.find((row: any) => row.scenario_key === scenario && row.metric_key === key)
+          ?.value_numeric ?? 0,
+      );
     const errorFlags = flags.filter((f: any) => f.severity === "error" && !f.resolved);
-    const verdictRow = outputs.find((row: any) => row.scenario_key === "base" && row.metric_key === "verdict");
+    const verdictRow = outputs.find(
+      (row: any) => row.scenario_key === "base" && row.metric_key === "verdict",
+    );
     const verdict = computeInvestmentVerdict({
       equity_multiple: outputValue("base", "equity_multiple"),
       profit_margin: outputValue("base", "profit_margin"),
@@ -126,7 +159,14 @@ export const generateMemo = createServerFn({ method: "POST" })
     // view and the PDF/DOCX downloads.
     const { buildMemoReport, memoReportText } = await import("./memo-report");
     const report = buildMemoReport({
-      project, assumptions, engineInputs, outputs, flags, risks, documents, verdict,
+      project,
+      assumptions,
+      engineInputs,
+      outputs,
+      flags,
+      risks,
+      documents,
+      verdict,
       generationMode: generation_mode,
       generatedLabel: new Date().toLocaleString("en-US", { month: "long", year: "numeric" }),
     });
@@ -159,14 +199,18 @@ export const generateMemo = createServerFn({ method: "POST" })
     const cashFlowAllowed: AllowedValue[] = [];
     for (const c of cashFlows as any[]) {
       const v = Number(c.amount);
-      if (Number.isFinite(v)) cashFlowAllowed.push({ value: v, unit: "$" }, { value: -v, unit: "$" });
+      if (Number.isFinite(v))
+        cashFlowAllowed.push({ value: v, unit: "$" }, { value: -v, unit: "$" });
     }
     const allowed: AllowedValue[] = [
       ...buildAllowedValues(
         assumptions.map((a: any) => (a.value_numeric == null ? null : Number(a.value_numeric))),
         engineInputs.map((r: any) => (r.value_numeric == null ? null : Number(r.value_numeric))),
         outputs.map((o: any) => (o.value_numeric == null ? null : Number(o.value_numeric))),
-        flags.flatMap((f: any) => [f.expected == null ? null : Number(f.expected), f.actual == null ? null : Number(f.actual)]),
+        flags.flatMap((f: any) => [
+          f.expected == null ? null : Number(f.expected),
+          f.actual == null ? null : Number(f.actual),
+        ]),
         verdict.gates.map((g) => (g.actual == null ? null : Number(g.actual))),
         // Fixed gate thresholds quoted by the verdict
         [1.5, 15, 100, 1.2, 1.0],
@@ -182,7 +226,13 @@ export const generateMemo = createServerFn({ method: "POST" })
     if (aiAvailable) {
       const model = process.env.AGIR_AI_MODEL || DEFAULT_AI_MODEL;
       const contextBlock = {
-        project: { name: project.name, location: project.location, type: project.type, status: project.status, notes: project.notes },
+        project: {
+          name: project.name,
+          location: project.location,
+          type: project.type,
+          status: project.status,
+          notes: project.notes,
+        },
         approved_assumptions: assumptions,
         engine_inputs: engineInputs,
         financial_outputs: outputs,
@@ -211,14 +261,26 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
         });
         rawText = result.text;
       } catch (error) {
-        throw new Error(`Memo generation model call failed: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(
+          `Memo generation model call failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
       const parsed = parseMemoJson(rawText);
       memo = parsed.memo;
       parse_warning = parsed.parse_warning;
     } else {
       const { buildDeterministicMemo } = await import("./memo-template");
-      memo = buildDeterministicMemo({ project, assumptions, engineInputs, outputs, cashFlows, flags, risks, errorFlags, verdict });
+      memo = buildDeterministicMemo({
+        project,
+        assumptions,
+        engineInputs,
+        outputs,
+        cashFlows,
+        flags,
+        risks,
+        errorFlags,
+        verdict,
+      });
     }
 
     // ---- Output provenance verifier (deterministic, both paths) ----
@@ -240,9 +302,12 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
 
     // Provenance NEVER blocks creation: a failing AI memo is saved with
     // needs_review=true and its orphan tokens recorded for the reviewer.
-    const status = generation_mode === "deterministic"
-      ? "generated_deterministic"
-      : provenance.pass ? "generated" : "needs_review";
+    const status =
+      generation_mode === "deterministic"
+        ? "generated_deterministic"
+        : provenance.pass
+          ? "generated"
+          : "needs_review";
 
     const { data: row, error: insErr } = await context.supabase
       .from("investment_memos")
@@ -261,11 +326,14 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
         },
         verification_report: verificationReport,
       })
-      .select().single();
-    if (insErr) throw new Error(`Memo generation failed saving investment_memos: ${insErr.message}`);
+      .select()
+      .single();
+    if (insErr)
+      throw new Error(`Memo generation failed saving investment_memos: ${insErr.message}`);
 
     await context.supabase.from("activities").insert({
-      project_id: project.id, user_id: context.userId,
+      project_id: project.id,
+      user_id: context.userId,
       activity_type: "memo_generated",
       description: `Generated ${generation_mode === "deterministic" ? "deterministic-template" : "AI-assisted"} investment memo${provenance.pass ? " (provenance verified)" : `: NEEDS REVIEW: ${provenance.orphans.length} token(s) lack provenance`}`,
     });
@@ -274,10 +342,14 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
 
 export const listMemos = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
+  .inputValidator((d: { project_id: string }) =>
+    z.object({ project_id: z.string().uuid() }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
-      .from("investment_memos").select("*").eq("project_id", data.project_id)
+      .from("investment_memos")
+      .select("*")
+      .eq("project_id", data.project_id)
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return rows ?? [];
@@ -289,45 +361,74 @@ export const listMemos = createServerFn({ method: "GET" })
 // the button with a clear reason and developers can inspect the inputs.
 export const debugMemoReadiness = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
+  .inputValidator((d: { project_id: string }) =>
+    z.object({ project_id: z.string().uuid() }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     const { data: project } = await context.supabase
-      .from("projects").select("id,name").eq("id", data.project_id).maybeSingle();
+      .from("projects")
+      .select("id,name")
+      .eq("id", data.project_id)
+      .maybeSingle();
 
-    const count = async (table: "assumptions" | "underwriting_inputs" | "cash_flows" | "reconciliation_flags", filters?: (q: any) => any) => {
-      let q = context.supabase.from(table).select("*", { count: "exact", head: true }).eq("project_id", data.project_id);
+    const count = async (
+      table: "assumptions" | "underwriting_inputs" | "cash_flows" | "reconciliation_flags",
+      filters?: (q: any) => any,
+    ) => {
+      let q = context.supabase
+        .from(table)
+        .select("*", { count: "exact", head: true })
+        .eq("project_id", data.project_id);
       if (filters) q = filters(q);
       const { count: c } = await q;
       return c ?? 0;
     };
 
     const assumptions_count = await count("assumptions");
-    const engine_inputs_count = await count("underwriting_inputs", (q) => q.in("status", ["approved", "default_accepted", "calculated"]));
+    const engine_inputs_count = await count("underwriting_inputs", (q) =>
+      q.in("status", ["approved", "default_accepted", "calculated"]),
+    );
     const cash_flows_count = await count("cash_flows");
     const reconciliation_flags_count = await count("reconciliation_flags");
 
     const { data: outputs } = await context.supabase
-      .from("financial_outputs").select("scenario_key,metric_key,value_numeric,formula_text,inputs").eq("project_id", data.project_id);
+      .from("financial_outputs")
+      .select("scenario_key,metric_key,value_numeric,formula_text,inputs")
+      .eq("project_id", data.project_id);
     const financial_outputs_count = outputs?.length ?? 0;
     const base_outputs_count = (outputs ?? []).filter((o: any) => o.scenario_key === "base").length;
-    const combined_outputs_count = (outputs ?? []).filter((o: any) => o.scenario_key === "combined").length;
-    const verdictRow = (outputs ?? []).find((o: any) => o.scenario_key === "base" && o.metric_key === "verdict");
-    const latest_verdict = (verdictRow?.inputs as { code?: string } | null)?.code ?? verdictRow?.formula_text ?? null;
+    const combined_outputs_count = (outputs ?? []).filter(
+      (o: any) => o.scenario_key === "combined",
+    ).length;
+    const verdictRow = (outputs ?? []).find(
+      (o: any) => o.scenario_key === "base" && o.metric_key === "verdict",
+    );
+    const latest_verdict =
+      (verdictRow?.inputs as { code?: string } | null)?.code ?? verdictRow?.formula_text ?? null;
 
     const { data: flags } = await context.supabase
-      .from("reconciliation_flags").select("severity,resolved").eq("project_id", data.project_id);
-    const unresolved_error_flags_count = (flags ?? []).filter((f: any) => f.severity === "error" && !f.resolved).length;
+      .from("reconciliation_flags")
+      .select("severity,resolved")
+      .eq("project_id", data.project_id);
+    const unresolved_error_flags_count = (flags ?? []).filter(
+      (f: any) => f.severity === "error" && !f.resolved,
+    ).length;
 
     // Detect which optional columns the table actually has.
-    const probe = await context.supabase.from("investment_memos").select("verification_report,status").limit(1);
+    const probe = await context.supabase
+      .from("investment_memos")
+      .select("verification_report,status")
+      .limit(1);
     const investment_memos_columns_detected = probe.error
       ? ["content"]
       : ["content", "verification_report", "status"];
 
     const blocking_reasons: string[] = [];
     if (!project) blocking_reasons.push("Project not found.");
-    if (base_outputs_count === 0) blocking_reasons.push("Run deterministic underwriting before generating a memo.");
-    if (financial_outputs_count === 0) blocking_reasons.push("No financial outputs: run deterministic underwriting first.");
+    if (base_outputs_count === 0)
+      blocking_reasons.push("Run deterministic underwriting before generating a memo.");
+    if (financial_outputs_count === 0)
+      blocking_reasons.push("No financial outputs: run deterministic underwriting first.");
 
     const { hasAnthropicKey } = await import("./ai-gateway.server");
     const has_anthropic_key = hasAnthropicKey();

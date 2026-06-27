@@ -33,25 +33,30 @@ export function revenueSourceText(row: ParsedRentRollRow): string {
   return `${row.sourceCellRef}: ${parts.join(" | ")}`;
 }
 
-export function mapRevenueProgramRowToAssumptions(row: ParsedRentRollRow, sourceDocument: { name: string }): MappedCandidate[] {
+export function mapRevenueProgramRowToAssumptions(
+  row: ParsedRentRollRow,
+  sourceDocument: { name: string },
+): MappedCandidate[] {
   const source_text = revenueSourceText(row);
   const emit = (key: string, value: number | null, role: string): MappedCandidate[] => {
     if (value == null || !Number.isFinite(value)) return [];
     const def = ASSUMPTION_BY_KEY[key];
     if (!def) return [];
-    return [{
-      field_key: key,
-      value_numeric: value,
-      value_text: null,
-      unit: def.unit,
-      confidence: 98,
-      source_doc_name: sourceDocument.name,
-      source_text,
-      source_location: row.sourceCellRef,
-      matched_alias: role,
-      via: "alias" as const,
-      candidate_role: "rent_row" as const,
-    }];
+    return [
+      {
+        field_key: key,
+        value_numeric: value,
+        value_text: null,
+        unit: def.unit,
+        confidence: 98,
+        source_doc_name: sourceDocument.name,
+        source_text,
+        source_location: row.sourceCellRef,
+        matched_alias: role,
+        via: "alias" as const,
+        candidate_role: "rent_row" as const,
+      },
+    ];
   };
 
   // Other Income is a scalar, not a leasable component, and is reported ANNUAL.
@@ -60,9 +65,8 @@ export function mapRevenueProgramRowToAssumptions(row: ParsedRentRollRow, source
   // $/unit/month convention (count × rent × 12). Previously both branches
   // returned the raw figure, silently understating multi-unit other income 12x.
   if (isOtherIncome(row.unitType)) {
-    const annual = row.rentBasis === "per_unit" && row.unitCount > 1
-      ? row.unitCount * row.rent * 12
-      : row.rent;
+    const annual =
+      row.rentBasis === "per_unit" && row.unitCount > 1 ? row.unitCount * row.rent * 12 : row.rent;
     return emit("other_income_annual", annual, "Other income rent-roll row");
   }
 
@@ -71,7 +75,11 @@ export function mapRevenueProgramRowToAssumptions(row: ParsedRentRollRow, source
   if (legacy === "Residential") {
     return [
       ...emit("residential_units", row.unitCount, "Residential rent-roll row"),
-      ...emit("residential_rent_monthly", row.rentBasis === "per_unit" ? row.rent : null, "Residential rent-roll row"),
+      ...emit(
+        "residential_rent_monthly",
+        row.rentBasis === "per_unit" ? row.rent : null,
+        "Residential rent-roll row",
+      ),
       ...emit("residential_occupancy", row.occupancyPct, "Residential rent-roll row"),
     ];
   }

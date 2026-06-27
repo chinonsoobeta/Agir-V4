@@ -13,7 +13,8 @@ const scaleBudget = (input: UnderwritingInput, f: number): UnderwritingInput["bu
   hard: input.budget.hard * f,
   soft: input.budget.soft * f,
   contingency: input.budget.contingency * f,
-  financingInterest: input.budget.financingInterest == null ? undefined : input.budget.financingInterest * f,
+  financingInterest:
+    input.budget.financingInterest == null ? undefined : input.budget.financingInterest * f,
   other: input.budget.other == null ? undefined : input.budget.other * f,
 });
 
@@ -31,13 +32,35 @@ export type SensitivityVar = {
 };
 
 export const SENSITIVITY_VARS: SensitivityVar[] = [
-  { key: "interest_rate", label: "Interest Rate", unit: "%", bounds: [0, 25],
-    read: (i) => i.interestRatePct, set: (i, v) => ({ ...i, interestRatePct: clamp(v, 0, 40) }) },
-  { key: "exit_cap_rate", label: "Exit Cap Rate", unit: "%", bounds: [1, 15],
-    read: (i) => i.exitCapRatePct, set: (i, v) => ({ ...i, exitCapRatePct: clamp(v, 0.5, 20) }) },
-  { key: "expense_ratio", label: "Operating Expense Ratio", unit: "%", bounds: [0, 90],
-    read: (i) => i.expenseRatioPct, set: (i, v) => ({ ...i, expenseRatioPct: clamp(v, 0, 95) }) },
-  { key: "stabilized_occupancy", label: "Stabilized Occupancy", unit: "%", bounds: [40, 100],
+  {
+    key: "interest_rate",
+    label: "Interest Rate",
+    unit: "%",
+    bounds: [0, 25],
+    read: (i) => i.interestRatePct,
+    set: (i, v) => ({ ...i, interestRatePct: clamp(v, 0, 40) }),
+  },
+  {
+    key: "exit_cap_rate",
+    label: "Exit Cap Rate",
+    unit: "%",
+    bounds: [1, 15],
+    read: (i) => i.exitCapRatePct,
+    set: (i, v) => ({ ...i, exitCapRatePct: clamp(v, 0.5, 20) }),
+  },
+  {
+    key: "expense_ratio",
+    label: "Operating Expense Ratio",
+    unit: "%",
+    bounds: [0, 90],
+    read: (i) => i.expenseRatioPct,
+    set: (i, v) => ({ ...i, expenseRatioPct: clamp(v, 0, 95) }),
+  },
+  {
+    key: "stabilized_occupancy",
+    label: "Stabilized Occupancy",
+    unit: "%",
+    bounds: [40, 100],
     read: (i) => i.stabilizedOccupancyPct,
     set: (i, v) => {
       const nv = clamp(v, 0, 100);
@@ -46,45 +69,106 @@ export const SENSITIVITY_VARS: SensitivityVar[] = [
         ...i,
         stabilizedOccupancyPct: nv,
         revenueProgram: i.revenueProgram.map((r) =>
-          r.occupancyPct == null ? r : { ...r, occupancyPct: clamp(r.occupancyPct + delta, 0, 100) },
+          r.occupancyPct == null
+            ? r
+            : { ...r, occupancyPct: clamp(r.occupancyPct + delta, 0, 100) },
         ),
       };
-    } },
-  { key: "rent_growth", label: "Annual Rent Growth", unit: "%", bounds: [-20, 20],
-    read: (i) => i.rentGrowthPct, set: (i, v) => ({ ...i, rentGrowthPct: clamp(v, -50, 50) }) },
-  { key: "selling_costs", label: "Disposition Costs", unit: "%", bounds: [0, 20],
-    read: (i) => i.sellingCostsPct, set: (i, v) => ({ ...i, sellingCostsPct: clamp(v, 0, 50) }) },
-  { key: "loan_amount", label: "Loan Amount", unit: "$",
-    read: (i) => i.loanAmount, set: (i, v) => ({ ...i, loanAmount: Math.max(0, v) }) },
-  { key: "hold_years", label: "Hold Period", unit: "yr", bounds: [1, 15],
-    read: (i) => i.holdYears, set: (i, v) => ({ ...i, holdYears: Math.max(1, Math.round(v)) }) },
-  { key: "rent_level", label: "Rent Level (index)", unit: "index", bounds: [50, 150],
+    },
+  },
+  {
+    key: "rent_growth",
+    label: "Annual Rent Growth",
+    unit: "%",
+    bounds: [-20, 20],
+    read: (i) => i.rentGrowthPct,
+    set: (i, v) => ({ ...i, rentGrowthPct: clamp(v, -50, 50) }),
+  },
+  {
+    key: "selling_costs",
+    label: "Disposition Costs",
+    unit: "%",
+    bounds: [0, 20],
+    read: (i) => i.sellingCostsPct,
+    set: (i, v) => ({ ...i, sellingCostsPct: clamp(v, 0, 50) }),
+  },
+  {
+    key: "loan_amount",
+    label: "Loan Amount",
+    unit: "$",
+    read: (i) => i.loanAmount,
+    set: (i, v) => ({ ...i, loanAmount: Math.max(0, v) }),
+  },
+  {
+    key: "hold_years",
+    label: "Hold Period",
+    unit: "yr",
+    bounds: [1, 15],
+    read: (i) => i.holdYears,
+    set: (i, v) => ({ ...i, holdYears: Math.max(1, Math.round(v)) }),
+  },
+  {
+    key: "rent_level",
+    label: "Rent Level (index)",
+    unit: "index",
+    bounds: [50, 150],
     read: () => 100,
     set: (i, pct) => ({
       ...i,
       revenueProgram: i.revenueProgram.map((r) => ({ ...r, rent: r.rent * (pct / 100) })),
       otherIncomeAnnual: i.otherIncomeAnnual * (pct / 100),
-    }) },
-  { key: "cost_level", label: "Cost Level (index)", unit: "index", bounds: [50, 150],
-    read: () => 100, set: (i, pct) => ({ ...i, budget: scaleBudget(i, pct / 100) }) },
+    }),
+  },
+  {
+    key: "cost_level",
+    label: "Cost Level (index)",
+    unit: "index",
+    bounds: [50, 150],
+    read: () => 100,
+    set: (i, pct) => ({ ...i, budget: scaleBudget(i, pct / 100) }),
+  },
 ];
 
-const VAR_BY_KEY: Record<string, SensitivityVar> = Object.fromEntries(SENSITIVITY_VARS.map((v) => [v.key, v]));
+const VAR_BY_KEY: Record<string, SensitivityVar> = Object.fromEntries(
+  SENSITIVITY_VARS.map((v) => [v.key, v]),
+);
 
-export type SensitivityMetric = { key: string; label: string; unit: "%" | "x" | "$"; read: (o: EngineOutput) => number };
+export type SensitivityMetric = {
+  key: string;
+  label: string;
+  unit: "%" | "x" | "$";
+  read: (o: EngineOutput) => number;
+};
 
 export const SENSITIVITY_METRICS: SensitivityMetric[] = [
   { key: "irr", label: "Levered IRR", unit: "%", read: (o) => o.values.irrPct },
-  { key: "equity_multiple", label: "Equity Multiple", unit: "x", read: (o) => o.values.equityMultiple },
+  {
+    key: "equity_multiple",
+    label: "Equity Multiple",
+    unit: "x",
+    read: (o) => o.values.equityMultiple,
+  },
   { key: "dscr", label: "DSCR", unit: "x", read: (o) => o.values.dscr },
-  { key: "profit_on_cost", label: "Profit on Cost", unit: "%", read: (o) => o.values.profitOnCostPct },
+  {
+    key: "profit_on_cost",
+    label: "Profit on Cost",
+    unit: "%",
+    read: (o) => o.values.profitOnCostPct,
+  },
   { key: "yield_on_cost", label: "Yield on Cost", unit: "%", read: (o) => o.values.yieldOnCostPct },
-  { key: "development_profit", label: "Development Profit", unit: "$", read: (o) => o.values.developmentProfit },
+  {
+    key: "development_profit",
+    label: "Development Profit",
+    unit: "$",
+    read: (o) => o.values.developmentProfit,
+  },
   { key: "debt_yield", label: "Debt Yield", unit: "%", read: (o) => o.values.debtYieldPct },
   { key: "cash_on_cash", label: "Cash-on-Cash", unit: "%", read: (o) => o.values.cashOnCashPct },
 ];
 
-const METRIC_BY_KEY: Record<string, SensitivityMetric> = Object.fromEntries(SENSITIVITY_METRICS.map((m) => [m.key, m]));
+const METRIC_BY_KEY: Record<string, SensitivityMetric> = Object.fromEntries(
+  SENSITIVITY_METRICS.map((m) => [m.key, m]),
+);
 
 function getVar(key: string): SensitivityVar {
   const v = VAR_BY_KEY[key];
@@ -99,7 +183,12 @@ function getMetric(key: string): SensitivityMetric {
 
 // A single deterministic re-run: set the driver to `value`, run the engine, read
 // the metric.
-export function runPoint(input: UnderwritingInput, varKey: string, value: number, metricKey: string): number {
+export function runPoint(
+  input: UnderwritingInput,
+  varKey: string,
+  value: number,
+  metricKey: string,
+): number {
   const v = getVar(varKey);
   const m = getMetric(metricKey);
   return m.read(runUnderwriting(v.set(input, value)));
@@ -137,7 +226,17 @@ export function tornado(
     const highValue = m.read(runUnderwriting(v.set(input, high)));
     const lo = Number.isFinite(lowValue) ? lowValue : baseMetric;
     const hi = Number.isFinite(highValue) ? highValue : baseMetric;
-    return { key: k, label: v.label, unit: m.unit, base, low, high, lowValue, highValue, swing: Math.abs(hi - lo) };
+    return {
+      key: k,
+      label: v.label,
+      unit: m.unit,
+      base,
+      low,
+      high,
+      lowValue,
+      highValue,
+      swing: Math.abs(hi - lo),
+    };
   });
   return bars.sort((a, b) => b.swing - a.swing);
 }
@@ -161,7 +260,7 @@ export function breakeven(
   if (!(hi0 > lo0)) return null;
   const f = (x: number) => m.read(runUnderwriting(v.set(input, x))) - target;
   let flo = f(lo0);
-  let fhi = f(hi0);
+  const fhi = f(hi0);
   if (!Number.isFinite(flo) || !Number.isFinite(fhi)) return null;
   if (flo === 0) return { value: lo0, metricAtValue: target, iterations: 0 };
   if (fhi === 0) return { value: hi0, metricAtValue: target, iterations: 0 };
@@ -172,7 +271,8 @@ export function breakeven(
     const mid = (lo + hi) / 2;
     const fm = f(mid);
     if (!Number.isFinite(fm)) return null;
-    if (Math.abs(fm) < 1e-7 || (hi - lo) / 2 < 1e-7) return { value: mid, metricAtValue: fm + target, iterations: i };
+    if (Math.abs(fm) < 1e-7 || (hi - lo) / 2 < 1e-7)
+      return { value: mid, metricAtValue: fm + target, iterations: i };
     if (flo * fm <= 0) {
       hi = mid;
     } else {

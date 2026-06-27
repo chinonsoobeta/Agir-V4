@@ -12,21 +12,45 @@ describe("reconciliation GPR uses the engine's unit convention", () => {
   test("per_sf rent is annual $/SF (no x12); per_unit rent is $/unit/month (x12)", () => {
     // Retail: 18,000 SF @ $42 annual $/SF = $756,000 (NOT $9.07M).
     expect(
-      computeRevenueGpr([{ rent_basis: "per_sf", avg_sf: 18_000, market_rent_monthly: 42, unit_count: 1 }]),
+      computeRevenueGpr([
+        { rent_basis: "per_sf", avg_sf: 18_000, market_rent_monthly: 42, unit_count: 1 },
+      ]),
     ).toBe(18_000 * 42);
     // Residential: 220 units @ $2,000/unit/month = $5,280,000 (annualized x12).
     expect(
-      computeRevenueGpr([{ rent_basis: "per_unit", avg_sf: null, market_rent_monthly: 2_000, unit_count: 220 }]),
+      computeRevenueGpr([
+        { rent_basis: "per_unit", avg_sf: null, market_rent_monthly: 2_000, unit_count: 220 },
+      ]),
     ).toBe(220 * 2_000 * 12);
   });
 
   test("computeRevenueGpr equals the engine's componentGpr for both bases (no drift)", () => {
-    expect(computeRevenueGpr([{ rent_basis: "per_sf", avg_sf: 32_000, market_rent_monthly: 36, unit_count: 1 }])).toBe(
-      componentGpr({ unitType: "Office", unitCount: 1, avgSf: 32_000, rent: 36, rentBasis: "per_sf" }),
+    expect(
+      computeRevenueGpr([
+        { rent_basis: "per_sf", avg_sf: 32_000, market_rent_monthly: 36, unit_count: 1 },
+      ]),
+    ).toBe(
+      componentGpr({
+        unitType: "Office",
+        unitCount: 1,
+        avgSf: 32_000,
+        rent: 36,
+        rentBasis: "per_sf",
+      }),
     );
     expect(
-      computeRevenueGpr([{ rent_basis: "per_unit", avg_sf: null, market_rent_monthly: 2_600, unit_count: 50 }]),
-    ).toBe(componentGpr({ unitType: "2BR", unitCount: 50, avgSf: null, rent: 2_600, rentBasis: "per_unit" }));
+      computeRevenueGpr([
+        { rent_basis: "per_unit", avg_sf: null, market_rent_monthly: 2_600, unit_count: 50 },
+      ]),
+    ).toBe(
+      componentGpr({
+        unitType: "2BR",
+        unitCount: 50,
+        avgSf: null,
+        rent: 2_600,
+        rentBasis: "per_unit",
+      }),
+    );
   });
 
   test("a mixed-use program sums per-component GPR without 12x-ing the per_sf lines", () => {

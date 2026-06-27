@@ -5,16 +5,24 @@
 // re-run; it computes nothing itself.
 
 import { useMemo, useState } from "react";
-import { runUnderwriting, buildScheduleGrid, type ScheduleGridCell, type UnderwritingInput } from "@/lib/engine";
+import {
+  runUnderwriting,
+  buildScheduleGrid,
+  type ScheduleGridCell,
+  type UnderwritingInput,
+} from "@/lib/engine";
 import { Card } from "@/components/ui/card";
 import { Eyebrow } from "@/components/decision-ui";
 import { Table2 } from "lucide-react";
 
 const money = (n: number) =>
   (n < 0 ? "-" : "") +
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1 }).format(
-    Math.abs(n),
-  );
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(Math.abs(n));
 
 type Selected = { rowLabel: string; period: number; phase: string; cell: ScheduleGridCell };
 
@@ -27,7 +35,9 @@ export function ScheduleGrid({ input }: { input: UnderwritingInput }) {
 
   if (!grid) {
     return (
-      <Card className="p-6 text-sm text-muted-foreground">The monthly schedule is unavailable for this deal.</Card>
+      <Card className="p-6 text-sm text-muted-foreground">
+        The monthly schedule is unavailable for this deal.
+      </Card>
     );
   }
 
@@ -54,23 +64,31 @@ export function ScheduleGrid({ input }: { input: UnderwritingInput }) {
             <tr className="bg-muted/20">
               <th className="text-left sticky left-0 bg-muted/20 z-10">Line item \ month</th>
               {Array.from({ length: grid.months }, (_, m) => (
-                <th key={m} className="text-right num text-muted-foreground">{m + 1}</th>
+                <th key={m} className="text-right num text-muted-foreground">
+                  {m + 1}
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {grid.rows.map((row) => (
               <tr key={row.key}>
-                <td className="font-medium whitespace-nowrap sticky left-0 bg-background z-10">{row.label}</td>
+                <td className="font-medium whitespace-nowrap sticky left-0 bg-background z-10">
+                  {row.label}
+                </td>
                 {row.cells.map((cell, period) => (
                   <td key={period} className="text-right num p-0">
                     {cell ? (
                       <button
                         type="button"
                         title={cell.formula_text}
-                        onClick={() => setSelected({ rowLabel: row.label, period, phase: phaseOf(period), cell })}
+                        onClick={() =>
+                          setSelected({ rowLabel: row.label, period, phase: phaseOf(period), cell })
+                        }
                         className={`w-full h-full px-2 py-1 text-right hover:bg-primary/15 transition-colors ${
-                          selected?.rowLabel === row.label && selected?.period === period ? "bg-primary/25" : ""
+                          selected?.rowLabel === row.label && selected?.period === period
+                            ? "bg-primary/25"
+                            : ""
                         } ${cell.amount < 0 ? "text-destructive" : ""}`}
                       >
                         {money(cell.amount)}
@@ -90,12 +108,19 @@ export function ScheduleGrid({ input }: { input: UnderwritingInput }) {
         <Card className="mt-3 p-4 border-primary/40">
           <div className="flex items-start justify-between">
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Cell provenance</div>
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                Cell provenance
+              </div>
               <div className="text-sm font-medium mt-1">
-                {selected.rowLabel} · month {selected.period + 1}{selected.phase ? ` (${selected.phase})` : ""}
+                {selected.rowLabel} · month {selected.period + 1}
+                {selected.phase ? ` (${selected.phase})` : ""}
               </div>
             </div>
-            <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setSelected(null)}>
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setSelected(null)}
+            >
               Dismiss
             </button>
           </div>

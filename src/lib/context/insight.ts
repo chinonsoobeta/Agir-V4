@@ -8,7 +8,12 @@ import type { EngineOutput, UnderwritingInput } from "../engine/types";
 import { deriveDealContext } from "./deal-context";
 import { interpretDeal } from "./interpret";
 import { buildAttribution, type Attribution, type Covenants } from "./attribution";
-import { getInsightProvider, type Audience, type NarrativeFacts, type NarrativeInput } from "./narrative";
+import {
+  getInsightProvider,
+  type Audience,
+  type NarrativeFacts,
+  type NarrativeInput,
+} from "./narrative";
 import type { BenchmarkInputs, DealContext, Interpretation } from "./types";
 
 export type InsightBundle = {
@@ -28,7 +33,11 @@ export type BuildInsightOptions = {
   verdictCode?: string;
 };
 
-export function buildInsight(output: EngineOutput, input: UnderwritingInput, opts: BuildInsightOptions = {}): InsightBundle {
+export function buildInsight(
+  output: EngineOutput,
+  input: UnderwritingInput,
+  opts: BuildInsightOptions = {},
+): InsightBundle {
   const context = deriveDealContext(input, opts.meta ?? {});
   const interpretations = interpretDeal(output, context, opts.benchInputs);
   const attribution = buildAttribution(output, input, context, opts.benchInputs, opts.covenants);

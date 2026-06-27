@@ -57,7 +57,12 @@ export function readSheetRows(ws: XLSX.WorkSheet): { rows: SheetRow[]; mergedCel
 // = better match). 0 means "not this table".
 export type HeaderScorer = (cells: string[]) => number;
 
-const lower = (row: SheetRow | undefined): string[] => (row ?? []).map((c) => String(c ?? "").trim().toLowerCase());
+const lower = (row: SheetRow | undefined): string[] =>
+  (row ?? []).map((c) =>
+    String(c ?? "")
+      .trim()
+      .toLowerCase(),
+  );
 
 // Real workbooks often put a merged title / "$ in thousands" caption above the
 // real header row. Scan the first few rows and pick the best-scoring one as the

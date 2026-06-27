@@ -604,7 +604,9 @@ function DealTable({
                   >
                     {deal.name}
                   </Link>
-                  <div className="text-[11px] text-muted-foreground">{deal.location || "Not available"}</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {deal.location || "Not available"}
+                  </div>
                 </td>
                 {show("stage") && (
                   <td>

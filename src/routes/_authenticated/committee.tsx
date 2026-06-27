@@ -11,7 +11,9 @@ const projectsQ = queryOptions({ queryKey: ["projects"], queryFn: () => listProj
 
 export const Route = createFileRoute("/_authenticated/committee")({
   head: () => ({ meta: [{ title: "Investment Committee | Agir" }] }),
-  validateSearch: (s: Record<string, unknown>) => ({ deal: typeof s.deal === "string" ? s.deal : undefined }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    deal: typeof s.deal === "string" ? s.deal : undefined,
+  }),
   loader: ({ context }) => context.queryClient.ensureQueryData(projectsQ),
   component: CommitteePage,
 });
@@ -28,10 +30,16 @@ function CommitteePage() {
 
   return (
     <>
-      <PageHeader eyebrow="Decision" title="Investment Committee" subtitle="Recommendation, conditions, and the recorded decision: with a permanent audit trail." />
+      <PageHeader
+        eyebrow="Decision"
+        title="Investment Committee"
+        subtitle="Recommendation, conditions, and the recorded decision: with a permanent audit trail."
+      />
       <div className="p-8 space-y-5">
         {projects.length === 0 ? (
-          <Card className="p-16 text-center elevated"><p className="text-sm text-muted-foreground">No deals to bring to committee yet.</p></Card>
+          <Card className="p-16 text-center elevated">
+            <p className="text-sm text-muted-foreground">No deals to bring to committee yet.</p>
+          </Card>
         ) : (
           <>
             <DealSelector projects={projects} value={dealId} onChange={setDealId} />

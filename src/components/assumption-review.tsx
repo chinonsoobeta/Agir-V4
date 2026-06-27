@@ -4,7 +4,13 @@
 import { useState } from "react";
 import { useSuspenseQuery, useMutation, useQueryClient, queryOptions } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listAssumptions, listAssumptionVersions, reviewAssumption, extractAssumptions, getReadiness } from "@/lib/assumptions.functions";
+import {
+  listAssumptions,
+  listAssumptionVersions,
+  reviewAssumption,
+  extractAssumptions,
+  getReadiness,
+} from "@/lib/assumptions.functions";
 import { runFullUnderwriting } from "@/lib/underwriting.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,12 +19,30 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Check, X, Edit3, Eye, History, Sparkles, RefreshCw, AlertCircle, Calculator } from "lucide-react";
+import {
+  Check,
+  X,
+  Edit3,
+  Eye,
+  History,
+  Sparkles,
+  RefreshCw,
+  AlertCircle,
+  Calculator,
+} from "lucide-react";
 import { REQUIRED_KEYS } from "@/lib/assumption-taxonomy";
 import { toast } from "sonner";
 
-const assumptionsQ = (pid: string) => queryOptions({ queryKey: ["assumptions", pid], queryFn: () => listAssumptions({ data: { project_id: pid } }) });
-const readinessQ = (pid: string) => queryOptions({ queryKey: ["readiness", pid], queryFn: () => getReadiness({ data: { project_id: pid } }) });
+const assumptionsQ = (pid: string) =>
+  queryOptions({
+    queryKey: ["assumptions", pid],
+    queryFn: () => listAssumptions({ data: { project_id: pid } }),
+  });
+const readinessQ = (pid: string) =>
+  queryOptions({
+    queryKey: ["readiness", pid],
+    queryFn: () => getReadiness({ data: { project_id: pid } }),
+  });
 
 const STATUS_STYLES: Record<string, string> = {
   approved: "bg-success/20 text-success border-success/30",
@@ -31,14 +55,22 @@ const STATUS_STYLES: Record<string, string> = {
   conflicting: "bg-destructive/20 text-destructive border-destructive/30",
 };
 const BAND_STYLES: Record<string, string> = {
-  high: "text-success", medium: "text-chart-5", low: "text-destructive", missing: "text-muted-foreground",
+  high: "text-success",
+  medium: "text-chart-5",
+  low: "text-destructive",
+  missing: "text-muted-foreground",
 };
 
 function fmt(a: any) {
   if (a.value_numeric == null && !a.value_text) return "Not available";
   if (a.value_text) return a.value_text;
   const n = Number(a.value_numeric);
-  if (a.unit === "$") return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+  if (a.unit === "$")
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    }).format(n);
   if (a.unit === "%") return `${n}%`;
   if (a.unit === "x") return `${n}x`;
   return `${n.toLocaleString()} ${a.unit ?? ""}`.trim();
@@ -46,8 +78,37 @@ function fmt(a: any) {
 
 // Conservative pick per field (taxonomy key). Mirrors the engine's
 // conservativePick direction so the UI and the deterministic resolver agree.
-const CONSERVATIVE_MAX_KEYS = new Set(["exit_cap_rate", "opex_ratio", "interest_rate", "disposition_cost_pct", "equity_amount", "land_cost", "hard_costs", "soft_costs", "contingency", "financing_costs", "total_project_cost"]);
-const CONSERVATIVE_MIN_KEYS = new Set(["debt_amount", "stabilized_occupancy", "residential_occupancy", "retail_occupancy", "office_occupancy", "dry_warehouse_occupancy", "cold_storage_occupancy", "last_mile_flex_occupancy", "residential_rent_monthly", "retail_rent_psf", "office_rent_psf", "dry_warehouse_rent_psf", "cold_storage_rent_psf", "last_mile_flex_rent_psf", "rent_growth", "other_income_annual"]);
+const CONSERVATIVE_MAX_KEYS = new Set([
+  "exit_cap_rate",
+  "opex_ratio",
+  "interest_rate",
+  "disposition_cost_pct",
+  "equity_amount",
+  "land_cost",
+  "hard_costs",
+  "soft_costs",
+  "contingency",
+  "financing_costs",
+  "total_project_cost",
+]);
+const CONSERVATIVE_MIN_KEYS = new Set([
+  "debt_amount",
+  "stabilized_occupancy",
+  "residential_occupancy",
+  "retail_occupancy",
+  "office_occupancy",
+  "dry_warehouse_occupancy",
+  "cold_storage_occupancy",
+  "last_mile_flex_occupancy",
+  "residential_rent_monthly",
+  "retail_rent_psf",
+  "office_rent_psf",
+  "dry_warehouse_rent_psf",
+  "cold_storage_rent_psf",
+  "last_mile_flex_rent_psf",
+  "rent_growth",
+  "other_income_annual",
+]);
 function conservativeValue(fieldKey: string, values: number[]): number | null {
   if (!values.length) return null;
   if (CONSERVATIVE_MAX_KEYS.has(fieldKey)) return Math.max(...values);
@@ -76,9 +137,13 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
   const mode = aiMode ? "ai" : ("deterministic" as const);
   const confidenceCounts = assumptions.reduce(
     (acc, a) => {
-      const band = a.confidence_band === "high" || a.confidence_band === "medium" || a.confidence_band === "low" || a.confidence_band === "missing"
-        ? a.confidence_band
-        : "missing";
+      const band =
+        a.confidence_band === "high" ||
+        a.confidence_band === "medium" ||
+        a.confidence_band === "low" ||
+        a.confidence_band === "missing"
+          ? a.confidence_band
+          : "missing";
       acc[band] += 1;
       return acc;
     },
@@ -99,7 +164,9 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
     onSuccess: (r: any) => {
       invalidate();
       setReport(r);
-      toast.success(`Pipeline complete (${r.analysis_mode === "ai" ? "AI" : "deterministic"}): ${r.found} found · ${r.conflicting} conflicting · ${r.missing} missing`);
+      toast.success(
+        `Pipeline complete (${r.analysis_mode === "ai" ? "AI" : "deterministic"}): ${r.found} found · ${r.conflicting} conflicting · ${r.missing} missing`,
+      );
       if (r.ai_note) toast.message(r.ai_note);
     },
     onError: (e: Error) => toast.error(e.message),
@@ -108,21 +175,29 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
     mutationFn: () => recomputeFn({ data: { project_id: projectId, mode } }),
     onSuccess: (r: any) => {
       invalidate();
-      if (r.blocked) toast.error("Underwriting is blocked: resolve missing/conflicting inputs first.");
-      else toast.success(`Underwriting recomputed (${r.analysis_mode === "ai" ? "AI" : "deterministic"})`);
+      if (r.blocked)
+        toast.error("Underwriting is blocked: resolve missing/conflicting inputs first.");
+      else
+        toast.success(
+          `Underwriting recomputed (${r.analysis_mode === "ai" ? "AI" : "deterministic"})`,
+        );
       if (r.ai_note) toast.message(r.ai_note);
     },
     onError: (e: Error) => toast.error(e.message),
   });
   const review = useMutation({
     mutationFn: (d: any) => reviewFn({ data: d }),
-    onSuccess: () => { invalidate(); toast.success("Updated"); },
+    onSuccess: () => {
+      invalidate();
+      toast.success("Updated");
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
   // Group by category
   const grouped = assumptions.reduce<Record<string, any[]>>((acc, a) => {
-    (acc[a.category || "Other"] ||= []).push(a); return acc;
+    (acc[a.category || "Other"] ||= []).push(a);
+    return acc;
   }, {});
 
   // Conflicts get a dedicated resolution center; required inputs are surfaced as critical.
@@ -135,7 +210,9 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
       <Card className="p-5">
         <div className="grid md:grid-cols-5 gap-4 items-center">
           <div className="col-span-2">
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Deal Readiness Score</div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              Deal Readiness Score
+            </div>
             <div className="flex items-baseline gap-3 mt-1">
               <div className="num text-4xl text-primary">{readiness.score}</div>
               <div className="text-xs text-muted-foreground">/ 100</div>
@@ -145,23 +222,34 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
             </div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Approved</div>
-            <div className="num text-lg mt-1">{readiness.approved} / {readiness.total}</div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              Approved
+            </div>
+            <div className="num text-lg mt-1">
+              {readiness.approved} / {readiness.total}
+            </div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Avg Confidence</div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              Avg Confidence
+            </div>
             <div className="num text-lg mt-1">{readiness.avg_confidence}%</div>
           </div>
           <div className="flex flex-col gap-2">
             {/* Analysis mode: AI by default, deterministic engine as backup. */}
-            <div className="inline-flex rounded-md border border-border p-0.5 text-[11px] font-medium" role="group" aria-label="Analysis mode">
+            <div
+              className="inline-flex rounded-md border border-border p-0.5 text-[11px] font-medium"
+              role="group"
+              aria-label="Analysis mode"
+            >
               <button
                 type="button"
                 onClick={() => setAiMode(true)}
                 aria-pressed={aiMode}
                 className={`inline-flex items-center gap-1 rounded px-2 py-1 transition-colors ${aiMode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
-                <Sparkles className="size-3" />AI
+                <Sparkles className="size-3" />
+                AI
               </button>
               <button
                 type="button"
@@ -169,14 +257,22 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
                 aria-pressed={!aiMode}
                 className={`inline-flex items-center gap-1 rounded px-2 py-1 transition-colors ${!aiMode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
-                <Calculator className="size-3" />Engine
+                <Calculator className="size-3" />
+                Engine
               </button>
             </div>
             <Button size="sm" onClick={() => extract.mutate()} disabled={extract.isPending}>
-              <Sparkles className="size-4 mr-1" />{extract.isPending ? "Extracting…" : "Run Extraction"}
+              <Sparkles className="size-4 mr-1" />
+              {extract.isPending ? "Extracting…" : "Run Extraction"}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => recompute.mutate()} disabled={recompute.isPending}>
-              <RefreshCw className="size-4 mr-1" />{recompute.isPending ? "Computing…" : "Recompute model"}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => recompute.mutate()}
+              disabled={recompute.isPending}
+            >
+              <RefreshCw className="size-4 mr-1" />
+              {recompute.isPending ? "Computing…" : "Recompute model"}
             </Button>
           </div>
         </div>
@@ -191,8 +287,12 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
           <div className="mt-4 flex items-start gap-2 text-xs text-chart-5 bg-chart-5/5 border border-chart-5/20 rounded p-3">
             <AlertCircle className="size-4 shrink-0 mt-0.5" />
             <div>
-              <div className="font-semibold uppercase tracking-widest">Missing required assumptions</div>
-              <div className="mt-1 text-muted-foreground">{readiness.missing_required.join(" · ")}</div>
+              <div className="font-semibold uppercase tracking-widest">
+                Missing required assumptions
+              </div>
+              <div className="mt-1 text-muted-foreground">
+                {readiness.missing_required.join(" · ")}
+              </div>
             </div>
           </div>
         )}
@@ -206,43 +306,95 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
         <Card className="p-5 border-destructive/40 bg-destructive/5">
           <div className="flex items-center gap-2 text-destructive">
             <AlertCircle className="size-4" />
-            <span className="text-[10px] uppercase tracking-widest font-semibold">Conflict Resolution Center · {conflicts.length}</span>
+            <span className="text-[10px] uppercase tracking-widest font-semibold">
+              Conflict Resolution Center · {conflicts.length}
+            </span>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">These inputs have conflicting documented values and block underwriting. Pick one: values are never averaged.</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            These inputs have conflicting documented values and block underwriting. Pick one: values
+            are never averaged.
+          </p>
           <div className="mt-3 grid md:grid-cols-2 gap-3">
             {conflicts.map((a) => {
               const values = (Array.isArray(a.conflict_values) ? a.conflict_values : [])
-                .map((cv: any) => ({ value: typeof cv === "object" ? cv.value : cv, source: typeof cv === "object" ? cv.source : null }))
+                .map((cv: any) => ({
+                  value: typeof cv === "object" ? cv.value : cv,
+                  source: typeof cv === "object" ? cv.source : null,
+                }))
                 .filter((cv: any) => Number.isFinite(Number(cv.value)));
-              const conservative = conservativeValue(a.field_key, values.map((v: any) => Number(v.value)));
+              const conservative = conservativeValue(
+                a.field_key,
+                values.map((v: any) => Number(v.value)),
+              );
               return (
-                <div key={a.id} className="rounded-lg border border-destructive/30 bg-background p-3">
+                <div
+                  key={a.id}
+                  className="rounded-lg border border-destructive/30 bg-background p-3"
+                >
                   <div className="text-sm font-medium">{a.field_label}</div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {values.map((cv: any, i: number) => {
                       const supersede = isInterestKey(a.field_key) && supersedingSource(cv.source);
                       return (
-                        <Button key={i} size="sm" variant="outline" disabled={review.isPending}
+                        <Button
+                          key={i}
+                          size="sm"
+                          variant="outline"
+                          disabled={review.isPending}
                           className={supersede ? "border-warning/50" : ""}
-                          title={supersede ? "Likely supersedes earlier term sheet" : cv.source || ""}
-                          onClick={() => review.mutate({ id: a.id, action: "modify", value_numeric: Number(cv.value), change_reason: `Resolved conflict → ${cv.value}` })}>
+                          title={
+                            supersede ? "Likely supersedes earlier term sheet" : cv.source || ""
+                          }
+                          onClick={() =>
+                            review.mutate({
+                              id: a.id,
+                              action: "modify",
+                              value_numeric: Number(cv.value),
+                              change_reason: `Resolved conflict → ${cv.value}`,
+                            })
+                          }
+                        >
                           <span className="num">{Number(cv.value).toLocaleString()}</span>
-                          {cv.source && <span className="text-[10px] text-muted-foreground ml-1.5 max-w-[110px] truncate">{cv.source}</span>}
-                          {supersede && <span className="text-[9px] text-warning ml-1 uppercase tracking-wider">supersedes</span>}
+                          {cv.source && (
+                            <span className="text-[10px] text-muted-foreground ml-1.5 max-w-[110px] truncate">
+                              {cv.source}
+                            </span>
+                          )}
+                          {supersede && (
+                            <span className="text-[9px] text-warning ml-1 uppercase tracking-wider">
+                              supersedes
+                            </span>
+                          )}
                         </Button>
                       );
                     })}
                     {conservative != null && (
-                      <Button size="sm" disabled={review.isPending}
-                        onClick={() => review.mutate({ id: a.id, action: "modify", value_numeric: conservative, change_reason: `Resolved conflict → conservative ${conservative}` })}>
+                      <Button
+                        size="sm"
+                        disabled={review.isPending}
+                        onClick={() =>
+                          review.mutate({
+                            id: a.id,
+                            action: "modify",
+                            value_numeric: conservative,
+                            change_reason: `Resolved conflict → conservative ${conservative}`,
+                          })
+                        }
+                      >
                         Use conservative ({conservative.toLocaleString()})
                       </Button>
                     )}
-                    <Button size="sm" variant="ghost" onClick={() => setEditOf(a)}>Enter value…</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setEditOf(a)}>
+                      Enter value…
+                    </Button>
                   </div>
-                  {isInterestKey(a.field_key) && values.some((cv: any) => supersedingSource(cv.source)) && (
-                    <p className="text-[10px] text-warning mt-2">A rate lock / addendum value is present and likely supersedes the earlier term sheet rate. Confirm before resolving: not auto-applied.</p>
-                  )}
+                  {isInterestKey(a.field_key) &&
+                    values.some((cv: any) => supersedingSource(cv.source)) && (
+                      <p className="text-[10px] text-warning mt-2">
+                        A rate lock / addendum value is present and likely supersedes the earlier
+                        term sheet rate. Confirm before resolving: not auto-applied.
+                      </p>
+                    )}
                 </div>
               );
             })}
@@ -253,14 +405,23 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
       {/* Critical Assumptions: required fields driving the recommendation */}
       {critical.length > 0 && (
         <Card className="p-5 elevated">
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Critical Assumptions</div>
-          <p className="text-xs text-muted-foreground mt-1">Required inputs the recommendation hinges on.</p>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+            Critical Assumptions
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            Required inputs the recommendation hinges on.
+          </p>
           <div className="mt-3 grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
             {critical.map((a) => (
               <div key={a.id} className="rounded-lg border border-border p-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium truncate">{a.field_label}</span>
-                  <Badge variant="outline" className={`${STATUS_STYLES[a.status]} text-[9px] capitalize shrink-0`}>{a.status.replace("_", " ")}</Badge>
+                  <Badge
+                    variant="outline"
+                    className={`${STATUS_STYLES[a.status]} text-[9px] capitalize shrink-0`}
+                  >
+                    {a.status.replace("_", " ")}
+                  </Badge>
                 </div>
                 <div className="num text-lg mt-1">{fmt(a)}</div>
               </div>
@@ -271,22 +432,38 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
 
       {assumptions.length === 0 ? (
         <Card className="p-12 text-center text-sm text-muted-foreground">
-          No assumptions yet. Upload documents to this deal, then click <strong>Run Extraction</strong>.
+          No assumptions yet. Upload documents to this deal, then click{" "}
+          <strong>Run Extraction</strong>.
         </Card>
       ) : (
         Object.entries(grouped).map(([cat, rows]) => (
           <div key={cat}>
             <div className="flex items-baseline justify-between mb-2 px-1">
-              <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">{cat}</span>
+              <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+                {cat}
+              </span>
               <span className="num text-xs text-muted-foreground">{rows.length}</span>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {rows.map((a) => (
-                <AssumptionCard key={a.id} a={a}
-                  onSource={() => setSourceOf(a)} onEdit={() => setEditOf(a)} onHistory={() => setHistoryOf(a)}
-                  onApprove={() => review.mutate({ id: a.id, action: "approve", change_reason: "Approved as extracted" })}
-                  onReject={() => review.mutate({ id: a.id, action: "reject", change_reason: "Rejected" })}
-                  pending={review.isPending} />
+                <AssumptionCard
+                  key={a.id}
+                  a={a}
+                  onSource={() => setSourceOf(a)}
+                  onEdit={() => setEditOf(a)}
+                  onHistory={() => setHistoryOf(a)}
+                  onApprove={() =>
+                    review.mutate({
+                      id: a.id,
+                      action: "approve",
+                      change_reason: "Approved as extracted",
+                    })
+                  }
+                  onReject={() =>
+                    review.mutate({ id: a.id, action: "reject", change_reason: "Rejected" })
+                  }
+                  pending={review.isPending}
+                />
               ))}
             </div>
           </div>
@@ -294,7 +471,14 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
       )}
 
       <SourcePanel a={sourceOf} onClose={() => setSourceOf(null)} />
-      <EditPanel a={editOf} onClose={() => setEditOf(null)} onSubmit={(d) => { review.mutate(d); setEditOf(null); }} />
+      <EditPanel
+        a={editOf}
+        onClose={() => setEditOf(null)}
+        onSubmit={(d) => {
+          review.mutate(d);
+          setEditOf(null);
+        }}
+      />
       <HistoryPanel a={historyOf} onClose={() => setHistoryOf(null)} />
     </div>
   );
@@ -304,12 +488,16 @@ function SourcePanel({ a, onClose }: { a: any | null; onClose: () => void }) {
   return (
     <Sheet open={!!a} onOpenChange={(o) => !o && onClose()}>
       <SheetContent>
-        <SheetHeader><SheetTitle className="font-mono">{a?.field_label}</SheetTitle></SheetHeader>
+        <SheetHeader>
+          <SheetTitle className="font-mono">{a?.field_label}</SheetTitle>
+        </SheetHeader>
         {a && (
           <div className="mt-4 space-y-4 text-sm">
             <Field label="Extracted value">{fmt(a)}</Field>
             <Field label="Source document">{a.source_location || "Not available"}</Field>
-            <Field label="Confidence">{a.confidence_score}%: {a.confidence_band}</Field>
+            <Field label="Confidence">
+              {a.confidence_score}%: {a.confidence_band}
+            </Field>
             <Field label="Source text">
               <blockquote className="text-xs italic text-muted-foreground border-l-2 border-primary pl-3 mt-1 whitespace-pre-wrap">
                 {a.source_text || "Not available"}
@@ -323,34 +511,60 @@ function SourcePanel({ a, onClose }: { a: any | null; onClose: () => void }) {
   );
 }
 
-function EditPanel({ a, onClose, onSubmit }: { a: any | null; onClose: () => void; onSubmit: (d: any) => void }) {
+function EditPanel({
+  a,
+  onClose,
+  onSubmit,
+}: {
+  a: any | null;
+  onClose: () => void;
+  onSubmit: (d: any) => void;
+}) {
   const [val, setVal] = useState("");
   const [reason, setReason] = useState("");
   return (
     <Dialog open={!!a} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Modify {a?.field_label}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Modify {a?.field_label}</DialogTitle>
+        </DialogHeader>
         {a && (
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            const num = Number(val);
-            onSubmit({
-              id: a.id, action: "modify",
-              value_numeric: isFinite(num) && a.unit !== "text" ? num : null,
-              value_text: a.unit === "text" ? val : null,
-              change_reason: reason || "Manual update",
-            });
-          }} className="space-y-3">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const num = Number(val);
+              onSubmit({
+                id: a.id,
+                action: "modify",
+                value_numeric: isFinite(num) && a.unit !== "text" ? num : null,
+                value_text: a.unit === "text" ? val : null,
+                change_reason: reason || "Manual update",
+              });
+            }}
+            className="space-y-3"
+          >
             <div>
               <label className="text-xs text-muted-foreground">Current: {fmt(a)}</label>
-              <Input autoFocus placeholder={`New value (${a.unit})`} value={val} onChange={(e) => setVal(e.target.value)} />
+              <Input
+                autoFocus
+                placeholder={`New value (${a.unit})`}
+                value={val}
+                onChange={(e) => setVal(e.target.value)}
+              />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Change reason</label>
-              <Textarea rows={2} placeholder="e.g. Lender confirmed 6.25%" value={reason} onChange={(e) => setReason(e.target.value)} />
+              <Textarea
+                rows={2}
+                placeholder="e.g. Lender confirmed 6.25%"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
             </div>
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+              <Button type="button" variant="ghost" onClick={onClose}>
+                Cancel
+              </Button>
               <Button type="submit">Save & approve</Button>
             </div>
           </form>
@@ -364,7 +578,9 @@ function HistoryPanel({ a, onClose }: { a: any | null; onClose: () => void }) {
   return (
     <Sheet open={!!a} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-[500px] sm:max-w-[500px]">
-        <SheetHeader><SheetTitle className="font-mono">{a?.field_label}: versions</SheetTitle></SheetHeader>
+        <SheetHeader>
+          <SheetTitle className="font-mono">{a?.field_label}: versions</SheetTitle>
+        </SheetHeader>
         {a && <VersionsList assumptionId={a.id} />}
       </SheetContent>
     </Sheet>
@@ -373,22 +589,34 @@ function HistoryPanel({ a, onClose }: { a: any | null; onClose: () => void }) {
 
 function VersionsList({ assumptionId }: { assumptionId: string }) {
   const fn = useServerFn(listAssumptionVersions);
-  const { data: versions = [] } = useSuspenseQuery(queryOptions({
-    queryKey: ["versions", assumptionId],
-    queryFn: () => fn({ data: { assumption_id: assumptionId } }),
-  }));
-  if (!versions.length) return <p className="mt-4 text-sm text-muted-foreground">No version history.</p>;
+  const { data: versions = [] } = useSuspenseQuery(
+    queryOptions({
+      queryKey: ["versions", assumptionId],
+      queryFn: () => fn({ data: { assumption_id: assumptionId } }),
+    }),
+  );
+  if (!versions.length)
+    return <p className="mt-4 text-sm text-muted-foreground">No version history.</p>;
   return (
     <ol className="mt-4 space-y-3">
       {versions.map((v: any) => (
         <li key={v.id} className="border-l-2 border-primary/40 pl-3 text-xs">
           <div className="flex items-center gap-2">
             <span className="font-mono text-primary">v{v.version_number}</span>
-            <Badge variant="outline" className={`${STATUS_STYLES[v.status]} text-[10px] capitalize`}>{v.status.replace("_"," ")}</Badge>
+            <Badge
+              variant="outline"
+              className={`${STATUS_STYLES[v.status]} text-[10px] capitalize`}
+            >
+              {v.status.replace("_", " ")}
+            </Badge>
             <span className="text-muted-foreground">{new Date(v.created_at).toLocaleString()}</span>
           </div>
-          <div className="num text-sm mt-1">{v.value_numeric ?? v.value_text ?? "Not available"}</div>
-          <div className="text-muted-foreground mt-0.5">by {v.changed_by_name || "user"} · {v.change_reason || "Not available"}</div>
+          <div className="num text-sm mt-1">
+            {v.value_numeric ?? v.value_text ?? "Not available"}
+          </div>
+          <div className="text-muted-foreground mt-0.5">
+            by {v.changed_by_name || "user"} · {v.change_reason || "Not available"}
+          </div>
         </li>
       ))}
     </ol>
@@ -401,35 +629,44 @@ function ExtractionReportCard({ report, onClose }: { report: any; onClose: () =>
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Extraction Audit Report · 3-stage pipeline</div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              Extraction Audit Report · 3-stage pipeline
+            </div>
             <ModeBadge mode={report.analysis_mode} />
           </div>
           <div className="text-sm mt-1">
-            Stage 1 parsed <strong className="font-mono">{report.stage1_candidates}</strong> candidates ·
-            Stage 2 classified <strong className="font-mono">{report.stage2_classified}</strong> ·
-            Stage 3 inferred <strong className="font-mono">{report.stage3_inferred_via_alias}</strong> via alias
+            Stage 1 parsed <strong className="font-mono">{report.stage1_candidates}</strong>{" "}
+            candidates · Stage 2 classified{" "}
+            <strong className="font-mono">{report.stage2_classified}</strong> · Stage 3 inferred{" "}
+            <strong className="font-mono">{report.stage3_inferred_via_alias}</strong> via alias
           </div>
-          {report.ai_note && (
-            <div className="text-[11px] text-chart-5 mt-1">{report.ai_note}</div>
-          )}
+          {report.ai_note && <div className="text-[11px] text-chart-5 mt-1">{report.ai_note}</div>}
         </div>
-        <Button variant="ghost" size="sm" onClick={onClose}>Dismiss</Button>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          Dismiss
+        </Button>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 text-sm">
         <Field label="Found">{report.found}</Field>
         <Field label="Conflicting">{report.conflicting}</Field>
         <Field label="Missing">{report.missing}</Field>
-        <Field label="Underwriting ready">{report.can_underwrite ? "Yes: all required present" : "No: required fields missing"}</Field>
+        <Field label="Underwriting ready">
+          {report.can_underwrite ? "Yes: all required present" : "No: required fields missing"}
+        </Field>
       </div>
       {report.conflicts?.length > 0 && (
         <div className="mt-3 text-xs">
-          <span className="font-semibold text-destructive uppercase tracking-widest">Conflicts:</span>{" "}
+          <span className="font-semibold text-destructive uppercase tracking-widest">
+            Conflicts:
+          </span>{" "}
           <span className="text-muted-foreground">{report.conflicts.join(" · ")}</span>
         </div>
       )}
       {report.missing_required?.length > 0 && (
         <div className="mt-2 text-xs">
-          <span className="font-semibold text-chart-5 uppercase tracking-widest">Missing required:</span>{" "}
+          <span className="font-semibold text-chart-5 uppercase tracking-widest">
+            Missing required:
+          </span>{" "}
           <span className="text-muted-foreground">{report.missing_required.join(" · ")}</span>
         </div>
       )}
@@ -440,9 +677,11 @@ function ExtractionReportCard({ report, onClose }: { report: any; onClose: () =>
 function recoveryLabel(d: any): string {
   const parts: string[] = [];
   if (d.recovered_via_ocr) parts.push(`OCR ${Math.round(d.ocr_confidence ?? 0)}%`);
-  if (Array.isArray(d.sheets_selected) && d.sheets_selected.length) parts.push(`sheet: ${d.sheets_selected.join(", ")}`);
+  if (d.ocr_truncated) parts.push(`first ${d.ocr_pages_processed}/${d.ocr_total_pages} pages`);
+  if (Array.isArray(d.sheets_selected) && d.sheets_selected.length)
+    parts.push(`sheet: ${d.sheets_selected.join(", ")}`);
   if (Number(d.merged_cells_filled) > 0) parts.push(`merged: ${d.merged_cells_filled}`);
-  return parts.length ? parts.join(" · ") : (d.download_ok ? "embedded text" : "");
+  return parts.length ? parts.join(" · ") : d.download_ok ? "embedded text" : "";
 }
 
 function ExtractionDebugCard({ debug }: { debug: any }) {
@@ -450,7 +689,9 @@ function ExtractionDebugCard({ debug }: { debug: any }) {
   const needsVerification = perDoc.filter((d) => d.needs_verification);
   return (
     <Card className="p-5 border-chart-2/40">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Extraction Debug Trace</div>
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+        Extraction Debug Trace
+      </div>
 
       {/* Auto-extraction is a checkable first pass, not gospel: flag anything
           recovered via OCR (low confidence) for human verification. */}
@@ -458,11 +699,17 @@ function ExtractionDebugCard({ debug }: { debug: any }) {
         <div className="mt-3 flex items-start gap-2 rounded border border-chart-5/30 bg-chart-5/10 p-3 text-xs">
           <AlertCircle className="size-4 shrink-0 mt-0.5 text-chart-5" />
           <div>
-            <span className="font-semibold uppercase tracking-widest text-chart-5">Verify before approving:</span>{" "}
+            <span className="font-semibold uppercase tracking-widest text-chart-5">
+              Verify before approving:
+            </span>{" "}
             <span className="text-muted-foreground">
-              {needsVerification.length} document{needsVerification.length === 1 ? "" : "s"} recovered via OCR
-              ({needsVerification.map((d) => `${d.name} ${Math.round(d.ocr_confidence ?? 0)}%`).join(", ")}). OCR text can
-              misread digits: confirm each extracted value against the source.
+              {needsVerification.length} document{needsVerification.length === 1 ? "" : "s"}{" "}
+              recovered via OCR (
+              {needsVerification
+                .map((d) => `${d.name} ${Math.round(d.ocr_confidence ?? 0)}%`)
+                .join(", ")}
+              ). OCR text can misread digits and page-capped scans may omit later pages: confirm
+              each extracted value against the source.
             </span>
           </div>
         </div>
@@ -485,29 +732,49 @@ function ExtractionDebugCard({ debug }: { debug: any }) {
 
       <div className="mt-4 overflow-x-auto">
         <table className="data-grid w-full text-xs">
-          <thead><tr className="bg-muted/20">
-            <th className="text-left">Document</th>
-            <th className="text-center">DL</th>
-            <th className="text-right">Text len</th>
-            <th className="text-right">Candidates</th>
-            <th className="text-left">Recovery</th>
-            <th className="text-left">Preview (value @ source) / error</th>
-          </tr></thead>
+          <thead>
+            <tr className="bg-muted/20">
+              <th className="text-left">Document</th>
+              <th className="text-center">DL</th>
+              <th className="text-right">Text len</th>
+              <th className="text-right">Candidates</th>
+              <th className="text-left">Recovery</th>
+              <th className="text-left">Preview (value @ source) / error</th>
+            </tr>
+          </thead>
           <tbody>
             {perDoc.map((d: any) => (
-              <tr key={d.document_id} className={`align-top hover:bg-accent/30 ${d.needs_verification ? "bg-chart-5/10" : ""}`}>
+              <tr
+                key={d.document_id}
+                className={`align-top hover:bg-accent/30 ${d.needs_verification ? "bg-chart-5/10" : ""}`}
+              >
                 <td className="font-medium">
                   {d.name}
-                  {d.needs_verification && <span className="ml-1 text-chart-5" title="Recovered via OCR: verify">!</span>}
+                  {d.needs_verification && (
+                    <span className="ml-1 text-chart-5" title="Recovered via OCR: verify">
+                      !
+                    </span>
+                  )}
                 </td>
                 <td className="text-center">{d.download_ok ? "OK" : "x"}</td>
                 <td className="text-right num">{d.text_length.toLocaleString()}</td>
                 <td className="text-right num">{d.candidate_count}</td>
-                <td className="text-muted-foreground max-w-[160px] truncate" title={recoveryLabel(d)}>{recoveryLabel(d)}</td>
+                <td
+                  className="text-muted-foreground max-w-[160px] truncate"
+                  title={recoveryLabel(d)}
+                >
+                  {recoveryLabel(d)}
+                </td>
                 <td className="text-muted-foreground max-w-[280px] truncate">
-                  {d.error
-                    ? <span className="text-destructive">{d.error}</span>
-                    : d.candidates_preview?.map((c: any) => c.source_location ? `${c.value_text} @ ${c.source_location}` : c.value_text).join(" · ") || d.text_preview}
+                  {d.error ? (
+                    <span className="text-destructive">{d.error}</span>
+                  ) : (
+                    d.candidates_preview
+                      ?.map((c: any) =>
+                        c.source_location ? `${c.value_text} @ ${c.source_location}` : c.value_text,
+                      )
+                      .join(" · ") || d.text_preview
+                  )}
                 </td>
               </tr>
             ))}
@@ -525,8 +792,22 @@ function ExtractionDebugCard({ debug }: { debug: any }) {
   );
 }
 
-function AssumptionCard({ a, onSource, onEdit, onHistory, onApprove, onReject, pending }: {
-  a: any; onSource: () => void; onEdit: () => void; onHistory: () => void; onApprove: () => void; onReject: () => void; pending: boolean;
+function AssumptionCard({
+  a,
+  onSource,
+  onEdit,
+  onHistory,
+  onApprove,
+  onReject,
+  pending,
+}: {
+  a: any;
+  onSource: () => void;
+  onEdit: () => void;
+  onHistory: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+  pending: boolean;
 }) {
   const band = a.confidence_band as keyof typeof BAND_STYLES;
   return (
@@ -536,19 +817,64 @@ function AssumptionCard({ a, onSource, onEdit, onHistory, onApprove, onReject, p
           <div className="text-sm font-medium leading-tight">{a.field_label}</div>
           <div className="num text-xl mt-1">{fmt(a)}</div>
         </div>
-        <Badge variant="outline" className={`${STATUS_STYLES[a.status]} text-[9px] capitalize shrink-0`}>{a.status.replace("_", " ")}</Badge>
+        <Badge
+          variant="outline"
+          className={`${STATUS_STYLES[a.status]} text-[9px] capitalize shrink-0`}
+        >
+          {a.status.replace("_", " ")}
+        </Badge>
       </div>
       <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-        <span className={`font-mono ${BAND_STYLES[band] ?? ""}`}>{a.confidence_score}% · {a.confidence_band}</span>
-        <span className="truncate max-w-[130px]" title={a.source_location || ""}>{a.source_location || "no source"}</span>
+        <span className={`font-mono ${BAND_STYLES[band] ?? ""}`}>
+          {a.confidence_score}% · {a.confidence_band}
+        </span>
+        <span className="truncate max-w-[130px]" title={a.source_location || ""}>
+          {a.source_location || "no source"}
+        </span>
       </div>
       <div className="flex items-center gap-0.5 border-t border-border pt-2 -mb-1">
-        <Button variant="ghost" size="icon" className="size-7" title="View source" onClick={onSource}><Eye className="size-3.5" /></Button>
-        <Button variant="ghost" size="icon" className="size-7" title="Modify" onClick={onEdit}><Edit3 className="size-3.5" /></Button>
-        <Button variant="ghost" size="icon" className="size-7" title="Version history" onClick={onHistory}><History className="size-3.5" /></Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7"
+          title="View source"
+          onClick={onSource}
+        >
+          <Eye className="size-3.5" />
+        </Button>
+        <Button variant="ghost" size="icon" className="size-7" title="Modify" onClick={onEdit}>
+          <Edit3 className="size-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7"
+          title="Version history"
+          onClick={onHistory}
+        >
+          <History className="size-3.5" />
+        </Button>
         <div className="ml-auto flex gap-0.5">
-          <Button variant="ghost" size="icon" className="size-7 text-success" title="Approve" disabled={a.status === "missing" || a.status === "conflicting" || pending} onClick={onApprove}><Check className="size-3.5" /></Button>
-          <Button variant="ghost" size="icon" className="size-7 text-destructive" title="Reject" disabled={pending} onClick={onReject}><X className="size-3.5" /></Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 text-success"
+            title="Approve"
+            disabled={a.status === "missing" || a.status === "conflicting" || pending}
+            onClick={onApprove}
+          >
+            <Check className="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 text-destructive"
+            title="Reject"
+            disabled={pending}
+            onClick={onReject}
+          >
+            <X className="size-3.5" />
+          </Button>
         </div>
       </div>
     </Card>

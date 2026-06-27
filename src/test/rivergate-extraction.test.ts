@@ -9,7 +9,8 @@ import { mapRevenueProgramRowToAssumptions } from "@/lib/revenue-assumption-mapp
 import { parseBudgetWorkbook } from "@/lib/parsers/budget.server";
 import { mapBudgetRowToAssumption } from "@/lib/budget-assumption-mapper";
 
-const fixtureDir = "/Users/chinonsoobeta/Downloads/Rivergate_Innovation_District_Test_Package/source_documents";
+const fixtureDir =
+  "/Users/chinonsoobeta/Downloads/Rivergate_Innovation_District_Test_Package/source_documents";
 const rentRollPath = path.join(fixtureDir, "Rivergate_Rent_Roll.xlsx");
 const budgetPath = path.join(fixtureDir, "Rivergate_Construction_Budget.xlsx");
 
@@ -20,10 +21,20 @@ async function readArrayBuffer(filePath: string): Promise<ArrayBuffer> {
 
 describe("Rivergate revenue extraction", () => {
   test("spreadsheet text preserves row headers as key-value context", async () => {
-    const text = await extractFileText("Rivergate_Rent_Roll.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", await readArrayBuffer(rentRollPath));
-    expect(text).toContain("Sheet Rent Roll row 2: Unit Type=Residential | Unit Count=620 | Market Rent=$3,850 | Rent Basis=per_unit | Occupancy=95.00%");
-    expect(text).toContain("Sheet Rent Roll row 3: Unit Type=Retail | Unit Count=1 | Avg SF=36,000 | Market Rent=$68 | Rent Basis=per_sf | Occupancy=92.00%");
-    expect(text).toContain("Sheet Rent Roll row 4: Unit Type=Office | Unit Count=1 | Avg SF=120,000 | Market Rent=$55 | Rent Basis=per_sf | Occupancy=90.00%");
+    const text = await extractFileText(
+      "Rivergate_Rent_Roll.xlsx",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      await readArrayBuffer(rentRollPath),
+    );
+    expect(text).toContain(
+      "Sheet Rent Roll row 2: Unit Type=Residential | Unit Count=620 | Market Rent=$3,850 | Rent Basis=per_unit | Occupancy=95.00%",
+    );
+    expect(text).toContain(
+      "Sheet Rent Roll row 3: Unit Type=Retail | Unit Count=1 | Avg SF=36,000 | Market Rent=$68 | Rent Basis=per_sf | Occupancy=92.00%",
+    );
+    expect(text).toContain(
+      "Sheet Rent Roll row 4: Unit Type=Office | Unit Count=1 | Avg SF=120,000 | Market Rent=$55 | Rent Basis=per_sf | Occupancy=90.00%",
+    );
   });
 
   test("rent regex catches Rivergate rent notation variants", () => {
@@ -40,7 +51,9 @@ describe("Rivergate revenue extraction", () => {
       "Office rent 55 per rentable square foot",
     ].join("\n");
     const rents = extractCandidates("rent-variants.txt", text).filter((c) => c.kind === "rent");
-    expect(rents.map((c) => c.value_numeric)).toEqual([3850, 3850, 3850, 3850, 68, 68, 68, 68, 55, 55]);
+    expect(rents.map((c) => c.value_numeric)).toEqual([
+      3850, 3850, 3850, 3850, 68, 68, 68, 68, 55, 55,
+    ]);
     expect(rents.slice(0, 4).every((c) => c.unit === "$/mo")).toBe(true);
     expect(rents.slice(4).every((c) => c.unit === "$/SF")).toBe(true);
   });
@@ -49,12 +62,35 @@ describe("Rivergate revenue extraction", () => {
     const parsed = parseRentRollWorkbook(await readArrayBuffer(rentRollPath));
     expect(parsed.rejected).toHaveLength(1);
     expect(parsed.inserted).toMatchObject([
-      { unitType: "Residential", unitCount: 620, avgSf: null, rent: 3850, rentBasis: "per_unit", occupancyPct: 95 },
-      { unitType: "Retail", unitCount: 1, avgSf: 36000, rent: 68, rentBasis: "per_sf", occupancyPct: 92 },
-      { unitType: "Office", unitCount: 1, avgSf: 120000, rent: 55, rentBasis: "per_sf", occupancyPct: 90 },
+      {
+        unitType: "Residential",
+        unitCount: 620,
+        avgSf: null,
+        rent: 3850,
+        rentBasis: "per_unit",
+        occupancyPct: 95,
+      },
+      {
+        unitType: "Retail",
+        unitCount: 1,
+        avgSf: 36000,
+        rent: 68,
+        rentBasis: "per_sf",
+        occupancyPct: 92,
+      },
+      {
+        unitType: "Office",
+        unitCount: 1,
+        avgSf: 120000,
+        rent: 55,
+        rentBasis: "per_sf",
+        occupancyPct: 90,
+      },
     ]);
 
-    const mapped = parsed.inserted.flatMap((row) => mapRevenueProgramRowToAssumptions(row, { name: "Rivergate_Rent_Roll.xlsx" }));
+    const mapped = parsed.inserted.flatMap((row) =>
+      mapRevenueProgramRowToAssumptions(row, { name: "Rivergate_Rent_Roll.xlsx" }),
+    );
     const grouped = groupAndResolve(mapped);
     const num = (key: string) => grouped.get(key)?.value_numeric ?? null;
 
@@ -76,16 +112,32 @@ describe("Rivergate revenue extraction", () => {
 
   test("structured budget rows map to budget assumption suggestions and skip total row", async () => {
     const parsed = parseBudgetWorkbook(await readArrayBuffer(budgetPath));
-    expect(parsed.inserted).toEqual(expect.arrayContaining([
-      expect.objectContaining({ category: "land", label: "Land acquisition", amount: 58_750_000 }),
-      expect.objectContaining({ category: "hard", label: "Hard costs", amount: 286_400_000 }),
-      expect.objectContaining({ category: "soft", label: "Soft costs", amount: 48_900_000 }),
-      expect.objectContaining({ category: "contingency", label: "Contingency", amount: 21_600_000 }),
-      expect.objectContaining({ category: "financing_interest", label: "Financing costs / interest reserve", amount: 31_250_000 }),
-    ]));
+    expect(parsed.inserted).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "land",
+          label: "Land acquisition",
+          amount: 58_750_000,
+        }),
+        expect.objectContaining({ category: "hard", label: "Hard costs", amount: 286_400_000 }),
+        expect.objectContaining({ category: "soft", label: "Soft costs", amount: 48_900_000 }),
+        expect.objectContaining({
+          category: "contingency",
+          label: "Contingency",
+          amount: 21_600_000,
+        }),
+        expect.objectContaining({
+          category: "financing_interest",
+          label: "Financing costs / interest reserve",
+          amount: 31_250_000,
+        }),
+      ]),
+    );
     expect(parsed.inserted.some((row) => row.label === "Total Development Cost")).toBe(false);
 
-    const mapped = parsed.inserted.map((row) => mapBudgetRowToAssumption(row, { name: "Rivergate_Construction_Budget.xlsx" })).filter(Boolean);
+    const mapped = parsed.inserted
+      .map((row) => mapBudgetRowToAssumption(row, { name: "Rivergate_Construction_Budget.xlsx" }))
+      .filter(Boolean);
     const grouped = groupAndResolve(mapped as any);
     const num = (key: string) => grouped.get(key)?.value_numeric ?? null;
 
@@ -111,10 +163,20 @@ describe("Rivergate revenue extraction", () => {
     const structured = [];
     for (const name of names) {
       const buffer = await readArrayBuffer(path.join(fixtureDir, name));
-      const text = await extractFileText(name, name.endsWith(".pdf") ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer);
+      const text = await extractFileText(
+        name,
+        name.endsWith(".pdf")
+          ? "application/pdf"
+          : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        buffer,
+      );
       candidates.push(...extractCandidates(name, text));
       if (name === "Rivergate_Rent_Roll.xlsx") {
-        structured.push(...parseRentRollWorkbook(buffer).inserted.flatMap((row) => mapRevenueProgramRowToAssumptions(row, { name })));
+        structured.push(
+          ...parseRentRollWorkbook(buffer).inserted.flatMap((row) =>
+            mapRevenueProgramRowToAssumptions(row, { name }),
+          ),
+        );
       }
     }
 

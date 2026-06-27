@@ -30,7 +30,12 @@ export function computePortfolioNorms(
   const bands: PortfolioNorms["bands"] = {};
   for (const [k, vals] of byMetric) {
     const s = [...vals].sort((a, b) => a - b);
-    bands[k] = { p25: percentile(s, 0.25), p50: percentile(s, 0.5), p75: percentile(s, 0.75), n: s.length };
+    bands[k] = {
+      p25: percentile(s, 0.25),
+      p50: percentile(s, 0.5),
+      p75: percentile(s, 0.75),
+      n: s.length,
+    };
   }
   return { bands, sampleSize: projects.size };
 }

@@ -71,7 +71,8 @@ export type CandidateMapping = {
 // every candidate so a percentage never lands on a dollar field.
 // A loan/debt label immediately preceding a value means the value IS the
 // debt: it must never be read as a stated total project cost.
-const LOAN_DEBT_LABEL_RE = /(senior\s+(construction\s+)?(loan|debt)|loan amount|loan facility|facility size|debt amount|mortgage|preferred equity|common equity|senior debt)/i;
+const LOAN_DEBT_LABEL_RE =
+  /(senior\s+(construction\s+)?(loan|debt)|loan amount|loan facility|facility size|debt amount|mortgage|preferred equity|common equity|senior debt)/i;
 
 // Context + range guards for keys that are easily contaminated by lookalike
 // rates (the classic failure: an exit-cap value of 5.75% mapping to the
@@ -83,23 +84,31 @@ const SENSITIVE_GUARDS: Record<string, Guard> = {
   opex_ratio: {
     need: /operating expense|opex|expense ratio|expense load|operating cost ratio|normalized expense|expense assumption|expense %/,
     deny: /exit cap|terminal cap|cap rate|capitalization rate|valuation cap|yield on cost|interest rate|debt yield/,
-    min: 10, max: 65,
+    min: 10,
+    max: 65,
   },
   exit_cap_rate: {
     need: /exit cap|terminal cap|cap rate|capitalization|valuation|appraisal|sale cap|reversion|disposition cap/,
-    min: 3, max: 12,
+    min: 3,
+    max: 12,
   },
   interest_rate: {
     need: /interest rate|loan rate|all-in rate|sofr|spread|rate lock|financing rate|coupon|note rate/,
     deny: /exit cap|terminal cap|cap rate|debt yield|expense ratio/,
-    min: 1, max: 20,
+    min: 1,
+    max: 20,
   },
   min_debt_yield: { need: /debt yield/, min: 4, max: 20 },
   stabilized_occupancy: {
     need: /stabilized occupancy|overall occupancy|portfolio occupancy|blended occupancy|average occupancy/,
-    min: 40, max: 100,
+    min: 40,
+    max: 100,
   },
-  tenant_concentration_pct: { need: /tenant concentration|revenue concentration|tenant share|largest tenant/, min: 1, max: 100 },
+  tenant_concentration_pct: {
+    need: /tenant concentration|revenue concentration|tenant share|largest tenant/,
+    min: 1,
+    max: 100,
+  },
 };
 
 function passesSensitiveGuard(cand: Candidate, key: string): boolean {
@@ -116,7 +125,10 @@ function passesSensitiveGuard(cand: Candidate, key: string): boolean {
   return true;
 }
 
-export function mapCandidateToKey(cand: Candidate, exclude: Set<string> = new Set()): CandidateMapping | null {
+export function mapCandidateToKey(
+  cand: Candidate,
+  exclude: Set<string> = new Set(),
+): CandidateMapping | null {
   const hint = (cand.label_hint || "").toLowerCase();
 
   // Match against the line-scoped label hint, preferring the alias whose match
@@ -135,7 +147,13 @@ export function mapCandidateToKey(cand: Candidate, exclude: Set<string> = new Se
     if (end > bestEnd || (end === bestEnd && alias.length > bestLen)) {
       bestEnd = end;
       bestLen = alias.length;
-      best = { field_key: def.key, confidence: 90, via: "alias", matched_alias: alias, where: "hint" };
+      best = {
+        field_key: def.key,
+        confidence: 90,
+        via: "alias",
+        matched_alias: alias,
+        where: "hint",
+      };
     }
   }
 
@@ -208,7 +226,12 @@ export function mapCandidates(candidates: Candidate[]): MappedCandidate[] {
       source_location: c.source_location,
       matched_alias: m.matched_alias,
       via: m.via,
-      candidate_role: def.key === "total_project_cost" ? "stated_total" : def.unit === "x" ? "ratio" : "scalar_assumption",
+      candidate_role:
+        def.key === "total_project_cost"
+          ? "stated_total"
+          : def.unit === "x"
+            ? "ratio"
+            : "scalar_assumption",
     });
   }
   return out;
@@ -258,7 +281,9 @@ export function groupAndResolve(mapped: MappedCandidate[]): Map<string, GroupRes
     // rows) exist for this key, they are authoritative: loose scalar text
     // candidates are ignored so a stray line-item mention can't manufacture a
     // false conflict against an aggregated total.
-    const structured = allMembers.filter((m) => m.candidate_role && STRUCTURED_ROLES.has(m.candidate_role));
+    const structured = allMembers.filter(
+      (m) => m.candidate_role && STRUCTURED_ROLES.has(m.candidate_role),
+    );
     const members = structured.length > 0 ? structured : allMembers;
     members.sort((a, b) => b.confidence - a.confidence);
     const distinct = Array.from(new Set(members.map(roundKey)));
@@ -270,7 +295,10 @@ export function groupAndResolve(mapped: MappedCandidate[]): Map<string, GroupRes
     // confidently-wrong number flow silently to the engine.
     const floor = PLAUSIBILITY_FLOOR[field_key];
     const implausible =
-      !isConflict && floor != null && winner.value_numeric != null && Math.abs(winner.value_numeric) < floor;
+      !isConflict &&
+      floor != null &&
+      winner.value_numeric != null &&
+      Math.abs(winner.value_numeric) < floor;
     const blocked = isConflict || implausible;
     const conflict_values = isConflict
       ? members
@@ -278,7 +306,12 @@ export function groupAndResolve(mapped: MappedCandidate[]): Map<string, GroupRes
           .map((m) => ({ value: roundKey(m), source: m.source_doc_name }))
           .filter((c, i, all) => all.findIndex((x) => x.value === c.value) === i)
       : implausible
-        ? [{ value: roundKey(winner), source: `${winner.source_doc_name} - implausibly small for ${field_key}; check units/scale` }]
+        ? [
+            {
+              value: roundKey(winner),
+              source: `${winner.source_doc_name} - implausibly small for ${field_key}; check units/scale`,
+            },
+          ]
         : null;
     out.set(field_key, {
       field_key,
@@ -303,7 +336,14 @@ export function groupAndResolve(mapped: MappedCandidate[]): Map<string, GroupRes
 export type RankedCandidate = { candidate: Candidate; index: number; score: number };
 
 const KIND_WEIGHT: Record<CandidateKind, number> = {
-  currency: 5, percent: 5, rent: 5, sf: 4, units: 4, ratio: 4, duration: 3, date: 0,
+  currency: 5,
+  percent: 5,
+  rent: 5,
+  sf: 4,
+  units: 4,
+  ratio: 4,
+  duration: 3,
+  date: 0,
 };
 
 export function scoreCandidate(cand: Candidate): number {
@@ -349,10 +389,15 @@ export function rankCandidates(
   // 2) Ensure each kind is represented.
   const kinds = new Set<CandidateKind>();
   for (const r of byScore) {
-    if (chosen.has(r.index)) { kinds.add(r.candidate.kind); }
+    if (chosen.has(r.index)) {
+      kinds.add(r.candidate.kind);
+    }
   }
   for (const r of byScore) {
-    if (!kinds.has(r.candidate.kind)) { chosen.add(r.index); kinds.add(r.candidate.kind); }
+    if (!kinds.has(r.candidate.kind)) {
+      chosen.add(r.index);
+      kinds.add(r.candidate.kind);
+    }
   }
   // 3) Fill remaining capacity by score.
   for (const r of byScore) {

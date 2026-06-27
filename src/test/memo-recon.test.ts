@@ -27,7 +27,9 @@ async function addendumDocxText(): Promise<string> {
     "Preferred Equity: $37,500,000",
     "Common Equity: $50,000,000",
   ];
-  const doc = new Document({ sections: [{ children: lines.map((l) => new Paragraph({ children: [new TextRun(l)] })) }] });
+  const doc = new Document({
+    sections: [{ children: lines.map((l) => new Paragraph({ children: [new TextRun(l)] })) }],
+  });
   const buf = await Packer.toBuffer(doc);
   const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
   return docxBufferToText(ab);
@@ -58,18 +60,28 @@ describe("budget_vs_stated_total does not fire from the senior loan", () => {
   test("with the loan correctly mapped, reconciliation raises no budget_vs_stated_total error", () => {
     // statedTotalProjectCost is the correctly-mapped $250M (== budget sum).
     const flags = runReconciliationChecks({
-      tdc: 250_000_000, equity: 50_000_000, loan: 162_500_000, noi: 6_395_155,
-      amortizingAnnualDebtService: 12_006_485, minDscr: 1.2,
-      statedTotalProjectCost: 250_000_000, budgetSum: 250_000_000,
+      tdc: 250_000_000,
+      equity: 50_000_000,
+      loan: 162_500_000,
+      noi: 6_395_155,
+      amortizingAnnualDebtService: 12_006_485,
+      minDscr: 1.2,
+      statedTotalProjectCost: 250_000_000,
+      budgetSum: 250_000_000,
     });
     expect(flags.find((f) => f.check_key === "budget_vs_stated_total")).toBeUndefined();
   });
 
   test("an implausibly small stated total is a suspect WARNING, not a hard error, and cites its source", () => {
     const flags = runReconciliationChecks({
-      tdc: 250_000_000, equity: 50_000_000, loan: 162_500_000, noi: 6_395_155,
-      amortizingAnnualDebtService: 12_006_485, minDscr: 1.2,
-      statedTotalProjectCost: 162_500, budgetSum: 250_000_000,
+      tdc: 250_000_000,
+      equity: 50_000_000,
+      loan: 162_500_000,
+      noi: 6_395_155,
+      amortizingAnnualDebtService: 12_006_485,
+      minDscr: 1.2,
+      statedTotalProjectCost: 162_500,
+      budgetSum: 250_000_000,
       statedTotalSource: "Addendum.docx: Senior Construction Debt: $162,500,000",
     });
     const flag = flags.find((f) => f.check_key === "budget_vs_stated_total")!;

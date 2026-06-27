@@ -78,5 +78,6 @@ re-exports the new symbols.
   errors.
 
 ## Definition of done
+
 typecheck 0; tests green incl. new; build green; no migration / no drift; no em dashes; no new
 `as any`; golden fixtures untouched; sensitivity cells are real engine re-runs (provenance-clean).

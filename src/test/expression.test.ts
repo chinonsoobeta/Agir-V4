@@ -40,7 +40,9 @@ describe("expression evaluator: arithmetic and precedence", () => {
     expect(evaluate(parseExpression("min(3, 7)"), ctx({}))).toBe(3);
     expect(evaluate(parseExpression("max(3, 7, 5)"), ctx({}))).toBe(7);
     expect(evaluate(parseExpression("abs(-9)"), ctx({}))).toBe(9);
-    expect(evaluate(parseExpression("max(noi - reserve, 0)"), ctx({ noi: 100, reserve: 130 }))).toBe(0);
+    expect(
+      evaluate(parseExpression("max(noi - reserve, 0)"), ctx({ noi: 100, reserve: 130 })),
+    ).toBe(0);
   });
 });
 
@@ -51,7 +53,9 @@ describe("expression evaluator: references resolve only from the supplied contex
   });
 
   test("a reference the engine did not supply throws (fail-closed, never zero)", () => {
-    expect(() => evaluate(parseExpression("noi + ghost"), ctx({ noi: 10 }))).toThrow(ExpressionError);
+    expect(() => evaluate(parseExpression("noi + ghost"), ctx({ noi: 10 }))).toThrow(
+      ExpressionError,
+    );
   });
 
   test("allowedRefs restricts which nodes may be referenced", () => {
@@ -90,7 +94,9 @@ describe("expression evaluator: fail-closed safety (no host escape, no minted va
 
   test("division by zero and non-finite results throw", () => {
     expect(() => evaluate(parseExpression("noi / 0"), ctx({ noi: 5 }))).toThrow(/Division by zero/);
-    expect(() => evaluate(parseExpression("x / y"), ctx({ x: 1, y: 0 }))).toThrow(/Division by zero/);
+    expect(() => evaluate(parseExpression("x / y"), ctx({ x: 1, y: 0 }))).toThrow(
+      /Division by zero/,
+    );
   });
 
   test("empty and malformed expressions throw", () => {
@@ -120,7 +126,8 @@ describe("expression evaluator: rendered formula is provenance-clean", () => {
     const result = evaluate(ast, ctx(refValues));
 
     // The formula string the engine would render for this custom line.
-    const money = (n: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(n));
+    const money = (n: number) =>
+      new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(n));
     const formula = `custom reserve = noi * 0.03 [noi = ${money(refValues.noi)}] = ${money(result)}`;
 
     // Allowed set = referenced node values + analyst literals + the result.

@@ -12,7 +12,11 @@ export type FindingCategory =
 
 export type FindingSeverity = "critical" | "high" | "medium" | "low";
 export type FindingSource = "underwriting" | "scenario" | "assumption" | "reconciliation";
-export type FindingsRecommendation = "APPROVE" | "APPROVE_WITH_CONDITIONS" | "RETURN_TO_UNDERWRITING" | "REJECT";
+export type FindingsRecommendation =
+  | "APPROVE"
+  | "APPROVE_WITH_CONDITIONS"
+  | "RETURN_TO_UNDERWRITING"
+  | "REJECT";
 
 export interface Finding {
   id: string;

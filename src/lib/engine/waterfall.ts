@@ -64,8 +64,10 @@ export type WaterfallResult = {
   formulaText: string;
 };
 
-const sumNeg = (events: WaterfallEvent[]) => events.reduce((s, e) => s + (e.amount < 0 ? -e.amount : 0), 0);
-const sumPos = (events: WaterfallEvent[]) => events.reduce((s, e) => s + (e.amount > 0 ? e.amount : 0), 0);
+const sumNeg = (events: WaterfallEvent[]) =>
+  events.reduce((s, e) => s + (e.amount < 0 ? -e.amount : 0), 0);
+const sumPos = (events: WaterfallEvent[]) =>
+  events.reduce((s, e) => s + (e.amount > 0 ? e.amount : 0), 0);
 const clampPct = (n: number) => Math.min(100, Math.max(0, Number.isFinite(n) ? n : 0));
 
 // A promote is configured when any carry tier hands the GP a positive share or a
@@ -96,7 +98,11 @@ export function runWaterfall(events: WaterfallEvent[], cfg: WaterfallConfig): Wa
     // guarantees LP returns are byte-identical to the deal-level returns.
     return {
       active: false,
-      lp: { flows: sorted.map((e) => ({ ...e })), contributed: sumNeg(sorted), distributed: sumPos(sorted) },
+      lp: {
+        flows: sorted.map((e) => ({ ...e })),
+        contributed: sumNeg(sorted),
+        distributed: sumPos(sorted),
+      },
       gp: { flows: [], contributed: 0, distributed: 0 },
       gpPromote: 0,
       lpPreferredPaid: 0,
@@ -153,7 +159,9 @@ export function runWaterfall(events: WaterfallEvent[], cfg: WaterfallConfig): Wa
 
   for (const event of sorted) {
     const dt = event.t - prevT;
-    if (dt > 0) for (const s of stops) if (s.rate != null && s.rate > 0) s.balance *= Math.pow(1 + s.rate, dt);
+    if (dt > 0)
+      for (const s of stops)
+        if (s.rate != null && s.rate > 0) s.balance *= Math.pow(1 + s.rate, dt);
     prevT = event.t;
 
     if (event.amount < 0) {
@@ -176,7 +184,13 @@ export function runWaterfall(events: WaterfallEvent[], cfg: WaterfallConfig): Wa
     }
     // 2. GP catch-up (optional): GP receives cpct of distributions until its
     // carry equals the first carry tier's share of the LP's preferred return.
-    if (pref.balance <= 1e-6 && cpct > 0 && firstCarryGp > 0 && firstCarryGp < 1 && remaining > 1e-9) {
+    if (
+      pref.balance <= 1e-6 &&
+      cpct > 0 &&
+      firstCarryGp > 0 &&
+      firstCarryGp < 1 &&
+      remaining > 1e-9
+    ) {
       const lpPrefPaid = Math.max(0, lpTier0Receipts - lpCapital);
       const target = (firstCarryGp / (1 - firstCarryGp)) * lpPrefPaid;
       const need = target - gpCatchUpReceipts;
@@ -216,7 +230,10 @@ export function runWaterfall(events: WaterfallEvent[], cfg: WaterfallConfig): Wa
   const lpPreferredPaid = Math.max(0, lpTier0Receipts - lpCapital);
 
   const tierText = carryTiers
-    .map((t) => `${Math.round(t.lp * 100)}/${Math.round(t.gp * 100)} LP/GP${t.rate == null ? "" : ` to ${(t.rate * 100).toFixed(1)}%`}`)
+    .map(
+      (t) =>
+        `${Math.round(t.lp * 100)}/${Math.round(t.gp * 100)} LP/GP${t.rate == null ? "" : ` to ${(t.rate * 100).toFixed(1)}%`}`,
+    )
     .join(", then ");
   const formulaText =
     `European waterfall over levered equity (${(sLP * 100).toFixed(0)}/${(sGP * 100).toFixed(0)} LP/GP capital): ` +

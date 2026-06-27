@@ -40,7 +40,8 @@ function pick<T>(arr: T[], seed: string): T {
   return arr[hash(seed) % arr.length];
 }
 
-const money = (n: number) => `$${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(n))}`;
+const money = (n: number) =>
+  `$${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(n))}`;
 const pct = (n: number) => `${n.toFixed(1)}%`;
 const x = (n: number) => `${n.toFixed(2)}x`;
 
@@ -84,10 +85,17 @@ function coverageSentence(nc: NarrativeInput): string | null {
   const parts: string[] = [];
   if (dscr) parts.push(`DSCR ${x(dscr.value)} (${dscr.comparativePhrase})`);
   if (dy) parts.push(`debt yield ${pct(dy.value)} (${dy.comparativePhrase})`);
-  const worst = [dscr, dy].filter(Boolean).sort((a, b) => (b!.salience - a!.salience))[0]!;
+  const worst = [dscr, dy].filter(Boolean).sort((a, b) => b!.salience - a!.salience)[0]!;
   const adj = pick(BAND_ADJ[worst.band], nc.facts.dealName + "cov");
-  const lead = pick(["Coverage is", "On the debt, coverage is", "Lender coverage sits"], nc.facts.dealName + "covlead");
-  const note = dscr?.contextNote ? ` ${dscr.contextNote}` : dy?.contextNote ? ` ${dy.contextNote}` : "";
+  const lead = pick(
+    ["Coverage is", "On the debt, coverage is", "Lender coverage sits"],
+    nc.facts.dealName + "covlead",
+  );
+  const note = dscr?.contextNote
+    ? ` ${dscr.contextNote}`
+    : dy?.contextNote
+      ? ` ${dy.contextNote}`
+      : "";
   return `${lead} ${adj}: ${parts.join(" and ")}.${note}`;
 }
 
@@ -101,34 +109,59 @@ function returnsSentence(nc: NarrativeInput): string | null {
   const driver = present.sort((a, b) => b.salience - a.salience)[0];
   const adj = pick(BAND_ADJ[driver.band], nc.facts.dealName + "ret");
   const bits: string[] = [];
-  if (spread) bits.push(`a ${Math.round(spread.value)} bps development spread (${spread.comparativePhrase})`);
+  if (spread)
+    bits.push(`a ${Math.round(spread.value)} bps development spread (${spread.comparativePhrase})`);
   if (em) bits.push(`a ${x(em.value)} equity multiple`);
   if (profit) bits.push(`${pct(profit.value)} profit on cost`);
-  const lead = pick(["On returns, the economics are", "The return profile is", "Returns screen as"], nc.facts.dealName + "retlead");
+  const lead = pick(
+    ["On returns, the economics are", "The return profile is", "Returns screen as"],
+    nc.facts.dealName + "retlead",
+  );
   return `${lead} ${adj}, with ${bits.join(", ")}.`;
 }
 
 function riskCloseSentence(nc: NarrativeInput): string {
-  const concerns = nc.interpretations.filter((i) => i.band === "weak" || i.band === "critical" || i.band === "soft").slice(0, 2);
+  const concerns = nc.interpretations
+    .filter((i) => i.band === "weak" || i.band === "critical" || i.band === "soft")
+    .slice(0, 2);
   const failingLever = nc.attribution.levers.find((l) => !l.passing);
   if (nc.facts.verdictCode === "APPROVE" && !concerns.length) {
     return pick(
-      ["Every screened coverage and return gate clears, and no reconciliation errors remain.", "The deal clears each underwriting gate with no outstanding exceptions."],
+      [
+        "Every screened coverage and return gate clears, and no reconciliation errors remain.",
+        "The deal clears each underwriting gate with no outstanding exceptions.",
+      ],
       nc.facts.dealName + "approve",
     );
   }
   const concernText = concerns.length
     ? `The binding constraints are ${concerns.map((c) => `${c.label.toLowerCase()} (${pick(BAND_ADJ[c.band], c.metricKey)})`).join(" and ")}`
     : "The deal is close to the bar";
-  const leverText = failingLever ? `: ${failingLever.lever.charAt(0).toLowerCase()}${failingLever.lever.slice(1)}.` : ".";
+  const leverText = failingLever
+    ? `: ${failingLever.lever.charAt(0).toLowerCase()}${failingLever.lever.slice(1)}.`
+    : ".";
   return `${concernText}${leverText}`;
 }
 
 function verdictLead(nc: NarrativeInput): string {
   const v = nc.facts.verdictCode;
-  if (v === "APPROVE") return pick(["The deal clears the investment bar.", "This one pencils."], nc.facts.dealName + "vl");
-  if (v === "APPROVE_WITH_CONDITIONS") return pick(["The deal clears with conditions.", "This is approvable subject to conditions."], nc.facts.dealName + "vl");
-  return pick(["The deal does not yet clear the investment bar.", "This is a return-to-underwriting in its current shape."], nc.facts.dealName + "vl");
+  if (v === "APPROVE")
+    return pick(
+      ["The deal clears the investment bar.", "This one pencils."],
+      nc.facts.dealName + "vl",
+    );
+  if (v === "APPROVE_WITH_CONDITIONS")
+    return pick(
+      ["The deal clears with conditions.", "This is approvable subject to conditions."],
+      nc.facts.dealName + "vl",
+    );
+  return pick(
+    [
+      "The deal does not yet clear the investment bar.",
+      "This is a return-to-underwriting in its current shape.",
+    ],
+    nc.facts.dealName + "vl",
+  );
 }
 
 export interface InsightProvider {
@@ -142,18 +175,26 @@ export interface InsightProvider {
 export const deterministicProvider: InsightProvider = {
   id: "deterministic",
   thesis(nc) {
-    const strengths = nc.interpretations.filter((i) => i.band === "strong" || i.band === "exceptional");
+    const strengths = nc.interpretations.filter(
+      (i) => i.band === "strong" || i.band === "exceptional",
+    );
     const concerns = nc.interpretations.filter((i) => i.band === "weak" || i.band === "critical");
     const topStrength = strengths.sort((a, b) => b.salience - a.salience)[0];
     const topConcern = concerns.sort((a, b) => b.salience - a.salience)[0];
     const head = verdictLead(nc);
     if (nc.facts.verdictCode === "REJECT") {
-      const reason = topConcern ? ` ${topConcern.label} is ${pick(BAND_ADJ[topConcern.band], topConcern.metricKey)} and ${topConcern.comparativePhrase}` : "";
+      const reason = topConcern
+        ? ` ${topConcern.label} is ${pick(BAND_ADJ[topConcern.band], topConcern.metricKey)} and ${topConcern.comparativePhrase}`
+        : "";
       const lever = nc.attribution.levers.find((l) => !l.passing);
       return `${head}${reason}.${lever ? ` ${lever.lever}.` : ""}`;
     }
-    const s = topStrength ? ` ${topStrength.label} is ${pick(BAND_ADJ[topStrength.band], topStrength.metricKey)} (${topStrength.comparativePhrase})` : "";
-    const c = topConcern ? `, though ${topConcern.label.toLowerCase()} is ${pick(BAND_ADJ[topConcern.band], topConcern.metricKey)}` : "";
+    const s = topStrength
+      ? ` ${topStrength.label} is ${pick(BAND_ADJ[topStrength.band], topStrength.metricKey)} (${topStrength.comparativePhrase})`
+      : "";
+    const c = topConcern
+      ? `, though ${topConcern.label.toLowerCase()} is ${pick(BAND_ADJ[topConcern.band], topConcern.metricKey)}`
+      : "";
     return `${head}${s}${c}.`;
   },
   paragraph(nc, audience) {
@@ -180,7 +221,8 @@ export const deterministicProvider: InsightProvider = {
       const note = i.contextNote ? `: ${i.contextNote}` : "";
       return `${i.label} ${i.comparativePhrase}; reads ${adj}.${note}`;
     });
-    for (const lever of nc.attribution.levers.filter((l) => !l.passing)) out.push(`Path to clearing ${lever.gate}: ${lever.lever}.`);
+    for (const lever of nc.attribution.levers.filter((l) => !l.passing))
+      out.push(`Path to clearing ${lever.gate}: ${lever.lever}.`);
     return out;
   },
 };

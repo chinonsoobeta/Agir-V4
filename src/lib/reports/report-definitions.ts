@@ -25,7 +25,8 @@ export const REPORT_DEFINITIONS: ReportDefinition[] = [
   {
     type: "investor_report",
     title: "Investor Report",
-    description: "Project summary, financial metrics, and scenario results for equity investors and the IC.",
+    description:
+      "Project summary, financial metrics, and scenario results for equity investors and the IC.",
     supportedFormats: ["pdf", "docx", "xlsx"],
     requiredData: ["project", "financial_outputs"],
     stakeholder: "investor",
@@ -34,7 +35,8 @@ export const REPORT_DEFINITIONS: ReportDefinition[] = [
   {
     type: "lender_package",
     title: "Lender Package",
-    description: "Debt-focused package: DSCR covenant, loan schedule, sources & uses, and lender conditions.",
+    description:
+      "Debt-focused package: DSCR covenant, loan schedule, sources & uses, and lender conditions.",
     supportedFormats: ["pdf", "docx", "xlsx"],
     requiredData: ["project", "financial_outputs", "debt_metrics"],
     stakeholder: "lender",
@@ -52,7 +54,8 @@ export const REPORT_DEFINITIONS: ReportDefinition[] = [
   {
     type: "internal_team_report",
     title: "Internal Team Report",
-    description: "Operational report: assumption register, defaults, reconciliation, audit trail, and action items.",
+    description:
+      "Operational report: assumption register, defaults, reconciliation, audit trail, and action items.",
     supportedFormats: ["pdf", "xlsx"],
     requiredData: ["project"],
     stakeholder: "internal",

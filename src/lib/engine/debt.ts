@@ -54,7 +54,13 @@ export function loanBalanceAfterYears(
   ioMonths: number,
   years: number,
 ) {
-  return loanBalanceAfterMonths(loanAmount, annualRatePct, amortYears, ioMonths, Math.round(years * 12));
+  return loanBalanceAfterMonths(
+    loanAmount,
+    annualRatePct,
+    amortYears,
+    ioMonths,
+    Math.round(years * 12),
+  );
 }
 
 // Year-end balance schedule from year 1 through `holdYears` (for payoff at exit

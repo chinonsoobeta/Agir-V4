@@ -25,5 +25,8 @@ export function canAccessRow(row: TenantRow, viewer: Viewer): boolean {
 // must own it AND (if it is shared) belong to the workspace it is stamped with,
 // so a row can never be pushed into a workspace the viewer is not a member of.
 export function canWriteRow(row: TenantRow, viewer: Viewer): boolean {
-  return row.owner_id === viewer.userId && (row.workspace_id == null || isMember(row.workspace_id, viewer));
+  return (
+    row.owner_id === viewer.userId &&
+    (row.workspace_id == null || isMember(row.workspace_id, viewer))
+  );
 }

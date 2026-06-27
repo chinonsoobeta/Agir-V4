@@ -4,7 +4,11 @@ import { debtFindings } from "./modules/debt";
 import { industrialFindings } from "./modules/industrial";
 import { operationsFindings } from "./modules/operations";
 import { reconciliationFindings } from "./modules/reconciliation";
-import { approvalConditionFindings, recommendationFromFindings, rootCauseFindings } from "./modules/recommendation";
+import {
+  approvalConditionFindings,
+  recommendationFromFindings,
+  rootCauseFindings,
+} from "./modules/recommendation";
 import { returnFindings } from "./modules/returns";
 import { scenarioFindings } from "./modules/scenarios";
 import { sortFindings } from "./findings-rules";
@@ -19,16 +23,18 @@ import type {
 } from "./findings-types";
 
 function metricsFromEngineOutput(output: EngineOutput): NormalizedMetricSet {
-  return Object.fromEntries(output.metrics
-    .filter((m) => Number.isFinite(m.value))
-    .map((m) => [m.key, Number(m.value)]));
+  return Object.fromEntries(
+    output.metrics.filter((m) => Number.isFinite(m.value)).map((m) => [m.key, Number(m.value)]),
+  );
 }
 
 function metricsFromRows(rows: PersistedOutputRow[], scenario: string): NormalizedMetricSet {
-  return Object.fromEntries(rows
-    .filter((r) => r.scenario_key === scenario && r.value_numeric != null)
-    .map((r) => [r.metric_key, Number(r.value_numeric)])
-    .filter(([, value]) => Number.isFinite(value)));
+  return Object.fromEntries(
+    rows
+      .filter((r) => r.scenario_key === scenario && r.value_numeric != null)
+      .map((r) => [r.metric_key, Number(r.value_numeric)])
+      .filter(([, value]) => Number.isFinite(value)),
+  );
 }
 
 function isPersistedRows(value: unknown): value is PersistedOutputRow[] {
@@ -57,7 +63,9 @@ function normalize(input: GenerateFindingsInput): NormalizedFindingsInput {
     };
   }
 
-  const scenarios: Record<string, NormalizedMetricSet> = { base: metricsFromEngineOutput(input.underwriting) };
+  const scenarios: Record<string, NormalizedMetricSet> = {
+    base: metricsFromEngineOutput(input.underwriting),
+  };
   for (const scenario of (input.scenarios ?? []) as ScenarioOutput[]) {
     scenarios[scenario.key] = metricsFromEngineOutput(scenario.output);
   }
@@ -96,7 +104,11 @@ export function generateFindings(
   const withRootCauses = sortFindings([...initial, ...rootCauses]);
   const approvalConditions = approvalConditionFindings(withRootCauses);
   const recommendation = recommendationFromFindings(withRootCauses, approvalConditions);
-  const allFindings = sortFindings([...withRootCauses, ...approvalConditions, recommendation.finding]);
+  const allFindings = sortFindings([
+    ...withRootCauses,
+    ...approvalConditions,
+    recommendation.finding,
+  ]);
 
   return {
     strengths: byCategory(allFindings, "strength"),
@@ -108,7 +120,9 @@ export function generateFindings(
     rootCauseFindings: sortFindings(rootCauses),
     criticalFindings: sortFindings(allFindings.filter((x) => x.severity === "critical")),
     highPriorityFindings: sortFindings(allFindings.filter((x) => x.severity === "high")),
-    informationalFindings: sortFindings(allFindings.filter((x) => x.severity === "medium" || x.severity === "low")),
+    informationalFindings: sortFindings(
+      allFindings.filter((x) => x.severity === "medium" || x.severity === "low"),
+    ),
     primaryDrivers: scenarioResult.primaryDrivers,
     downsideDrivers: scenarioResult.downsideDrivers,
     recommendationFindings: byCategory(allFindings, "recommendation"),

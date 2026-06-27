@@ -112,10 +112,22 @@ export type IndustrialComponentKeys = { sf: string; rent: string; occupancy: str
 export function classifyRevenueComponent(label: string): IndustrialComponentKeys | null {
   const t = (label || "").toLowerCase();
   if (/\bcold[\s-]?storage|cold[\s-]?chain|refrigerat|temperature[\s-]?controlled\b/.test(t))
-    return { sf: "cold_storage_sf", rent: "cold_storage_rent_psf", occupancy: "cold_storage_occupancy" };
+    return {
+      sf: "cold_storage_sf",
+      rent: "cold_storage_rent_psf",
+      occupancy: "cold_storage_occupancy",
+    };
   if (/last[\s-]?mile|flex|urban logistics|delivery/.test(t))
-    return { sf: "last_mile_flex_sf", rent: "last_mile_flex_rent_psf", occupancy: "last_mile_flex_occupancy" };
+    return {
+      sf: "last_mile_flex_sf",
+      rent: "last_mile_flex_rent_psf",
+      occupancy: "last_mile_flex_occupancy",
+    };
   if (/dry[\s-]?warehouse|warehouse|distribution|bulk|industrial|logistics/.test(t))
-    return { sf: "dry_warehouse_sf", rent: "dry_warehouse_rent_psf", occupancy: "dry_warehouse_occupancy" };
+    return {
+      sf: "dry_warehouse_sf",
+      rent: "dry_warehouse_rent_psf",
+      occupancy: "dry_warehouse_occupancy",
+    };
   return null;
 }

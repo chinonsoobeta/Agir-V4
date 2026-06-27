@@ -18,10 +18,16 @@ function triggerDownload(blob: Blob, filename: string) {
 
 // Excel sheet names: <=31 chars, no : \ / ? * [ ], unique.
 function sheetName(used: Set<string>, raw: string): string {
-  let base = raw.replace(/[:\\/?*[\]]/g, " ").trim().slice(0, 28) || "Sheet";
+  const base =
+    raw
+      .replace(/[:\\/?*[\]]/g, " ")
+      .trim()
+      .slice(0, 28) || "Sheet";
   let name = base;
   let n = 2;
-  while (used.has(name.toLowerCase())) { name = `${base.slice(0, 26)} ${n++}`; }
+  while (used.has(name.toLowerCase())) {
+    name = `${base.slice(0, 26)} ${n++}`;
+  }
   used.add(name.toLowerCase());
   return name;
 }
@@ -52,13 +58,22 @@ export function buildReportWorkbook(XLSX: any, report: MemoReport) {
       aoa = [sec.table.columns, ...sec.table.rows];
       if (sec.table.note) aoa.push([], [`Note: ${sec.table.note}`]);
     } else {
-      aoa = [[sec.heading], ...String(sec.body ?? "").split("\n").map((line) => [line])];
+      aoa = [
+        [sec.heading],
+        ...String(sec.body ?? "")
+          .split("\n")
+          .map((line) => [line]),
+      ];
     }
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), sheetName(used, sec.heading));
   }
 
   // Disclosure tab.
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(report.footnotes.map((f) => [f])), sheetName(used, "Disclosure"));
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.aoa_to_sheet(report.footnotes.map((f) => [f])),
+    sheetName(used, "Disclosure"),
+  );
   return wb;
 }
 
@@ -70,5 +85,8 @@ export async function renderReportXlsxArrayBuffer(report: MemoReport): Promise<A
 
 export async function downloadReportXlsx(report: MemoReport, filename: string) {
   const ab = await renderReportXlsxArrayBuffer(report);
-  triggerDownload(new Blob([ab], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), filename);
+  triggerDownload(
+    new Blob([ab], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+    filename,
+  );
 }

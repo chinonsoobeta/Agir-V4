@@ -16,7 +16,11 @@ export type TallyPolicy = {
   rejectBlocks?: boolean;
 };
 
-export const DEFAULT_TALLY_POLICY: TallyPolicy = { quorum: 2, approveThresholdPct: 50, rejectBlocks: false };
+export const DEFAULT_TALLY_POLICY: TallyPolicy = {
+  quorum: 2,
+  approveThresholdPct: 50,
+  rejectBlocks: false,
+};
 
 export type VoteOutcome =
   | "approved"
@@ -45,7 +49,12 @@ function dedupeLatest(votes: IcVote[]): IcVote[] {
 }
 
 export function tallyVotes(votes: IcVote[], policy: TallyPolicy = DEFAULT_TALLY_POLICY): VoteTally {
-  const counts: Record<VoteValue, number> = { approve: 0, approve_with_conditions: 0, reject: 0, abstain: 0 };
+  const counts: Record<VoteValue, number> = {
+    approve: 0,
+    approve_with_conditions: 0,
+    reject: 0,
+    abstain: 0,
+  };
   for (const v of dedupeLatest(votes)) counts[v.vote] += 1;
 
   const approvals = counts.approve + counts.approve_with_conditions;
@@ -65,14 +74,24 @@ export function tallyVotes(votes: IcVote[], policy: TallyPolicy = DEFAULT_TALLY_
     // when approveThresholdPct > 50) AND more approvals than rejects. A prior
     // `approvalPct > 50` short-circuit ignored the threshold entirely, so a
     // simple majority always passed even when a supermajority was required.
-    outcome = counts.approve_with_conditions >= counts.approve ? "approved_with_conditions" : "approved";
+    outcome =
+      counts.approve_with_conditions >= counts.approve ? "approved_with_conditions" : "approved";
   } else if (rejects > approvals) {
     outcome = "rejected";
   } else {
     outcome = "tie";
   }
 
-  return { counts, decisiveVotes, approvals, rejects, abstentions, quorumMet, approvalPct, outcome };
+  return {
+    counts,
+    decisiveVotes,
+    approvals,
+    rejects,
+    abstentions,
+    quorumMet,
+    approvalPct,
+    outcome,
+  };
 }
 
 // ---- Approval conditions tracked open -> satisfied / waived through to close ----
@@ -92,9 +111,13 @@ export function canTransitionCondition(current: ConditionStatus, action: Conditi
 
 // Apply a condition state transition, or throw on an illegal one (e.g. you
 // cannot "satisfy" a waived condition without reopening it first).
-export function transitionCondition(current: ConditionStatus, action: ConditionAction): ConditionStatus {
+export function transitionCondition(
+  current: ConditionStatus,
+  action: ConditionAction,
+): ConditionStatus {
   const next = TRANSITIONS[current]?.[action];
-  if (next == null) throw new Error(`Illegal condition transition: cannot ${action} a ${current} condition.`);
+  if (next == null)
+    throw new Error(`Illegal condition transition: cannot ${action} a ${current} condition.`);
   return next;
 }
 

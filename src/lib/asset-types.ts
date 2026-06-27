@@ -28,7 +28,12 @@ export function assetTypeLabel(value?: string | null): string {
 // extracted component labels). Used to suggest a non-multifamily default.
 export function detectAssetType(text: string): string | null {
   const t = (text || "").toLowerCase();
-  if (/industrial|logistics|warehouse|distribution|cold[\s-]?storage|last[\s-]?mile|fulfillment/.test(t)) return "industrial";
+  if (
+    /industrial|logistics|warehouse|distribution|cold[\s-]?storage|last[\s-]?mile|fulfillment/.test(
+      t,
+    )
+  )
+    return "industrial";
   if (/data[\s-]?center/.test(t)) return "data_center";
   if (/life[\s-]?science|lab|biotech/.test(t)) return "life_science";
   if (/self[\s-]?storage/.test(t)) return "self_storage";

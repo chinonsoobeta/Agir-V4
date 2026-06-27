@@ -7,8 +7,14 @@ const files = [
   ["Harbour_Centre_Market_Study.pdf", "application/pdf"],
   ["Harbour_Centre_Broker_Opinion.pdf", "application/pdf"],
   ["Harbour_Centre_Lender_Term_Sheet.pdf", "application/pdf"],
-  ["Harbour_Centre_Construction_Budget.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
-  ["Harbour_Centre_Rent_Roll.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+  [
+    "Harbour_Centre_Construction_Budget.xlsx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ],
+  [
+    "Harbour_Centre_Rent_Roll.xlsx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ],
 ];
 
 let total = 0;

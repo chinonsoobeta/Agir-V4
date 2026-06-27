@@ -53,7 +53,10 @@ export const RECOMMENDATION_LABEL: Record<DecisionRecommendation, string> = {
 
 // Tone is used consistently across the UI: green = approval, red = material
 // risk / rejection, amber = conditions, neutral for everything informational.
-export const RECOMMENDATION_TONE: Record<DecisionRecommendation, "approve" | "condition" | "return" | "reject"> = {
+export const RECOMMENDATION_TONE: Record<
+  DecisionRecommendation,
+  "approve" | "condition" | "return" | "reject"
+> = {
   APPROVE: "approve",
   APPROVE_WITH_CONDITIONS: "condition",
   RETURN_TO_UNDERWRITING: "return",
@@ -83,7 +86,11 @@ export function reconcileRecommendation(args: {
   weakContext?: boolean;
 }): { code: DecisionRecommendation; rationale: string } {
   if (args.hardFail) {
-    return { code: "REJECT", rationale: "Hard fail (equity wipeout or an unresolved error-severity reconciliation flag) overrides the gate and findings lenses." };
+    return {
+      code: "REJECT",
+      rationale:
+        "Hard fail (equity wipeout or an unresolved error-severity reconciliation flag) overrides the gate and findings lenses.",
+    };
   }
   const vr = REC_RANK[args.verdictCode ?? "APPROVE"] ?? 0;
   const fr = REC_RANK[args.findingsRec ?? "APPROVE"] ?? 0;
@@ -93,7 +100,8 @@ export function reconcileRecommendation(args: {
     rank = 1;
     ctxEscalated = true;
   }
-  const code: DecisionRecommendation = rank === 0 ? "APPROVE" : rank === 1 ? "APPROVE_WITH_CONDITIONS" : "RETURN_TO_UNDERWRITING";
+  const code: DecisionRecommendation =
+    rank === 0 ? "APPROVE" : rank === 1 ? "APPROVE_WITH_CONDITIONS" : "RETURN_TO_UNDERWRITING";
   const lens = ctxEscalated
     ? "context-aware interpretation flags a below-norm metric the fixed gates cleared"
     : vr > fr
@@ -107,7 +115,13 @@ export function reconcileRecommendation(args: {
   };
 }
 
-const PRESENT_STATUSES = new Set(["extracted", "approved", "modified", "default_accepted", "calculated"]);
+const PRESENT_STATUSES = new Set([
+  "extracted",
+  "approved",
+  "modified",
+  "default_accepted",
+  "calculated",
+]);
 const APPROVED_STATUSES = new Set(["approved", "modified", "default_accepted", "calculated"]);
 
 function n(v: number | string | null | undefined): number | null {
@@ -144,7 +158,8 @@ export function normalizeOutputs(rows: OutputRow[]): NormalizedOutputs {
   for (const r of rows) {
     if (r.metric_key === "verdict") {
       const code = r.inputs?.code ?? r.formula_text;
-      if (code === "APPROVE" || code === "APPROVE_WITH_CONDITIONS" || code === "REJECT") verdict = code;
+      if (code === "APPROVE" || code === "APPROVE_WITH_CONDITIONS" || code === "REJECT")
+        verdict = code;
       continue;
     }
     if (r.metric_key === "risk_score") {
@@ -172,7 +187,10 @@ export function normalizeOutputs(rows: OutputRow[]): NormalizedOutputs {
 
 // ---------- Confidence Score ----------
 // 0-100, "how much do we trust the inputs behind this decision?"
-export function computeConfidenceScore(assumptions: AssumptionRow[]): { score: number; components: ScoreComponent[] } {
+export function computeConfidenceScore(assumptions: AssumptionRow[]): {
+  score: number;
+  components: ScoreComponent[];
+} {
   const present = assumptions.filter((a) => PRESENT_STATUSES.has(a.status ?? ""));
   const approved = assumptions.filter((a) => APPROVED_STATUSES.has(a.status ?? ""));
   const conflicting = assumptions.filter((a) => a.status === "conflicting");
@@ -198,11 +216,36 @@ export function computeConfidenceScore(assumptions: AssumptionRow[]): { score: n
   const sourceQuality = present.length ? (sourced.length / present.length) * 100 : 0;
 
   const components: ScoreComponent[] = [
-    { label: "Extraction confidence", score: clamp(extractionConf), weight: 0.3, detail: `${Math.round(extractionConf)}% mean across ${present.length} present` },
-    { label: "Approved coverage", score: clamp(approvedRatio), weight: 0.25, detail: `${approved.length} of ${total} approved` },
-    { label: "Conflict resolution", score: conflictScore, weight: 0.2, detail: conflicting.length ? `${conflicting.length} unresolved` : "no conflicts" },
-    { label: "Completeness", score: completeness, weight: 0.15, detail: `${missing.length} missing` },
-    { label: "Source quality", score: clamp(sourceQuality), weight: 0.1, detail: `${sourced.length}/${present.length} documented` },
+    {
+      label: "Extraction confidence",
+      score: clamp(extractionConf),
+      weight: 0.3,
+      detail: `${Math.round(extractionConf)}% mean across ${present.length} present`,
+    },
+    {
+      label: "Approved coverage",
+      score: clamp(approvedRatio),
+      weight: 0.25,
+      detail: `${approved.length} of ${total} approved`,
+    },
+    {
+      label: "Conflict resolution",
+      score: conflictScore,
+      weight: 0.2,
+      detail: conflicting.length ? `${conflicting.length} unresolved` : "no conflicts",
+    },
+    {
+      label: "Completeness",
+      score: completeness,
+      weight: 0.15,
+      detail: `${missing.length} missing`,
+    },
+    {
+      label: "Source quality",
+      score: clamp(sourceQuality),
+      weight: 0.1,
+      detail: `${sourced.length}/${present.length} documented`,
+    },
   ];
 
   const score = Math.round(components.reduce((s, c) => s + c.score * c.weight, 0));
@@ -233,15 +276,38 @@ export function computeInvestmentScore(
   const debt = band(b.dscr, 1.0, 1.6);
 
   // Sensitivity: does the deal survive the worst stress run?
-  const sens = avg([band(norm.worstStress.dscr, 1.0, 1.4), band(norm.worstStress.equity_multiple, 0.8, 1.4)]);
+  const sens = avg([
+    band(norm.worstStress.dscr, 1.0, 1.4),
+    band(norm.worstStress.equity_multiple, 0.8, 1.4),
+  ]);
 
   // Data quality / confidence feeds directly.
   const components: ScoreComponent[] = [
     { label: "Returns", score: returns ?? 0, weight: 0.3, detail: fmtReturns(b) },
-    { label: "Risk profile", score: riskScore ?? 50, weight: 0.2, detail: norm.riskScore == null ? "n/a" : `engine risk ${Math.round(norm.riskScore)}` },
-    { label: "Debt support", score: debt ?? 0, weight: 0.15, detail: b.dscr ? `DSCR ${b.dscr.toFixed(2)}x` : "n/a" },
-    { label: "Sensitivity", score: sens ?? 0, weight: 0.2, detail: norm.worstStress.dscr ? `stress DSCR ${norm.worstStress.dscr.toFixed(2)}x` : "n/a" },
-    { label: "Confidence & data", score: confidenceScore, weight: 0.15, detail: `${confidenceScore}/100 confidence` },
+    {
+      label: "Risk profile",
+      score: riskScore ?? 50,
+      weight: 0.2,
+      detail: norm.riskScore == null ? "n/a" : `engine risk ${Math.round(norm.riskScore)}`,
+    },
+    {
+      label: "Debt support",
+      score: debt ?? 0,
+      weight: 0.15,
+      detail: b.dscr ? `DSCR ${b.dscr.toFixed(2)}x` : "n/a",
+    },
+    {
+      label: "Sensitivity",
+      score: sens ?? 0,
+      weight: 0.2,
+      detail: norm.worstStress.dscr ? `stress DSCR ${norm.worstStress.dscr.toFixed(2)}x` : "n/a",
+    },
+    {
+      label: "Confidence & data",
+      score: confidenceScore,
+      weight: 0.15,
+      detail: `${confidenceScore}/100 confidence`,
+    },
   ];
 
   const score = Math.round(components.reduce((s, c) => s + c.score * c.weight, 0));
@@ -261,7 +327,10 @@ function avg(xs: (number | null)[]): number | null {
   return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null;
 }
 
-export function riskRatingFrom(norm: NormalizedOutputs, investmentScore: number | null): RiskRating {
+export function riskRatingFrom(
+  norm: NormalizedOutputs,
+  investmentScore: number | null,
+): RiskRating {
   // An equity wipeout or rejection is always Critical.
   if (norm.verdict === "REJECT") return "Critical";
   const rs = norm.riskScore;
@@ -287,7 +356,12 @@ export const RISK_TONE: Record<RiskRating, "approve" | "condition" | "return" | 
 
 // ---------- The unified decision summary ----------
 // The deterministic Insight Layer read, surfaced on the decision/findings tab.
-export type DecisionInsight = { thesis: string; interpretations: any[]; levers: any[]; context: any };
+export type DecisionInsight = {
+  thesis: string;
+  interpretations: any[];
+  levers: any[];
+  context: any;
+};
 
 export type DecisionSummary = {
   hasUnderwriting: boolean;
@@ -305,8 +379,12 @@ export type DecisionSummary = {
 
 export function buildDecision(outputs: OutputRow[], assumptions: AssumptionRow[]): DecisionSummary {
   const norm = normalizeOutputs(outputs);
-  const { score: confidenceScore, components: confidenceComponents } = computeConfidenceScore(assumptions);
-  const { score: investmentScore, components: investmentComponents } = computeInvestmentScore(norm, confidenceScore);
+  const { score: confidenceScore, components: confidenceComponents } =
+    computeConfidenceScore(assumptions);
+  const { score: investmentScore, components: investmentComponents } = computeInvestmentScore(
+    norm,
+    confidenceScore,
+  );
 
   let findings: FindingsReport | null = null;
   let recommendation: DecisionRecommendation;
@@ -321,7 +399,9 @@ export function buildDecision(outputs: OutputRow[], assumptions: AssumptionRow[]
     recommendation = "RETURN_TO_UNDERWRITING";
   }
 
-  const insightRow = outputs.find((o: any) => o.metric_key === "insight" && o.scenario_key === "base");
+  const insightRow = outputs.find(
+    (o: any) => o.metric_key === "insight" && o.scenario_key === "base",
+  );
   const insight: DecisionInsight | null = insightRow
     ? {
         thesis: String((insightRow as any).formula_text ?? ""),
@@ -336,16 +416,22 @@ export function buildDecision(outputs: OutputRow[], assumptions: AssumptionRow[]
   // contextual read together here. Keeps the deal header, Decision tab, Analysis
   // thesis and memo from ever disagreeing.
   if (norm.hasUnderwriting && Object.keys(norm.base).length > 0) {
-    const persisted = (insightRow as any)?.inputs?.recommendation as DecisionRecommendation | undefined;
+    const persisted = (insightRow as any)?.inputs?.recommendation as
+      | DecisionRecommendation
+      | undefined;
     if (persisted) {
       recommendation = persisted;
     } else {
-      const verdictRow = outputs.find((o: any) => o.metric_key === "verdict" && o.scenario_key === "base");
+      const verdictRow = outputs.find(
+        (o: any) => o.metric_key === "verdict" && o.scenario_key === "base",
+      );
       recommendation = reconcileRecommendation({
         verdictCode: (verdictRow as any)?.inputs?.code ?? null,
         hardFail: Boolean((verdictRow as any)?.inputs?.hardFail),
         findingsRec: findings?.recommendation ?? null,
-        weakContext: (insight?.interpretations ?? []).some((i: any) => i.band === "weak" || i.band === "critical"),
+        weakContext: (insight?.interpretations ?? []).some(
+          (i: any) => i.band === "weak" || i.band === "critical",
+        ),
       }).code;
     }
   }
@@ -399,7 +485,8 @@ export function pipelineStageFor(opts: {
   const last = opts.decisions[0]?.decision;
   if (last === "reject") return "Rejected";
   if (last === "approve" || last === "approve_with_conditions") return "Approved";
-  if (opts.status === "approved" || opts.status === "active" || opts.status === "completed") return "Approved";
+  if (opts.status === "approved" || opts.status === "active" || opts.status === "completed")
+    return "Approved";
   if (opts.status === "cancelled") return "Rejected";
   if (opts.hasUnderwriting) return "Investment Committee";
   if (opts.docCount > 0) return "Document Review";

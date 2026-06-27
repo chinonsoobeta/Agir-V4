@@ -27,14 +27,22 @@ function acceptDefaults(rows: ProjectInputRows, keys: string[]) {
   for (const key of keys) {
     const def = DEFAULTS[key];
     if (!def) throw new Error(`No static default for ${key}`);
-    rows.scalars.push({ key, value_numeric: def.value, status: "default_accepted", source: "default" });
+    rows.scalars.push({
+      key,
+      value_numeric: def.value,
+      status: "default_accepted",
+      source: "default",
+    });
   }
 }
 
 function resolveConflictConservative(rows: ProjectInputRows, key: string) {
   const row = rows.scalars.find((r) => r.key === key && r.status === "conflicting");
   if (!row?.conflict_values?.length) throw new Error(`No conflict to resolve for ${key}`);
-  const winner = conservativePick(key, row.conflict_values.map((c) => c.value));
+  const winner = conservativePick(
+    key,
+    row.conflict_values.map((c) => c.value),
+  );
   row.value_numeric = winner;
   row.status = "approved";
   return winner;
@@ -47,9 +55,17 @@ describe("Harbour Centre golden fixture (catastrophic deal)", () => {
     // ---- 1. BLOCKED: missing expense_ratio, hold_years, selling_costs; exit cap conflicting.
     const blocked = computeReadiness(rows);
     expect(blocked.status).toBe("blocked");
-    expect(blocked.missing.sort()).toEqual(["expense_ratio_pct", "hold_years", "selling_costs_pct"]);
+    expect(blocked.missing.sort()).toEqual([
+      "expense_ratio_pct",
+      "hold_years",
+      "selling_costs_pct",
+    ]);
     expect(blocked.conflicting).toEqual(["exit_cap_rate_pct"]);
-    expect(blocked.defaultable.sort()).toEqual(["expense_ratio_pct", "hold_years", "selling_costs_pct"]);
+    expect(blocked.defaultable.sort()).toEqual([
+      "expense_ratio_pct",
+      "hold_years",
+      "selling_costs_pct",
+    ]);
     // No metrics can be produced: assembly fails closed.
     expect(() => assembleEngineInput(rows)).toThrow(UnderwritingBlockedError);
 
@@ -141,7 +157,8 @@ describe("Harbour Centre golden fixture (catastrophic deal)", () => {
       profit_margin: v.profitOnCostPct,
       development_spread: v.developmentSpreadBps,
       stress_dscr: runUnderwriting(applyStress(input, STRESS_PRESETS[4])).values.dscr,
-      stress_equity_multiple: runUnderwriting(applyStress(input, STRESS_PRESETS[4])).values.equityMultiple,
+      stress_equity_multiple: runUnderwriting(applyStress(input, STRESS_PRESETS[4])).values
+        .equityMultiple,
       equity_wipeout: output.equityWipeout,
       error_flag_count: errorFlags.length,
     });
@@ -161,10 +178,32 @@ describe("Harbour Centre golden fixture (catastrophic deal)", () => {
     // ---- 6. Provenance verifier: every displayed number traces to the seeded
     // inputs or engine math.
     const inputValues = [
-      34_500_000, 162_000_000, 27_500_000, 18_000_000, 8_000_000, // budget lines
-      220, 3_050, 42, 36, 18_000, 32_000, 96, 92, 85, // revenue program
-      162_500_000, 6.25, 30, 1.2, 93, 50_000_000, 3, 4.75, 5.25, // capital stack & conflict candidates
-      DEFAULTS.expense_ratio_pct.value, DEFAULTS.hold_years.value, DEFAULTS.selling_costs_pct.value,
+      34_500_000,
+      162_000_000,
+      27_500_000,
+      18_000_000,
+      8_000_000, // budget lines
+      220,
+      3_050,
+      42,
+      36,
+      18_000,
+      32_000,
+      96,
+      92,
+      85, // revenue program
+      162_500_000,
+      6.25,
+      30,
+      1.2,
+      93,
+      50_000_000,
+      3,
+      4.75,
+      5.25, // capital stack & conflict candidates
+      DEFAULTS.expense_ratio_pct.value,
+      DEFAULTS.hold_years.value,
+      DEFAULTS.selling_costs_pct.value,
     ];
     const engineValues = Object.values(v).filter((x): x is number => typeof x === "number");
     const derivedValues = [

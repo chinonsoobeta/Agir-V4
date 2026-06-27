@@ -18,8 +18,8 @@ export const SEVERITY_RANK: Record<FindingSeverity, number> = {
 };
 
 export function sortFindings(findings: Finding[]) {
-  return [...findings].sort((a, b) =>
-    SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || a.id.localeCompare(b.id),
+  return [...findings].sort(
+    (a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || a.id.localeCompare(b.id),
   );
 }
 

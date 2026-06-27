@@ -20,7 +20,10 @@ export const listScenarios = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { project_id?: string }) => d)
   .handler(async ({ data, context }) => {
-    let q = context.supabase.from("scenarios").select("*").order("created_at", { ascending: false });
+    let q = context.supabase
+      .from("scenarios")
+      .select("*")
+      .order("created_at", { ascending: false });
     if (data?.project_id) q = q.eq("project_id", data.project_id);
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
@@ -32,7 +35,10 @@ export const createScenario = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ScenarioSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
-      .from("scenarios").insert({ ...data, owner_id: context.userId }).select().single();
+      .from("scenarios")
+      .insert({ ...data, owner_id: context.userId })
+      .select()
+      .single();
     if (error) throw new Error(error.message);
     return row;
   });

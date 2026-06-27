@@ -13,9 +13,29 @@ function rivergateInput(): UnderwritingInput {
       other: 14_500_000,
     },
     revenueProgram: [
-      { unitType: "Residential", unitCount: 620, rent: 3_850, rentBasis: "per_unit", occupancyPct: 95 },
-      { unitType: "Retail", unitCount: 1, avgSf: 36_000, rent: 68, rentBasis: "per_sf", occupancyPct: 92 },
-      { unitType: "Office", unitCount: 1, avgSf: 120_000, rent: 55, rentBasis: "per_sf", occupancyPct: 90 },
+      {
+        unitType: "Residential",
+        unitCount: 620,
+        rent: 3_850,
+        rentBasis: "per_unit",
+        occupancyPct: 95,
+      },
+      {
+        unitType: "Retail",
+        unitCount: 1,
+        avgSf: 36_000,
+        rent: 68,
+        rentBasis: "per_sf",
+        occupancyPct: 92,
+      },
+      {
+        unitType: "Office",
+        unitCount: 1,
+        avgSf: 120_000,
+        rent: 55,
+        rentBasis: "per_sf",
+        occupancyPct: 90,
+      },
     ],
     constructionMonths: 0,
     leaseUpMonths: 0,
@@ -85,14 +105,18 @@ describe("Findings Engine", () => {
     expect(ids.has("scenario.revenue_sensitivity")).toBe(true);
     expect(ids.has("root_cause.noi_cost_leverage")).toBe(true);
 
-    expect(report.rootCauseFindings[0].title).toBe("Insufficient NOI Relative to Cost Basis and Leverage");
+    expect(report.rootCauseFindings[0].title).toBe(
+      "Insufficient NOI Relative to Cost Basis and Leverage",
+    );
     expect(report.recommendation).toBe("RETURN_TO_UNDERWRITING");
-    expect(report.approvalConditions.map((finding) => finding.title)).toEqual(expect.arrayContaining([
-      "Increase NOI",
-      "Reduce Leverage",
-      "Increase Development Spread",
-      "Improve Stress Resilience",
-    ]));
+    expect(report.approvalConditions.map((finding) => finding.title)).toEqual(
+      expect.arrayContaining([
+        "Increase NOI",
+        "Reduce Leverage",
+        "Increase Development Spread",
+        "Improve Stress Resilience",
+      ]),
+    );
     expect(report.downsideDrivers.length).toBeGreaterThan(0);
     expect(report.downsideDrivers[0].impact).toBeLessThan(0);
     expect(report.highPriorityFindings.length).toBeGreaterThan(0);

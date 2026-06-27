@@ -30,7 +30,13 @@ export type ScalarInputRow = {
   conflict_values?: { value: number; source?: string | null }[] | null;
 };
 
-export type BudgetCategory = "land" | "hard" | "soft" | "contingency" | "financing_interest" | "other";
+export type BudgetCategory =
+  | "land"
+  | "hard"
+  | "soft"
+  | "contingency"
+  | "financing_interest"
+  | "other";
 
 export type BudgetLineRow = {
   category: BudgetCategory;
@@ -108,7 +114,9 @@ export type Readiness = {
 };
 
 function readableScalar(rows: ScalarInputRow[], key: string): ScalarInputRow | undefined {
-  return rows.find((r) => r.key === key && ENGINE_READABLE_STATUSES.includes(r.status) && r.value_numeric != null);
+  return rows.find(
+    (r) => r.key === key && ENGINE_READABLE_STATUSES.includes(r.status) && r.value_numeric != null,
+  );
 }
 
 export function computeReadiness(rows: ProjectInputRows): Readiness {
@@ -118,7 +126,8 @@ export function computeReadiness(rows: ProjectInputRows): Readiness {
   for (const category of REQUIRED_BUDGET_CATEGORIES) {
     const lines = rows.budget.filter((b) => b.category === category);
     if (lines.some((b) => b.status === "conflicting")) conflicting.push(`budget:${category}`);
-    else if (!lines.some((b) => ENGINE_READABLE_STATUSES.includes(b.status))) missing.push(`budget:${category}`);
+    else if (!lines.some((b) => ENGINE_READABLE_STATUSES.includes(b.status)))
+      missing.push(`budget:${category}`);
   }
 
   for (const key of REQUIRED_SCALAR_KEYS) {
@@ -131,7 +140,8 @@ export function computeReadiness(rows: ProjectInputRows): Readiness {
   // (count/SF and rent both present): a partial row never silently feeds
   // a zero into the engine.
   const readableComponents = rows.revenue.filter(
-    (r) => ENGINE_READABLE_STATUSES.includes(r.status) && Number(r.unit_count) > 0 && Number(r.rent) > 0,
+    (r) =>
+      ENGINE_READABLE_STATUSES.includes(r.status) && Number(r.unit_count) > 0 && Number(r.rent) > 0,
   );
   if (rows.revenue.some((r) => r.status === "conflicting")) conflicting.push("revenue_program");
   else if (readableComponents.length === 0) missing.push("revenue_program");
@@ -193,15 +203,19 @@ export function conservativePick(key: string, values: number[]): number {
 
 // Derived tier: a derivable total is never "missing". Computes
 // total_project_cost from approved/default_accepted budget lines.
-export function deriveCalculatedTdc(rows: BudgetLineRow[]): { value: number; formula_text: string } | null {
+export function deriveCalculatedTdc(
+  rows: BudgetLineRow[],
+): { value: number; formula_text: string } | null {
   const readable = rows.filter((b) => ENGINE_READABLE_STATUSES.includes(b.status));
   const sums = new Map<BudgetCategory, number>();
-  for (const line of readable) sums.set(line.category, (sums.get(line.category) ?? 0) + Number(line.amount));
+  for (const line of readable)
+    sums.set(line.category, (sums.get(line.category) ?? 0) + Number(line.amount));
   if (!REQUIRED_BUDGET_CATEGORIES.every((c) => sums.has(c))) return null;
   const parts = REQUIRED_BUDGET_CATEGORIES.map((c) => sums.get(c) ?? 0);
   const other = sums.get("other") ?? 0;
   const total = parts.reduce((a, b) => a + b, 0) + other;
-  const fmt = (n: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(n));
+  const fmt = (n: number) =>
+    new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(n));
   const formula = `total_project_cost = land ${fmt(parts[0])} + hard ${fmt(parts[1])} + soft ${fmt(parts[2])} + contingency ${fmt(parts[3])} + financing ${fmt(parts[4])}${other ? ` + other ${fmt(other)}` : ""} = ${fmt(total)}`;
   return { value: total, formula_text: formula };
 }
@@ -227,20 +241,27 @@ export function assembleEngineInput(rows: ProjectInputRows): UnderwritingInput {
       .filter((b) => b.category === category && ENGINE_READABLE_STATUSES.includes(b.status))
       .reduce((sum, b) => sum + Number(b.amount), 0);
 
-  const scalar = (key: string): number | null => readableScalar(rows.scalars, key)?.value_numeric ?? null;
+  const scalar = (key: string): number | null =>
+    readableScalar(rows.scalars, key)?.value_numeric ?? null;
   const required = (key: string): number => {
     const v = scalar(key);
     if (v == null) throw new UnderwritingBlockedError(readiness); // unreachable when ready
     return v;
   };
   const optionalZero = (key: string): number => {
-    if (!ABSENT_MEANS_ZERO.has(key)) throw new Error(`Key ${key} is not an absent-means-zero input.`);
+    if (!ABSENT_MEANS_ZERO.has(key))
+      throw new Error(`Key ${key} is not an absent-means-zero input.`);
     return scalar(key) ?? 0;
   };
 
   const projectOcc = scalar("stabilized_occupancy_pct");
   const revenueProgram: RevenueUnitInput[] = rows.revenue
-    .filter((r) => ENGINE_READABLE_STATUSES.includes(r.status) && Number(r.unit_count) > 0 && Number(r.rent) > 0)
+    .filter(
+      (r) =>
+        ENGINE_READABLE_STATUSES.includes(r.status) &&
+        Number(r.unit_count) > 0 &&
+        Number(r.rent) > 0,
+    )
     .map((r) => ({
       unitType: r.unit_type,
       unitCount: Number(r.unit_count),
@@ -271,11 +292,19 @@ export function assembleEngineInput(rows: ProjectInputRows): UnderwritingInput {
   const tier1Gp = scalar("promote_tier1_gp_pct");
   const tier2Gp = scalar("promote_tier2_gp_pct");
   const tiers: { hurdlePct?: number | null; gpPct: number }[] = [];
-  if (tier1Gp != null) tiers.push({ hurdlePct: scalar("promote_tier1_hurdle_pct"), gpPct: tier1Gp });
-  if (tier2Gp != null) tiers.push({ hurdlePct: scalar("promote_tier2_hurdle_pct"), gpPct: tier2Gp });
-  const hasWaterfall = preferredReturnPct > 0 || tiers.some((t) => t.gpPct > 0) || lpEquityPct != null || gpEquityPct != null;
-  const resolvedLp = lpEquityPct != null ? lpEquityPct : gpEquityPct != null ? 100 - gpEquityPct : 100;
-  const resolvedGp = gpEquityPct != null ? gpEquityPct : lpEquityPct != null ? 100 - lpEquityPct : 0;
+  if (tier1Gp != null)
+    tiers.push({ hurdlePct: scalar("promote_tier1_hurdle_pct"), gpPct: tier1Gp });
+  if (tier2Gp != null)
+    tiers.push({ hurdlePct: scalar("promote_tier2_hurdle_pct"), gpPct: tier2Gp });
+  const hasWaterfall =
+    preferredReturnPct > 0 ||
+    tiers.some((t) => t.gpPct > 0) ||
+    lpEquityPct != null ||
+    gpEquityPct != null;
+  const resolvedLp =
+    lpEquityPct != null ? lpEquityPct : gpEquityPct != null ? 100 - gpEquityPct : 100;
+  const resolvedGp =
+    gpEquityPct != null ? gpEquityPct : lpEquityPct != null ? 100 - lpEquityPct : 0;
   const waterfall = hasWaterfall
     ? {
         lpEquityPct: resolvedLp,

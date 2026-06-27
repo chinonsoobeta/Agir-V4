@@ -29,11 +29,18 @@ export function categoryFor(label: string): ParsedBudgetRow["category"] {
   // Reserves and offsite/infrastructure go to "other": checked BEFORE land so
   // "offsite" (contains "site") and "environmental" are not miscategorised.
   if (/environmental|remediation|pfas|\besa\b/.test(normalized)) return "other";
-  if (/off[\s-]?site|public road|infrastructure|municipal|substation|stormwater/.test(normalized)) return "other";
+  if (/off[\s-]?site|public road|infrastructure|municipal|substation|stormwater/.test(normalized))
+    return "other";
   if (/contingenc/.test(normalized)) return "contingency";
-  if (/interest|financing|loan fee|lender|capitalized interest/.test(normalized)) return "financing_interest";
+  if (/interest|financing|loan fee|lender|capitalized interest/.test(normalized))
+    return "financing_interest";
   if (/hard|construction|gmp|sitework|building|shell/.test(normalized)) return "hard";
-  if (/soft|design|architect|engineering|permit|legal|consulting|developer fee|leasing|tenant improvement|\bti\b|\blc\b/.test(normalized)) return "soft";
+  if (
+    /soft|design|architect|engineering|permit|legal|consulting|developer fee|leasing|tenant improvement|\bti\b|\blc\b/.test(
+      normalized,
+    )
+  )
+    return "soft";
   if (/land|acquisition/.test(normalized)) return "land";
   return "other";
 }
@@ -72,16 +79,24 @@ function parseBudgetSheet(
   const numericShare = (i: number) => {
     const vals = dataRows.map((r) => r[i]).filter((c) => c != null && String(c).trim() !== "");
     if (!vals.length) return 0;
-    const n = vals.filter((c) => Number.isFinite(typeof c === "number" ? c : Number(String(c).replace(/[$,%\s]/g, "")))).length;
+    const n = vals.filter((c) =>
+      Number.isFinite(typeof c === "number" ? c : Number(String(c).replace(/[$,%\s]/g, ""))),
+    ).length;
     return n / vals.length;
   };
   const moneyCols = header
     .map((h, i) => ({ h, i }))
-    .filter(({ h, i }) => i !== labelIndex && i !== categoryIndex && /amount|cost|budget|total|value|\$/.test(h));
+    .filter(
+      ({ h, i }) =>
+        i !== labelIndex && i !== categoryIndex && /amount|cost|budget|total|value|\$/.test(h),
+    );
   let amountIndex =
     moneyCols.find(({ i }) => numericShare(i) >= 0.6)?.i ??
     (moneyCols.length ? moneyCols[moneyCols.length - 1].i : -1);
-  if (amountIndex < 0) amountIndex = header.findIndex((_, i) => i !== labelIndex && i !== categoryIndex && numericShare(i) >= 0.6);
+  if (amountIndex < 0)
+    amountIndex = header.findIndex(
+      (_, i) => i !== labelIndex && i !== categoryIndex && numericShare(i) >= 0.6,
+    );
   // No identifiable amount column (no money-named header, no column whose data is
   // >=60% numeric): never guess a column. The previous `Math.max(1, -1)` forced
   // column 1, so a non-money column (a phase number, code, or year) could be read
@@ -92,7 +107,8 @@ function parseBudgetSheet(
       inserted,
       rejected: dataRows.map((row, i) => ({
         row: headerRowIndex + i + 2,
-        reason: "No amount column could be identified; rows skipped to avoid fabricating budget figures.",
+        reason:
+          "No amount column could be identified; rows skipped to avoid fabricating budget figures.",
         values: row,
       })),
     };
@@ -103,12 +119,20 @@ function parseBudgetSheet(
   // rows ABOVE the header (a merged "$ in thousands" banner is common).
   const amountHeader = amountIndex >= 0 ? String(headerRow[amountIndex] ?? "") : "";
   const columnScale = detectMoneyScale(amountHeader);
-  const captionCells = rows.slice(0, headerRowIndex + 1).flat().map((c) => String(c ?? ""));
+  const captionCells = rows
+    .slice(0, headerRowIndex + 1)
+    .flat()
+    .map((c) => String(c ?? ""));
   const scale =
-    columnScale !== 1
-      ? columnScale
-      : detectMoneyScale([sheetName, ...captionCells].join(" "));
-  const scaleLabel = scale === 1_000 ? "thousands" : scale === 1_000_000 ? "millions" : scale === 1_000_000_000 ? "billions" : null;
+    columnScale !== 1 ? columnScale : detectMoneyScale([sheetName, ...captionCells].join(" "));
+  const scaleLabel =
+    scale === 1_000
+      ? "thousands"
+      : scale === 1_000_000
+        ? "millions"
+        : scale === 1_000_000_000
+          ? "billions"
+          : null;
 
   dataRows.forEach((row, i) => {
     const rowNumber = headerRowIndex + i + 2;
@@ -116,10 +140,17 @@ function parseBudgetSheet(
     const itemLabel = String(row[labelIndex] ?? "").trim();
     const label = itemLabel || categoryLabel;
     const rawAmount = row[amountIndex];
-    const parsedAmount = typeof rawAmount === "number" ? rawAmount : Number(String(rawAmount ?? "").replace(/[$,]/g, ""));
+    const parsedAmount =
+      typeof rawAmount === "number"
+        ? rawAmount
+        : Number(String(rawAmount ?? "").replace(/[$,]/g, ""));
     const amount = Number.isFinite(parsedAmount) ? parsedAmount * scale : parsedAmount;
     if (/^total$/i.test(categoryLabel) || /total development cost|^total$/i.test(label)) {
-      rejected.push({ row: rowNumber, reason: "Total row skipped to avoid double counting.", values: row });
+      rejected.push({
+        row: rowNumber,
+        reason: "Total row skipped to avoid double counting.",
+        values: row,
+      });
       return;
     }
     if (!label || !Number.isFinite(amount)) {
@@ -137,7 +168,9 @@ function parseBudgetSheet(
         label ? `Line Item=${label}` : null,
         `Amount=$${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(amount)}`,
         scaleLabel ? `Scale=${scaleLabel}` : null,
-      ].filter(Boolean).join(" | "),
+      ]
+        .filter(Boolean)
+        .join(" | "),
     });
   });
 

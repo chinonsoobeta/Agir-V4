@@ -29,25 +29,41 @@ import {
   type UnderwritingInput,
 } from "./engine";
 import { computeInvestmentVerdict } from "./verdict";
-import { buildInsight, writeNarrative, computePortfolioNorms, deriveDealContext, interpretDeal } from "./context";
+import {
+  buildInsight,
+  writeNarrative,
+  computePortfolioNorms,
+  deriveDealContext,
+  interpretDeal,
+} from "./context";
 import { generateFindings } from "./findings";
 import { reconcileRecommendation } from "./decision";
 
 // Taxonomy (review queue) → engine key mapping. Conflicting review-queue rows
 // are surfaced to readiness through this mapping so a conflicted key blocks
 // underwriting even before approval.
-import { ENGINE_SCALAR_TO_TAXONOMY, TAXONOMY_TO_ENGINE_SCALAR, TAXONOMY_TO_BUDGET_CATEGORY, TAXONOMY_TO_REVENUE_FIELD } from "./taxonomy-engine-map";
+import {
+  ENGINE_SCALAR_TO_TAXONOMY,
+  TAXONOMY_TO_ENGINE_SCALAR,
+  TAXONOMY_TO_BUDGET_CATEGORY,
+  TAXONOMY_TO_REVENUE_FIELD,
+} from "./taxonomy-engine-map";
 
 const ProjectIdSchema = z.object({ project_id: z.string().uuid() });
 
 // The single loader. Everything the engine sees flows through here.
 async function loadProjectRows(supabase: any, projectId: string): Promise<ProjectInputRows> {
-  const [{ data: scalars }, { data: budget }, { data: revenue }, { data: conflictingAssumptions }] = await Promise.all([
-    supabase.from("underwriting_inputs").select("*").eq("project_id", projectId),
-    supabase.from("development_budget").select("*").eq("project_id", projectId),
-    supabase.from("revenue_program").select("*").eq("project_id", projectId),
-    supabase.from("assumptions").select("field_key,conflict_values,status").eq("project_id", projectId).eq("status", "conflicting"),
-  ]);
+  const [{ data: scalars }, { data: budget }, { data: revenue }, { data: conflictingAssumptions }] =
+    await Promise.all([
+      supabase.from("underwriting_inputs").select("*").eq("project_id", projectId),
+      supabase.from("development_budget").select("*").eq("project_id", projectId),
+      supabase.from("revenue_program").select("*").eq("project_id", projectId),
+      supabase
+        .from("assumptions")
+        .select("field_key,conflict_values,status")
+        .eq("project_id", projectId)
+        .eq("status", "conflicting"),
+    ]);
 
   const rows: ProjectInputRows = {
     scalars: (scalars ?? []).map((r: any) => ({
@@ -84,19 +100,26 @@ async function loadProjectRows(supabase: any, projectId: string): Promise<Projec
     const engineKey = TAXONOMY_TO_ENGINE_SCALAR[a.field_key];
     if (engineKey) {
       const existing = rows.scalars.find((r) => r.key === engineKey);
-      if (existing && (existing.status === "approved" || existing.status === "default_accepted")) continue;
+      if (existing && (existing.status === "approved" || existing.status === "default_accepted"))
+        continue;
       if (existing) {
         existing.status = "conflicting";
         existing.conflict_values = a.conflict_values ?? existing.conflict_values;
       } else {
-        rows.scalars.push({ key: engineKey, value_numeric: null, status: "conflicting", conflict_values: a.conflict_values ?? null });
+        rows.scalars.push({
+          key: engineKey,
+          value_numeric: null,
+          status: "conflicting",
+          conflict_values: a.conflict_values ?? null,
+        });
       }
       continue;
     }
     const budgetCategory = TAXONOMY_TO_BUDGET_CATEGORY[a.field_key];
     if (budgetCategory) {
       const existing = rows.budget.find((b) => b.category === budgetCategory);
-      if (existing && (existing.status === "approved" || existing.status === "default_accepted")) continue;
+      if (existing && (existing.status === "approved" || existing.status === "default_accepted"))
+        continue;
       if (existing) existing.status = "conflicting";
       else rows.budget.push({ category: budgetCategory as any, amount: 0, status: "conflicting" });
       continue;
@@ -104,9 +127,17 @@ async function loadProjectRows(supabase: any, projectId: string): Promise<Projec
     const rev = TAXONOMY_TO_REVENUE_FIELD[a.field_key];
     if (rev) {
       const existing = rows.revenue.find((r) => r.unit_type === rev.unitType);
-      if (existing && (existing.status === "approved" || existing.status === "default_accepted")) continue;
+      if (existing && (existing.status === "approved" || existing.status === "default_accepted"))
+        continue;
       if (existing) existing.status = "conflicting";
-      else rows.revenue.push({ unit_type: rev.unitType, unit_count: 0, rent: 0, rent_basis: rev.basis, status: "conflicting" } as any);
+      else
+        rows.revenue.push({
+          unit_type: rev.unitType,
+          unit_count: 0,
+          rent: 0,
+          rent_basis: rev.basis,
+          status: "conflicting",
+        } as any);
       continue;
     }
   }
@@ -114,7 +145,10 @@ async function loadProjectRows(supabase: any, projectId: string): Promise<Projec
   return rows;
 }
 
-export async function loadEngineInput(supabase: any, projectId: string): Promise<UnderwritingInput> {
+export async function loadEngineInput(
+  supabase: any,
+  projectId: string,
+): Promise<UnderwritingInput> {
   return assembleEngineInput(await loadProjectRows(supabase, projectId));
 }
 
@@ -132,13 +166,20 @@ export const getEngineInput = createServerFn({ method: "GET" })
     async ({
       data,
       context,
-    }): Promise<{ blocked: false; input: UnderwritingInput } | { blocked: true; missing: string[]; conflicting: string[] }> => {
+    }): Promise<
+      | { blocked: false; input: UnderwritingInput }
+      | { blocked: true; missing: string[]; conflicting: string[] }
+    > => {
       try {
         const input = await loadEngineInput(context.supabase, data.project_id);
         return { blocked: false, input };
       } catch (error) {
         if (error instanceof UnderwritingBlockedError) {
-          return { blocked: true, missing: error.readiness.missing, conflicting: error.readiness.conflicting };
+          return {
+            blocked: true,
+            missing: error.readiness.missing,
+            conflicting: error.readiness.conflicting,
+          };
         }
         throw error;
       }
@@ -147,12 +188,19 @@ export const getEngineInput = createServerFn({ method: "GET" })
 
 function scalarValue(rows: ProjectInputRows, key: string): number | null {
   const row = rows.scalars.find(
-    (r) => r.key === key && (r.status === "approved" || r.status === "default_accepted") && r.value_numeric != null,
+    (r) =>
+      r.key === key &&
+      (r.status === "approved" || r.status === "default_accepted") &&
+      r.value_numeric != null,
   );
   return row?.value_numeric ?? null;
 }
 
-function buildReconciliationContext(rows: ProjectInputRows, input: UnderwritingInput, output: EngineOutput) {
+function buildReconciliationContext(
+  rows: ProjectInputRows,
+  input: UnderwritingInput,
+  output: EngineOutput,
+) {
   const perUnitCounts = rows.revenue
     .filter((r) => r.rent_basis === "per_unit" && Number(r.unit_count) > 0)
     .map((r) => Number(r.unit_count));
@@ -166,10 +214,15 @@ function buildReconciliationContext(rows: ProjectInputRows, input: UnderwritingI
     .filter((b) => b.status === "approved" || b.status === "default_accepted")
     .reduce((sum, b) => sum + Number(b.amount), 0);
   const statedTotalRow = rows.scalars.find(
-    (r) => r.key === "stated_total_project_cost" && (r.status === "approved" || r.status === "default_accepted"),
+    (r) =>
+      r.key === "stated_total_project_cost" &&
+      (r.status === "approved" || r.status === "default_accepted"),
   );
   const statedTotalSource = statedTotalRow
-    ? [statedTotalRow.source_location, statedTotalRow.source_text].filter(Boolean).join(": ").slice(0, 240) || null
+    ? [statedTotalRow.source_location, statedTotalRow.source_text]
+        .filter(Boolean)
+        .join(": ")
+        .slice(0, 240) || null
     : null;
   return {
     tdc: output.values.tdc,
@@ -214,7 +267,9 @@ export const getUnderwritingReadiness = createServerFn({ method: "GET" })
       value: DEFAULTS[key].value,
       label: DEFAULTS[key].label,
     }));
-    const defaultedKeys = rows.scalars.filter((r) => r.status === "default_accepted").map((r) => r.key);
+    const defaultedKeys = rows.scalars
+      .filter((r) => r.status === "default_accepted")
+      .map((r) => r.key);
     return { ...readiness, conflicts, defaults, defaultedKeys };
   });
 
@@ -247,8 +302,12 @@ export const acceptDefaults = createServerFn({ method: "POST" })
       accepted.push(key);
     }
     await context.supabase.from("audit_logs").insert({
-      project_id: data.project_id, owner_id: context.userId, user_id: context.userId,
-      entity_type: "underwriting_inputs", entity_id: null, action: "accept_defaults",
+      project_id: data.project_id,
+      owner_id: context.userId,
+      user_id: context.userId,
+      entity_type: "underwriting_inputs",
+      entity_id: null,
+      action: "accept_defaults",
       payload: { accepted, defaults: accepted.map((k) => ({ key: k, value: DEFAULTS[k].value })) },
     });
     return { accepted };
@@ -271,8 +330,11 @@ export const resolveConflict = createServerFn({ method: "POST" })
     const rows = await loadProjectRows(context.supabase, data.project_id);
     const row = rows.scalars.find((r) => r.key === data.key && r.status === "conflicting");
     if (!row) throw new Error(`No conflicting input found for key ${data.key}.`);
-    const candidates = (row.conflict_values ?? []).map((c) => Number(c.value)).filter((v) => Number.isFinite(v));
-    if (!candidates.length) throw new Error(`Conflict for ${data.key} has no recorded candidate values.`);
+    const candidates = (row.conflict_values ?? [])
+      .map((c) => Number(c.value))
+      .filter((v) => Number.isFinite(v));
+    if (!candidates.length)
+      throw new Error(`Conflict for ${data.key} has no recorded candidate values.`);
 
     let resolved: number;
     if (data.mode === "conservative") {
@@ -282,7 +344,9 @@ export const resolveConflict = createServerFn({ method: "POST" })
       // Picking is constrained to one of the documented candidates: no code
       // path may average, blend, or invent a third value.
       if (!candidates.some((c) => Math.abs(c - data.value!) < 1e-9)) {
-        throw new Error(`Value ${data.value} is not one of the documented candidates (${candidates.join(", ")}).`);
+        throw new Error(
+          `Value ${data.value} is not one of the documented candidates (${candidates.join(", ")}).`,
+        );
       }
       resolved = data.value;
     }
@@ -316,8 +380,10 @@ export const resolveConflict = createServerFn({ method: "POST" })
       await context.supabase
         .from("assumptions")
         .update({
-          value_numeric: resolved, status: "approved",
-          approved_by: context.userId, approved_at: new Date().toISOString(),
+          value_numeric: resolved,
+          status: "approved",
+          approved_by: context.userId,
+          approved_at: new Date().toISOString(),
           ai_reasoning: note,
         })
         .eq("project_id", data.project_id)
@@ -326,8 +392,12 @@ export const resolveConflict = createServerFn({ method: "POST" })
     }
 
     await context.supabase.from("audit_logs").insert({
-      project_id: data.project_id, owner_id: context.userId, user_id: context.userId,
-      entity_type: "underwriting_inputs", entity_id: null, action: "resolve_conflict",
+      project_id: data.project_id,
+      owner_id: context.userId,
+      user_id: context.userId,
+      entity_type: "underwriting_inputs",
+      entity_id: null,
+      action: "resolve_conflict",
       payload: { key: data.key, mode: data.mode, resolved, candidates, note },
     });
     return { key: data.key, resolved, note };
@@ -342,7 +412,11 @@ export const resolveConflict = createServerFn({ method: "POST" })
 // it cannot change a value or introduce a number that is not already a
 // pre-approved constant. Accepted rows are written as default_accepted with
 // provenance and remain fully visible and reversible by the analyst.
-async function aiSelectDefaults(ctx: any, projectId: string, defaultable: string[]): Promise<string[]> {
+async function aiSelectDefaults(
+  ctx: any,
+  projectId: string,
+  defaultable: string[],
+): Promise<string[]> {
   const keys = defaultable.filter((k) => DEFAULTS[k] != null);
   if (!keys.length) return [];
   const list = keys
@@ -388,8 +462,12 @@ async function aiSelectDefaults(ctx: any, projectId: string, defaultable: string
   }
   if (accepted.length) {
     await ctx.supabase.from("audit_logs").insert({
-      project_id: projectId, owner_id: ctx.userId, user_id: ctx.userId,
-      entity_type: "underwriting_inputs", entity_id: null, action: "ai_accept_defaults",
+      project_id: projectId,
+      owner_id: ctx.userId,
+      user_id: ctx.userId,
+      entity_type: "underwriting_inputs",
+      entity_id: null,
+      action: "ai_accept_defaults",
       payload: { accepted, defaults: accepted.map((k) => ({ key: k, value: DEFAULTS[k].value })) },
     });
   }
@@ -401,13 +479,15 @@ async function aiSelectDefaults(ctx: any, projectId: string, defaultable: string
 export const runFullUnderwriting = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { project_id: string; mode?: "ai" | "deterministic" }) =>
-    z.object({
-      project_id: z.string().uuid(),
-      // AI is the default. It only selects inputs (which consensual static
-      // defaults to accept); the deterministic engine performs every
-      // calculation in BOTH modes. "deterministic" disables the AI step.
-      mode: z.enum(["ai", "deterministic"]).default("ai"),
-    }).parse(d),
+    z
+      .object({
+        project_id: z.string().uuid(),
+        // AI is the default. It only selects inputs (which consensual static
+        // defaults to accept); the deterministic engine performs every
+        // calculation in BOTH modes. "deterministic" disables the AI step.
+        mode: z.enum(["ai", "deterministic"]).default("ai"),
+      })
+      .parse(d),
   )
   .handler(async ({ data, context }) => {
     const { hasAnthropicKey } = await import("./ai-gateway.server");
@@ -415,7 +495,9 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
     const wantsAI = data.mode === "ai";
     const useAI = wantsAI && aiAvailable;
     let aiFailureReason: string | null =
-      wantsAI && !aiAvailable ? "AI unavailable (ANTHROPIC_API_KEY missing or malformed): used the deterministic engine." : null;
+      wantsAI && !aiAvailable
+        ? "AI unavailable (ANTHROPIC_API_KEY missing or malformed): used the deterministic engine."
+        : null;
     const aiAcceptedDefaults: string[] = [];
 
     let rows = await loadProjectRows(context.supabase, data.project_id);
@@ -459,9 +541,13 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
     if (calculated) {
       await context.supabase.from("underwriting_inputs").upsert(
         {
-          project_id: data.project_id, owner_id: context.userId,
-          key: "total_project_cost", value_numeric: calculated.value,
-          source: "analyst", status: "calculated", formula_text: calculated.formula_text,
+          project_id: data.project_id,
+          owner_id: context.userId,
+          key: "total_project_cost",
+          value_numeric: calculated.value,
+          source: "analyst",
+          status: "calculated",
+          formula_text: calculated.formula_text,
         },
         { onConflict: "project_id,key" },
       );
@@ -471,8 +557,11 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
     const flags: ReconciliationFlag[] = [
       ...runReconciliationChecks(buildReconciliationContext(rows, input, base)),
       ...base.warnings.map((w) => ({
-        check_key: w.key, severity: "warning" as const, message: w.message,
-        expected: w.expected, actual: w.actual,
+        check_key: w.key,
+        severity: "warning" as const,
+        message: w.message,
+        expected: w.expected,
+        actual: w.actual,
       })),
     ];
 
@@ -510,7 +599,10 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
       .neq("project_id", data.project_id);
     const portfolioNorms = computePortfolioNorms((portfolioRows ?? []) as any);
     const { data: projectRow } = await context.supabase
-      .from("projects").select("name, type, location").eq("id", data.project_id).maybeSingle();
+      .from("projects")
+      .select("name, type, location")
+      .eq("id", data.project_id)
+      .maybeSingle();
 
     // ONE recommendation: reconcile the gate verdict with the findings engine and
     // the contextual read so every surface (Analysis, Decision, memo) agrees.
@@ -518,16 +610,30 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
     // does: real assumptions, scenarios, and NO engine `input`: so the
     // persisted recommendation matches what the Decision tab would compute.
     const { data: findingsAssumptions } = await context.supabase
-      .from("assumptions").select("field_key,value_numeric,status,confidence_score").eq("project_id", data.project_id);
+      .from("assumptions")
+      .select("field_key,value_numeric,status,confidence_score")
+      .eq("project_id", data.project_id);
     let findingsRec: string | null = null;
     try {
-      const scenarios = scenarioOutputs.filter((s) => s.key !== "base").map((s) => ({ key: s.key, label: s.key, output: s.output }));
-      findingsRec = generateFindings(base, (findingsAssumptions ?? []) as any, scenarios as any).recommendation;
+      const scenarios = scenarioOutputs
+        .filter((s) => s.key !== "base")
+        .map((s) => ({ key: s.key, label: s.key, output: s.output }));
+      findingsRec = generateFindings(
+        base,
+        (findingsAssumptions ?? []) as any,
+        scenarios as any,
+      ).recommendation;
     } catch {
       findingsRec = null;
     }
-    const dealContext = deriveDealContext(input, { type: projectRow?.type ?? null, location: projectRow?.location ?? null });
-    const interpretationsForRec = interpretDeal(base, dealContext, { portfolioNorms, portfolioMinSample: 6 });
+    const dealContext = deriveDealContext(input, {
+      type: projectRow?.type ?? null,
+      location: projectRow?.location ?? null,
+    });
+    const interpretationsForRec = interpretDeal(base, dealContext, {
+      portfolioNorms,
+      portfolioMinSample: 6,
+    });
     const reconciled = reconcileRecommendation({
       verdictCode: verdict.code,
       hardFail: verdict.hardFail,
@@ -536,9 +642,16 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
     });
 
     const insight = buildInsight(base, input, {
-      meta: { name: projectRow?.name ?? null, type: projectRow?.type ?? null, location: projectRow?.location ?? null },
+      meta: {
+        name: projectRow?.name ?? null,
+        type: projectRow?.type ?? null,
+        location: projectRow?.location ?? null,
+      },
       benchInputs: { portfolioNorms, portfolioMinSample: 6 },
-      covenants: { minDscr: scalarValue(rows, "min_dscr"), minDebtYield: scalarValue(rows, "min_debt_yield") },
+      covenants: {
+        minDscr: scalarValue(rows, "min_dscr"),
+        minDebtYield: scalarValue(rows, "min_debt_yield"),
+      },
       verdictCode: reconciled.code,
     });
 
@@ -554,31 +667,50 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
     for (const { key: scenarioKey, output } of scenarioOutputs) {
       for (const metric of output.metrics) {
         outputInserts.push({
-          project_id: data.project_id, owner_id: context.userId, scenario_key: scenarioKey,
-          metric_key: metric.key, metric_label: metric.label,
+          project_id: data.project_id,
+          owner_id: context.userId,
+          scenario_key: scenarioKey,
+          metric_key: metric.key,
+          metric_label: metric.label,
           value_numeric: Number.isFinite(metric.value) ? metric.value : null,
-          unit: metric.unit, formula_text: metric.formula,
+          unit: metric.unit,
+          formula_text: metric.formula,
           inputs: { engine_input_keys: Object.keys(input), scenario: scenarioKey },
         });
       }
     }
     outputInserts.push({
-      project_id: data.project_id, owner_id: context.userId, scenario_key: "base",
-      metric_key: "risk_score", metric_label: "Risk Score", value_numeric: riskScore, unit: "count",
+      project_id: data.project_id,
+      owner_id: context.userId,
+      scenario_key: "base",
+      metric_key: "risk_score",
+      metric_label: "Risk Score",
+      value_numeric: riskScore,
+      unit: "count",
       formula_text: "Fixed thresholds over engine outputs + reconciliation flags (no LLM).",
       inputs: { error_flags: errorFlags.length },
     });
     outputInserts.push({
-      project_id: data.project_id, owner_id: context.userId, scenario_key: "base",
-      metric_key: "verdict", metric_label: "Deterministic Verdict", value_numeric: null, unit: "count",
+      project_id: data.project_id,
+      owner_id: context.userId,
+      scenario_key: "base",
+      metric_key: "verdict",
+      metric_label: "Deterministic Verdict",
+      value_numeric: null,
+      unit: "count",
       formula_text: `${verdict.code}: ${verdict.gates.filter((g) => !g.pass).length} of ${verdict.gates.length} gates failed${verdict.hardFail ? "; hard fail (equity wipeout or error-severity reconciliation flag)" : ""}`,
       inputs: { code: verdict.code, gates: verdict.gates, hardFail: verdict.hardFail },
     });
     // The deterministic "analyst read": thesis, contextual interpretations,
     // what-if levers, and audience-adapted narratives (all provenance-clean).
     outputInserts.push({
-      project_id: data.project_id, owner_id: context.userId, scenario_key: "base",
-      metric_key: "insight", metric_label: "Deterministic Read", value_numeric: null, unit: "count",
+      project_id: data.project_id,
+      owner_id: context.userId,
+      scenario_key: "base",
+      metric_key: "insight",
+      metric_label: "Deterministic Read",
+      value_numeric: null,
+      unit: "count",
       formula_text: insight.thesis,
       inputs: {
         recommendation: reconciled.code,
@@ -599,13 +731,19 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
         portfolioSample: portfolioNorms.sampleSize,
       },
     });
-    const { error: outErr } = await context.supabase.from("financial_outputs").insert(outputInserts);
+    const { error: outErr } = await context.supabase
+      .from("financial_outputs")
+      .insert(outputInserts);
     if (outErr) throw new Error(outErr.message);
 
     const cashFlowInserts = scenarioOutputs.flatMap(({ key: scenarioKey, output }) =>
       output.cashFlows.map((row) => ({
-        project_id: data.project_id, owner_id: context.userId, scenario_key: scenarioKey,
-        period_year: row.periodYear, line_key: row.lineKey, amount: row.amount,
+        project_id: data.project_id,
+        owner_id: context.userId,
+        scenario_key: scenarioKey,
+        period_year: row.periodYear,
+        line_key: row.lineKey,
+        amount: row.amount,
       })),
     );
     if (cashFlowInserts.length) {
@@ -614,26 +752,37 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
     }
 
     if (flags.length) {
-      const { error } = await context.supabase.from("reconciliation_flags").insert(
-        flags.map((flag) => ({ project_id: data.project_id, owner_id: context.userId, ...flag })),
-      );
+      const { error } = await context.supabase
+        .from("reconciliation_flags")
+        .insert(
+          flags.map((flag) => ({ project_id: data.project_id, owner_id: context.userId, ...flag })),
+        );
       if (error) throw new Error(error.message);
     }
 
     if (risks.length) {
-      await context.supabase.from("risk_register").insert(
-        risks.map((risk) => ({ project_id: data.project_id, owner_id: context.userId, ...risk })),
-      );
+      await context.supabase
+        .from("risk_register")
+        .insert(
+          risks.map((risk) => ({ project_id: data.project_id, owner_id: context.userId, ...risk })),
+        );
     }
 
     await context.supabase.from("audit_logs").insert({
-      project_id: data.project_id, owner_id: context.userId, user_id: context.userId,
-      entity_type: "project", entity_id: data.project_id, action: "run_full_underwriting",
+      project_id: data.project_id,
+      owner_id: context.userId,
+      user_id: context.userId,
+      entity_type: "project",
+      entity_id: data.project_id,
+      action: "run_full_underwriting",
       payload: {
         scenarios: scenarioOutputs.map((s) => s.key),
-        verdict: verdict.code, risk_score: riskScore,
-        error_flags: errorFlags.length, equity_wipeout: base.equityWipeout,
-        analysis_mode: analysisMode, ai_accepted_defaults: aiAcceptedDefaults,
+        verdict: verdict.code,
+        risk_score: riskScore,
+        error_flags: errorFlags.length,
+        equity_wipeout: base.equityWipeout,
+        analysis_mode: analysisMode,
+        ai_accepted_defaults: aiAcceptedDefaults,
       },
     });
 
@@ -655,7 +804,9 @@ export const listReconciliationFlags = createServerFn({ method: "GET" })
   .inputValidator((d: { project_id: string }) => ProjectIdSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
-      .from("reconciliation_flags").select("*").eq("project_id", data.project_id)
+      .from("reconciliation_flags")
+      .select("*")
+      .eq("project_id", data.project_id)
       .order("severity", { ascending: false });
     if (error) throw new Error(error.message);
     return rows ?? [];

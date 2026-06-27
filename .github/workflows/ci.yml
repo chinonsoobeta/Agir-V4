@@ -28,16 +28,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run lint
       - run: npm run test
       # vite.config.ts defaults missing Supabase env to "" so the build needs no
       # secrets; runtime config is injected by the host (Vercel) at deploy time.
       - run: npm run build
-      # NOTE: `npm run lint` is intentionally NOT gated yet. The repo currently
-      # has pre-existing, repo-wide prettier/prettier formatting violations
-      # (eslint-plugin-prettier is enabled but the tree was never fully
-      # formatted). Wiring it in now would fail every PR. Run `npm run format`
-      # across the tree in a dedicated change, then add `- run: npm run lint`
-      # here.
 
   schema-types:
     name: Supabase types in sync with migrations

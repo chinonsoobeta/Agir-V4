@@ -4,12 +4,26 @@
 import type { MemoReport, ReportSection, ReportStat } from "../memo-report";
 import type { ReportData } from "./report-data.server";
 import {
-  makeAccessors, deriveCore, reportVerdict, irrStatusText, requiredActions,
-  disclosureFootnotes, defaultAcceptedFields, inputCounts, VERDICT_BANNER, insightFor,
-  money, pct, x, bps,
+  makeAccessors,
+  deriveCore,
+  reportVerdict,
+  irrStatusText,
+  requiredActions,
+  disclosureFootnotes,
+  defaultAcceptedFields,
+  inputCounts,
+  VERDICT_BANNER,
+  insightFor,
+  money,
+  pct,
+  x,
+  bps,
 } from "./report-common";
 
-export function buildExecutiveSummary(data: ReportData, opts: { generatedLabel: string }): MemoReport {
+export function buildExecutiveSummary(
+  data: ReportData,
+  opts: { generatedLabel: string },
+): MemoReport {
   const { oVal } = makeAccessors(data);
   const core = deriveCore(data);
   const verdict = reportVerdict(data);
@@ -20,7 +34,21 @@ export function buildExecutiveSummary(data: ReportData, opts: { generatedLabel: 
 
   const card = (label: string, key: string, unit: string): ReportStat => {
     const v = oVal("base", key);
-    return { label, value: v == null ? "Not available" : unit === "$" ? money(v) : unit === "%" ? pct(v) : unit === "x" ? x(v) : unit === "bps" ? bps(v) : String(v) };
+    return {
+      label,
+      value:
+        v == null
+          ? "Not available"
+          : unit === "$"
+            ? money(v)
+            : unit === "%"
+              ? pct(v)
+              : unit === "x"
+                ? x(v)
+                : unit === "bps"
+                  ? bps(v)
+                  : String(v),
+    };
   };
   const metric_cards: ReportStat[] = [
     { label: "Total Development Cost", value: money(core.tdc) },
@@ -41,9 +69,14 @@ export function buildExecutiveSummary(data: ReportData, opts: { generatedLabel: 
 
   // One-paragraph deterministic deal summary.
   const summaryBits: string[] = [];
-  if (data.project?.name) summaryBits.push(`${data.project.name}${data.project?.location ? ` (${data.project.location})` : ""} carries a total development cost of ${money(core.tdc)} funded by ${money(core.loan)} of senior debt and ${money(core.committedEquity)} of committed equity.`);
-  if (core.noi != null && core.exitCap != null) summaryBits.push(`Stabilized NOI is ${money(core.noi)} at a ${pct(core.exitCap)} exit cap.`);
-  if (core.dscr != null && core.minDscr != null) summaryBits.push(`Underwritten DSCR is ${x(core.dscr)} against a ${x(core.minDscr)} covenant.`);
+  if (data.project?.name)
+    summaryBits.push(
+      `${data.project.name}${data.project?.location ? ` (${data.project.location})` : ""} carries a total development cost of ${money(core.tdc)} funded by ${money(core.loan)} of senior debt and ${money(core.committedEquity)} of committed equity.`,
+    );
+  if (core.noi != null && core.exitCap != null)
+    summaryBits.push(`Stabilized NOI is ${money(core.noi)} at a ${pct(core.exitCap)} exit cap.`);
+  if (core.dscr != null && core.minDscr != null)
+    summaryBits.push(`Underwritten DSCR is ${x(core.dscr)} against a ${x(core.minDscr)} covenant.`);
   if (!summaryBits.length) summaryBits.push("Insufficient approved data to summarize this deal.");
   // Prefer the deterministic analyst read (thesis + contextual narrative) when
   // the Insight Layer has run; fall back to the templated summary otherwise.
@@ -54,28 +87,55 @@ export function buildExecutiveSummary(data: ReportData, opts: { generatedLabel: 
   // each one requires (magnitudes are provenance-backed via ins.derived).
   const failingLevers = (ins?.levers ?? []).filter((l: any) => !l.passing);
   if (failingLevers.length) {
-    sections.push({ heading: "What Would Move the Needle", body: failingLevers.map((l: any) => `- ${l.lever}`).join("\n") });
+    sections.push({
+      heading: "What Would Move the Needle",
+      body: failingLevers.map((l: any) => `- ${l.lever}`).join("\n"),
+    });
   }
 
   // Top reasons for the recommendation (3-5, derived from flags/metrics).
   const reasons: string[] = [];
-  if (verdict.hardFail) reasons.push("- Hard fail: an equity wipeout or unresolved error-severity reconciliation flag is present.");
-  if (core.dscr != null && core.minDscr != null && core.dscr < core.minDscr) reasons.push(`- DSCR ${x(core.dscr)} is below the ${x(core.minDscr)} covenant.`);
+  if (verdict.hardFail)
+    reasons.push(
+      "- Hard fail: an equity wipeout or unresolved error-severity reconciliation flag is present.",
+    );
+  if (core.dscr != null && core.minDscr != null && core.dscr < core.minDscr)
+    reasons.push(`- DSCR ${x(core.dscr)} is below the ${x(core.minDscr)} covenant.`);
   const spread = oVal("base", "development_spread");
-  if (spread != null && spread < 100) reasons.push(`- Development spread is ${bps(spread)} (target >= 100 bps).`);
-  if (Math.abs(core.fundingGap) > 1) reasons.push(`- Funding gap of ${money(core.fundingGap)} between required and committed equity.`);
+  if (spread != null && spread < 100)
+    reasons.push(`- Development spread is ${bps(spread)} (target >= 100 bps).`);
+  if (Math.abs(core.fundingGap) > 1)
+    reasons.push(
+      `- Funding gap of ${money(core.fundingGap)} between required and committed equity.`,
+    );
   const em = oVal("base", "equity_multiple");
   if (em != null && em < 1.5) reasons.push(`- Equity multiple is ${x(em)} (target >= 1.50x).`);
   if (!reasons.length) reasons.push("- All screened return and covenant gates are satisfied.");
-  sections.push({ heading: "Top Reasons for Recommendation", body: reasons.slice(0, 5).join("\n") });
+  sections.push({
+    heading: "Top Reasons for Recommendation",
+    body: reasons.slice(0, 5).join("\n"),
+  });
 
   // Top risks (highest severity first).
-  const rank: Record<string, number> = { critical: 0, red: 1, yellow: 2, warning: 2, info: 3 };
+  const rank: Record<string, number> = {
+    error: 0,
+    critical: 0,
+    high: 1,
+    red: 1,
+    warning: 2,
+    medium: 2,
+    yellow: 2,
+    info: 3,
+    low: 3,
+  };
   const topRisks = [...data.risks]
     .sort((a, b) => (rank[String(a.severity)] ?? 9) - (rank[String(b.severity)] ?? 9))
     .slice(0, 5)
     .map((r) => `- [${String(r.severity).toUpperCase()}] ${r.title}`);
-  sections.push({ heading: "Top Risks", body: topRisks.length ? topRisks.join("\n") : "No automated risk flags." });
+  sections.push({
+    heading: "Top Risks",
+    body: topRisks.length ? topRisks.join("\n") : "No automated risk flags.",
+  });
 
   // Required actions.
   sections.push({ heading: "Required Actions", body: requiredActions(data, core).join("\n") });
@@ -85,13 +145,22 @@ export function buildExecutiveSummary(data: ReportData, opts: { generatedLabel: 
   const errorCount = data.flags.filter((f) => f.severity === "error" && !f.resolved).length;
   const warningCount = data.flags.filter((f) => f.severity === "warning" && !f.resolved).length;
   const names = defaultAcceptedFields(data);
-  derived.push(counts.approved, counts.calculated, counts.defaultAccepted, errorCount, warningCount);
-  sections.push({ heading: "Data Quality & Readiness", body: [
-    "Input conflicts: none outstanding.",
-    `Reconciliation: ${errorCount} error(s), ${warningCount} warning(s).`,
-    `Inputs used: ${counts.approved} approved, ${counts.calculated} calculated, ${counts.defaultAccepted} default-accepted.`,
-    names.length ? `Default-accepted: ${names.join(", ")}.` : "Default-accepted inputs: none.",
-  ].join("\n") });
+  derived.push(
+    counts.approved,
+    counts.calculated,
+    counts.defaultAccepted,
+    errorCount,
+    warningCount,
+  );
+  sections.push({
+    heading: "Data Quality & Readiness",
+    body: [
+      "Input conflicts: none outstanding.",
+      `Reconciliation: ${errorCount} error(s), ${warningCount} warning(s).`,
+      `Inputs used: ${counts.approved} approved, ${counts.calculated} calculated, ${counts.defaultAccepted} default-accepted.`,
+      names.length ? `Default-accepted: ${names.join(", ")}.` : "Default-accepted inputs: none.",
+    ].join("\n"),
+  });
 
   const disc = disclosureFootnotes(data);
   derived.push(...disc.derived);

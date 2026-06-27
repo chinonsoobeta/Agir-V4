@@ -15,7 +15,13 @@
 // activate real OCR. The boundary is injectable so tests exercise the
 // empty-text-layer -> OCR -> candidates path without the heavy dependencies.
 
-export type OcrResult = { text: string; confidence: number };
+export type OcrResult = {
+  text: string;
+  confidence: number;
+  pagesProcessed?: number;
+  totalPages?: number;
+  truncated?: boolean;
+};
 export type OcrRunner = (buf: ArrayBuffer) => Promise<OcrResult>;
 
 // Optional dynamic import: never throws, returns null when the module is not
@@ -30,16 +36,19 @@ async function optionalImport<T = unknown>(spec: string): Promise<T | null> {
 }
 
 // Cap pages so a large scanned PDF cannot make extraction hang.
-const MAX_OCR_PAGES = 10;
+export const MAX_OCR_PAGES = 10;
 
 export const defaultOcrRunner: OcrRunner = async (buf) => {
   const unpdf = await optionalImport<any>("unpdf");
   if (!unpdf?.renderPageAsImage || !unpdf?.getDocumentProxy) return { text: "", confidence: 0 };
 
   let pageCount = 1;
+  let sourcePageCount = 1;
   try {
     const pdf = await unpdf.getDocumentProxy(new Uint8Array(buf));
-    pageCount = Math.min(MAX_OCR_PAGES, Number(pdf?.numPages ?? 1) || 1);
+    const totalPages = Number(pdf?.numPages ?? 1) || 1;
+    pageCount = Math.min(MAX_OCR_PAGES, totalPages);
+    sourcePageCount = totalPages;
   } catch {
     return { text: "", confidence: 0 };
   }
@@ -68,7 +77,8 @@ export const defaultOcrRunner: OcrRunner = async (buf) => {
         image = null;
       }
       if (!image) continue;
-      const input = image instanceof Uint8Array ? Buffer.from(image) : Buffer.from(image as ArrayBuffer);
+      const input =
+        image instanceof Uint8Array ? Buffer.from(image) : Buffer.from(image as ArrayBuffer);
       const { data } = await worker.recognize(input);
       if (data?.text) texts.push(String(data.text));
       if (typeof data?.confidence === "number") confidences.push(data.confidence);
@@ -83,6 +93,14 @@ export const defaultOcrRunner: OcrRunner = async (buf) => {
     }
   }
 
-  const confidence = confidences.length ? confidences.reduce((a, b) => a + b, 0) / confidences.length : 0;
-  return { text: texts.join("\n").trim(), confidence };
+  const confidence = confidences.length
+    ? confidences.reduce((a, b) => a + b, 0) / confidences.length
+    : 0;
+  return {
+    text: texts.join("\n").trim(),
+    confidence,
+    pagesProcessed: pageCount,
+    totalPages: sourcePageCount,
+    truncated: sourcePageCount > pageCount,
+  };
 };

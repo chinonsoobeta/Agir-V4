@@ -24,7 +24,11 @@ export const STRESS_PRESETS: StressPreset[] = [
   { key: "rate_shock", label: "Rate Shock (+150 bps)", rateDeltaBps: 150 },
   { key: "revenue_down", label: "Revenue Downside (-10%)", revenueDeltaPct: -10 },
   { key: "occupancy_down", label: "Occupancy Downside (-500 bps)", occupancyDeltaPts: -5 },
-  { key: "expense_inflation", label: "Expense Inflation (+500 bps ratio)", expenseRatioDeltaPts: 5 },
+  {
+    key: "expense_inflation",
+    label: "Expense Inflation (+500 bps ratio)",
+    expenseRatioDeltaPts: 5,
+  },
   {
     // The true downside: every shock at once, including the occupancy and
     // expense slippage that the verdict's stress gate reads from this preset.
@@ -53,14 +57,18 @@ export function applyStress(input: UnderwritingInput, preset: StressPreset): Und
       soft: input.budget.soft * costMultiplier,
       contingency: input.budget.contingency * costMultiplier,
       financingInterest:
-        input.budget.financingInterest == null ? undefined : input.budget.financingInterest * costMultiplier,
+        input.budget.financingInterest == null
+          ? undefined
+          : input.budget.financingInterest * costMultiplier,
       other: input.budget.other == null ? undefined : input.budget.other * costMultiplier,
     },
     revenueProgram: input.revenueProgram.map((row) => ({
       ...row,
       rent: row.rent * revenueMultiplier,
       occupancyPct:
-        row.occupancyPct == null ? row.occupancyPct : Math.max(0, row.occupancyPct + occupancyDeltaPts),
+        row.occupancyPct == null
+          ? row.occupancyPct
+          : Math.max(0, row.occupancyPct + occupancyDeltaPts),
     })),
     otherIncomeAnnual: input.otherIncomeAnnual * revenueMultiplier,
     stabilizedOccupancyPct: Math.max(0, input.stabilizedOccupancyPct + occupancyDeltaPts),

@@ -200,17 +200,25 @@ function IntegrationsPage() {
         <Card className="p-5 elevated">
           <div className="flex items-center gap-2">
             <Plug className="size-4 text-muted-foreground" />
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Connector status</div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+              Connector status
+            </div>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Only connectors marked Live perform a real import / export round-trip today. Planned connectors are
-            disclosed as roadmap, never shown as connected.
+            Only connectors marked Live perform a real import / export round-trip today. Planned
+            connectors are disclosed as roadmap, never shown as connected.
           </p>
           <div className="mt-3 grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
             {CONNECTOR_REGISTRY.map((c) => (
-              <div key={c.provider} className="rounded border border-border p-2 flex items-center justify-between gap-2">
+              <div
+                key={c.provider}
+                className="rounded border border-border p-2 flex items-center justify-between gap-2"
+              >
                 <span className="text-sm">{c.label}</span>
-                <Badge variant="outline" className={`text-[9px] uppercase ${c.status === "live" ? "text-success border-success/40" : "text-muted-foreground"}`}>
+                <Badge
+                  variant="outline"
+                  className={`text-[9px] uppercase ${c.status === "live" ? "text-success border-success/40" : "text-muted-foreground"}`}
+                >
                   {c.status}
                 </Badge>
               </div>
@@ -492,7 +500,12 @@ function CsvConnectorPanel({
   const importFn = useServerFn(importDealsCsv);
   const csvConn = connections.find((c: any) => c.provider === "csv");
   const [csvText, setCsvText] = useState("");
-  const [result, setResult] = useState<{ created: number; updated: number; failed: number; parseErrors: string[] } | null>(null);
+  const [result, setResult] = useState<{
+    created: number;
+    updated: number;
+    failed: number;
+    parseErrors: string[];
+  } | null>(null);
 
   // The explicit mapping used for both directions.
   const MAPPING: Record<string, string> = {
@@ -506,8 +519,19 @@ function CsvConnectorPanel({
 
   const enable = useMutation({
     mutationFn: () =>
-      ensureFn({ data: { provider: "csv", category: "spreadsheet", display_name: "CSV Import / Export", status: "connected", workspace_id: workspaceId ?? null } }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["integrations"] }); toast.success("CSV connector enabled"); },
+      ensureFn({
+        data: {
+          provider: "csv",
+          category: "spreadsheet",
+          display_name: "CSV Import / Export",
+          status: "connected",
+          workspace_id: workspaceId ?? null,
+        },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["integrations"] });
+      toast.success("CSV connector enabled");
+    },
     onError: (e: Error) => toast.error(e.message),
   });
   const doExport = useMutation({
@@ -525,7 +549,8 @@ function CsvConnectorPanel({
     onError: (e: Error) => toast.error(e.message),
   });
   const doImport = useMutation({
-    mutationFn: () => importFn({ data: { connection_id: csvConn.id, csv: csvText, mapping: MAPPING } }),
+    mutationFn: () =>
+      importFn({ data: { connection_id: csvConn.id, csv: csvText, mapping: MAPPING } }),
     onSuccess: (r: any) => {
       setResult(r);
       qc.invalidateQueries({ queryKey: ["projects"] });
@@ -538,37 +563,60 @@ function CsvConnectorPanel({
     <Card className="p-5 elevated">
       <div className="flex items-center gap-2">
         <FileSpreadsheet className="size-4 text-primary" />
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">CSV deal sync (live connector)</div>
+        <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+          CSV deal sync (live connector)
+        </div>
       </div>
       <p className="text-xs text-muted-foreground mt-1">
-        Explicit field mapping: {Object.entries(MAPPING).map(([col, field]) => `${col} -> ${field}`).join(", ")}.
-        Imports are idempotent (re-importing a Deal ID updates the same deal).
+        Explicit field mapping:{" "}
+        {Object.entries(MAPPING)
+          .map(([col, field]) => `${col} -> ${field}`)
+          .join(", ")}
+        . Imports are idempotent (re-importing a Deal ID updates the same deal).
       </p>
       {!csvConn ? (
-        <Button size="sm" className="mt-3" disabled={enable.isPending} onClick={() => enable.mutate()}>
+        <Button
+          size="sm"
+          className="mt-3"
+          disabled={enable.isPending}
+          onClick={() => enable.mutate()}
+        >
           <Plug className="size-4 mr-1.5" />
           Enable CSV connector
         </Button>
       ) : (
         <div className="mt-3 space-y-3">
-          <Button size="sm" variant="outline" disabled={doExport.isPending} onClick={() => doExport.mutate()}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={doExport.isPending}
+            onClick={() => doExport.mutate()}
+          >
             <RefreshCw className="size-4 mr-1.5" />
             Export deals to CSV
           </Button>
           <textarea
             className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs font-mono h-28"
-            placeholder={"Paste CSV with a header row, e.g.\nDeal ID,Name,Market,Source,Win %,Target Close\nCRM-1,Harbour Centre,Vancouver,broker,60,2026-09-01"}
+            placeholder={
+              "Paste CSV with a header row, e.g.\nDeal ID,Name,Market,Source,Win %,Target Close\nCRM-1,Harbour Centre,Vancouver,broker,60,2026-09-01"
+            }
             value={csvText}
             onChange={(e) => setCsvText(e.target.value)}
           />
-          <Button size="sm" disabled={!csvText.trim() || doImport.isPending} onClick={() => doImport.mutate()}>
+          <Button
+            size="sm"
+            disabled={!csvText.trim() || doImport.isPending}
+            onClick={() => doImport.mutate()}
+          >
             <Upload className="size-4 mr-1.5" />
             Import deals from CSV
           </Button>
           {result && (
             <div className="text-xs text-muted-foreground">
               Imported {result.created} new, {result.updated} updated, {result.failed} failed.
-              {result.parseErrors.length > 0 && <span className="text-warning"> {result.parseErrors.slice(0, 3).join("; ")}</span>}
+              {result.parseErrors.length > 0 && (
+                <span className="text-warning"> {result.parseErrors.slice(0, 3).join("; ")}</span>
+              )}
             </div>
           )}
         </div>

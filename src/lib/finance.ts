@@ -43,7 +43,10 @@ export const QUICK_START_DEFAULTS = {
   ioMonths: 12,
 };
 
-export function quickStartUnderwritingInput(project: ProjectInput, scenario: ProjectScenario = {}): UnderwritingInput {
+export function quickStartUnderwritingInput(
+  project: ProjectInput,
+  scenario: ProjectScenario = {},
+): UnderwritingInput {
   const land = num(project.acquisition_cost) * (1 + (scenario.cost_change ?? 0) / 100);
   const hard = num(project.construction_cost) * (1 + (scenario.cost_change ?? 0) / 100);
   const annualRevenue = num(project.revenue_forecast) * (1 + (scenario.revenue_change ?? 0) / 100);
@@ -104,8 +107,16 @@ export function deriveQuickStartMetrics(project: ProjectInput, scenario?: Projec
 }
 
 export const fmtCurrency = (n: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n || 0);
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(n || 0);
 export const fmtPct = (n: number) => `${Number(n || 0).toFixed(2)}%`;
 export const fmtCompact = (n: number) =>
-  new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1, style: "currency", currency: "USD" }).format(n || 0);
-
+  new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+    style: "currency",
+    currency: "USD",
+  }).format(n || 0);

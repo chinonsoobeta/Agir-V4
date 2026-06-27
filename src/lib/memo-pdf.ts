@@ -45,15 +45,24 @@ export async function renderMemoPdfArrayBuffer(report: MemoReport): Promise<Arra
 
   // RETURN_TO_UNDERWRITING is a negative outcome and must read red, like REJECT --
   // not the amber (GOLD) reserved for conditional approvals.
-  const isNegative = report.verdict_code === "REJECT" || report.verdict_code === "RETURN_TO_UNDERWRITING";
+  const isNegative =
+    report.verdict_code === "REJECT" || report.verdict_code === "RETURN_TO_UNDERWRITING";
   const verdictColor = isNegative ? REJECT : report.verdict_code === "APPROVE" ? OK : GOLD;
 
   const footer = () => {
-    doc.setFont("helvetica", "normal").setFontSize(7).setTextColor(...MUTED);
+    doc
+      .setFont("helvetica", "normal")
+      .setFontSize(7)
+      .setTextColor(...MUTED);
     doc.text(`${report.header_band}: Page ${page}`, M, H - 22);
   };
   const ensure = (space: number) => {
-    if (y + space > H - 40) { footer(); doc.addPage(); page += 1; y = M; }
+    if (y + space > H - 40) {
+      footer();
+      doc.addPage();
+      page += 1;
+      y = M;
+    }
   };
 
   // ---- Header band ----
@@ -66,13 +75,19 @@ export async function renderMemoPdfArrayBuffer(report: MemoReport): Promise<Arra
   y = 50;
 
   // ---- Title block ----
-  doc.setTextColor(...INK).setFont("helvetica", "bold").setFontSize(20);
+  doc
+    .setTextColor(...INK)
+    .setFont("helvetica", "bold")
+    .setFontSize(20);
   doc.text(report.title, M, y);
   y += 22;
   doc.setFontSize(15).setTextColor(...GOLD);
   doc.text(report.project_name, M, y);
   y += 16;
-  doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(...MUTED);
+  doc
+    .setFont("helvetica", "normal")
+    .setFontSize(10)
+    .setTextColor(...MUTED);
   doc.text(`${report.subtitle}   ·   ${report.mode_label}`, M, y);
   y += 16;
 
@@ -88,10 +103,19 @@ export async function renderMemoPdfArrayBuffer(report: MemoReport): Promise<Arra
       if (col === 0) ensure(cellH);
       const cx = M + col * cellW;
       const cy = y + row * cellH;
-      doc.setDrawColor(...LINE).setLineWidth(0.5).rect(cx, cy, cellW, cellH);
-      doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(...MUTED);
+      doc
+        .setDrawColor(...LINE)
+        .setLineWidth(0.5)
+        .rect(cx, cy, cellW, cellH);
+      doc
+        .setFont("helvetica", "normal")
+        .setFontSize(6.5)
+        .setTextColor(...MUTED);
       doc.text(s.label.toUpperCase(), cx + 6, cy + 12);
-      doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(...INK);
+      doc
+        .setFont("helvetica", "bold")
+        .setFontSize(11)
+        .setTextColor(...INK);
       doc.text(s.value, cx + 6, cy + 26);
     });
     y += Math.ceil(stats.length / perRow) * cellH + 12;
@@ -105,7 +129,10 @@ export async function renderMemoPdfArrayBuffer(report: MemoReport): Promise<Arra
   doc.text(report.verdict_banner, M + 8, y + 16);
   y += 32;
   if (report.verdict_narrative) {
-    doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...INK);
+    doc
+      .setFont("helvetica", "normal")
+      .setFontSize(9)
+      .setTextColor(...INK);
     const lines = doc.splitTextToSize(report.verdict_narrative, contentW);
     ensure(lines.length * 11 + 6);
     doc.text(lines, M, y);
@@ -125,10 +152,19 @@ export async function renderMemoPdfArrayBuffer(report: MemoReport): Promise<Arra
       if (col === 0) ensure(cellH);
       const cx = M + col * cellW;
       const cy = y + row * cellH;
-      doc.setDrawColor(...LINE).setLineWidth(0.5).rect(cx, cy, cellW, cellH);
-      doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(...MUTED);
+      doc
+        .setDrawColor(...LINE)
+        .setLineWidth(0.5)
+        .rect(cx, cy, cellW, cellH);
+      doc
+        .setFont("helvetica", "normal")
+        .setFontSize(6.5)
+        .setTextColor(...MUTED);
       doc.text(c.label.toUpperCase(), cx + 6, cy + 13);
-      doc.setFont("helvetica", "bold").setFontSize(13).setTextColor(...INK);
+      doc
+        .setFont("helvetica", "bold")
+        .setFontSize(13)
+        .setTextColor(...INK);
       doc.text(c.value, cx + 6, cy + 30);
     });
     y += Math.ceil(cards.length / perRow) * cellH + 12;
@@ -139,7 +175,10 @@ export async function renderMemoPdfArrayBuffer(report: MemoReport): Promise<Arra
     sectionHeading(`${idx + 1}. ${sec.heading}`);
     if (sec.table) drawTable(sec.table);
     if (sec.body) {
-      doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...INK);
+      doc
+        .setFont("helvetica", "normal")
+        .setFontSize(9)
+        .setTextColor(...INK);
       const lines = doc.splitTextToSize(sec.body, contentW);
       ensure(lines.length * 11);
       doc.text(lines, M, y);
@@ -150,10 +189,16 @@ export async function renderMemoPdfArrayBuffer(report: MemoReport): Promise<Arra
   // ---- Footnotes ----
   if (report.footnotes.length) {
     ensure(20);
-    doc.setDrawColor(...LINE).setLineWidth(0.5).line(M, y, W - M, y);
+    doc
+      .setDrawColor(...LINE)
+      .setLineWidth(0.5)
+      .line(M, y, W - M, y);
     y += 10;
     report.footnotes.forEach((f) => {
-      doc.setFont("helvetica", "normal").setFontSize(7).setTextColor(...MUTED);
+      doc
+        .setFont("helvetica", "normal")
+        .setFontSize(7)
+        .setTextColor(...MUTED);
       const lines = doc.splitTextToSize(f, contentW);
       ensure(lines.length * 9 + 4);
       doc.text(lines, M, y);
@@ -169,7 +214,10 @@ export async function renderMemoPdfArrayBuffer(report: MemoReport): Promise<Arra
     ensure(24);
     doc.setFillColor(...HEADBG);
     doc.rect(M, y, contentW, 18, "F");
-    doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(...INK);
+    doc
+      .setFont("helvetica", "bold")
+      .setFontSize(9)
+      .setTextColor(...INK);
     doc.text(text.toUpperCase(), M + 6, y + 12.5);
     y += 24;
   }
@@ -189,19 +237,25 @@ export async function renderMemoPdfArrayBuffer(report: MemoReport): Promise<Arra
 
     const drawRow = (cells: string[], opts: { header?: boolean }) => {
       const wrapped = cells.map((c, i) =>
-        doc.splitTextToSize(String(c ?? ""), widths[i] - 2 * pad));
+        doc.splitTextToSize(String(c ?? ""), widths[i] - 2 * pad),
+      );
       const rowH = Math.max(...wrapped.map((w) => w.length)) * lh + 2 * pad;
       ensure(rowH);
       let cx = M;
-      if (opts.header) { doc.setFillColor(...HEADBG); doc.rect(M, y, contentW, rowH, "F"); }
+      if (opts.header) {
+        doc.setFillColor(...HEADBG);
+        doc.rect(M, y, contentW, rowH, "F");
+      }
       doc.setDrawColor(...LINE).setLineWidth(0.4);
       cells.forEach((_, i) => {
         doc.rect(cx, y, widths[i], rowH);
-        doc.setFont("helvetica", opts.header ? "bold" : "normal").setFontSize(opts.header ? headFont : bodyFont);
+        doc
+          .setFont("helvetica", opts.header ? "bold" : "normal")
+          .setFontSize(opts.header ? headFont : bodyFont);
         doc.setTextColor(...(opts.header ? MUTED : INK));
         // Right-align numeric-looking non-first columns.
         const txt = wrapped[i];
-        const isNum = i > 0 && /^[\(\-$]?[\d.,]/.test(String(cells[i]).trim());
+        const isNum = i > 0 && /^[(\-$]?[\d.,]/.test(String(cells[i]).trim());
         if (isNum) doc.text(txt, cx + widths[i] - pad, y + pad + lh - 2, { align: "right" });
         else doc.text(txt, cx + pad, y + pad + lh - 2);
         cx += widths[i];
@@ -212,7 +266,10 @@ export async function renderMemoPdfArrayBuffer(report: MemoReport): Promise<Arra
     drawRow(table.columns, { header: true });
     table.rows.forEach((r) => drawRow(r, {}));
     if (table.note) {
-      doc.setFont("helvetica", "italic").setFontSize(6.8).setTextColor(...MUTED);
+      doc
+        .setFont("helvetica", "italic")
+        .setFontSize(6.8)
+        .setTextColor(...MUTED);
       const lines = doc.splitTextToSize(`Note: ${table.note}`, contentW);
       ensure(lines.length * 8 + 4);
       doc.text(lines, M, y + 8);

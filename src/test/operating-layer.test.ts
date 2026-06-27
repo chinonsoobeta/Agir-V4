@@ -14,10 +14,25 @@ import {
   type IcVote,
 } from "@/lib/committee/voting";
 import { canAccessRow, canWriteRow } from "@/lib/workspace-access";
-import { csvConnector, parseCsv, CONNECTOR_REGISTRY, type DealRecord, type FieldMapping } from "@/lib/integrations/connector";
+import {
+  csvConnector,
+  parseCsv,
+  CONNECTOR_REGISTRY,
+  type DealRecord,
+  type FieldMapping,
+} from "@/lib/integrations/connector";
 
-const M = (id: string, dueDate: string | null, status: ExecMilestone["status"], dependsOn: string[] = []): ExecMilestone => ({
-  id, title: id, dueDate, status, dependsOn,
+const M = (
+  id: string,
+  dueDate: string | null,
+  status: ExecMilestone["status"],
+  dependsOn: string[] = [],
+): ExecMilestone => ({
+  id,
+  title: id,
+  dueDate,
+  status,
+  dependsOn,
 });
 
 describe("3A execution critical path", () => {
@@ -67,7 +82,10 @@ describe("3A execution critical path", () => {
   });
 
   test("detects dependency cycles without infinite recursion", () => {
-    const cyclic = [M("a", "2026-07-01", "not_started", ["b"]), M("b", "2026-07-02", "not_started", ["a"])];
+    const cyclic = [
+      M("a", "2026-07-01", "not_started", ["b"]),
+      M("b", "2026-07-02", "not_started", ["a"]),
+    ];
     const r = computeCriticalPath(cyclic, null, "2026-07-01");
     expect(r.hasCycle).toBe(true);
     expect(r.cycles.length).toBeGreaterThan(0);
@@ -78,14 +96,23 @@ describe("3B IC vote tallying", () => {
   const vote = (memberId: string, v: IcVote["vote"]): IcVote => ({ memberId, vote: v });
 
   test("a clear majority approves", () => {
-    const t = tallyVotes([vote("a", "approve"), vote("b", "approve"), vote("c", "approve"), vote("d", "reject")]);
+    const t = tallyVotes([
+      vote("a", "approve"),
+      vote("b", "approve"),
+      vote("c", "approve"),
+      vote("d", "reject"),
+    ]);
     expect(t.quorumMet).toBe(true);
     expect(t.approvalPct).toBe(75);
     expect(t.outcome).toBe("approved");
   });
 
   test("conditional approvals dominate -> approved_with_conditions", () => {
-    const t = tallyVotes([vote("a", "approve_with_conditions"), vote("b", "approve_with_conditions"), vote("c", "approve")]);
+    const t = tallyVotes([
+      vote("a", "approve_with_conditions"),
+      vote("b", "approve_with_conditions"),
+      vote("c", "approve"),
+    ]);
     expect(t.outcome).toBe("approved_with_conditions");
   });
 
@@ -148,7 +175,9 @@ describe("3B approval conditions tracked to close", () => {
   test("a conditional approval clears for close only when no condition is open", () => {
     expect(conditionsCleared([{ status: "open" }, { status: "satisfied" }])).toBe(false);
     expect(conditionsCleared([{ status: "satisfied" }, { status: "waived" }])).toBe(true);
-    expect(openConditionCount([{ status: "open" }, { status: "open" }, { status: "satisfied" }])).toBe(2);
+    expect(
+      openConditionCount([{ status: "open" }, { status: "open" }, { status: "satisfied" }]),
+    ).toBe(2);
   });
 });
 
@@ -185,15 +214,31 @@ describe("3C integrations: CSV reference connector round-trip", () => {
   const mapping: FieldMapping = {
     "Deal ID": "external_id",
     "Opportunity Name": "name",
-    "Market": "location",
-    "Product": "type",
+    Market: "location",
+    Product: "type",
     "Lead Source": "source",
     "Win %": "probability",
     "Target Close": "target_close_date",
   };
   const records: DealRecord[] = [
-    { external_id: "CRM-1", name: "Harbour Centre, Phase II", location: "Vancouver, BC", type: "mixed_use", source: "broker", probability: 60, target_close_date: "2026-09-01" },
-    { external_id: "CRM-2", name: "Rivergate", location: "Austin, TX", type: "multifamily", source: "direct", probability: 35, target_close_date: null },
+    {
+      external_id: "CRM-1",
+      name: "Harbour Centre, Phase II",
+      location: "Vancouver, BC",
+      type: "mixed_use",
+      source: "broker",
+      probability: 60,
+      target_close_date: "2026-09-01",
+    },
+    {
+      external_id: "CRM-2",
+      name: "Rivergate",
+      location: "Austin, TX",
+      type: "multifamily",
+      source: "direct",
+      probability: 35,
+      target_close_date: null,
+    },
   ];
 
   test("export then import is a faithful round-trip through the field mapping", () => {
@@ -211,7 +256,10 @@ describe("3C integrations: CSV reference connector round-trip", () => {
 
   test("rows missing the mapped external id or name are reported, not imported", () => {
     const csv = "Deal ID,Opportunity Name\n,No ID Deal\nCRM-9,\nCRM-10,Good Deal";
-    const { records: parsed, errors } = csvConnector.parseInbound(csv, { "Deal ID": "external_id", "Opportunity Name": "name" });
+    const { records: parsed, errors } = csvConnector.parseInbound(csv, {
+      "Deal ID": "external_id",
+      "Opportunity Name": "name",
+    });
     expect(parsed).toHaveLength(1);
     expect(parsed[0].external_id).toBe("CRM-10");
     expect(errors.length).toBe(2);

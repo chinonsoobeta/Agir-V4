@@ -5,24 +5,111 @@
 import { describe, expect, test } from "vitest";
 import { buildMemoReport, memoReportText, displaySourceLabel } from "@/lib/memo-report";
 
-const out = (scenario: string, metric_key: string, metric_label: string, value_numeric: number, unit: string) =>
-  ({ scenario_key: scenario, metric_key, metric_label, value_numeric, unit, formula_text: "" });
+const out = (
+  scenario: string,
+  metric_key: string,
+  metric_label: string,
+  value_numeric: number,
+  unit: string,
+) => ({ scenario_key: scenario, metric_key, metric_label, value_numeric, unit, formula_text: "" });
 
 function ctx(overrides: Partial<Parameters<typeof buildMemoReport>[0]> = {}) {
   const base = {
-    project: { name: "Harbour Centre", location: "Vancouver", type: "mixed_use", status: "underwriting" },
+    project: {
+      name: "Harbour Centre",
+      location: "Vancouver",
+      type: "mixed_use",
+      status: "underwriting",
+    },
     assumptions: [
-      { field_key: "land_cost", value_numeric: 34_500_000, field_label: "Land Cost", unit: "$", status: "approved", source_document_id: "doc-budget" },
-      { field_key: "hard_costs", value_numeric: 162_000_000, field_label: "Hard / Construction Costs", unit: "$", status: "approved", source_document_id: "doc-budget" },
-      { field_key: "soft_costs", value_numeric: 27_500_000, field_label: "Soft Costs", unit: "$", status: "approved", source_document_id: "doc-budget" },
-      { field_key: "financing_costs", value_numeric: 18_000_000, field_label: "Financing Costs", unit: "$", status: "approved", source_document_id: "doc-budget" },
-      { field_key: "contingency", value_numeric: 8_000_000, field_label: "Contingency", unit: "$", status: "approved", source_document_id: "doc-budget" },
-      { field_key: "debt_amount", value_numeric: 162_500_000, field_label: "Debt Amount", unit: "$", status: "approved", source_document_id: "doc-lender" },
-      { field_key: "equity_amount", value_numeric: 50_000_000, field_label: "Equity Amount", unit: "$", status: "approved", source_document_id: "doc-sponsor" },
-      { field_key: "residential_units", value_numeric: 220, field_label: "Residential Units", unit: "units", status: "approved", source_document_id: "doc-sponsor" },
-      { field_key: "residential_rent_monthly", value_numeric: 3050, field_label: "Residential Rent", unit: "$", status: "approved", source_document_id: "doc-market" },
-      { field_key: "residential_occupancy", value_numeric: 96, field_label: "Residential Occupancy", unit: "%", status: "approved", source_document_id: "doc-market" },
-      { field_key: "total_project_cost", value_numeric: 250_000_000, field_label: "Total Project Cost", unit: "$", status: "calculated", source_document_id: null },
+      {
+        field_key: "land_cost",
+        value_numeric: 34_500_000,
+        field_label: "Land Cost",
+        unit: "$",
+        status: "approved",
+        source_document_id: "doc-budget",
+      },
+      {
+        field_key: "hard_costs",
+        value_numeric: 162_000_000,
+        field_label: "Hard / Construction Costs",
+        unit: "$",
+        status: "approved",
+        source_document_id: "doc-budget",
+      },
+      {
+        field_key: "soft_costs",
+        value_numeric: 27_500_000,
+        field_label: "Soft Costs",
+        unit: "$",
+        status: "approved",
+        source_document_id: "doc-budget",
+      },
+      {
+        field_key: "financing_costs",
+        value_numeric: 18_000_000,
+        field_label: "Financing Costs",
+        unit: "$",
+        status: "approved",
+        source_document_id: "doc-budget",
+      },
+      {
+        field_key: "contingency",
+        value_numeric: 8_000_000,
+        field_label: "Contingency",
+        unit: "$",
+        status: "approved",
+        source_document_id: "doc-budget",
+      },
+      {
+        field_key: "debt_amount",
+        value_numeric: 162_500_000,
+        field_label: "Debt Amount",
+        unit: "$",
+        status: "approved",
+        source_document_id: "doc-lender",
+      },
+      {
+        field_key: "equity_amount",
+        value_numeric: 50_000_000,
+        field_label: "Equity Amount",
+        unit: "$",
+        status: "approved",
+        source_document_id: "doc-sponsor",
+      },
+      {
+        field_key: "residential_units",
+        value_numeric: 220,
+        field_label: "Residential Units",
+        unit: "units",
+        status: "approved",
+        source_document_id: "doc-sponsor",
+      },
+      {
+        field_key: "residential_rent_monthly",
+        value_numeric: 3050,
+        field_label: "Residential Rent",
+        unit: "$",
+        status: "approved",
+        source_document_id: "doc-market",
+      },
+      {
+        field_key: "residential_occupancy",
+        value_numeric: 96,
+        field_label: "Residential Occupancy",
+        unit: "%",
+        status: "approved",
+        source_document_id: "doc-market",
+      },
+      {
+        field_key: "total_project_cost",
+        value_numeric: 250_000_000,
+        field_label: "Total Project Cost",
+        unit: "$",
+        status: "calculated",
+        source_document_id: null,
+      },
     ],
     engineInputs: [
       { key: "loan_amount", value_numeric: 162_500_000, status: "approved" },
@@ -32,12 +119,16 @@ function ctx(overrides: Partial<Parameters<typeof buildMemoReport>[0]> = {}) {
       { key: "expense_ratio_pct", value_numeric: 35, status: "default_accepted" },
       { key: "hold_years", value_numeric: 5, status: "default_accepted" },
       { key: "selling_costs_pct", value_numeric: 2, status: "default_accepted" },
-      { key: "exit_cap_rate_pct", value_numeric: 5.25, status: "approved",
+      {
+        key: "exit_cap_rate_pct",
+        value_numeric: 5.25,
+        status: "approved",
         conflict_values: [
           { value: 4.75, source: "Harbour_Centre_Broker_Opinion.pdf" },
           { value: 5.25, source: "Harbour_Centre_Lender_Term_Sheet.pdf" },
           { value: 5, source: "Harbour_Centre_Underwriting_Assumptions_Addendum.docx" },
-        ] },
+        ],
+      },
     ],
     outputs: [
       out("base", "total_project_cost", "Total Project Cost", 250_000_000, "$"),
@@ -54,9 +145,26 @@ function ctx(overrides: Partial<Parameters<typeof buildMemoReport>[0]> = {}) {
       out("base", "equity_multiple", "Equity Multiple", 0, "x"),
     ],
     flags: [
-      { check_key: "sources_vs_uses", severity: "error", message: "Funding gap.", expected: 250_000_000, actual: 212_500_000, resolved: false },
-      { check_key: "equity_mismatch", severity: "warning", message: "Analyst equity differs from TDC minus loan amount.", resolved: false },
-      { check_key: "occupancy_vs_lender:Office", severity: "warning", message: "Office stabilized occupancy 85.0% is below 93.0%.", resolved: false },
+      {
+        check_key: "sources_vs_uses",
+        severity: "error",
+        message: "Funding gap.",
+        expected: 250_000_000,
+        actual: 212_500_000,
+        resolved: false,
+      },
+      {
+        check_key: "equity_mismatch",
+        severity: "warning",
+        message: "Analyst equity differs from TDC minus loan amount.",
+        resolved: false,
+      },
+      {
+        check_key: "occupancy_vs_lender:Office",
+        severity: "warning",
+        message: "Office stabilized occupancy 85.0% is below 93.0%.",
+        resolved: false,
+      },
     ],
     risks: [],
     documents: [
@@ -65,7 +173,13 @@ function ctx(overrides: Partial<Parameters<typeof buildMemoReport>[0]> = {}) {
       { id: "doc-sponsor", name: "Harbour_Centre_Sponsor_Summary.pdf", category: "Sponsor" },
       { id: "doc-market", name: "Harbour_Centre_Market_Study.pdf", category: "Market Study" },
     ],
-    verdict: { code: "REJECT", hardFail: true, gates: [{ key: "equity_multiple", label: "Equity Multiple >= 1.50x", pass: false, actual: 0 }] },
+    verdict: {
+      code: "REJECT",
+      hardFail: true,
+      gates: [
+        { key: "equity_multiple", label: "Equity Multiple >= 1.50x", pass: false, actual: 0 },
+      ],
+    },
     generationMode: "deterministic" as const,
     generatedLabel: "June 2026",
   };
@@ -74,14 +188,22 @@ function ctx(overrides: Partial<Parameters<typeof buildMemoReport>[0]> = {}) {
 
 describe("displaySourceLabel", () => {
   test("maps known Harbour filenames to clean labels", () => {
-    expect(displaySourceLabel(null, "Harbour_Centre_Construction_Budget.xlsx")).toBe("Construction Budget");
-    expect(displaySourceLabel(null, "Harbour_Centre_Lender_Term_Sheet.pdf")).toBe("Lender Term Sheet");
+    expect(displaySourceLabel(null, "Harbour_Centre_Construction_Budget.xlsx")).toBe(
+      "Construction Budget",
+    );
+    expect(displaySourceLabel(null, "Harbour_Centre_Lender_Term_Sheet.pdf")).toBe(
+      "Lender Term Sheet",
+    );
     expect(displaySourceLabel(null, "Harbour_Centre_Rent_Roll.xlsx")).toBe("Rent Roll");
     expect(displaySourceLabel("Harbour_Centre_Broker_Opinion.pdf")).toBe("Broker Opinion");
-    expect(displaySourceLabel(null, "Harbour_Centre_Underwriting_Assumptions_Addendum.docx")).toBe("Underwriting Addendum");
+    expect(displaySourceLabel(null, "Harbour_Centre_Underwriting_Assumptions_Addendum.docx")).toBe(
+      "Underwriting Addendum",
+    );
   });
   test("cleans and title-cases unknown filenames, dropping duplicate project prefix", () => {
-    expect(displaySourceLabel(null, "Harbour_Centre_Appraisal_Update.pdf")).toBe("Appraisal Update");
+    expect(displaySourceLabel(null, "Harbour_Centre_Appraisal_Update.pdf")).toBe(
+      "Appraisal Update",
+    );
     expect(displaySourceLabel(null, "some-random_file.xlsx")).toBe("Some Random File");
   });
 });
@@ -90,9 +212,13 @@ describe("memo polish", () => {
   test("source transparency and Document Sources keep full provenance", () => {
     const r = ctx();
     const prov = r.sections.find((s) => s.heading === "Assumption Source Transparency")!;
-    expect(prov.table!.rows.some((row) => row.includes("Harbour_Centre_Construction_Budget.xlsx"))).toBe(true);
+    expect(
+      prov.table!.rows.some((row) => row.includes("Harbour_Centre_Construction_Budget.xlsx")),
+    ).toBe(true);
     const docs = r.sections.find((s) => s.heading === "Document Sources")!;
-    expect(docs.table!.rows.some((row) => row.includes("Harbour_Centre_Construction_Budget.xlsx"))).toBe(true);
+    expect(
+      docs.table!.rows.some((row) => row.includes("Harbour_Centre_Construction_Budget.xlsx")),
+    ).toBe(true);
   });
 
   test("operating expense ratio row shows ratio and default-accepted source", () => {
@@ -113,10 +239,12 @@ describe("memo polish", () => {
   });
 
   test("no exit-cap footnote when there is no conflict history", () => {
-    const r = ctx({ engineInputs: [
-      { key: "exit_cap_rate_pct", value_numeric: 5.25, status: "approved" },
-      { key: "expense_ratio_pct", value_numeric: 35, status: "default_accepted" },
-    ] } as any);
+    const r = ctx({
+      engineInputs: [
+        { key: "exit_cap_rate_pct", value_numeric: 5.25, status: "approved" },
+        { key: "expense_ratio_pct", value_numeric: 35, status: "default_accepted" },
+      ],
+    } as any);
     expect(r.footnotes.join("\n")).not.toContain("conservative resolution");
   });
 

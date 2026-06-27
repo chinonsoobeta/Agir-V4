@@ -20,10 +20,22 @@ const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
 
 const downloads = "/Users/amitbhattacharya/Downloads";
 const files = [
-  ["Harbour_Centre_Sponsor_Summary.pdf", "demo/harbour-centre/Sponsor_Summary.pdf", "application/pdf"],
+  [
+    "Harbour_Centre_Sponsor_Summary.pdf",
+    "demo/harbour-centre/Sponsor_Summary.pdf",
+    "application/pdf",
+  ],
   ["Harbour_Centre_Market_Study.pdf", "demo/harbour-centre/Market_Study.pdf", "application/pdf"],
-  ["Harbour_Centre_Broker_Opinion.pdf", "demo/harbour-centre/Broker_Opinion.pdf", "application/pdf"],
-  ["Harbour_Centre_Lender_Term_Sheet.pdf", "demo/harbour-centre/Lender_Term_Sheet.pdf", "application/pdf"],
+  [
+    "Harbour_Centre_Broker_Opinion.pdf",
+    "demo/harbour-centre/Broker_Opinion.pdf",
+    "application/pdf",
+  ],
+  [
+    "Harbour_Centre_Lender_Term_Sheet.pdf",
+    "demo/harbour-centre/Lender_Term_Sheet.pdf",
+    "application/pdf",
+  ],
   [
     "Harbour_Centre_Construction_Budget.xlsx",
     "demo/harbour-centre/Construction_Budget.xlsx",

@@ -22,7 +22,9 @@ import {
 function devDeal(overrides: Partial<UnderwritingInput> = {}): UnderwritingInput {
   return {
     budget: { land: 5_000_000, hard: 20_000_000, soft: 3_000_000, contingency: 0 },
-    revenueProgram: [{ unitType: "Residential", unitCount: 100, rent: 3_000, rentBasis: "per_unit" }],
+    revenueProgram: [
+      { unitType: "Residential", unitCount: 100, rent: 3_000, rentBasis: "per_unit" },
+    ],
     constructionMonths: 12,
     leaseUpMonths: 12,
     stabilizedOccupancyPct: 95,
@@ -129,7 +131,9 @@ describe("WS1 (c): hand-computed precision checks", () => {
   test("1B: lease-up NOI ramps linearly and raises the monthly IRR above the full-delay model", () => {
     const fullDelay = runUnderwriting(devDeal({ monthlyModel: true })); // 1B off
     const absorbed = runUnderwriting(devDeal({ monthlyModel: true, leaseUpCurve: true }));
-    expect(absorbed.values.scheduleLeveredIrrPct!).toBeGreaterThan(fullDelay.values.scheduleLeveredIrrPct!);
+    expect(absorbed.values.scheduleLeveredIrrPct!).toBeGreaterThan(
+      fullDelay.values.scheduleLeveredIrrPct!,
+    );
 
     // A specific lease-up NOI node equals (k + 0.5)/L of stabilized monthly NOI.
     const C = 12;
@@ -158,7 +162,9 @@ describe("WS1 (c): hand-computed precision checks", () => {
     expect(out.values.refiNewAnnualDebtService).toBeCloseTo(expectedDs, 6);
     expect(out.values.postRefiDscr).toBeCloseTo(out.values.noi / expectedDs, 6);
 
-    const refiNodes = out.schedule!.nodes.filter((n) => n.period === 24 && n.lineKey.startsWith("refi"));
+    const refiNodes = out.schedule!.nodes.filter(
+      (n) => n.period === 24 && n.lineKey.startsWith("refi"),
+    );
     expect(refiNodes.length).toBe(3); // proceeds, payoff, cash-out
     expect(out.metrics.some((m) => m.key === "refi_cash_out")).toBe(true);
   });
@@ -169,7 +175,9 @@ describe("WS1 (c): sandboxed custom line items", () => {
     const out = runUnderwriting(
       devDeal({
         monthlyModel: true,
-        customLines: [{ key: "mgmt_reserve", label: "Management reserve", expression: "noi * 0.03" }],
+        customLines: [
+          { key: "mgmt_reserve", label: "Management reserve", expression: "noi * 0.03" },
+        ],
       }),
     );
     const metric = out.metrics.find((m) => m.key === "custom_mgmt_reserve");
@@ -178,7 +186,9 @@ describe("WS1 (c): sandboxed custom line items", () => {
 
     // The rendered formula is provenance-clean: the literal coefficient and the
     // total are the only numeric tokens, and both are admitted.
-    const allowed = buildAllowedValues(collectLiterals(parseExpression("noi * 0.03")), [metric!.value]);
+    const allowed = buildAllowedValues(collectLiterals(parseExpression("noi * 0.03")), [
+      metric!.value,
+    ]);
     expect(verifyNumericProvenance(metric!.formula, allowed).pass).toBe(true);
     expect(out.schedule!.nodes.some((n) => n.key === "custom_mgmt_reserve")).toBe(true);
   });
@@ -206,12 +216,15 @@ describe("WS1 (d): provenance -- every new metric formula is orphan-free", () =>
       }),
     );
     const allowed = buildAllowedValues(
-      Object.values(out.values).filter((v): v is number => typeof v === "number" && Number.isFinite(v)),
+      Object.values(out.values).filter(
+        (v): v is number => typeof v === "number" && Number.isFinite(v),
+      ),
       out.metrics.map((m) => m.value),
       out.cashFlows.map((c) => c.amount),
     );
     const newMetrics = out.metrics.filter(
-      (m) => m.key.startsWith("schedule_") || m.key.startsWith("refi_") || m.key === "post_refi_dscr",
+      (m) =>
+        m.key.startsWith("schedule_") || m.key.startsWith("refi_") || m.key === "post_refi_dscr",
     );
     expect(newMetrics.length).toBeGreaterThan(0);
     for (const m of newMetrics) {

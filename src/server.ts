@@ -8,6 +8,28 @@ type ServerEntry = {
 };
 
 let serverEntryPromise: Promise<ServerEntry> | undefined;
+let schemaDriftPromise: Promise<void> | undefined;
+
+function assertSchemaDriftOnStartup() {
+  if (schemaDriftPromise) return schemaDriftPromise;
+  schemaDriftPromise = import("./lib/schema-drift.server")
+    .then(async ({ checkSchemaDrift }) => {
+      const drift = await checkSchemaDrift();
+      if (drift.status === "drift") {
+        console.error(
+          `[schema-drift] pending=${drift.pending.join(",") || "none"} extra=${drift.extra.join(",") || "none"}`,
+        );
+      } else if (drift.status === "unknown" && drift.configured) {
+        console.warn(`[schema-drift] unable to verify schema: ${drift.error ?? "unknown error"}`);
+      }
+    })
+    .catch((error) => {
+      console.warn(
+        `[schema-drift] startup check failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
+  return schemaDriftPromise;
+}
 
 function wantsHtmlDocument(request: Request) {
   const accept = request.headers.get("accept") ?? "";
@@ -35,7 +57,10 @@ async function getServerEntry(): Promise<ServerEntry> {
 
 // h3 swallows in-handler throws into a normal 500 Response with body
 // {"unhandled":true,"message":"HTTPError"}: try/catch alone never fires for those.
-async function normalizeCatastrophicSsrResponse(request: Request, response: Response): Promise<Response> {
+async function normalizeCatastrophicSsrResponse(
+  request: Request,
+  response: Response,
+): Promise<Response> {
   if (response.status < 500) return response;
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) return response;
@@ -61,6 +86,7 @@ async function normalizeCatastrophicSsrResponse(request: Request, response: Resp
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      void assertSchemaDriftOnStartup();
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(request, response);

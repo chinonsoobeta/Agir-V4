@@ -17,23 +17,23 @@ rent/expense growth), seeded it into Agir exactly the way the product's own gold
 are seeded, and ran the full deterministic deal analysis.
 
 The engine correctly identified the deal as sub-institutional. **But it reached that
-conclusion partly for the wrong reasons.** Two reconciliation checks emitted *false* error
+conclusion partly for the wrong reasons.** Two reconciliation checks emitted _false_ error
 flags, and because an error-severity reconciliation flag is an automatic hard-fail
 (`verdict.ts`), the deal was flagged **RETURN TO UNDERWRITING / CRITICAL (risk 90/100)** on
 the back of two bugs rather than its real economics. Separately, the equity multiple and IRR
 silently dropped a full year of cash flow. The two metrics a lender actually sizes on,
 **debt yield** and **break-even occupancy**, were not reported at all.
 
-| | Before | After fixes |
-|---|---|---|
-| Reconciliation **error** flags | 2 (both false positives) | **0** (only 4 legitimate occupancy warnings) |
-| Verdict | RETURN TO UNDERWRITING: **hard-fail** | REJECT: honest, 5/5 gates fail on merits |
-| Risk score | **90 / 100 (CRITICAL)** | **65 / 100** |
-| Equity multiple | 1.32x | **1.37x** (restored dropped year-5 cash flow) |
-| Levered IRR | 5.99% | **6.72%** |
-| Debt yield | *not computed* | **8.31%** (new first-class metric) |
-| Break-even occupancy | *not computed* | **83.05%** (new first-class metric) |
-| Stress scenarios | 5 | **7** (added occupancy & expense shocks) |
+|                                | Before                                | After fixes                                   |
+| ------------------------------ | ------------------------------------- | --------------------------------------------- |
+| Reconciliation **error** flags | 2 (both false positives)              | **0** (only 4 legitimate occupancy warnings)  |
+| Verdict                        | RETURN TO UNDERWRITING: **hard-fail** | REJECT: honest, 5/5 gates fail on merits      |
+| Risk score                     | **90 / 100 (CRITICAL)**               | **65 / 100**                                  |
+| Equity multiple                | 1.32x                                 | **1.37x** (restored dropped year-5 cash flow) |
+| Levered IRR                    | 5.99%                                 | **6.72%**                                     |
+| Debt yield                     | _not computed_                        | **8.31%** (new first-class metric)            |
+| Break-even occupancy           | _not computed_                        | **83.05%** (new first-class metric)           |
+| Stress scenarios               | 5                                     | **7** (added occupancy & expense shocks)      |
 
 All 78 unit tests pass after the changes (the golden Maple Heights equity multiple was
 re-pinned from 1.07 → 1.08 to reflect the corrected cash-flow treatment).
@@ -81,17 +81,17 @@ Reconciliation flags emitted:
 
 ## 4. Findings: where the engine fell short and why
 
-### Finding 1: `unit_count_consistency` false-fails every multi-unit-type building *(critical)*
+### Finding 1: `unit_count_consistency` false-fails every multi-unit-type building _(critical)_
 
 **What happened.** The engine reported "Documents disagree on unit count: 120 vs 80 vs 20 vs
-220": an error-severity flag: for a building whose unit types are *defined* as 120 + 80 +
+220": an error-severity flag: for a building whose unit types are _defined_ as 120 + 80 +
 20 = 220.
 
 **Why.** `buildReconciliationContext` fed the per-**unit-type** counts to the check as if each
 were a competing building **total**: `unitCounts: [...perUnitCounts, statedUnits]` →
 `[120, 80, 20, 220]`. The check (`reconciliation.ts`, check 6) then flagged the four distinct
-values as a disagreement. The check's *intent* (per its own comment, "220 must stay 220") is
-to catch documents that state *different building totals*; the implementation conflated a
+values as a disagreement. The check's _intent_ (per its own comment, "220 must stay 220") is
+to catch documents that state _different building totals_; the implementation conflated a
 unit-type breakdown with a document-level total. This misfires for essentially every real
 multifamily deal. The 1-year golden Maple Heights fixture would trip it too with 60 vs 50 vs
 10, but Maple is never run through reconciliation in tests.
@@ -99,7 +99,7 @@ multifamily deal. The 1-year golden Maple Heights fixture would trip it too with
 **Impact.** A spurious error flag (+15 risk) and, because any error flag is a hard-fail, an
 automatic RETURN TO UNDERWRITING: independent of the deal's economics.
 
-### Finding 2: Covenant feasibility tests an interest-only loan against an amortizing payment *(critical)*
+### Finding 2: Covenant feasibility tests an interest-only loan against an amortizing payment _(critical)_
 
 **What happened.** The engine emitted `error · covenant_feasibility` claiming the debt is
 "unsupportable" because NOI ($5.20M) < 1.20× **amortizing** ADS ($4.62M) = $5.54M. But the
@@ -109,14 +109,14 @@ during the hold is the IO payment ($3.91M); on that basis the covenant requires 
 
 **Why.** `reconciliation.ts` check 3 used `amortizingAnnualDebtService` unconditionally. The
 loan-balance math elsewhere already honors the IO period (`debt.ts`), so the model was
-internally inconsistent: it amortizes the *balance* like an IO loan but tests the *covenant*
+internally inconsistent: it amortizes the _balance_ like an IO loan but tests the _covenant_
 like a fully-amortizing one.
 
 **Impact.** A second false error flag (+15 risk) and a second hard-fail driver. The headline
 "Refinance Risk / Weak Debt Coverage" framing was overstated for a loan that is not amortizing
 during the hold.
 
-### Finding 3: Equity multiple and IRR drop the sale-year operating cash flow *(high)*
+### Finding 3: Equity multiple and IRR drop the sale-year operating cash flow _(high)_
 
 **What happened.** Equity multiple was 1.32x and IRR 5.99%. The return calculation summed
 operating cash flows for years 1…N-1 and then used **only net sale proceeds** for the exit
@@ -126,13 +126,13 @@ equity).
 **Why.** In `proforma.ts`, `interimLevered = holdLevered.slice(0, exitYear - 1)` and
 `finalEquityFlow = saleProceedsToEquity`. The exit-year element of `holdLevered` was never
 added to either the equity-multiple numerator or the IRR cash-flow vector. On the 1-year
-Maple Heights fixture this dropped the *entire* operating year (which is why the golden EM was
+Maple Heights fixture this dropped the _entire_ operating year (which is why the golden EM was
 pinned at the slightly-low 1.07x).
 
 **Impact.** Systematic understatement of levered returns by one full year of operating cash
 flow on every deal.
 
-### Finding 4: Debt yield is not a first-class metric *(high)*
+### Finding 4: Debt yield is not a first-class metric _(high)_
 
 **What happened.** Debt yield (NOI / loan): the primary metric lenders size construction
 takeouts on: appeared nowhere in the engine's metric set, the persisted `financial_outputs`,
@@ -142,14 +142,14 @@ this profile: and nothing surfaced it.
 
 **Why.** It was simply never added to `proforma.ts` outputs or `reconciliation.ts` scoring.
 
-### Finding 5: Break-even occupancy is not computed *(high)*
+### Finding 5: Break-even occupancy is not computed _(high)_
 
 **What happened.** The occupancy at which the deal stops carrying its debt: the single most
 important downside metric for a lease-up-heavy development: was not computed anywhere.
 
 **Why.** Never implemented.
 
-### Finding 6: The stress suite cannot shock occupancy or operating expenses *(medium)*
+### Finding 6: The stress suite cannot shock occupancy or operating expenses _(medium)_
 
 **What happened.** The five presets shock cap rate, cost, rate, and rent. For a deal whose
 dominant risks are lease-up/occupancy slippage and expense inflation, the suite was blind to
@@ -158,11 +158,11 @@ both. `revenue_down` cuts rent but never touches occupancy; nothing touches the 
 **Why.** `StressPreset` / `applyStress` (`scenarios.ts`) had no occupancy or expense-ratio
 levers.
 
-### Finding 7: The cash-flow ledger and exit valuation are thin / inconsistent *(recommendation only: see §6)*
+### Finding 7: The cash-flow ledger and exit valuation are thin / inconsistent _(recommendation only: see §6)_
 
 The persisted cash-flow ledger emits only year 0, year 1, and the exit year, so the
 multi-year hold is uninspectable; and the engine grows operating NOI across the hold but
-capitalizes the exit on *going-in* NOI. The exit-on-going-in choice is defensibly conservative
+capitalizes the exit on _going-in_ NOI. The exit-on-going-in choice is defensibly conservative
 for development underwriting, so it is documented as a recommendation rather than "fixed"
 (changing it would make the engine less conservative and would rescue the intentionally-failing
 Rivergate fixture).
@@ -174,15 +174,15 @@ Rivergate fixture).
 All changes preserve the architecture's central rule: the engine reads only typed, approved
 inputs and no LLM ever supplies a number.
 
-| # | Finding | Change | Files |
-|---|---|---|---|
-| F1 | 3 | Include the sale-year operating cash flow in the equity multiple **and** the IRR vector; also emit it as a `levered_cf` ledger row in the exit year. | `engine/proforma.ts` |
-| F2 | 1 | Cross-check the **summed** building unit total (Σ per-type counts) against any document-stated total, instead of treating each unit type as a competing total. | `underwriting.functions.ts` |
-| F3 | 2 | Covenant feasibility is tested against the debt service **actually in force during the hold**: the interest-only payment when the loan is IO for the entire hold, the amortizing constant otherwise. | `engine/reconciliation.ts`, `underwriting.functions.ts` |
-| F4 | 4 | New first-class **Debt Yield** metric (NOI / loan), plus a deterministic risk-register entry and risk-score contribution when thin. | `engine/proforma.ts`, `engine/reconciliation.ts`, `engine/types.ts` |
-| F5 | 5 | New first-class **Break-even Occupancy** metric, plus a risk-register entry / risk-score contribution when the cushion is thin. | `engine/proforma.ts`, `engine/reconciliation.ts`, `engine/types.ts` |
-| F6 | 6 | Two new stress presets: **Occupancy Downside (−500 bps)** and **Expense Inflation (+500 bps ratio)**: with matching `applyStress` levers and UI/driver labels. | `engine/scenarios.ts`, `components/underwriting-panel.tsx`, `findings/modules/scenarios.ts` |
-| UI | 4,5 | Surface Debt Yield and Break-even Occupancy as headline cards on the Analysis tab. | `components/underwriting-panel.tsx` |
+| #   | Finding | Change                                                                                                                                                                                               | Files                                                                                       |
+| --- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| F1  | 3       | Include the sale-year operating cash flow in the equity multiple **and** the IRR vector; also emit it as a `levered_cf` ledger row in the exit year.                                                 | `engine/proforma.ts`                                                                        |
+| F2  | 1       | Cross-check the **summed** building unit total (Σ per-type counts) against any document-stated total, instead of treating each unit type as a competing total.                                       | `underwriting.functions.ts`                                                                 |
+| F3  | 2       | Covenant feasibility is tested against the debt service **actually in force during the hold**: the interest-only payment when the loan is IO for the entire hold, the amortizing constant otherwise. | `engine/reconciliation.ts`, `underwriting.functions.ts`                                     |
+| F4  | 4       | New first-class **Debt Yield** metric (NOI / loan), plus a deterministic risk-register entry and risk-score contribution when thin.                                                                  | `engine/proforma.ts`, `engine/reconciliation.ts`, `engine/types.ts`                         |
+| F5  | 5       | New first-class **Break-even Occupancy** metric, plus a risk-register entry / risk-score contribution when the cushion is thin.                                                                      | `engine/proforma.ts`, `engine/reconciliation.ts`, `engine/types.ts`                         |
+| F6  | 6       | Two new stress presets: **Occupancy Downside (−500 bps)** and **Expense Inflation (+500 bps ratio)**: with matching `applyStress` levers and UI/driver labels.                                       | `engine/scenarios.ts`, `components/underwriting-panel.tsx`, `findings/modules/scenarios.ts` |
+| UI  | 4,5     | Surface Debt Yield and Break-even Occupancy as headline cards on the Analysis tab.                                                                                                                   | `components/underwriting-panel.tsx`                                                         |
 
 **Tests.** `src/test/engine.test.ts` was updated (golden Maple EM 1.07 → 1.08 with an
 explanatory comment; preset list 5 → 7) and extended with three new tests: debt-yield /

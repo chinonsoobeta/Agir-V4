@@ -33,11 +33,34 @@ export const TONE_SOLID: Record<Tone, string> = {
   neutral: "bg-muted text-foreground",
 };
 
-export function RecommendationPill({ rec, className }: { rec: DecisionRecommendation; className?: string }) {
+export function RecommendationPill({
+  rec,
+  className,
+}: {
+  rec: DecisionRecommendation;
+  className?: string;
+}) {
   const tone = RECOMMENDATION_TONE[rec];
   return (
-    <span className={cn("inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wider", TONE_CHIP[tone], className)}>
-      <span className={cn("size-1.5 rounded-full", tone === "approve" ? "bg-success" : tone === "condition" ? "bg-warning" : tone === "return" ? "bg-chart-2" : "bg-destructive")} />
+    <span
+      className={cn(
+        "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wider",
+        TONE_CHIP[tone],
+        className,
+      )}
+    >
+      <span
+        className={cn(
+          "size-1.5 rounded-full",
+          tone === "approve"
+            ? "bg-success"
+            : tone === "condition"
+              ? "bg-warning"
+              : tone === "return"
+                ? "bg-chart-2"
+                : "bg-destructive",
+        )}
+      />
       {RECOMMENDATION_LABEL[rec]}
     </span>
   );
@@ -46,7 +69,13 @@ export function RecommendationPill({ rec, className }: { rec: DecisionRecommenda
 export function RiskPill({ rating, className }: { rating: RiskRating; className?: string }) {
   const tone = RISK_TONE[rating];
   return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider", TONE_CHIP[tone], className)}>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
+        TONE_CHIP[tone],
+        className,
+      )}
+    >
       {rating} Risk
     </span>
   );
@@ -72,28 +101,49 @@ export function ScoreDial({
   const c = 2 * Math.PI * r;
   const dash = (pct / 100) * c;
   const color =
-    tone === "approve" ? "var(--color-success)"
-    : tone === "condition" ? "var(--color-warning)"
-    : tone === "return" ? "var(--color-chart-2)"
-    : tone === "reject" ? "var(--color-destructive)"
-    : "var(--color-primary)";
+    tone === "approve"
+      ? "var(--color-success)"
+      : tone === "condition"
+        ? "var(--color-warning)"
+        : tone === "return"
+          ? "var(--color-chart-2)"
+          : tone === "reject"
+            ? "var(--color-destructive)"
+            : "var(--color-primary)";
   return (
     <div className="flex flex-col items-center">
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90">
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-border)" strokeWidth={stroke} />
           <circle
-            cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
-            strokeLinecap="round" strokeDasharray={`${dash} ${c}`}
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke="var(--color-border)"
+            strokeWidth={stroke}
+          />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke={color}
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={`${dash} ${c}`}
             style={{ transition: "stroke-dasharray 700ms cubic-bezier(.4,0,.2,1)" }}
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="num text-3xl font-semibold leading-none">{value == null ? "Not available" : Math.round(value)}</div>
+          <div className="num text-3xl font-semibold leading-none">
+            {value == null ? "Not available" : Math.round(value)}
+          </div>
           {value != null && <div className="text-[10px] text-muted-foreground mt-0.5">/ 100</div>}
         </div>
       </div>
-      <div className="mt-3 text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">{label}</div>
+      <div className="mt-3 text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
+        {label}
+      </div>
       {sub && <div className="text-[11px] text-muted-foreground mt-0.5">{sub}</div>}
     </div>
   );
@@ -108,14 +158,22 @@ export function ScoreBreakdown({ components }: { components: ScoreComponent[] })
         <div key={c.label}>
           <div className="flex items-baseline justify-between text-xs">
             <span className="text-foreground/80">{c.label}</span>
-            <span className="num text-muted-foreground">{Math.round(c.score)} <span className="text-muted-foreground/60">· {Math.round(c.weight * 100)}%</span></span>
+            <span className="num text-muted-foreground">
+              {Math.round(c.score)}{" "}
+              <span className="text-muted-foreground/60">· {Math.round(c.weight * 100)}%</span>
+            </span>
           </div>
           <div className="mt-1 h-1.5 rounded-full bg-muted overflow-hidden">
             <div
               className="h-full rounded-full"
               style={{
                 width: `${Math.max(2, c.score)}%`,
-                background: c.score >= 66 ? "var(--color-success)" : c.score >= 40 ? "var(--color-warning)" : "var(--color-destructive)",
+                background:
+                  c.score >= 66
+                    ? "var(--color-success)"
+                    : c.score >= 40
+                      ? "var(--color-warning)"
+                      : "var(--color-destructive)",
               }}
             />
           </div>
@@ -126,10 +184,29 @@ export function ScoreBreakdown({ components }: { components: ScoreComponent[] })
   );
 }
 
-export function SectionLabel({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn("text-[10px] uppercase tracking-widest text-muted-foreground font-semibold", className)}>{children}</div>;
+export function SectionLabel({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "text-[10px] uppercase tracking-widest text-muted-foreground font-semibold",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
 }
 
 export function Eyebrow({ children }: { children: React.ReactNode }) {
-  return <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-semibold">{children}</div>;
+  return (
+    <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-semibold">
+      {children}
+    </div>
+  );
 }

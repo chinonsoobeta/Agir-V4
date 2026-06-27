@@ -32,15 +32,29 @@ function ResetPassword() {
     <div className="min-h-screen flex items-center justify-center p-6 bg-background">
       <Card className="w-full max-w-md p-8">
         <h1 className="text-xl font-semibold">Reset password</h1>
-        <p className="text-xs text-muted-foreground mt-1">Choose a new password for your account.</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Choose a new password for your account.
+        </p>
         {ready ? (
           <form onSubmit={handle} className="space-y-3 mt-4">
-            <div><Label>New password</Label>
-              <Input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} /></div>
-            <Button type="submit" className="w-full">Update password</Button>
+            <div>
+              <Label>New password</Label>
+              <Input
+                type="password"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+            <Button type="submit" className="w-full">
+              Update password
+            </Button>
           </form>
         ) : (
-          <p className="text-sm text-muted-foreground mt-4">Open this page from the reset email link.</p>
+          <p className="text-sm text-muted-foreground mt-4">
+            Open this page from the reset email link.
+          </p>
         )}
       </Card>
     </div>
