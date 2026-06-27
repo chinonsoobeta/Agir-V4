@@ -22,6 +22,7 @@ import {
   runReconciliationChecks,
   runUnderwriting,
   STRESS_PRESETS,
+  UnderwritingBlockedError,
   type EngineOutput,
   type ProjectInputRows,
   type ReconciliationFlag,
@@ -116,6 +117,33 @@ async function loadProjectRows(supabase: any, projectId: string): Promise<Projec
 export async function loadEngineInput(supabase: any, projectId: string): Promise<UnderwritingInput> {
   return assembleEngineInput(await loadProjectRows(supabase, projectId));
 }
+
+// WS3. Return the assembled, engine-ready input so the client can run the PURE
+// engine for transparency (the monthly schedule grid) and flexible sensitivity
+// (tornado / breakeven / 2-variable grid). It only EXPOSES the user's own approved
+// inputs (RLS-scoped via context.supabase); it never persists. Fail-closed: a deal
+// that is not ready returns { blocked } with the same missing/conflicting detail
+// the engine would refuse on, so the UI explains what to resolve rather than
+// computing on a gap.
+export const getEngineInput = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { project_id: string }) => ProjectIdSchema.parse(d))
+  .handler(
+    async ({
+      data,
+      context,
+    }): Promise<{ blocked: false; input: UnderwritingInput } | { blocked: true; missing: string[]; conflicting: string[] }> => {
+      try {
+        const input = await loadEngineInput(context.supabase, data.project_id);
+        return { blocked: false, input };
+      } catch (error) {
+        if (error instanceof UnderwritingBlockedError) {
+          return { blocked: true, missing: error.readiness.missing, conflicting: error.readiness.conflicting };
+        }
+        throw error;
+      }
+    },
+  );
 
 function scalarValue(rows: ProjectInputRows, key: string): number | null {
   const row = rows.scalars.find(

@@ -46,6 +46,28 @@ export {
 } from "./waterfall";
 export { STRESS_PRESETS, applyStress, type StressPreset } from "./scenarios";
 export {
+  SENSITIVITY_VARS,
+  SENSITIVITY_METRICS,
+  runPoint,
+  tornado,
+  breakeven,
+  grid2d,
+  linspace,
+  type SensitivityVar,
+  type SensitivityMetric,
+  type TornadoBar,
+  type BreakevenResult,
+  type Grid2D,
+} from "./sensitivity";
+export {
+  buildScheduleGrid,
+  phaseForPeriod,
+  type ScheduleGrid,
+  type ScheduleGridRow,
+  type ScheduleGridCell,
+  type SchedulePhase,
+} from "./schedule-grid";
+export {
   ENGINE_READABLE_STATUSES,
   REQUIRED_BUDGET_CATEGORIES,
   REQUIRED_SCALAR_KEYS,

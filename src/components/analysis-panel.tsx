@@ -4,14 +4,18 @@
 
 import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import { listFinancialOutputs, listAssumptions } from "@/lib/assumptions.functions";
+import { getEngineInput } from "@/lib/underwriting.functions";
 import { Card } from "@/components/ui/card";
 import { buildDecision } from "@/lib/decision";
 import { SectionLabel, Eyebrow, TONE_TEXT } from "@/components/decision-ui";
 import { UnderwritingPanel } from "@/components/underwriting-panel";
+import { SensitivityPanel } from "@/components/sensitivity-panel";
+import { ScheduleGrid } from "@/components/schedule-grid";
 import { ArrowDownRight, ArrowUpRight, GitBranch, Activity, ShieldCheck } from "lucide-react";
 
 const outputsQ = (pid: string) => queryOptions({ queryKey: ["outputs", pid], queryFn: () => listFinancialOutputs({ data: { project_id: pid } }) });
 const assumptionsQ = (pid: string) => queryOptions({ queryKey: ["assumptions", pid], queryFn: () => listAssumptions({ data: { project_id: pid } }) });
+const engineInputQ = (pid: string) => queryOptions({ queryKey: ["engine-input", pid], queryFn: () => getEngineInput({ data: { project_id: pid } }) });
 
 const SCENARIO_LABELS: Record<string, string> = {
   base: "Base Case", revenue_down: "Revenue −10%", cost_overrun: "Cost +10%",
@@ -29,6 +33,7 @@ const GATES = [
 export function AnalysisPanel({ projectId }: { projectId: string }) {
   const { data: outputs } = useSuspenseQuery(outputsQ(projectId));
   const { data: assumptions } = useSuspenseQuery(assumptionsQ(projectId));
+  const { data: engineInput } = useSuspenseQuery(engineInputQ(projectId));
   const decision = buildDecision(outputs as any, assumptions as any);
   const f = decision.findings;
   const scenarios = decision.norm.scenarios;
@@ -84,7 +89,7 @@ export function AnalysisPanel({ projectId }: { projectId: string }) {
         </Card>
 
         <Card className="p-5 elevated">
-          <div className="flex items-center gap-2"><Activity className="size-4 text-primary" /><SectionLabel>Sensitivity</SectionLabel></div>
+          <div className="flex items-center gap-2"><Activity className="size-4 text-primary" /><SectionLabel>Stress worst-case</SectionLabel></div>
           <p className="text-xs text-muted-foreground mt-2">Worst observed value across all stress runs:</p>
           <div className="mt-3 space-y-3">
             {GATES.map((g) => {
@@ -130,6 +135,14 @@ export function AnalysisPanel({ projectId }: { projectId: string }) {
             ))}
           </ul>
         </Card>
+      )}
+
+      {/* WS3: flexible sensitivity (live engine re-runs) + the monthly schedule grid */}
+      {!engineInput.blocked && (
+        <>
+          <SensitivityPanel input={engineInput.input} />
+          <ScheduleGrid input={engineInput.input} />
+        </>
       )}
 
       {/* Deterministic pro-forma detail */}
