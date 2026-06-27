@@ -16,7 +16,11 @@
     "lint": "eslint .",
     "verify": "npm run test && npm run build",
     "format": "prettier --write .",
-    "migrate": "node run_migrations.mjs"
+    "migrate": "node run_migrations.mjs",
+    "migrate:dry-run": "node run_migrations.mjs --dry-run",
+    "migrate:seed": "node run_migrations.mjs --seed",
+    "rls:bootstrap": "node src/test/rls/bootstrap-db.mjs",
+    "test:rls": "vitest run --config vitest.rls.config.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.199",
