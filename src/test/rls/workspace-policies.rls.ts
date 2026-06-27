@@ -54,6 +54,12 @@ function shouldUseSsl(connectionString: string) {
   return !["localhost", "127.0.0.1", "::1"].includes(url.hostname);
 }
 
+function isDeniedError(error: unknown) {
+  return /row-level security|permission denied|Only a workspace owner|A workspace must always have at least one owner|append-only/i.test(
+    error instanceof Error ? error.message : String(error),
+  );
+}
+
 const client = new Client({
   connectionString: resolveDatabaseUrl(),
   ssl: shouldUseSsl(resolveDatabaseUrl()) ? { rejectUnauthorized: false } : false,
@@ -80,9 +86,13 @@ async function asUser<T = Record<string, unknown>>(
 }
 
 async function expectDenied(work: Promise<unknown>) {
-  await expect(work).rejects.toThrow(
-    /row-level security|permission denied|Only a workspace owner|A workspace must always have at least one owner/,
-  );
+  try {
+    await work;
+  } catch (error) {
+    expect(isDeniedError(error)).toBe(true);
+    return;
+  }
+  throw new Error("Expected database operation to be denied");
 }
 
 async function resetFixture() {
@@ -225,6 +235,46 @@ describe("workspace RLS policies", () => {
       [ids.project, ids.member],
     );
     expect(condition.rowCount).toBe(1);
+  });
+
+  test("audit logs are append-only for workspace members", async () => {
+    const inserted = await asUser<{ id: string }>(
+      ids.member,
+      `
+      INSERT INTO public.audit_logs (
+        project_id,
+        owner_id,
+        user_id,
+        entity_type,
+        entity_id,
+        action,
+        payload
+      )
+      VALUES ($1, $2, $2, 'project', $1, 'member_test_event', '{"ok": true}'::jsonb)
+      RETURNING id
+      `,
+      [ids.project, ids.member],
+    );
+    expect(inserted.rowCount).toBe(1);
+    const auditId = inserted.rows[0].id;
+
+    const visible = await asUser(
+      ids.member,
+      "SELECT id FROM public.audit_logs WHERE id = $1 AND project_id = $2",
+      [auditId, ids.project],
+    );
+    expect(visible.rowCount).toBe(1);
+
+    await expectDenied(
+      asUser(
+        ids.member,
+        "UPDATE public.audit_logs SET action = 'tampered' WHERE id = $1 RETURNING id",
+        [auditId],
+      ),
+    );
+    await expectDenied(
+      asUser(ids.member, "DELETE FROM public.audit_logs WHERE id = $1 RETURNING id", [auditId]),
+    );
   });
 
   test("member cannot delete the project, but admin can", async () => {
