@@ -52,6 +52,35 @@ describe("development underwriting engine", () => {
     expect(output.values.dscr).toBeLessThan(output.values.interestOnlyDscr);
   });
 
+  test("Maple Heights refi-at-stabilization golden fixture", () => {
+    const input = {
+      ...mapleHeightsInput(),
+      holdYears: 5,
+      monthlyModel: true,
+      refinance: {
+        month: mapleHeightsInput().constructionMonths + mapleHeightsInput().leaseUpMonths,
+        newAmount: 30_000_000,
+        ratePct: 5.5,
+        amortYears: 30,
+        ioMonths: 0,
+      },
+    };
+    const output = runUnderwriting(input);
+    const expectedPostRefiDebtService = annualDebtService(30_000_000, 5.5, 30);
+
+    closeToDollars(output.values.noi, 2_178_540);
+    closeToDollars(output.values.refiNewLoanAmount ?? 0, 30_000_000);
+    closeToDollars(output.values.refiCashOut ?? 0, 2_375_000);
+    expect(output.values.refiNewAnnualDebtService).toBeCloseTo(expectedPostRefiDebtService, 6);
+    expect(output.values.postRefiDscr).toBeCloseTo(
+      output.values.noi / expectedPostRefiDebtService,
+      6,
+    );
+    expect(output.metrics.some((m) => m.key === "refi_new_loan")).toBe(true);
+    expect(output.metrics.some((m) => m.key === "post_refi_dscr")).toBe(true);
+    expect(output.schedule?.reconciliation.every((row) => row.withinTolerance)).toBe(true);
+  });
+
   test("stress scenarios are deterministic engine re-runs that strictly degrade the deal", () => {
     const base = mapleHeightsInput();
     const baseOut = runUnderwriting(base);

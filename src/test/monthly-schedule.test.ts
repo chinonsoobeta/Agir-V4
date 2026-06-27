@@ -88,6 +88,35 @@ describe("WS1 (b): the monthly roll-up reconciles to the annual figures", () => 
       expect(r.withinTolerance).toBe(true);
     }
   });
+
+  test("advanced features do not reconcile different bases for refi, mezz, or equity timing", () => {
+    const input = devDeal({
+      monthlyModel: true,
+      constructionMonths: 12,
+      leaseUpMonths: 12,
+      holdYears: 5,
+      equityAmount: 8_000_000,
+      equityDrawMonths: 18,
+      mezzanine: { amount: 2_000_000, ratePct: 11, amortYears: 0, ioMonths: 120 },
+      refinance: { month: 24, newAmount: 21_000_000, ratePct: 5, amortYears: 30, ioMonths: 0 },
+    });
+    const out = runUnderwriting(input);
+    const reconciliation = new Map(out.schedule!.reconciliation.map((row) => [row.key, row]));
+    const expectedPostRefiYear1DebtService =
+      annualDebtService(21_000_000, 5, 30) + 2_000_000 * 0.11;
+
+    expect(reconciliation.get("equity")?.annual).toBe(-8_000_000);
+    expect(reconciliation.get("equity")?.rolledUp).toBeCloseTo(-8_000_000, 6);
+    expect(reconciliation.get("debt_service_year1")?.annual).toBeCloseTo(
+      -expectedPostRefiYear1DebtService,
+      6,
+    );
+    expect(reconciliation.get("debt_service_year1")?.rolledUp).toBeCloseTo(
+      -expectedPostRefiYear1DebtService,
+      6,
+    );
+    expect(out.schedule!.reconciliation.every((row) => row.withinTolerance)).toBe(true);
+  });
 });
 
 describe("WS1 (c): hand-computed precision checks", () => {
