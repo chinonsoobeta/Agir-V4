@@ -9,6 +9,7 @@ export type SchemaDriftStatus = "ok" | "drift" | "unknown";
 export type SchemaDriftCheck = {
   configured: boolean;
   status: SchemaDriftStatus;
+  connectionEnvVar: string | null;
   expected: string[];
   applied: string[];
   pending: string[];
@@ -17,6 +18,27 @@ export type SchemaDriftCheck = {
   latestApplied: string | null;
   error?: string;
 };
+
+export const SCHEMA_DRIFT_DATABASE_URL_ENV_KEYS = [
+  "POSTGRES_URL",
+  "DATABASE_URL",
+  "SUPABASE_DB_URL",
+  "SUPABASE_DATABASE_URL",
+  "SUPABASE_POSTGRES_URL",
+  "POSTGRES_PRISMA_URL",
+  "POSTGRES_URL_NON_POOLING",
+] as const;
+
+export function resolveSchemaDriftConnection(env: NodeJS.ProcessEnv = process.env): {
+  connectionString: string | null;
+  envVar: string | null;
+} {
+  for (const key of SCHEMA_DRIFT_DATABASE_URL_ENV_KEYS) {
+    const value = env[key]?.trim();
+    if (value) return { connectionString: value, envVar: key };
+  }
+  return { connectionString: null, envVar: null };
+}
 
 export function diffMigrationVersions(expected: string[], applied: string[]) {
   const expectedSet = new Set(expected);
@@ -37,26 +59,30 @@ export async function localMigrationVersions(cwd = process.cwd()): Promise<strin
 }
 
 export async function checkSchemaDrift(
-  connectionString = process.env.POSTGRES_URL,
+  connectionString?: string | null,
   cwd = process.cwd(),
 ): Promise<SchemaDriftCheck> {
   const expected = await localMigrationVersions(cwd);
-  if (!connectionString) {
+  const resolved = connectionString
+    ? { connectionString, envVar: "explicit" }
+    : resolveSchemaDriftConnection();
+  if (!resolved.connectionString) {
     return {
       configured: false,
       status: "unknown",
+      connectionEnvVar: null,
       expected,
       applied: [],
       pending: [],
       extra: [],
       latestExpected: expected.at(-1) ?? null,
       latestApplied: null,
-      error: "POSTGRES_URL is not set; schema drift cannot be checked.",
+      error: `${SCHEMA_DRIFT_DATABASE_URL_ENV_KEYS.join(", ")} are not set; schema drift cannot be checked.`,
     };
   }
 
   const client = new Client({
-    connectionString,
+    connectionString: resolved.connectionString,
     ssl: { rejectUnauthorized: false },
   });
   try {
@@ -69,6 +95,7 @@ export async function checkSchemaDrift(
     return {
       configured: true,
       status: pending.length || extra.length ? "drift" : "ok",
+      connectionEnvVar: resolved.envVar,
       expected,
       applied,
       pending,
@@ -80,6 +107,7 @@ export async function checkSchemaDrift(
     return {
       configured: true,
       status: "unknown",
+      connectionEnvVar: resolved.envVar,
       expected,
       applied: [],
       pending: [],

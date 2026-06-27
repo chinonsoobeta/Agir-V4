@@ -6,11 +6,28 @@ import pg from "pg";
 
 const { Client } = pg;
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const DATABASE_URL_ENV_KEYS = [
+  "POSTGRES_URL",
+  "DATABASE_URL",
+  "SUPABASE_DB_URL",
+  "SUPABASE_DATABASE_URL",
+  "SUPABASE_POSTGRES_URL",
+  "POSTGRES_PRISMA_URL",
+  "POSTGRES_URL_NON_POOLING",
+];
+
+function resolveDatabaseUrl() {
+  for (const key of DATABASE_URL_ENV_KEYS) {
+    const value = process.env[key]?.trim();
+    if (value) return { connectionString: value, envVar: key };
+  }
+  return { connectionString: null, envVar: null };
+}
 
 async function runMigrations() {
-  const connectionString = process.env.POSTGRES_URL;
+  const { connectionString, envVar } = resolveDatabaseUrl();
   if (!connectionString) {
-    console.error("Error: POSTGRES_URL not set");
+    console.error(`Error: set one database URL env var: ${DATABASE_URL_ENV_KEYS.join(", ")}`);
     process.exit(1);
   }
 
@@ -21,7 +38,7 @@ async function runMigrations() {
 
   try {
     await client.connect();
-    console.log("Connected to database\n");
+    console.log(`Connected to database via ${envVar}\n`);
 
     // Get migration files
     const migrationDir = resolve(__dirname, "supabase/migrations");

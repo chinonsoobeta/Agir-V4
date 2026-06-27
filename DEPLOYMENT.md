@@ -19,6 +19,7 @@ Add these in Vercel Project Settings -> Environment Variables for Production, Pr
 SUPABASE_URL=
 SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+POSTGRES_URL=
 VITE_SUPABASE_URL=
 VITE_SUPABASE_PUBLISHABLE_KEY=
 ANTHROPIC_API_KEY=
@@ -29,6 +30,11 @@ AGIR_AI_MODEL=claude-sonnet-4-6
 `VITE_SUPABASE_PUBLISHABLE_KEY` should equal `SUPABASE_PUBLISHABLE_KEY`.
 
 Never expose `SUPABASE_SERVICE_ROLE_KEY` with a `VITE_` prefix.
+
+`POSTGRES_URL` is the direct Supabase Postgres connection string used by migrations and schema
+drift checks. If your host provides a different name, the app also accepts `DATABASE_URL`,
+`SUPABASE_DB_URL`, `SUPABASE_DATABASE_URL`, `SUPABASE_POSTGRES_URL`, `POSTGRES_PRISMA_URL`, and
+`POSTGRES_URL_NON_POOLING`.
 
 ## Supabase auth URLs
 
