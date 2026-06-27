@@ -40,7 +40,10 @@ export async function renderMemoDocxBase64(report: MemoReport): Promise<string> 
   const thinBorder = { style: BorderStyle.SINGLE, size: 4, color: "CED1DA" };
   const cellBorders = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
 
-  const verdictFill = report.verdict_code === "REJECT" ? "B02626" : report.verdict_code === "APPROVE" ? "1A6E40" : "C99612";
+  // RETURN_TO_UNDERWRITING reads red like REJECT (a negative outcome), not the
+  // amber reserved for conditional approvals.
+  const verdictNegative = report.verdict_code === "REJECT" || report.verdict_code === "RETURN_TO_UNDERWRITING";
+  const verdictFill = verdictNegative ? "B02626" : report.verdict_code === "APPROVE" ? "1A6E40" : "C99612";
 
   const cell = (text: string, opts: { header?: boolean; first?: boolean; width?: number } = {}) =>
     new TableCell({

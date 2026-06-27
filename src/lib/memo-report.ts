@@ -240,13 +240,13 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
   ];
 
   const sections: ReportSection[] = [];
-  const recommendationLabel = verdict.code === "APPROVE"
-    ? "APPROVE"
-    : verdict.code === "APPROVE_WITH_CONDITIONS"
-      ? "APPROVE WITH CONDITIONS"
-      : verdict.hardFail
-        ? "REJECT"
-        : "RETURN TO UNDERWRITING";
+  // ONE recommendation everywhere: the banner (verdict_code/verdict_banner below)
+  // headlines the reconciled `unifiedRec`, so the Executive Summary, scorecard
+  // note and IC section must read from the SAME value, not the raw gate
+  // verdict.code (which can disagree once findings/context are folded in).
+  // unifiedRec is one of APPROVE / APPROVE_WITH_CONDITIONS /
+  // RETURN_TO_UNDERWRITING / REJECT; underscores -> spaces gives the label.
+  const recommendationLabel = unifiedRec.replace(/_/g, " ");
   const sourceDoc = (a: Row | undefined): string => {
     if (!a) return "Insufficient evidence available";
     const byId = a.source_document_id ? docNameById.get(a.source_document_id) : null;

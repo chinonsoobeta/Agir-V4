@@ -60,8 +60,11 @@ export function tallyVotes(votes: IcVote[], policy: TallyPolicy = DEFAULT_TALLY_
     outcome = "no_quorum";
   } else if (policy.rejectBlocks && rejects > 0) {
     outcome = "rejected";
-  } else if (approvalPct > 50 || (approvalPct >= policy.approveThresholdPct && approvalPct > 100 - approvalPct)) {
-    // A clear majority of decisive votes approves.
+  } else if (approvalPct >= policy.approveThresholdPct && approvals > rejects) {
+    // Approval requires the CONFIGURED share of decisive votes (a supermajority
+    // when approveThresholdPct > 50) AND more approvals than rejects. A prior
+    // `approvalPct > 50` short-circuit ignored the threshold entirely, so a
+    // simple majority always passed even when a supermajority was required.
     outcome = counts.approve_with_conditions >= counts.approve ? "approved_with_conditions" : "approved";
   } else if (rejects > approvals) {
     outcome = "rejected";

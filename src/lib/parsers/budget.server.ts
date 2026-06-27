@@ -82,7 +82,21 @@ function parseBudgetSheet(
     moneyCols.find(({ i }) => numericShare(i) >= 0.6)?.i ??
     (moneyCols.length ? moneyCols[moneyCols.length - 1].i : -1);
   if (amountIndex < 0) amountIndex = header.findIndex((_, i) => i !== labelIndex && i !== categoryIndex && numericShare(i) >= 0.6);
-  if (amountIndex < 0) amountIndex = Math.max(1, header.findIndex((h) => /amount|cost|budget|total/.test(h)));
+  // No identifiable amount column (no money-named header, no column whose data is
+  // >=60% numeric): never guess a column. The previous `Math.max(1, -1)` forced
+  // column 1, so a non-money column (a phase number, code, or year) could be read
+  // as dollar amounts -- fabricating budget figures, the one thing the platform
+  // must never do. Reject every row so a malformed sheet yields nothing instead.
+  if (amountIndex < 0) {
+    return {
+      inserted,
+      rejected: dataRows.map((row, i) => ({
+        row: headerRowIndex + i + 2,
+        reason: "No amount column could be identified; rows skipped to avoid fabricating budget figures.",
+        values: row,
+      })),
+    };
+  }
 
   // Honor a declared scale ("$ in thousands / millions") from the amount-column
   // header first, then the sheet name, the header row, and any caption/title

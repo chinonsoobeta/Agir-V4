@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
-import { reconcileDevelopmentInputs } from "./reconcile.server";
+import { reconcileDevelopmentInputs, computeRevenueGpr } from "./reconcile.server";
 import { ASSUMPTION_BY_KEY, bandFor } from "./assumption-taxonomy";
 
 const DocProjectSchema = z.object({
@@ -150,12 +150,11 @@ export const runReconciliation = createServerFn({ method: "POST" })
       context.supabase.from("revenue_program").select("*").eq("project_id", data.project_id),
     ]);
     const budgetTotal = (budget ?? []).reduce((sum: number, row: any) => sum + Number(row.amount ?? 0), 0);
-    const computedGpr = (revenue ?? []).reduce((sum: number, row: any) => {
-      const sf = Number(row.avg_sf ?? 0);
-      const rent = Number(row.market_rent_monthly ?? 0);
-      const count = Number(row.unit_count ?? 0);
-      return sum + count * (row.rent_basis === "per_sf" ? sf * rent : rent) * 12;
-    }, 0);
+    // computeRevenueGpr mirrors the engine's componentGpr convention exactly so
+    // the reconciliation can never drift from the engine. The previous inline
+    // formula multiplied the per_sf branch by 12 as well, overstating
+    // retail/office/industrial GPR 12x and firing spurious revenue flags.
+    const computedGpr = computeRevenueGpr(revenue ?? []);
     const flags = reconcileDevelopmentInputs({
       budgetTotal,
       statedTdc: Number(project?.acquisition_cost ?? 0) + Number(project?.construction_cost ?? 0),

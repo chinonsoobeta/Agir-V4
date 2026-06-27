@@ -6,6 +6,28 @@ export type ReconciliationFlag = {
   actual?: number;
 };
 
+// Gross potential rent from rent-roll rows, matching the engine's componentGpr
+// convention EXACTLY (engine/proforma.ts, engine/input-assembly.ts:46): a per_sf
+// row stores ANNUAL $/SF, so GPR = count x SF x rent with NO x12; only a per_unit
+// row's rent is $/unit/MONTH and is annualized (count x rent x 12). Kept here as
+// the single source of truth so the gpr_vs_revenue reconciliation check can never
+// drift from how the underwriting engine computes the same figure.
+export function computeRevenueGpr(
+  rows: {
+    rent_basis?: string | null;
+    avg_sf?: number | null;
+    market_rent_monthly?: number | null;
+    unit_count?: number | null;
+  }[],
+): number {
+  return rows.reduce((sum, row) => {
+    const sf = Number(row.avg_sf ?? 0);
+    const rent = Number(row.market_rent_monthly ?? 0);
+    const count = Number(row.unit_count ?? 0);
+    return sum + (row.rent_basis === "per_sf" ? count * sf * rent : count * rent * 12);
+  }, 0);
+}
+
 function severityFor(deltaPct: number): ReconciliationFlag["severity"] {
   if (deltaPct > 10) return "error";
   if (deltaPct > 5) return "warning";

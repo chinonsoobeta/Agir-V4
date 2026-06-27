@@ -43,8 +43,10 @@ export async function renderMemoPdfArrayBuffer(report: MemoReport): Promise<Arra
   let y = M;
   let page = 1;
 
-  const isReject = report.verdict_code === "REJECT";
-  const verdictColor = isReject ? REJECT : report.verdict_code === "APPROVE" ? OK : GOLD;
+  // RETURN_TO_UNDERWRITING is a negative outcome and must read red, like REJECT --
+  // not the amber (GOLD) reserved for conditional approvals.
+  const isNegative = report.verdict_code === "REJECT" || report.verdict_code === "RETURN_TO_UNDERWRITING";
+  const verdictColor = isNegative ? REJECT : report.verdict_code === "APPROVE" ? OK : GOLD;
 
   const footer = () => {
     doc.setFont("helvetica", "normal").setFontSize(7).setTextColor(...MUTED);

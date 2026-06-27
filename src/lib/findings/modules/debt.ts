@@ -1,4 +1,4 @@
-import { FINDING_THRESHOLDS, f, metric, pct, x } from "../findings-rules";
+import { FINDING_THRESHOLDS, f, metric, money, pct, x } from "../findings-rules";
 import type { Finding, NormalizedFindingsInput } from "../findings-types";
 
 function assumptionValue(input: NormalizedFindingsInput, key: string): number | null {
@@ -33,7 +33,7 @@ export function debtFindings(input: NormalizedFindingsInput): Finding[] {
       "risk",
       "high",
       "Refinance Risk",
-      [`DSCR ${x(dscr)}`, annualDebtService == null ? "Annual debt service unavailable" : `Annual debt service ${annualDebtService}`],
+      [`DSCR ${x(dscr)}`, annualDebtService == null ? "Annual debt service unavailable" : `Annual debt service ${money(annualDebtService)}`],
       { dscr, threshold: minDscr, ...(annualDebtService == null ? {} : { annual_debt_service: annualDebtService }) },
       "A DSCR covenant failure indicates limited cash flow support for the proposed debt load.",
       "underwriting",

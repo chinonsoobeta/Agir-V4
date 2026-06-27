@@ -181,9 +181,11 @@ export function extractCandidates(docName: string, text: string): Candidate[] {
         return { kind: "sf", value_numeric: n, value_text: m[0].trim(), unit: "SF" };
       },
     },
-    // Unit counts: "220 units", "220 residential units".
+    // Unit counts: "220 units", "220 residential units". The decimal group
+    // matches the siblings above so "220.5 units" captures 220.5, not 5 (without
+    // it the engine skipped the "220." prefix and mis-read the fractional digit).
     {
-      re: /([\d,]+)\s*(?:units|apartments|condos|keys|rooms|beds|stalls|spaces)\b/gi,
+      re: /([\d,]+(?:\.\d+)?)\s*(?:units|apartments|condos|keys|rooms|beds|stalls|spaces)\b/gi,
       handle: (m) => {
         const n = toNumber(m[1]);
         if (!isFinite(n)) return null;

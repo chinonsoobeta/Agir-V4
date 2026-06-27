@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { isMissingRelation } from "./db-compat";
 
 const milestoneSchema = z.object({
   project_id: z.string().uuid(),
@@ -19,7 +20,7 @@ export const listMilestones = createServerFn({ method: "GET" })
       .from("deal_milestones")
       .select("*, projects(name,location)")
       .order("due_date", { ascending: true, nullsFirst: false });
-    if (error?.message?.includes("Could not find the table")) return [];
+    if (isMissingRelation(error)) return [];
     if (error) throw new Error(error.message);
     return data ?? [];
   });
@@ -82,7 +83,7 @@ export const listMarketSignals = createServerFn({ method: "GET" })
       .from("market_signals")
       .select("*")
       .order("observed_at", { ascending: false });
-    if (error?.message?.includes("Could not find the table")) return [];
+    if (isMissingRelation(error)) return [];
     if (error) throw new Error(error.message);
     return data ?? [];
   });
@@ -189,15 +190,6 @@ type IntegrationConnection = {
   updated_at: string;
   workspace_id?: string | null;
 };
-
-function isMissingRelation(error: { code?: string; message?: string } | null) {
-  return Boolean(
-    error &&
-    (error.code === "PGRST205" ||
-      error.message?.includes("Could not find the table") ||
-      error.message?.includes("schema cache")),
-  );
-}
 
 function parseIntegrationEvent(
   description: string | null,

@@ -115,6 +115,21 @@ describe("3B IC vote tallying", () => {
     expect(t.counts.reject).toBe(0);
     expect(t.outcome).toBe("approved");
   });
+
+  test("a supermajority threshold blocks a simple majority (regression)", () => {
+    const policy = { ...DEFAULT_TALLY_POLICY, approveThresholdPct: 67 };
+    const approve = (n: number) => Array.from({ length: n }, (_, i) => vote(`a${i}`, "approve"));
+    const reject = (n: number) => Array.from({ length: n }, (_, i) => vote(`r${i}`, "reject"));
+    // 6 approve / 4 reject = 60% decisive approval: short of the 67% bar, so it
+    // must NOT pass (previously a >50% short-circuit approved it anyway).
+    const short = tallyVotes([...approve(6), ...reject(4)], policy);
+    expect(short.approvalPct).toBeCloseTo(60);
+    expect(short.outcome).not.toBe("approved");
+    // 7 approve / 3 reject = 70%: clears the supermajority and approves.
+    const clears = tallyVotes([...approve(7), ...reject(3)], policy);
+    expect(clears.approvalPct).toBeCloseTo(70);
+    expect(clears.outcome).toBe("approved");
+  });
 });
 
 describe("3B approval conditions tracked to close", () => {
