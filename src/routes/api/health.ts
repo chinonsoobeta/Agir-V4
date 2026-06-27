@@ -19,13 +19,17 @@ export const Route = createFileRoute("/api/health")({
           schemaDrift: schema.status !== "drift",
         };
         const healthy = Object.values(required).every(Boolean);
+        // Public, UNAUTHENTICATED endpoint: return only booleans. The detailed
+        // `schema` object (full migration manifest, pending/unreleased versions,
+        // the DB connection env-var name, and raw Postgres error text) is
+        // reconnaissance material and must not be exposed here. The server logs
+        // the detail at startup (see src/server.ts) for operators instead.
         return Response.json(
           {
             status: healthy ? "ok" : "degraded",
             service: "agir",
             timestamp: new Date().toISOString(),
             checks: required,
-            schema,
           },
           {
             status: healthy ? 200 : 503,

@@ -53,6 +53,7 @@ const roleSchema = z.enum(["owner", "admin", "member", "viewer"]);
 async function requireWorkspaceAdminForMember(
   supabase: any,
   memberId: string,
+  newRole?: WorkspaceRole,
 ): Promise<{ id: string; workspace_id: string; role: WorkspaceRole; user_id: string }> {
   const { data: member, error: memberError } = await supabase
     .from("workspace_members")
@@ -63,12 +64,19 @@ async function requireWorkspaceAdminForMember(
     throw new Error("Workspaces need the latest database migration to be applied.");
   }
   if (memberError) throw new Error(memberError.message);
-  const { data: role, error: roleError } = await supabase.rpc("workspace_role", {
+  const { data: callerRole, error: roleError } = await supabase.rpc("workspace_role", {
     ws: member.workspace_id,
   });
   if (roleError) throw new Error(roleError.message);
-  if (role !== "owner" && role !== "admin") {
+  if (callerRole !== "owner" && callerRole !== "admin") {
     throw new Error("Only workspace owners and admins can manage members.");
+  }
+  // Owner protection: only an OWNER may demote/remove an existing owner or grant
+  // ownership. Without this an admin could demote the owner to viewer (or promote
+  // themselves to owner) and seize the workspace. Mirrored in the database by the
+  // prevent_last_workspace_owner_removal trigger (defense in depth).
+  if ((member.role === "owner" || newRole === "owner") && callerRole !== "owner") {
+    throw new Error("Only a workspace owner can manage another owner or grant ownership.");
   }
   return member;
 }
@@ -227,7 +235,7 @@ export const updateMemberRole = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ data, context }) => {
     const supabase = context.supabase as any;
-    await requireWorkspaceAdminForMember(supabase, data.member_id);
+    await requireWorkspaceAdminForMember(supabase, data.member_id, data.role);
     const { data: rows, error } = await supabase
       .from("workspace_members")
       .update({ role: data.role })

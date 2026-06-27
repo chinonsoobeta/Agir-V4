@@ -166,8 +166,19 @@ function formatSpreadsheetCell(
     .map((value) => String(value ?? "").toLowerCase())
     .join(" ");
   const financialContext = [label.toLowerCase(), rowLabel].join(" ");
-  const looksLikePercent =
-    /\b(occupancy|occupanc|occ\.?|percent|pct|%)\b/.test(financialContext) && Math.abs(cell) <= 1;
+  // Percent columns. A fraction (<=1) is a ratio rendered as N%. But many sheets
+  // store occupancy / cap / vacancy / expense ratios as WHOLE numbers (96, 5.5,
+  // 35) -- previously these had |cell| > 1 so the % was dropped and the bare
+  // number flowed downstream with the wrong unit. Within an UNAMBIGUOUS percent
+  // context we now also accept 1 < |cell| <= 100 as an already-percent value.
+  // Values > 100 are left alone so a count is never mislabeled, and the context
+  // terms are chosen to avoid money-column collisions ("cap rate"/"exit cap" not
+  // bare "cap"; "expense ratio"/"opex ratio" not bare "expense").
+  const percentContext =
+    /\b(occupancy|occupanc|occ\.?|percent|pct|%|vacancy|cap rate|caprate|exit cap|going-in|expense ratio|opex ratio|interest rate|discount rate|rent growth|expense growth|yield|ltv|ltc)\b/.test(
+      financialContext,
+    );
+  const looksLikePercent = percentContext && Math.abs(cell) <= 100;
 
   const looksLikeMoney =
     /\b(amount|budget|cost|price|value|loan|equity|debt|proceeds|income|revenue|rent|noi|opex|expense|tdc|total|contingency|financing|acquisition|land|soft|hard|capital|reserve|fee)\b/.test(
@@ -178,7 +189,12 @@ function formatSpreadsheetCell(
   // percent or count column is never rescaled.
   const value = looksLikeMoney && scale !== 1 ? cell * scale : cell;
   const formatted = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
-  if (looksLikePercent) return `${prefix}${(cell * 100).toFixed(2)}%`;
+  if (looksLikePercent) {
+    // A fraction (<=1) is scaled to N%; a whole-number percent (5.5, 35, 96) is
+    // already in percent terms and emitted as-is, so neither is mis-scaled.
+    const asPercent = Math.abs(cell) <= 1 ? cell * 100 : cell;
+    return `${prefix}${asPercent.toFixed(2)}%`;
+  }
   return `${prefix}${looksLikeMoney ? `$${formatted}` : formatted}`;
 }
 

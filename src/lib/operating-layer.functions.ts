@@ -20,6 +20,7 @@ import {
   type ConditionAction,
 } from "./committee/voting";
 import { getConnector, type DealRecord, type FieldMapping } from "./integrations/connector";
+import { isMissingRelation } from "./db-compat";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -55,7 +56,9 @@ export const getCriticalPath = createServerFn({ method: "GET" })
         .eq("id", data.project_id)
         .maybeSingle(),
     ]);
-    if (mErr) throw new Error(mErr.message);
+    // Degrade to an empty critical path on an unmigrated schema instead of
+    // crashing the Execution page (the deal_milestones table may not exist yet).
+    if (mErr && !isMissingRelation(mErr)) throw new Error(mErr.message);
     const execMilestones: ExecMilestone[] = (milestones ?? []).map((m: any) => ({
       id: m.id,
       title: m.title,
@@ -122,6 +125,7 @@ export const listIcVotes = createServerFn({ method: "GET" })
       .from("ic_votes")
       .select("*")
       .eq("project_id", data.project_id);
+    if (isMissingRelation(error)) return { votes: [], tally: tallyVotes([]) };
     if (error) throw new Error(error.message);
     const votes: IcVote[] = (rows ?? []).map((r: any) => ({ memberId: r.owner_id, vote: r.vote }));
     return { votes: rows ?? [], tally: tallyVotes(votes) };
@@ -190,6 +194,7 @@ export const listConditions = createServerFn({ method: "GET" })
       .select("*")
       .eq("project_id", data.project_id)
       .order("created_at", { ascending: true });
+    if (isMissingRelation(error)) return { conditions: [], cleared: true, openCount: 0 };
     if (error) throw new Error(error.message);
     const conditions = rows ?? [];
     return {
@@ -355,6 +360,7 @@ export const listSyncRuns = createServerFn({ method: "GET" })
       .eq("connection_id", data.connection_id)
       .order("started_at", { ascending: false })
       .limit(20);
+    if (isMissingRelation(error)) return [];
     if (error) throw new Error(error.message);
     return rows ?? [];
   });
