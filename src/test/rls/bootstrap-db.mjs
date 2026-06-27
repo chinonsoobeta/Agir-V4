@@ -1,4 +1,5 @@
 import pg from "pg";
+import { assertTestDatabase } from "./assert-test-db.mjs";
 
 const { Client } = pg;
 
@@ -118,6 +119,7 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth, storage TO anon, authenticated, s
 `;
 
 const { connectionString, envVar } = resolveDatabaseUrl();
+assertTestDatabase(connectionString);
 const client = new Client({
   connectionString,
   ssl: shouldUseSsl(connectionString) ? { rejectUnauthorized: false } : false,

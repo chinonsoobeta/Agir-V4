@@ -24,6 +24,7 @@ VITE_SUPABASE_URL=
 VITE_SUPABASE_PUBLISHABLE_KEY=
 ANTHROPIC_API_KEY=
 AGIR_AI_MODEL=claude-sonnet-4-6
+ERROR_WEBHOOK_URL=
 ```
 
 `VITE_SUPABASE_URL` should equal `SUPABASE_URL`.
@@ -35,6 +36,16 @@ Never expose `SUPABASE_SERVICE_ROLE_KEY` with a `VITE_` prefix.
 drift checks. If your host provides a different name, the app also accepts `DATABASE_URL`,
 `SUPABASE_DB_URL`, `SUPABASE_DATABASE_URL`, `SUPABASE_POSTGRES_URL`, `POSTGRES_PRISMA_URL`, and
 `POSTGRES_URL_NON_POOLING`.
+
+## Error monitoring
+
+Every server-side error is emitted to stderr as a single structured JSON line
+prefixed `[agir-error]` (see `src/lib/observability.server.ts`). Vercel captures
+stderr, so the lowest-effort production monitoring is to attach a **log drain**
+(Vercel Project Settings -> Log Drains: Sentry, Logflare, Axiom, Datadog) and
+alert on `level":"error"`. For direct push instead, set `ERROR_WEBHOOK_URL` to an
+ingest endpoint and each error event is POSTed there (fire-and-forget). Reporting
+never throws and never blocks a request.
 
 ## Supabase auth URLs
 

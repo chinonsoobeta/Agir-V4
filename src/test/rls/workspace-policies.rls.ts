@@ -1,5 +1,6 @@
 import { beforeAll, beforeEach, afterAll, describe, expect, test } from "vitest";
 import pg from "pg";
+import { assertTestDatabase } from "./assert-test-db.mjs";
 
 const { Client } = pg;
 
@@ -32,7 +33,10 @@ const ids = {
 function resolveDatabaseUrl() {
   for (const key of DATABASE_URL_ENV_KEYS) {
     const value = process.env[key]?.trim();
-    if (value) return value;
+    if (value) {
+      assertTestDatabase(value);
+      return value;
+    }
   }
   throw new Error(`Set one database URL env var before running npm run test:rls.`);
 }

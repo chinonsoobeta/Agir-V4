@@ -2,6 +2,15 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { captureServerError } from "./lib/observability.server";
+
+function requestPath(request: Request): string {
+  try {
+    return new URL(request.url).pathname;
+  } catch {
+    return "(unknown)";
+  }
+}
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -70,7 +79,10 @@ async function normalizeCatastrophicSsrResponse(
     return response;
   }
 
-  console.error(consumeLastCapturedError() ?? new Error(`h3 swallowed SSR error: ${body}`));
+  captureServerError(consumeLastCapturedError() ?? new Error(`h3 swallowed SSR error: ${body}`), {
+    path: requestPath(request),
+    kind: "ssr_swallowed",
+  });
   if (!wantsHtmlDocument(request)) {
     return new Response(body, {
       status: 500,
@@ -91,7 +103,7 @@ export default {
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(request, response);
     } catch (error) {
-      console.error(error);
+      captureServerError(error, { path: requestPath(request), kind: "fetch" });
       if (!wantsHtmlDocument(request)) return jsonErrorResponse(error);
       return new Response(renderErrorPage(), {
         status: 500,
