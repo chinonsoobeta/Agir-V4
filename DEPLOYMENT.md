@@ -63,6 +63,10 @@ If you use Google sign-in, configure Google as a Supabase OAuth provider and add
 
 ## Migrations & schema discipline
 
+Operational recovery procedures live in [docs/RUNBOOK.md](docs/RUNBOOK.md), including failed
+migration recovery, rollback conventions, backup/PITR steps, schema drift incidents, and the
+predeploy checklist.
+
 Apply every migration in `supabase/migrations` to the target Supabase project **before** deploying new code. Two ways:
 
 ```bash
