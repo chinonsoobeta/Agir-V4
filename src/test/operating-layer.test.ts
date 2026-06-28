@@ -13,6 +13,7 @@ import {
   DEFAULT_TALLY_POLICY,
   type IcVote,
 } from "@/lib/committee/voting";
+import { buildCommitteeReadiness } from "@/lib/committee/readiness";
 import { canAccessRow, canWriteRow } from "@/lib/workspace-access";
 import {
   csvConnector,
@@ -178,6 +179,69 @@ describe("3B approval conditions tracked to close", () => {
     expect(
       openConditionCount([{ status: "open" }, { status: "open" }, { status: "satisfied" }]),
     ).toBe(2);
+  });
+});
+
+describe("3B committee readiness accountability", () => {
+  test("blocks committee before deterministic outputs and clean assumptions exist", () => {
+    const readiness = buildCommitteeReadiness({
+      hasUnderwriting: false,
+      assumptions: [{ status: "approved" }, { status: "conflicting" }, { status: "missing" }],
+      reconciliationFlags: [{ severity: "error", resolved: false }],
+      voteTally: tallyVotes([]),
+      conditions: [{ status: "open" }],
+      decisions: [],
+      memoCount: 0,
+    });
+
+    expect(readiness.status).toBe("blocked");
+    expect(readiness.blockers).toBeGreaterThanOrEqual(3);
+    expect(readiness.items.find((item) => item.key === "underwriting")?.severity).toBe("blocker");
+    expect(readiness.items.find((item) => item.key === "assumptions")?.severity).toBe("blocker");
+    expect(readiness.items.find((item) => item.key === "reconciliation")?.severity).toBe("blocker");
+  });
+
+  test("marks a clean package ready while preserving workflow warnings", () => {
+    const readiness = buildCommitteeReadiness({
+      hasUnderwriting: true,
+      assumptions: [{ status: "approved" }, { status: "modified" }],
+      reconciliationFlags: [],
+      voteTally: tallyVotes([
+        { memberId: "a", vote: "approve" },
+        { memberId: "b", vote: "approve_with_conditions" },
+      ]),
+      conditions: [],
+      decisions: [],
+      memoCount: 0,
+    });
+
+    expect(readiness.status).toBe("ready");
+    expect(readiness.blockers).toBe(0);
+    expect(readiness.items.find((item) => item.key === "memo")?.severity).toBe("warning");
+    expect(readiness.items.find((item) => item.key === "decision_history")?.severity).toBe(
+      "warning",
+    );
+  });
+
+  test("records a decided package once committee has made a terminal decision", () => {
+    const readiness = buildCommitteeReadiness({
+      hasUnderwriting: true,
+      assumptions: [{ status: "approved" }],
+      reconciliationFlags: [],
+      voteTally: tallyVotes([
+        { memberId: "a", vote: "approve" },
+        { memberId: "b", vote: "approve" },
+      ]),
+      conditions: [{ status: "satisfied" }],
+      decisions: [{ decision: "approve", user_name: "A. Sponsor", created_at: "2026-06-27" }],
+      memoCount: 1,
+    });
+
+    expect(readiness.status).toBe("decided");
+    expect(readiness.label).toBe("Decision recorded");
+    expect(readiness.items.find((item) => item.key === "decision_history")?.detail).toContain(
+      "A. Sponsor",
+    );
   });
 });
 

@@ -71,7 +71,7 @@ export const listProjects = createServerFn({ method: "GET" })
 
 export const getProject = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .validator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: proj, error } = await context.supabase
       .from("projects")
@@ -84,7 +84,7 @@ export const getProject = createServerFn({ method: "GET" })
 
 export const createProject = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => ProjectSchema.parse(d))
+  .validator((d: unknown) => ProjectSchema.parse(d))
   .handler(async ({ data, context }) => {
     const payload = { ...data, owner_id: context.userId };
     let { data: proj, error } = await context.supabase
@@ -113,7 +113,7 @@ export const createProject = createServerFn({ method: "POST" })
 
 export const updateProject = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z.object({ id: z.string().uuid() }).merge(ProjectSchema.partial()).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -148,7 +148,7 @@ export const updateProject = createServerFn({ method: "POST" })
 
 export const deleteProject = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .validator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase.from("projects").delete().eq("id", data.id);
     if (error) throw new Error(error.message);

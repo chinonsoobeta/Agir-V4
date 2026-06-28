@@ -28,7 +28,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export const setMilestoneDependencies = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z.object({ id: z.string().uuid(), depends_on: z.array(z.string().uuid()).max(50) }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -44,9 +44,7 @@ export const setMilestoneDependencies = createServerFn({ method: "POST" })
 
 export const getCriticalPath = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) =>
-    z.object({ project_id: z.string().uuid() }).parse(d),
-  )
+  .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const [{ data: milestones, error: mErr }, { data: project }] = await Promise.all([
       context.supabase.from("deal_milestones").select("*").eq("project_id", data.project_id),
@@ -79,7 +77,7 @@ export const getCriticalPath = createServerFn({ method: "GET" })
 
 export const castVote = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z
       .object({
         project_id: z.string().uuid(),
@@ -117,9 +115,7 @@ export const castVote = createServerFn({ method: "POST" })
 
 export const listIcVotes = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) =>
-    z.object({ project_id: z.string().uuid() }).parse(d),
-  )
+  .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
       .from("ic_votes")
@@ -133,7 +129,7 @@ export const listIcVotes = createServerFn({ method: "GET" })
 
 export const addCondition = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z.object({ project_id: z.string().uuid(), label: z.string().min(1).max(1000) }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -153,7 +149,7 @@ export const addCondition = createServerFn({ method: "POST" })
 
 export const updateConditionStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z.object({ id: z.string().uuid(), action: z.enum(["satisfy", "reopen", "waive"]) }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -185,9 +181,7 @@ export const updateConditionStatus = createServerFn({ method: "POST" })
 
 export const listConditions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) =>
-    z.object({ project_id: z.string().uuid() }).parse(d),
-  )
+  .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
       .from("ic_conditions")
@@ -210,7 +204,7 @@ const MappingSchema = z.record(z.string(), z.string());
 
 export const exportDealsCsv = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z.object({ connection_id: z.string().uuid(), mapping: MappingSchema }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -255,7 +249,7 @@ export const exportDealsCsv = createServerFn({ method: "POST" })
 
 export const importDealsCsv = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z
       .object({
         connection_id: z.string().uuid(),
@@ -350,7 +344,7 @@ export const importDealsCsv = createServerFn({ method: "POST" })
 
 export const listSyncRuns = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { connection_id: string }) =>
+  .validator((d: { connection_id: string }) =>
     z.object({ connection_id: z.string().uuid() }).parse(d),
   )
   .handler(async ({ data, context }) => {

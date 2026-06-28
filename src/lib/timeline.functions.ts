@@ -7,9 +7,7 @@ import { mapTimeline, type RawSources, type TimelineEvent } from "./timeline";
 // Union of every event source for one deal -> one labeled, chronological stream.
 // Each source is optional: a missing/unmigrated table is skipped, never fatal.
 export const getDealTimeline = createServerFn({ method: "GET" })
-  .inputValidator((d: { project_id: string }) =>
-    z.object({ project_id: z.string().uuid() }).parse(d),
-  )
+  .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
   .middleware([requireSupabaseAuth])
   .handler(async ({ data, context }): Promise<TimelineEvent[]> => {
     const supabase = context.supabase as any;

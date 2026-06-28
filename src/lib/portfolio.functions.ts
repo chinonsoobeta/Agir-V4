@@ -174,9 +174,7 @@ export const listPortfolio = createServerFn({ method: "GET" })
 // recomputed here, only selected from norm.base / norm.worstStress / findings.
 export const compareDeals = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
-    z.object({ ids: z.array(z.string().uuid()).min(1).max(6) }).parse(d),
-  )
+  .validator((d: unknown) => z.object({ ids: z.array(z.string().uuid()).min(1).max(6) }).parse(d))
   .handler(async ({ data, context }): Promise<ComparisonDeal[]> => {
     const ids = data.ids;
     const { data: projects, error } = await context.supabase

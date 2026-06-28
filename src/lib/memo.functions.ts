@@ -40,9 +40,7 @@ function parseMemoJson(text: string): {
 
 export const generateMemo = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) =>
-    z.object({ project_id: z.string().uuid() }).parse(d),
-  )
+  .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: project, error: projErr } = await context.supabase
       .from("projects")
@@ -342,9 +340,7 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
 
 export const listMemos = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) =>
-    z.object({ project_id: z.string().uuid() }).parse(d),
-  )
+  .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
       .from("investment_memos")
@@ -361,9 +357,7 @@ export const listMemos = createServerFn({ method: "GET" })
 // the button with a clear reason and developers can inspect the inputs.
 export const debugMemoReadiness = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) =>
-    z.object({ project_id: z.string().uuid() }).parse(d),
-  )
+  .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: project } = await context.supabase
       .from("projects")

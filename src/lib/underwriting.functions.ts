@@ -240,7 +240,7 @@ export async function loadEngineInput(
 // computing on a gap.
 export const getEngineInput = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) => ProjectIdSchema.parse(d))
+  .validator((d: { project_id: string }) => ProjectIdSchema.parse(d))
   .handler(
     async ({
       data,
@@ -334,7 +334,7 @@ function buildReconciliationContext(
 
 export const getUnderwritingReadiness = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) => ProjectIdSchema.parse(d))
+  .validator((d: { project_id: string }) => ProjectIdSchema.parse(d))
   .handler(async ({ data, context }) => {
     const rows = await loadProjectRows(context.supabase, data.project_id);
     const readiness = computeReadiness(rows);
@@ -356,7 +356,7 @@ export const getUnderwritingReadiness = createServerFn({ method: "GET" })
 
 export const acceptDefaults = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) => ProjectIdSchema.parse(d))
+  .validator((d: { project_id: string }) => ProjectIdSchema.parse(d))
   .handler(async ({ data, context }) => {
     const rows = await loadProjectRows(context.supabase, data.project_id);
     const readiness = computeReadiness(rows);
@@ -404,7 +404,7 @@ const ResolveConflictSchema = z.object({
 
 export const resolveConflict = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => ResolveConflictSchema.parse(d))
+  .validator((d: unknown) => ResolveConflictSchema.parse(d))
   .handler(async ({ data, context }) => {
     const rows = await loadProjectRows(context.supabase, data.project_id);
     const row = rows.scalars.find((r) => r.key === data.key && r.status === "conflicting");
@@ -557,7 +557,7 @@ async function aiSelectDefaults(
 
 export const runFullUnderwriting = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string; mode?: "ai" | "deterministic" }) =>
+  .validator((d: { project_id: string; mode?: "ai" | "deterministic" }) =>
     z
       .object({
         project_id: z.string().uuid(),
@@ -881,7 +881,7 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
 
 export const listReconciliationFlags = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) => ProjectIdSchema.parse(d))
+  .validator((d: { project_id: string }) => ProjectIdSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
       .from("reconciliation_flags")

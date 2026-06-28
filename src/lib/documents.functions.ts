@@ -4,7 +4,7 @@ import { z } from "zod";
 
 export const listDocuments = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id?: string }) => d)
+  .validator((d: { project_id?: string }) => d)
   .handler(async ({ data, context }) => {
     let q = context.supabase
       .from("documents")
@@ -27,7 +27,7 @@ const CreateDocSchema = z.object({
 
 export const createDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => CreateDocSchema.parse(d))
+  .validator((d: unknown) => CreateDocSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
       .from("documents")
@@ -40,7 +40,7 @@ export const createDocument = createServerFn({ method: "POST" })
 
 export const deleteDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .validator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: doc } = await context.supabase
       .from("documents")
@@ -56,7 +56,7 @@ export const deleteDocument = createServerFn({ method: "POST" })
 
 export const getDocumentUrl = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .validator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: doc, error } = await context.supabase
       .from("documents")
@@ -74,7 +74,7 @@ export const getDocumentUrl = createServerFn({ method: "GET" })
 
 export const analyzeDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string; name: string; category?: string | null }) =>
+  .validator((d: { id: string; name: string; category?: string | null }) =>
     z
       .object({
         id: z.string().uuid(),

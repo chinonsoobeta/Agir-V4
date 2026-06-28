@@ -18,7 +18,7 @@ const ScenarioSchema = z.object({
 
 export const listScenarios = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id?: string }) => d)
+  .validator((d: { project_id?: string }) => d)
   .handler(async ({ data, context }) => {
     let q = context.supabase
       .from("scenarios")
@@ -32,7 +32,7 @@ export const listScenarios = createServerFn({ method: "GET" })
 
 export const createScenario = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => ScenarioSchema.parse(d))
+  .validator((d: unknown) => ScenarioSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
       .from("scenarios")
@@ -45,7 +45,7 @@ export const createScenario = createServerFn({ method: "POST" })
 
 export const deleteScenario = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .validator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase.from("scenarios").delete().eq("id", data.id);
     if (error) throw new Error(error.message);

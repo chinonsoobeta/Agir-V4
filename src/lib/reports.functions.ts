@@ -35,7 +35,7 @@ async function countRows(
 
 export const getReportReadiness = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string; report_type: ReportType }) =>
+  .validator((d: { project_id: string; report_type: ReportType }) =>
     z.object({ project_id: z.string().uuid(), report_type: ReportTypeSchema }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -151,7 +151,7 @@ export const getReportReadiness = createServerFn({ method: "GET" })
 
 export const generateReport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string; report_type: ReportType }) =>
+  .validator((d: { project_id: string; report_type: ReportType }) =>
     z.object({ project_id: z.string().uuid(), report_type: ReportTypeSchema }).parse(d),
   )
   .handler(async ({ data, context }) => {

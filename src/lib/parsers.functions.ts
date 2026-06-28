@@ -24,7 +24,7 @@ async function downloadDocument(context: any, documentId: string) {
 
 export const parseBudget = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => DocProjectSchema.parse(d))
+  .validator((d: unknown) => DocProjectSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { doc, buffer } = await downloadDocument(context, data.document_id);
     const { parseBudgetWorkbook } = await import("./parsers/budget.server");
@@ -95,7 +95,7 @@ export const parseBudget = createServerFn({ method: "POST" })
 
 export const parseRentRoll = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => DocProjectSchema.parse(d))
+  .validator((d: unknown) => DocProjectSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { doc, buffer } = await downloadDocument(context, data.document_id);
     const { parseRentRollWorkbook } = await import("./parsers/rent-roll.server");
@@ -168,9 +168,7 @@ export const parseRentRoll = createServerFn({ method: "POST" })
 
 export const runReconciliation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) =>
-    z.object({ project_id: z.string().uuid() }).parse(d),
-  )
+  .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const [{ data: project }, { data: budget }, { data: revenue }] = await Promise.all([
       context.supabase.from("projects").select("*").eq("id", data.project_id).single(),

@@ -23,9 +23,7 @@ import {
 
 export const listAssumptions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) =>
-    z.object({ project_id: z.string().uuid() }).parse(d),
-  )
+  .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
       .from("assumptions")
@@ -39,7 +37,7 @@ export const listAssumptions = createServerFn({ method: "GET" })
 
 export const listAssumptionVersions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { assumption_id: string }) =>
+  .validator((d: { assumption_id: string }) =>
     z.object({ assumption_id: z.string().uuid() }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -54,9 +52,7 @@ export const listAssumptionVersions = createServerFn({ method: "GET" })
 
 export const listFinancialOutputs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) =>
-    z.object({ project_id: z.string().uuid() }).parse(d),
-  )
+  .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
       .from("financial_outputs")
@@ -70,9 +66,7 @@ export const listFinancialOutputs = createServerFn({ method: "GET" })
 
 export const listRisks = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) =>
-    z.object({ project_id: z.string().uuid() }).parse(d),
-  )
+  .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
       .from("risk_register")
@@ -85,9 +79,7 @@ export const listRisks = createServerFn({ method: "GET" })
 
 export const listDecisions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) =>
-    z.object({ project_id: z.string().uuid() }).parse(d),
-  )
+  .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
       .from("decision_logs")
@@ -100,9 +92,7 @@ export const listDecisions = createServerFn({ method: "GET" })
 
 export const listAudit = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) =>
-    z.object({ project_id: z.string().uuid() }).parse(d),
-  )
+  .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
       .from("audit_logs")
@@ -255,7 +245,7 @@ const ClassificationSchema = z.object({
 
 export const extractAssumptions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string; mode?: "ai" | "deterministic" }) =>
+  .validator((d: { project_id: string; mode?: "ai" | "deterministic" }) =>
     z
       .object({
         project_id: z.string().uuid(),
@@ -993,7 +983,7 @@ const UpdateSchema = z.object({
 
 export const reviewAssumption = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => UpdateSchema.parse(d))
+  .validator((d: unknown) => UpdateSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { data: cur, error } = await context.supabase
       .from("assumptions")
@@ -1081,7 +1071,7 @@ export const reviewAssumption = createServerFn({ method: "POST" })
 
 export const recordDecision = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z
       .object({
         project_id: z.string().uuid(),
@@ -1122,9 +1112,7 @@ export const recordDecision = createServerFn({ method: "POST" })
 
 export const getReadiness = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { project_id: string }) =>
-    z.object({ project_id: z.string().uuid() }).parse(d),
-  )
+  .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: rows } = await context.supabase
       .from("assumptions")

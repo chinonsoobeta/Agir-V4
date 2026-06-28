@@ -8,6 +8,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { listFinancialOutputs, listDecisions, recordDecision } from "@/lib/assumptions.functions";
 import { listAssumptions } from "@/lib/assumptions.functions";
 import { listReconciliationFlags } from "@/lib/underwriting.functions";
+import { listMemos } from "@/lib/memo.functions";
 import {
   castVote,
   listIcVotes,
@@ -21,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { buildDecision, RECOMMENDATION_TONE } from "@/lib/decision";
+import type { AssumptionRow, OutputRow } from "@/lib/decision";
 import {
   ScoreDial,
   RecommendationPill,
@@ -31,7 +33,9 @@ import {
   TONE_TEXT,
   TONE_SOLID,
 } from "@/components/decision-ui";
+import { buildCommitteeReadiness, type ReadinessSeverity } from "@/lib/committee/readiness";
 import {
+  AlertTriangle,
   CheckCircle2,
   FileCheck2,
   RotateCcw,
@@ -40,7 +44,9 @@ import {
   ListChecks,
   Gavel,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
+import type { VoteTally } from "@/lib/committee/voting";
 
 const outputsQ = (pid: string) =>
   queryOptions({
@@ -61,6 +67,11 @@ const flagsQ = (pid: string) =>
   queryOptions({
     queryKey: ["recon-flags", pid],
     queryFn: () => listReconciliationFlags({ data: { project_id: pid } }),
+  });
+const memosQ = (pid: string) =>
+  queryOptions({
+    queryKey: ["memos", pid],
+    queryFn: () => listMemos({ data: { project_id: pid } }),
   });
 const icVotesQ = (pid: string) =>
   queryOptions({
@@ -84,8 +95,31 @@ const VOTE_OPTIONS: {
 ];
 
 type ICAction = "approve" | "approve_with_conditions" | "return_to_underwriting" | "reject";
+type DecisionLogRow = {
+  id: string;
+  decision: string;
+  rationale: string | null;
+  conditions: string | null;
+  user_name: string | null;
+  created_at: string;
+};
+type ReconFlagRow = { id: string; severity?: string | null; message: string; resolved?: boolean };
+type ConditionRow = { id: string; label: string; status: "open" | "satisfied" | "waived" };
+type VoteData = {
+  tally: VoteTally;
+};
+type ConditionData = {
+  conditions: ConditionRow[];
+  openCount: number;
+  cleared: boolean;
+};
 
-const ACTIONS: { key: ICAction; label: string; icon: any; tone: keyof typeof TONE_SOLID }[] = [
+const ACTIONS: {
+  key: ICAction;
+  label: string;
+  icon: LucideIcon;
+  tone: keyof typeof TONE_SOLID;
+}[] = [
   { key: "approve", label: "Approve", icon: CheckCircle2, tone: "approve" },
   {
     key: "approve_with_conditions",
@@ -107,11 +141,28 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
   const { data: assumptions } = useSuspenseQuery(assumptionsQ(projectId));
   const { data: decisions } = useSuspenseQuery(decisionsQ(projectId));
   const { data: flags } = useSuspenseQuery(flagsQ(projectId));
+  const { data: memos } = useSuspenseQuery(memosQ(projectId));
+  const { data: voteData } = useSuspenseQuery(icVotesQ(projectId));
+  const { data: condData } = useSuspenseQuery(icCondsQ(projectId));
   const qc = useQueryClient();
   const fn = useServerFn(recordDecision);
 
-  const decision = buildDecision(outputs as any, assumptions as any);
+  const outputRows = outputs as OutputRow[];
+  const assumptionRows = assumptions as AssumptionRow[];
+  const decision = buildDecision(outputRows, assumptionRows);
   const recTone = RECOMMENDATION_TONE[decision.recommendation];
+  const decisionRows = decisions as DecisionLogRow[];
+  const flagRows = flags as ReconFlagRow[];
+  const conditionRows = (condData as ConditionData).conditions;
+  const readiness = buildCommitteeReadiness({
+    hasUnderwriting: decision.hasUnderwriting,
+    assumptions: assumptionRows,
+    reconciliationFlags: flagRows,
+    voteTally: (voteData as VoteData).tally,
+    conditions: conditionRows,
+    decisions: decisionRows,
+    memoCount: memos.length,
+  });
 
   const [action, setAction] = useState<ICAction>(
     decision.recommendation === "APPROVE"
@@ -163,7 +214,7 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
     );
   }
 
-  const errorFlags = (flags as any[]).filter((f) => f.severity === "error");
+  const errorFlags = flagRows.filter((f) => f.severity === "error" && !f.resolved);
   const conditionsList = decision.findings?.approvalConditions ?? [];
 
   return (
@@ -216,6 +267,8 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
           </ul>
         </Card>
       )}
+
+      <CommitteeReadinessCard readiness={readiness} />
 
       {/* Approval conditions + critical findings */}
       <div className="grid lg:grid-cols-2 gap-4">
@@ -277,7 +330,11 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
       </div>
 
       {/* Committee votes + tracked conditions (governance over the engine verdict) */}
-      <CommitteeGovernance projectId={projectId} />
+      <CommitteeGovernance
+        projectId={projectId}
+        voteData={voteData as VoteData}
+        condData={condData as ConditionData}
+      />
 
       {/* IC decision */}
       <Card className="p-6 elevated" data-section="record-decision">
@@ -339,15 +396,15 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
       <Card className="overflow-hidden elevated">
         <div className="px-5 py-3 border-b border-border bg-muted/20 flex items-center justify-between">
           <SectionLabel>Decision History · Audit Trail</SectionLabel>
-          <span className="num text-xs text-muted-foreground">{decisions.length}</span>
+          <span className="num text-xs text-muted-foreground">{decisionRows.length}</span>
         </div>
-        {decisions.length === 0 ? (
+        {decisionRows.length === 0 ? (
           <p className="p-8 text-sm text-muted-foreground text-center">
             No committee decisions recorded yet.
           </p>
         ) : (
           <ul className="divide-y divide-border">
-            {decisions.map((d: any) => {
+            {decisionRows.map((d) => {
               const tone =
                 d.decision === "approve"
                   ? "approve"
@@ -390,13 +447,102 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
   );
 }
 
+const READINESS_META: Record<
+  ReadinessSeverity,
+  { icon: LucideIcon; cls: string; dot: string; label: string }
+> = {
+  blocker: {
+    icon: ShieldAlert,
+    cls: "border-destructive/30 bg-destructive/5 text-destructive",
+    dot: "bg-destructive",
+    label: "Blocker",
+  },
+  warning: {
+    icon: AlertTriangle,
+    cls: "border-warning/30 bg-warning/5 text-warning",
+    dot: "bg-warning",
+    label: "Warning",
+  },
+  satisfied: {
+    icon: CheckCircle2,
+    cls: "border-success/30 bg-success/5 text-success",
+    dot: "bg-success",
+    label: "Satisfied",
+  },
+};
+
+function CommitteeReadinessCard({
+  readiness,
+}: {
+  readiness: ReturnType<typeof buildCommitteeReadiness>;
+}) {
+  const tone =
+    readiness.status === "blocked"
+      ? READINESS_META.blocker
+      : readiness.status === "ready"
+        ? READINESS_META.warning
+        : READINESS_META.satisfied;
+  const StatusIcon = tone.icon;
+
+  return (
+    <Card className={`p-5 elevated border ${tone.cls}`}>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <StatusIcon className="size-4" />
+            <SectionLabel>{readiness.label}</SectionLabel>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Current package status before final committee circulation.
+          </p>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <Badge variant="outline" className="text-[10px] uppercase">
+            {readiness.blockers} blocker{readiness.blockers === 1 ? "" : "s"}
+          </Badge>
+          <Badge variant="outline" className="text-[10px] uppercase">
+            {readiness.warnings} warning{readiness.warnings === 1 ? "" : "s"}
+          </Badge>
+        </div>
+      </div>
+      <div className="mt-4 grid md:grid-cols-2 xl:grid-cols-3 gap-2.5">
+        {readiness.items.map((item) => {
+          const meta = READINESS_META[item.severity];
+          return (
+            <div key={item.key} className="rounded-md border border-border bg-background/70 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className={`size-1.5 rounded-full shrink-0 ${meta.dot}`} />
+                  <span className="text-xs font-semibold truncate">{item.label}</span>
+                </span>
+                <span
+                  className={`rounded-full border px-1.5 py-0.5 text-[9px] uppercase shrink-0 ${meta.cls}`}
+                >
+                  {meta.label}
+                </span>
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{item.detail}</p>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
 // 3B: committee voting + tracked approval conditions. Votes and conditions are
 // governance layered ON TOP of the deterministic engine verdict; they never
 // change a computed number. Vote tallying and condition transitions are pure
 // (see src/lib/committee/voting.ts); this component only renders and mutates.
-function CommitteeGovernance({ projectId }: { projectId: string }) {
-  const { data: voteData } = useSuspenseQuery(icVotesQ(projectId));
-  const { data: condData } = useSuspenseQuery(icCondsQ(projectId));
+function CommitteeGovernance({
+  projectId,
+  voteData,
+  condData,
+}: {
+  projectId: string;
+  voteData: VoteData;
+  condData: ConditionData;
+}) {
   const qc = useQueryClient();
   const castFn = useServerFn(castVote);
   const addFn = useServerFn(addCondition);
@@ -432,7 +578,7 @@ function CommitteeGovernance({ projectId }: { projectId: string }) {
   });
 
   const tally = voteData.tally;
-  const conditions = condData.conditions as Array<{ id: string; label: string; status: string }>;
+  const conditions = condData.conditions;
 
   return (
     <div className="grid lg:grid-cols-2 gap-4">
