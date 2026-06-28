@@ -100,6 +100,16 @@ export type CandidateMapping = {
 const LOAN_DEBT_LABEL_RE =
   /(senior\s+(construction\s+)?(loan|debt)|loan amount|loan facility|facility size|debt amount|mortgage|preferred equity|common equity|senior debt)/i;
 
+// A refinance/takeout or mezzanine/subordinate label must not land on the
+// generic senior key just because the generic alias ("loan amount",
+// "amortization") matched contiguously. When the label names such a tranche, the
+// generic key is excluded and the mapper re-picks the qualified sibling
+// (refinance_amount / mezz_debt_amount / refinance_amort_years / ...) via its own
+// aliases. (interest_rate is handled by its SENSITIVE_GUARD deny instead.)
+const TRANCHE_QUALIFIER_RE =
+  /refinanc|\brefi\b|takeout|permanent loan|perm loan|mezzanine|\bmezz\b|subordinate|junior debt/i;
+const TRANCHE_GENERIC_KEYS = new Set(["debt_amount", "amortization_years"]);
+
 // Context + range guards for keys that are easily contaminated by lookalike
 // rates (the classic failure: an exit-cap value of 5.75% mapping to the
 // operating expense ratio). A guarded key requires matching context AND, where
@@ -123,7 +133,7 @@ const SENSITIVE_GUARDS: Record<string, Guard> = {
     // all-in rate. A mezzanine/subordinate label is denied so a junior-tranche
     // rate never lands on the senior interest rate (it re-picks to mezz_interest_rate).
     need: /interest rate|loan rate|all-in rate|rate lock|financing rate|coupon|note rate/,
-    deny: /exit cap|terminal cap|cap rate|debt yield|expense ratio|mezzanine|\bmezz\b|subordinate/,
+    deny: /exit cap|terminal cap|cap rate|debt yield|expense ratio|mezzanine|\bmezz\b|subordinate|refinanc|\brefi\b|takeout|permanent loan/,
     min: 1,
     max: 20,
   },
@@ -250,6 +260,19 @@ export function mapCandidateToKey(
     if (LOAN_DEBT_LABEL_RE.test(tail)) {
       return mapCandidateToKey(cand, new Set([...exclude, "total_project_cost"]));
     }
+  }
+
+  // Tranche re-route: a generic senior key whose label actually names a
+  // refinance/mezzanine tranche must yield to its qualified sibling. Re-pick
+  // excluding the generic key so refinance_amount / mezz_debt_amount /
+  // refinance_amort_years (etc.) win via their own aliases.
+  if (
+    best &&
+    TRANCHE_GENERIC_KEYS.has(best.field_key) &&
+    !exclude.has(best.field_key) &&
+    TRANCHE_QUALIFIER_RE.test(hint)
+  ) {
+    return mapCandidateToKey(cand, new Set([...exclude, best.field_key]));
   }
 
   // Sensitive-key contamination guard: if the best match is a rate/ratio/

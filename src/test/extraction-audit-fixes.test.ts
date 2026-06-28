@@ -48,6 +48,51 @@ describe("candidate extractor", () => {
   });
 });
 
+describe("scaled non-money quantities (millions/thousands of SF or units)", () => {
+  test("'5 million square feet' is extracted as 5,000,000 SF, not $5M", () => {
+    const ks = kinds("Rentable area of 5 million square feet");
+    expect(ks).toContain("sf:5000000");
+    expect(ks).not.toContain("currency:5000000");
+  });
+
+  test("'2 thousand units' is extracted at the scaled magnitude", () => {
+    expect(kinds("A 2 thousand units portfolio")).toContain("units:2000");
+  });
+
+  test("'5 million units' is 5,000,000, not the bare 5 the descriptor rule would give", () => {
+    expect(kinds("5 million units")).toContain("units:5000000");
+  });
+});
+
+describe("tranche re-route (refinance / mezzanine qualifiers)", () => {
+  test("a permanent-takeout loan amount maps to refinance_amount, not the senior debt", () => {
+    const v = values("Loan amount (permanent takeout) $120,000,000");
+    expect(v.get("refinance_amount")).toBe(120000000);
+    expect(v.get("debt_amount")).toBeUndefined();
+  });
+
+  test("a mezzanine loan amount written generically maps to mezz_debt_amount", () => {
+    const v = values("Loan amount (mezzanine) $25,000,000");
+    expect(v.get("mezz_debt_amount")).toBe(25000000);
+    expect(v.get("debt_amount")).toBeUndefined();
+  });
+
+  test("a refinance amortization maps to refinance_amort_years", () => {
+    expect(values("Amortization (refinance) 30 years").get("refinance_amort_years")).toBe(30);
+  });
+
+  test("a refinance interest rate does not contaminate the senior interest rate", () => {
+    const v = values("Interest rate (refinance) 6.0%");
+    expect(v.get("refinance_rate")).toBe(6);
+    expect(v.get("interest_rate")).toBeUndefined();
+  });
+
+  test("an unqualified senior loan amount / amortization are NOT re-routed", () => {
+    expect(values("Senior loan amount $162,500,000").get("debt_amount")).toBe(162500000);
+    expect(values("Amortization 30 years").get("amortization_years")).toBe(30);
+  });
+});
+
 describe("mapper denomination + plausibility", () => {
   test("a multi-million lump sum labelled 'office rent' is not a per-SF rent", () => {
     expect(values("Office rent total $5,200,000").get("office_rent_psf")).toBeUndefined();

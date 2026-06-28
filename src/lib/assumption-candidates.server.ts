@@ -219,6 +219,38 @@ export function extractCandidates(docName: string, text: string): Candidate[] {
         return { kind: "percent", value_numeric: n, value_text: m[0].trim(), unit: "%" };
       },
     },
+    // Scaled square footage: "5 million square feet", "1.2 million SF". Runs
+    // before the bare-money and plain-SF passes so the scale word is applied to
+    // the magnitude (5,000,000 SF), not dropped or read as $5M.
+    {
+      re: /\b([\d,]+(?:\.\d+)?)\s+(million|billion|thousand|mm|bn|k)\s+(?:sq\.?\s?ft\.?|square\s?feet|square\s?foot|sf)\b/gi,
+      handle: (m) => {
+        const n = toNumber(m[1]);
+        if (!isFinite(n)) return null;
+        return {
+          kind: "sf",
+          value_numeric: n * scaleMultiplier(m[2]),
+          value_text: m[0].trim(),
+          unit: "SF",
+        };
+      },
+    },
+    // Scaled unit counts: "2 thousand units", "1.5 million keys". Runs before the
+    // plain-units pass, which would otherwise read the scale word as a descriptor
+    // and capture the bare number ("5 million units" -> 5 instead of 5,000,000).
+    {
+      re: /\b([\d,]+(?:\.\d+)?)\s+(million|billion|thousand|mm|bn|k)\s+(?:(?!per\b)[a-z][a-z-]*\s+){0,2}(?:units|apartments|condos|keys|rooms|beds|stalls|spaces)\b/gi,
+      handle: (m) => {
+        const n = toNumber(m[1]);
+        if (!isFinite(n)) return null;
+        return {
+          kind: "units",
+          value_numeric: n * scaleMultiplier(m[2]),
+          value_text: m[0].trim(),
+          unit: "units",
+        };
+      },
+    },
     // Bare scaled money: "34.5 million": only when the label denotes money AND
     // the scaled number is not naming a non-money quantity ("5 million square
     // feet", "2 thousand units", "5 million residents") - those would otherwise
