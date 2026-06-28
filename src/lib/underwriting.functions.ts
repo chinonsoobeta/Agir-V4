@@ -275,7 +275,7 @@ function scalarValue(rows: ProjectInputRows, key: string): number | null {
   return row?.value_numeric ?? null;
 }
 
-function buildReconciliationContext(
+export function buildReconciliationContext(
   rows: ProjectInputRows,
   input: UnderwritingInput,
   output: EngineOutput,
@@ -305,8 +305,8 @@ function buildReconciliationContext(
     : null;
   return {
     tdc: output.values.tdc,
-    equity: input.equityAmount ?? 0,
-    loan: input.loanAmount,
+    equity: output.values.equity,
+    loan: output.values.totalDebt,
     noi: output.values.noi,
     amortizingAnnualDebtService: output.values.annualDebtService,
     interestOnlyAnnualDebtService: input.loanAmount * (input.interestRatePct / 100),

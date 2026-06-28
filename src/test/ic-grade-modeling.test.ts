@@ -8,6 +8,7 @@ import {
   applyStress,
   buildAllowedValues,
   buildEquityContributions,
+  computeReadiness,
   isWaterfallActive,
   leaseUpAbsorptionIncome,
   mapleHeightsInput,
@@ -16,12 +17,14 @@ import {
   STRESS_PRESETS,
   verifyNumericProvenance,
   xirr,
+  type ProjectInputRows,
   type UnderwritingInput,
   type WaterfallConfig,
 } from "@/lib/engine";
 import { buildMemoReport, memoReportText } from "@/lib/memo-report";
 import { computeInvestmentVerdict } from "@/lib/verdict";
 import { ASSUMPTION_BY_KEY } from "@/lib/assumption-taxonomy";
+import { buildReconciliationContext } from "@/lib/underwriting.functions";
 
 const NEUTRAL_WF: WaterfallConfig = {
   lpEquityPct: 100,
@@ -56,6 +59,38 @@ function profitableInput(overrides: Partial<UnderwritingInput> = {}): Underwriti
     rentGrowthPct: 0,
     expenseGrowthPct: 0,
     ...overrides,
+  };
+}
+
+function readyRows(): ProjectInputRows {
+  return {
+    budget: [
+      { category: "land", amount: 10_000_000, status: "approved" },
+      { category: "hard", amount: 0, status: "approved" },
+      { category: "soft", amount: 0, status: "approved" },
+      { category: "contingency", amount: 0, status: "approved" },
+      { category: "financing_interest", amount: 0, status: "approved" },
+    ],
+    revenue: [
+      {
+        unit_type: "Residential",
+        unit_count: 100,
+        rent: 2_000,
+        rent_basis: "per_unit",
+        occupancy_pct: 100,
+        status: "approved",
+      },
+    ],
+    scalars: [
+      { key: "loan_amount", value_numeric: 5_000_000, status: "approved" },
+      { key: "interest_rate_pct", value_numeric: 5, status: "approved" },
+      { key: "amort_years", value_numeric: 30, status: "approved" },
+      { key: "equity_amount", value_numeric: 5_000_000, status: "approved" },
+      { key: "exit_cap_rate_pct", value_numeric: 5, status: "approved" },
+      { key: "expense_ratio_pct", value_numeric: 0, status: "approved" },
+      { key: "hold_years", value_numeric: 5, status: "approved" },
+      { key: "selling_costs_pct", value_numeric: 0, status: "approved" },
+    ],
   };
 }
 
@@ -132,6 +167,66 @@ describe("WS1.1B multi-tranche debt (mezzanine)", () => {
     expect(withMezz.values.allInDscr).toBeLessThan(withMezz.values.seniorDscr);
     // More debt funds the project, so required equity falls by the mezz amount.
     expect(withMezz.values.requiredEquity).toBeCloseTo(base.values.requiredEquity - 2_000_000, 6);
+
+    const equityFormula = withMezz.metrics.find((m) => m.key === "equity_requirement")!.formula;
+    const ltcFormula = withMezz.metrics.find((m) => m.key === "loan_to_cost")!.formula;
+    expect(equityFormula).toContain("total debt");
+    expect(equityFormula).toContain("mezzanine");
+    expect(ltcFormula).toContain("total debt");
+    expect(ltcFormula).not.toContain("senior loan");
+  });
+
+  test("a positive mezzanine amount is blocked until a positive mezzanine rate is approved", () => {
+    const rows = readyRows();
+    rows.scalars.push({ key: "mezz_loan_amount", value_numeric: 2_000_000, status: "approved" });
+
+    const missingRate = computeReadiness(rows);
+    expect(missingRate.status).toBe("blocked");
+    expect(missingRate.missing).toContain("mezz_interest_rate_pct");
+
+    rows.scalars.push({ key: "mezz_interest_rate_pct", value_numeric: 0, status: "approved" });
+    expect(computeReadiness(rows).missing).toContain("mezz_interest_rate_pct");
+
+    rows.scalars[rows.scalars.length - 1] = {
+      key: "mezz_interest_rate_pct",
+      value_numeric: 12,
+      status: "approved",
+    };
+    expect(computeReadiness(rows).status).toBe("ready");
+  });
+
+  test("optional scalar conflicts block readiness instead of being treated as absent", () => {
+    const rows = readyRows();
+    rows.scalars.push({
+      key: "other_income_annual",
+      value_numeric: null,
+      status: "conflicting",
+      conflict_values: [
+        { value: 0, source: "Budget" },
+        { value: 500_000, source: "Sponsor memo" },
+      ],
+    });
+
+    const readiness = computeReadiness(rows);
+    expect(readiness.status).toBe("blocked");
+    expect(readiness.conflicting).toContain("other_income_annual");
+  });
+
+  test("reconciliation sources include mezzanine debt once the capital stack has it", () => {
+    const rows = readyRows();
+    rows.scalars.push(
+      { key: "mezz_loan_amount", value_numeric: 2_000_000, status: "approved" },
+      { key: "mezz_interest_rate_pct", value_numeric: 12, status: "approved" },
+    );
+    const input = {
+      ...profitableInput({ equityAmount: null }),
+      mezzanine: { amount: 2_000_000, ratePct: 12, amortYears: 0, ioMonths: 60 },
+    };
+    const output = runUnderwriting(input);
+    const ctx = buildReconciliationContext(rows, input, output);
+
+    expect(ctx.loan).toBe(output.values.totalDebt);
+    expect(ctx.equity + ctx.loan).toBeCloseTo(output.values.tdc, 6);
   });
 });
 

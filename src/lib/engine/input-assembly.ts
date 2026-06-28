@@ -122,18 +122,40 @@ function readableScalar(rows: ScalarInputRow[], key: string): ScalarInputRow | u
 export function computeReadiness(rows: ProjectInputRows): Readiness {
   const missing: string[] = [];
   const conflicting: string[] = [];
+  const pushMissing = (key: string) => {
+    if (!missing.includes(key)) missing.push(key);
+  };
+  const pushConflicting = (key: string) => {
+    if (!conflicting.includes(key)) conflicting.push(key);
+  };
 
   for (const category of REQUIRED_BUDGET_CATEGORIES) {
     const lines = rows.budget.filter((b) => b.category === category);
-    if (lines.some((b) => b.status === "conflicting")) conflicting.push(`budget:${category}`);
+    if (lines.some((b) => b.status === "conflicting")) pushConflicting(`budget:${category}`);
     else if (!lines.some((b) => ENGINE_READABLE_STATUSES.includes(b.status)))
-      missing.push(`budget:${category}`);
+      pushMissing(`budget:${category}`);
   }
 
   for (const key of REQUIRED_SCALAR_KEYS) {
     const all = rows.scalars.filter((r) => r.key === key);
-    if (all.some((r) => r.status === "conflicting")) conflicting.push(key);
-    else if (!readableScalar(rows.scalars, key)) missing.push(key);
+    if (all.some((r) => r.status === "conflicting")) pushConflicting(key);
+    else if (!readableScalar(rows.scalars, key)) pushMissing(key);
+  }
+
+  // Optional engine targets still fail closed once they appear in the review
+  // queue: an unresolved conflict cannot be silently treated as "absent".
+  for (const row of rows.scalars) {
+    if (row.status === "conflicting") pushConflicting(row.key);
+  }
+
+  // A positive mezzanine amount activates the subordinate-debt tranche. Its
+  // coupon is then mandatory; otherwise the engine would model free mezz debt.
+  const mezzAmount = readableScalar(rows.scalars, "mezz_loan_amount")?.value_numeric;
+  if (mezzAmount != null && mezzAmount > 0) {
+    const mezzRateRow = readableScalar(rows.scalars, "mezz_interest_rate_pct");
+    if (!mezzRateRow || mezzRateRow.value_numeric == null || mezzRateRow.value_numeric <= 0) {
+      pushMissing("mezz_interest_rate_pct");
+    }
   }
 
   // A component is usable only when it is engine-readable AND complete
@@ -143,15 +165,15 @@ export function computeReadiness(rows: ProjectInputRows): Readiness {
     (r) =>
       ENGINE_READABLE_STATUSES.includes(r.status) && Number(r.unit_count) > 0 && Number(r.rent) > 0,
   );
-  if (rows.revenue.some((r) => r.status === "conflicting")) conflicting.push("revenue_program");
-  else if (readableComponents.length === 0) missing.push("revenue_program");
+  if (rows.revenue.some((r) => r.status === "conflicting")) pushConflicting("revenue_program");
+  else if (readableComponents.length === 0) pushMissing("revenue_program");
 
   // Stabilized occupancy is required per revenue component (own occupancy_pct
   // or an approved project-level stabilized_occupancy_pct fallback).
   const projectOcc = readableScalar(rows.scalars, "stabilized_occupancy_pct");
   for (const component of readableComponents) {
     if (component.occupancy_pct == null && !projectOcc) {
-      missing.push(`occupancy:${component.unit_type}`);
+      pushMissing(`occupancy:${component.unit_type}`);
     }
   }
 

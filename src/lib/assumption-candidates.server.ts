@@ -251,12 +251,12 @@ export function extractCandidates(docName: string, text: string): Candidate[] {
         };
       },
     },
-    // Bare scaled money: "34.5 million": only when the label denotes money AND
+    // Bare scaled money: "34.5 million" / "250M": only when the label denotes money AND
     // the scaled number is not naming a non-money quantity ("5 million square
     // feet", "2 thousand units", "5 million residents") - those would otherwise
     // be emitted as $5,000,000 and would also pre-empt the SF/units passes.
     {
-      re: /\b([\d,]+(?:\.\d+)?)\s+(million|billion|thousand|mm|bn)\b(?!\s+(?:sq\b|square|sf\b|ft\b|feet|acres?|units?|keys?|rooms?|beds?|stalls?|spaces?|residents?|people|jobs|employees|tenants?|members?|households?|cars?|vehicles?))/gi,
+      re: /\b([\d,]+(?:\.\d+)?)\s*(million|billion|thousand|mm|bn|m|b|k)\b(?!\s+(?:sq\b|square|sf\b|ft\b|feet|acres?|units?|keys?|rooms?|beds?|stalls?|spaces?|residents?|people|jobs|employees|tenants?|members?|households?|cars?|vehicles?))/gi,
       handle: (m) => {
         const n = toNumber(m[1]);
         if (!isFinite(n)) return null;

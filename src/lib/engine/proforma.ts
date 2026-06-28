@@ -323,14 +323,18 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
       label: "Equity Requirement",
       value: impliedEquity,
       unit: "$",
-      formula: `Required equity = TDC ${money(tdc)} - loan ${money(input.loanAmount)} = ${money(impliedEquity)}`,
+      formula: mezz
+        ? `Required equity = TDC ${money(tdc)} - total debt ${money(totalDebt)} (senior ${money(input.loanAmount)} + mezzanine ${money(mezz.amount)}) = ${money(impliedEquity)}`
+        : `Required equity = TDC ${money(tdc)} - senior loan ${money(input.loanAmount)} = ${money(impliedEquity)}`,
     },
     {
       key: "loan_to_cost",
       label: "Loan-to-Cost",
       value: ltcPct,
       unit: "%",
-      formula: `LTC = loan ${money(input.loanAmount)} / TDC ${money(tdc)} = ${ltcPct.toFixed(2)}%`,
+      formula: mezz
+        ? `LTC = total debt ${money(totalDebt)} / TDC ${money(tdc)} = ${ltcPct.toFixed(2)}%`
+        : `LTC = senior loan ${money(input.loanAmount)} / TDC ${money(tdc)} = ${ltcPct.toFixed(2)}%`,
     },
     {
       key: "annual_debt_service",
@@ -415,7 +419,9 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
       label: "Loan Payoff at Exit",
       value: loanPayoffAtExit,
       unit: "$",
-      formula: `Loan balance after ${input.holdYears}yr (${input.ioMonths}mo IO, ${input.amortYears}yr amort) = ${money(loanPayoffAtExit)}`,
+      formula: mezz
+        ? `Total debt payoff after ${input.holdYears}yr = senior/mezzanine balances summed across the debt stack = ${money(loanPayoffAtExit)}`
+        : `Senior loan balance after ${input.holdYears}yr (${input.ioMonths}mo IO, ${input.amortYears}yr amort) = ${money(loanPayoffAtExit)}`,
     },
     {
       key: "equity_multiple",

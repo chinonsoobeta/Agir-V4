@@ -93,6 +93,27 @@ describe("free-text spreadsheet conversion honors a declared scale", () => {
   });
 });
 
+describe("candidate extraction for compact money suffixes", () => {
+  test("bare M/B/K suffixes are accepted only near money labels", () => {
+    const candidates = extractCandidates(
+      "Sponsor_Memo.txt",
+      [
+        "Total development cost: 250M.",
+        "Senior debt amount: 162.5M.",
+        "The trail is 12 km from downtown and the schedule is 18 months.",
+      ].join("\n"),
+    );
+
+    expect(candidates.some((c) => c.kind === "currency" && c.value_numeric === 250_000_000)).toBe(
+      true,
+    );
+    expect(candidates.some((c) => c.kind === "currency" && c.value_numeric === 162_500_000)).toBe(
+      true,
+    );
+    expect(candidates.some((c) => c.kind === "currency" && c.value_text === "12 k")).toBe(false);
+  });
+});
+
 describe("plausibility backstop blocks an implausibly small aggregate", () => {
   const base = (over: Partial<MappedCandidate>): MappedCandidate => ({
     field_key: "hard_costs",
