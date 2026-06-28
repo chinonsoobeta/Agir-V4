@@ -165,7 +165,20 @@ async function recordVersion(ctx: any, a: any, changeReason: string, by: string)
   });
 }
 
-export const EXTRACTION_TEXT_SCAN_CHAR_LIMIT = 40_000;
+// Upper bound on how much extracted document text is scanned for candidates.
+// A dense underwriting page is ~3–4K characters, so 5M characters comfortably
+// covers a 1,000+ page document. The old 40K limit silently scanned only the
+// first ~12 pages, dropping every value past them on a large appraisal or OM.
+// Candidate extraction is linear in the scanned length (see the Claims bitmap
+// in assumption-candidates.server.ts), so the full prefix is profiled to scan
+// in well under a second. The cap still guards against a pathological multi-
+// hundred-MB text blob exhausting memory. Override via env for ops tuning.
+const DEFAULT_EXTRACTION_TEXT_SCAN_CHAR_LIMIT = 5_000_000;
+function resolveScanCharLimit(): number {
+  const raw = Number(process.env.EXTRACTION_TEXT_SCAN_CHAR_LIMIT);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_EXTRACTION_TEXT_SCAN_CHAR_LIMIT;
+}
+export const EXTRACTION_TEXT_SCAN_CHAR_LIMIT = resolveScanCharLimit();
 export const STALE_ASSUMPTION_REVIEW_MESSAGE =
   "Assumption changed while you were reviewing it. Refresh and retry.";
 

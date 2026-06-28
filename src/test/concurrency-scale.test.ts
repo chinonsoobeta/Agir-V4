@@ -6,18 +6,21 @@ import {
 import {
   APPROVED_ASSUMPTION_SYNC_MESSAGE,
   assertApprovedAssumptionsSynced,
+  persistAcceptedDefaults,
 } from "@/lib/underwriting.functions";
 import { loadReportData } from "@/lib/reports/report-data.server";
 
 type QueryRecord = {
   table: string;
-  operation: "select" | "update";
+  operation: "select" | "update" | "upsert";
   filters: Array<{ type: "eq" | "in"; column: string; value: unknown }>;
+  rowCount?: number;
 };
 
 class FakeQuery {
   private filters: QueryRecord["filters"] = [];
-  private operation: "select" | "update" = "select";
+  private operation: "select" | "update" | "upsert" = "select";
+  private rowCount: number | undefined;
 
   constructor(
     private table: string,
@@ -34,6 +37,21 @@ class FakeQuery {
     this.operation = "update";
     this.patch = patch;
     return this;
+  }
+
+  async upsert(rows: Record<string, unknown> | Record<string, unknown>[]) {
+    const list = Array.isArray(rows) ? rows : [rows];
+    this.operation = "upsert";
+    this.rowCount = list.length;
+    this.records.push({
+      table: this.table,
+      operation: "upsert",
+      filters: [],
+      rowCount: list.length,
+    });
+    const target = (this.db[this.table] ??= []);
+    target.push(...list);
+    return { data: list, error: null };
   }
 
   eq(column: string, value: unknown) {
@@ -204,5 +222,53 @@ describe("concurrency and scale guards", () => {
       column: "assumption_id",
       value: ["a1", "a2"],
     });
+  });
+
+  test("accepting defaults batches N keys into one upsert instead of N", async () => {
+    const supabase = fakeSupabase({ underwriting_inputs: [] });
+    const keys = ["expense_ratio_pct", "selling_costs_pct", "hold_years", "lease_up_months"];
+
+    const accepted = await persistAcceptedDefaults(supabase, {
+      projectId: "p1",
+      userId: "u1",
+      keys,
+      via: "analyst",
+    });
+
+    expect(accepted).toEqual(keys);
+    const upserts = supabase.records.filter((record) => record.operation === "upsert");
+    expect(upserts).toHaveLength(1);
+    expect(upserts[0].table).toBe("underwriting_inputs");
+    expect(upserts[0].rowCount).toBe(keys.length);
+  });
+
+  test("default acceptance collapses duplicate keys so one conflict row is never touched twice", async () => {
+    const supabase = fakeSupabase({ underwriting_inputs: [] });
+
+    const accepted = await persistAcceptedDefaults(supabase, {
+      projectId: "p1",
+      userId: "u1",
+      // The AI path can return the same index twice; a single upsert statement
+      // must not list the same (project_id,key) conflict row more than once.
+      keys: ["hold_years", "hold_years", "not_a_real_default"],
+      via: "ai",
+    });
+
+    expect(accepted).toEqual(["hold_years"]);
+    const upserts = supabase.records.filter((record) => record.operation === "upsert");
+    expect(upserts).toHaveLength(1);
+    expect(upserts[0].rowCount).toBe(1);
+  });
+
+  test("accepting an empty default set issues no write at all", async () => {
+    const supabase = fakeSupabase({ underwriting_inputs: [] });
+    const accepted = await persistAcceptedDefaults(supabase, {
+      projectId: "p1",
+      userId: "u1",
+      keys: [],
+      via: "analyst",
+    });
+    expect(accepted).toEqual([]);
+    expect(supabase.records.filter((r) => r.operation === "upsert")).toHaveLength(0);
   });
 });

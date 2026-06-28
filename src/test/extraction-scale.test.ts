@@ -203,33 +203,80 @@ describe("2A: OCR fallback for scanned / image-only PDFs (mocked boundary)", () 
 });
 
 describe("large-document extraction bounds", () => {
-  test("candidate extraction scans a bounded prefix and reports timing for a 50-page-style payload", () => {
-    const page = [
-      "Development underwriting package page",
-      "Noise OCR 0O1l | duplicated footer | unrelated rent comps | boilerplate",
-      "Land acquisition cost $34,500,000.",
-      "Hard costs $162,000,000.",
-      "Interest rate 6.25%.",
-      "Exit cap rate 5.25%.",
-      "Lease-up period 12 months.",
-    ].join("\n");
-    const largeText = Array.from({ length: 50 }, (_, i) => `Page ${i + 1}\n${page}`)
-      .join("\n\n")
-      .repeat(90);
+  // A realistic dense underwriting page (~1.5K chars). 1,000 of these models a
+  // 500–1000 page appraisal / offering memorandum.
+  const PAGE_COUNT = 1_000;
+  function buildLargeDoc(pages: number): string {
+    // A dense page body (~1.5K chars) approximating a real appraisal page, so
+    // 1,000 pages models a ~1.5M-character document.
+    const bodyLines = [
+      "Noise OCR 0O1l | duplicated footer | unrelated rent comps | boilerplate prose.",
+      "Land acquisition cost $34,500,000. Hard costs $162,000,000. Soft costs $21,400,000.",
+      "Interest rate 6.25%. Exit cap rate 5.25%. Lease-up period 12 months. Contingency 5%.",
+      "Stabilized NOI $9,250,000 with 220 residential units at 1,050 SF average rents $3,050/month.",
+      "Senior construction debt $98,000,000 priced at 275 bps over the index; DSCR 1.25x.",
+    ];
+    const body = Array.from({ length: 4 }, () => bodyLines.join("\n")).join("\n");
+    const out: string[] = [];
+    for (let i = 1; i <= pages; i++) {
+      out.push(
+        [
+          `Page ${i} - Development underwriting package`,
+          body,
+          // A value unique to the LAST page, far past the old 40K limit, so the
+          // test proves deep content is scanned - not just a leading prefix.
+          i === pages ? "Deferred developer fee $7,777,777 recognized at exit." : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      );
+    }
+    return out.join("\n\n");
+  }
 
+  test("scans a full ~1000-page document end to end within a linear time budget", () => {
+    const largeText = buildLargeDoc(PAGE_COUNT);
+    // The whole document fits inside the scan limit (no silent truncation of a
+    // realistic large doc).
     expect(largeText.length).toBeGreaterThan(1_000_000);
+    expect(largeText.length).toBeLessThanOrEqual(EXTRACTION_TEXT_SCAN_CHAR_LIMIT);
+
     const scannedText = largeText.slice(0, EXTRACTION_TEXT_SCAN_CHAR_LIMIT);
     const started = performance.now();
     const candidates = extractCandidates("Large_Appraisal.txt", scannedText);
     const elapsedMs = performance.now() - started;
 
     console.info(
-      `[large-doc-profile] bytes=${largeText.length} scanned_chars=${scannedText.length} candidates=${candidates.length} elapsed_ms=${elapsedMs.toFixed(1)}`,
+      `[large-doc-profile] pages=${PAGE_COUNT} bytes=${largeText.length} scanned_chars=${scannedText.length} candidates=${candidates.length} elapsed_ms=${elapsedMs.toFixed(1)}`,
     );
 
-    expect(scannedText.length).toBe(EXTRACTION_TEXT_SCAN_CHAR_LIMIT);
+    expect(scannedText.length).toBe(largeText.length);
     expect(candidates.length).toBeGreaterThan(0);
-    expect(elapsedMs).toBeLessThan(3_000);
+    // The unique last-page value must be present: deep content is extracted, not
+    // dropped by a leading-prefix cap.
+    expect(candidates.some((c) => c.value_numeric === 7_777_777)).toBe(true);
+    // Linear-time guard: the bitmap-backed Claims keeps a full-document scan well
+    // under a couple of seconds. The pre-bitmap O(matches²) scan blew past this.
+    expect(elapsedMs).toBeLessThan(5_000);
+  });
+
+  test("candidate extraction time stays roughly linear as the document grows", () => {
+    const timeFor = (pages: number) => {
+      const text = buildLargeDoc(pages);
+      const started = performance.now();
+      extractCandidates("scale.txt", text);
+      return performance.now() - started;
+    };
+    // Warm up so JIT/regex compilation does not skew the first measurement.
+    timeFor(50);
+    const small = Math.max(timeFor(200), 1);
+    const large = timeFor(800);
+    console.info(
+      `[large-doc-scaling] 200p=${small.toFixed(1)}ms 800p=${large.toFixed(1)}ms ratio=${(large / small).toFixed(2)}`,
+    );
+    // 4× the input should cost on the order of 4× the time, not 16×. Allow ample
+    // slack for noise on shared CI while still catching quadratic regressions.
+    expect(large).toBeLessThan(small * 10);
   });
 });
 

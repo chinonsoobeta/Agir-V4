@@ -35,8 +35,17 @@ async function optionalImport<T = unknown>(spec: string): Promise<T | null> {
   }
 }
 
-// Cap pages so a large scanned PDF cannot make extraction hang.
-export const MAX_OCR_PAGES = 10;
+// Cap pages so a large scanned PDF cannot make extraction hang. OCR is ~1–2s
+// per page (tesseract), so a 500–1000 page *scanned* document cannot be OCR'd
+// inside a single request - embedded-text PDFs have no such limit and now scan
+// in full (see EXTRACTION_TEXT_SCAN_CHAR_LIMIT). When this cap truncates a
+// scanned doc the caller surfaces a "first N of M pages" warning rather than
+// failing silently. Override via env for batch/background contexts.
+function resolveMaxOcrPages(): number {
+  const raw = Number(process.env.MAX_OCR_PAGES);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 10;
+}
+export const MAX_OCR_PAGES = resolveMaxOcrPages();
 
 export const defaultOcrRunner: OcrRunner = async (buf) => {
   const unpdf = await optionalImport<any>("unpdf");

@@ -80,19 +80,33 @@ function sourceLocation(text: string, idx: number): string | null {
 // Tracks claimed [start,end) spans so a single numeric token is not emitted as
 // multiple candidates (e.g. "$42 per square foot" is one rent, not also "$42"
 // currency and "42 sf").
+//
+// Backed by a per-character coverage bitmap rather than a list of spans: the
+// previous list-scan made `overlaps()` O(spans) per call, so a whole-document
+// scan was O(matches²) and degraded sharply on large (500–1000 page) inputs.
+// The bitmap makes both `overlaps` and `claim` O(token length) - i.e. the whole
+// pass is linear in the scanned text - at a cost of one byte per character.
 class Claims {
-  private spans: Array<[number, number]> = [];
+  private readonly claimed: Uint8Array;
+  constructor(length: number) {
+    this.claimed = new Uint8Array(Math.max(0, length));
+  }
   overlaps(start: number, end: number): boolean {
-    return this.spans.some(([s, e]) => start < e && end > s);
+    const lo = Math.max(0, start);
+    const hi = Math.min(this.claimed.length, end);
+    for (let i = lo; i < hi; i++) if (this.claimed[i]) return true;
+    return false;
   }
   claim(start: number, end: number) {
-    this.spans.push([start, end]);
+    const lo = Math.max(0, start);
+    const hi = Math.min(this.claimed.length, end);
+    for (let i = lo; i < hi; i++) this.claimed[i] = 1;
   }
 }
 
 export function extractCandidates(docName: string, text: string): Candidate[] {
   const out: Array<Candidate & { _idx: number }> = [];
-  const claims = new Claims();
+  const claims = new Claims(text.length);
   const push = (
     idx: number,
     len: number,

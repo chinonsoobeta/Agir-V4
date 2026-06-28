@@ -354,32 +354,65 @@ export const getUnderwritingReadiness = createServerFn({ method: "GET" })
 
 // ---------- Defaults are static and consensual ----------
 
+// Persist a batch of accepted static defaults in a SINGLE upsert instead of one
+// round-trip per key. Both the analyst ("accept all") and the AI-assisted paths
+// accept N keys at once; issuing N sequential upserts was a real N+1 against
+// underwriting_inputs. All rows share the (project_id,key) conflict target, so a
+// single .upsert([...]) is equivalent - and duplicate keys are collapsed first
+// because Postgres rejects a statement that touches the same conflict row twice.
+export async function persistAcceptedDefaults(
+  supabase: any,
+  opts: {
+    projectId: string;
+    userId: string;
+    keys: string[];
+    via: "analyst" | "ai";
+  },
+): Promise<string[]> {
+  const seen = new Set<string>();
+  const accepted: string[] = [];
+  for (const key of opts.keys) {
+    if (seen.has(key) || !DEFAULTS[key]) continue;
+    seen.add(key);
+    accepted.push(key);
+  }
+  if (!accepted.length) return [];
+
+  const approvedAt = new Date().toISOString();
+  const reason =
+    opts.via === "ai"
+      ? "AI accepted the consensual static default"
+      : "Static default accepted by analyst";
+  const rows = accepted.map((key) => ({
+    project_id: opts.projectId,
+    owner_id: opts.userId,
+    key,
+    value_numeric: DEFAULTS[key].value,
+    source: "default",
+    status: "default_accepted",
+    formula_text: `${reason}: ${DEFAULTS[key].label}`,
+    approved_by: opts.userId,
+    approved_at: approvedAt,
+  }));
+  const { error } = await supabase
+    .from("underwriting_inputs")
+    .upsert(rows, { onConflict: "project_id,key" });
+  if (error) throw new Error(error.message);
+  return accepted;
+}
+
 export const acceptDefaults = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: { project_id: string }) => ProjectIdSchema.parse(d))
   .handler(async ({ data, context }) => {
     const rows = await loadProjectRows(context.supabase, data.project_id);
     const readiness = computeReadiness(rows);
-    const accepted: string[] = [];
-    for (const key of readiness.defaultable) {
-      const def = DEFAULTS[key];
-      const { error } = await context.supabase.from("underwriting_inputs").upsert(
-        {
-          project_id: data.project_id,
-          owner_id: context.userId,
-          key,
-          value_numeric: def.value,
-          source: "default",
-          status: "default_accepted",
-          formula_text: `Static default accepted by analyst: ${def.label}`,
-          approved_by: context.userId,
-          approved_at: new Date().toISOString(),
-        },
-        { onConflict: "project_id,key" },
-      );
-      if (error) throw new Error(error.message);
-      accepted.push(key);
-    }
+    const accepted = await persistAcceptedDefaults(context.supabase, {
+      projectId: data.project_id,
+      userId: context.userId,
+      keys: readiness.defaultable,
+      via: "analyst",
+    });
     await context.supabase.from("audit_logs").insert({
       project_id: data.project_id,
       owner_id: context.userId,
@@ -517,28 +550,17 @@ async function aiSelectDefaults(
   } catch {
     indices = [];
   }
-  const accepted: string[] = [];
+  const chosenKeys: string[] = [];
   for (const raw of Array.isArray(indices) ? indices : []) {
     const key = keys[Number(raw)];
-    if (!key) continue;
-    const def = DEFAULTS[key];
-    const { error } = await ctx.supabase.from("underwriting_inputs").upsert(
-      {
-        project_id: projectId,
-        owner_id: ctx.userId,
-        key,
-        value_numeric: def.value,
-        source: "default",
-        status: "default_accepted",
-        formula_text: `AI accepted the consensual static default: ${def.label}`,
-        approved_by: ctx.userId,
-        approved_at: new Date().toISOString(),
-      },
-      { onConflict: "project_id,key" },
-    );
-    if (error) throw new Error(error.message);
-    accepted.push(key);
+    if (key) chosenKeys.push(key);
   }
+  const accepted = await persistAcceptedDefaults(ctx.supabase, {
+    projectId,
+    userId: ctx.userId,
+    keys: chosenKeys,
+    via: "ai",
+  });
   if (accepted.length) {
     await ctx.supabase.from("audit_logs").insert({
       project_id: projectId,
