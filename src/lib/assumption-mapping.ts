@@ -9,10 +9,17 @@
 import type { Candidate, CandidateKind } from "./assumption-candidates.server";
 import { ASSUMPTION_DEFS, ASSUMPTION_BY_KEY, type AssumptionDef } from "./assumption-taxonomy";
 
-// Candidate kinds that are admissible for a taxonomy unit. This is a guard
-// against gross mismatches (e.g. a percentage mapping to a dollar field); the
+// Candidate kinds (and rent denomination) admissible for a taxonomy unit. This
+// guards against gross mismatches (e.g. a percentage on a dollar field); the
 // label match is the primary signal.
-function kindFitsKey(kind: CandidateKind, def: AssumptionDef): boolean {
+//
+// Rent candidates carry a denomination in `unit` ("$/mo" vs "$/SF"). It must be
+// honoured: a per-SF rent ($/SF) is ~100x a monthly per-unit rent, so letting an
+// "$X PSF" office rent satisfy a "$"-unit monthly field (it used to, via a
+// generic "asking rent" alias) put a wrong field AND a wrong magnitude into the
+// engine. A monthly rent likewise must never fill a $/SF field.
+function kindFitsKey(cand: Candidate, def: AssumptionDef): boolean {
+  const { kind } = cand;
   switch (def.unit) {
     case "%":
       return kind === "percent";
@@ -26,10 +33,11 @@ function kindFitsKey(kind: CandidateKind, def: AssumptionDef): boolean {
     case "mo":
       return kind === "duration";
     case "$":
-      // residential_rent_monthly is unit "$" but arrives as a monthly rent.
-      return kind === "currency" || kind === "rent";
+      // Absolute / monthly-per-unit dollar field: a per-SF rent must not land here.
+      return kind === "currency" || (kind === "rent" && cand.unit !== "$/SF");
     case "$/SF":
-      return kind === "rent" || kind === "currency";
+      // Per-SF field: a monthly per-unit rent must not land here.
+      return (kind === "rent" && cand.unit !== "$/mo") || kind === "currency";
     case "text":
       return true;
     default:
@@ -140,7 +148,7 @@ export function mapCandidateToKey(
   let bestLen = -1;
   for (const { def, alias } of ALIAS_TABLE) {
     if (exclude.has(def.key)) continue;
-    if (!kindFitsKey(cand.kind, def)) continue;
+    if (!kindFitsKey(cand, def)) continue;
     const idx = hint.lastIndexOf(alias);
     if (idx < 0) continue;
     const end = idx + alias.length;

@@ -22,6 +22,104 @@ import {
   type DealRecord,
   type FieldMapping,
 } from "@/lib/integrations/connector";
+import { importDealRecords } from "@/lib/operating-layer.functions";
+
+// Minimal PostgREST-shaped fake: records every (table, op) so tests can assert
+// query counts (the N+1 guard), executes filters/inserts against an in-memory
+// db, and can fail a project insert by name to exercise the per-row fallback.
+function fakeSupabase(
+  seed: Record<string, any[]> = {},
+  opts: { failProjectName?: string } = {},
+) {
+  const db: Record<string, any[]> = {
+    projects: [...(seed.projects ?? [])],
+    external_record_links: [...(seed.external_record_links ?? [])],
+  };
+  const calls: Array<{ table: string; op: string }> = [];
+  let idSeq = 1000;
+
+  function from(table: string) {
+    const state: {
+      op: "select" | "insert" | "update";
+      filters: Array<["eq" | "in", string, any]>;
+      patch: any;
+      rows: any[] | null;
+      returning: boolean;
+    } = { op: "select", filters: [], patch: null, rows: null, returning: false };
+
+    const applyFilters = (rows: any[]) => {
+      let out = rows;
+      for (const [type, col, val] of state.filters) {
+        if (type === "eq") out = out.filter((r) => r[col] === val);
+        else {
+          const set = new Set(val as any[]);
+          out = out.filter((r) => set.has(r[col]));
+        }
+      }
+      return out;
+    };
+
+    const run = (single: boolean) => {
+      calls.push({ table, op: state.op });
+      if (state.op === "insert") {
+        const rows = state.rows ?? [];
+        if (table === "projects" && opts.failProjectName) {
+          // A statement that includes the poison row fails as a whole, exactly
+          // like Postgres rejecting a multi-row INSERT on one bad tuple.
+          if (rows.some((r) => r.name === opts.failProjectName)) {
+            return { data: null, error: { message: "invalid row in batch" } };
+          }
+        }
+        const created = rows.map((r) => ({ ...r, id: r.id ?? `gen-${idSeq++}` }));
+        (db[table] ??= []).push(...created);
+        const data = state.returning ? created.map((r) => ({ id: r.id })) : null;
+        return { data: single ? (data?.[0] ?? null) : data, error: null };
+      }
+      if (state.op === "update") {
+        const matched = applyFilters(db[table] ?? []);
+        for (const row of matched) Object.assign(row, state.patch);
+        const data = matched.map((r) => ({ ...r }));
+        return { data: single ? (data[0] ?? null) : data, error: null };
+      }
+      const rows = applyFilters(db[table] ?? []).map((r) => ({ ...r }));
+      return { data: single ? (rows[0] ?? null) : rows, error: null };
+    };
+
+    const builder: any = {
+      select(_cols?: string) {
+        state.returning = true;
+        return builder;
+      },
+      update(patch: any) {
+        state.op = "update";
+        state.patch = patch;
+        return builder;
+      },
+      insert(rows: any) {
+        state.op = "insert";
+        state.rows = Array.isArray(rows) ? rows : [rows];
+        return builder;
+      },
+      eq(col: string, val: any) {
+        state.filters.push(["eq", col, val]);
+        return builder;
+      },
+      in(col: string, vals: any[]) {
+        state.filters.push(["in", col, vals]);
+        return builder;
+      },
+      single: async () => run(true),
+      maybeSingle: async () => run(true),
+      then: (res: any, rej: any) => Promise.resolve(run(false)).then(res, rej),
+    };
+    return builder;
+  }
+
+  return { from, calls, db };
+}
+
+const countOps = (calls: Array<{ table: string; op: string }>, table: string, op: string) =>
+  calls.filter((c) => c.table === table && c.op === op).length;
 
 const M = (
   id: string,
@@ -333,5 +431,90 @@ describe("3C integrations: CSV reference connector round-trip", () => {
     expect(CONNECTOR_REGISTRY.find((c) => c.provider === "csv")?.status).toBe("live");
     expect(CONNECTOR_REGISTRY.find((c) => c.provider === "salesforce")?.status).toBe("planned");
     expect(CONNECTOR_REGISTRY.find((c) => c.provider === "dealcloud")?.status).toBe("planned");
+  });
+});
+
+describe("3C integrations: deal import persistence batches its queries (N+1 guard)", () => {
+  const deal = (external_id: string, name: string): DealRecord => ({
+    external_id,
+    name,
+    location: null,
+    type: null,
+    source: "broker",
+    probability: null,
+    target_close_date: null,
+  });
+
+  test("N brand-new deals cost one read, one project insert, and one link insert", async () => {
+    const supabase = fakeSupabase();
+    const records = [deal("CRM-1", "Alpha"), deal("CRM-2", "Beta"), deal("CRM-3", "Gamma")];
+
+    const result = await importDealRecords(supabase, {
+      connectionId: "conn-1",
+      ownerId: "user-1",
+      workspaceId: null,
+      records,
+    });
+
+    expect(result).toEqual({ created: 3, updated: 0, failed: 0 });
+    // The N+1 that this fix targets: link lookups must be a single IN query, not
+    // one SELECT per record. Writes are likewise two statements, not 2N.
+    expect(countOps(supabase.calls, "external_record_links", "select")).toBe(1);
+    expect(countOps(supabase.calls, "projects", "insert")).toBe(1);
+    expect(countOps(supabase.calls, "external_record_links", "insert")).toBe(1);
+    expect(supabase.db.projects).toHaveLength(3);
+    expect(supabase.db.external_record_links).toHaveLength(3);
+  });
+
+  test("existing deals update in place and refresh last_synced_at in one batched touch", async () => {
+    const supabase = fakeSupabase({
+      projects: [{ id: "p1", name: "Old Name" }],
+      external_record_links: [
+        { id: "l1", connection_id: "conn-1", external_id: "CRM-1", project_id: "p1" },
+      ],
+    });
+
+    const result = await importDealRecords(supabase, {
+      connectionId: "conn-1",
+      ownerId: "user-1",
+      workspaceId: null,
+      records: [deal("CRM-1", "New Name"), deal("CRM-2", "Fresh")],
+    });
+
+    expect(result).toEqual({ created: 1, updated: 1, failed: 0 });
+    expect(supabase.db.projects.find((p) => p.id === "p1")?.name).toBe("New Name");
+    // One project UPDATE for the existing deal, and exactly one batched link
+    // touch (not one per updated record).
+    expect(countOps(supabase.calls, "projects", "update")).toBe(1);
+    expect(countOps(supabase.calls, "external_record_links", "update")).toBe(1);
+    expect(supabase.db.external_record_links.find((l) => l.id === "l1")?.last_synced_at).toBeTruthy();
+  });
+
+  test("one unparseable row falls back to per-row inserts without poisoning the batch", async () => {
+    const supabase = fakeSupabase({}, { failProjectName: "Bad Deal" });
+
+    const result = await importDealRecords(supabase, {
+      connectionId: "conn-1",
+      ownerId: "user-1",
+      workspaceId: null,
+      records: [deal("CRM-1", "Good A"), deal("CRM-2", "Bad Deal"), deal("CRM-3", "Good B")],
+    });
+
+    expect(result).toEqual({ created: 2, updated: 0, failed: 1 });
+    // The good rows still land despite the poison row.
+    expect(supabase.db.projects.map((p) => p.name).sort()).toEqual(["Good A", "Good B"]);
+    expect(supabase.db.external_record_links).toHaveLength(2);
+  });
+
+  test("an empty record set performs no writes at all", async () => {
+    const supabase = fakeSupabase();
+    const result = await importDealRecords(supabase, {
+      connectionId: "conn-1",
+      ownerId: "user-1",
+      workspaceId: null,
+      records: [],
+    });
+    expect(result).toEqual({ created: 0, updated: 0, failed: 0 });
+    expect(supabase.calls).toHaveLength(0);
   });
 });
