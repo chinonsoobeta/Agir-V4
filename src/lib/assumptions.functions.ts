@@ -176,7 +176,9 @@ async function recordVersion(ctx: any, a: any, changeReason: string, by: string)
 const DEFAULT_EXTRACTION_TEXT_SCAN_CHAR_LIMIT = 5_000_000;
 function resolveScanCharLimit(): number {
   const raw = Number(process.env.EXTRACTION_TEXT_SCAN_CHAR_LIMIT);
-  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_EXTRACTION_TEXT_SCAN_CHAR_LIMIT;
+  return Number.isFinite(raw) && raw > 0
+    ? Math.floor(raw)
+    : DEFAULT_EXTRACTION_TEXT_SCAN_CHAR_LIMIT;
 }
 export const EXTRACTION_TEXT_SCAN_CHAR_LIMIT = resolveScanCharLimit();
 export const STALE_ASSUMPTION_REVIEW_MESSAGE =
@@ -405,6 +407,11 @@ export const extractAssumptions = createServerFn({ method: "POST" })
           perDocument.push(row);
           continue;
         }
+        if (text.length > EXTRACTION_TEXT_SCAN_CHAR_LIMIT) {
+          warnings.push(
+            `${d.name}: only the first ${EXTRACTION_TEXT_SCAN_CHAR_LIMIT.toLocaleString()} of ${text.length.toLocaleString()} extracted characters were scanned for values; later content was not read.`,
+          );
+        }
         const cands = extractCandidates(d.name, text.slice(0, EXTRACTION_TEXT_SCAN_CHAR_LIMIT));
         row.candidate_count = cands.length;
         row.candidates_preview = cands.slice(0, 5).map((c) => ({
@@ -415,31 +422,47 @@ export const extractAssumptions = createServerFn({ method: "POST" })
         }));
         allCandidates.push(...cands);
         if (/\.(xlsx|xls)$/i.test(d.name)) {
-          const parsedRevenue = parseRentRollWorkbook(buf);
-          structuredRevenueMappings.push(
-            ...parsedRevenue.inserted.flatMap((revRow) =>
-              mapRevenueProgramRowToAssumptions(revRow, { name: d.name }),
-            ),
-          );
-          const parsedBudget = parseBudgetWorkbook(buf);
-          // Aggregate line items by category within this document: multiple
-          // rows in one category are summed into a single category total, not
-          // treated as competing conflicts.
-          structuredBudgetMappings.push(
-            ...aggregateBudgetRows(parsedBudget.inserted, { name: d.name }),
-          );
-          // 2D: record which sheet(s) fed the typed parsers and how many merged
-          // cells were recovered, so the trace shows the workbook was scanned.
-          row.sheets_scanned = parsedBudget.meta.sheetsScanned;
-          row.sheets_selected = Array.from(
-            new Set(
-              [...parsedRevenue.meta.sheetsSelected, parsedBudget.meta.sheetSelected].filter(
-                Boolean,
+          // Each structured parser runs in its own guard: a failure in one (a
+          // corrupt sheet) must not discard the other parser's output, the
+          // free-text candidates already collected above, or mislabel the whole
+          // document as skipped.
+          const selectedSheets = new Set<string>();
+          try {
+            const parsedRevenue = parseRentRollWorkbook(buf);
+            structuredRevenueMappings.push(
+              ...parsedRevenue.inserted.flatMap((revRow) =>
+                mapRevenueProgramRowToAssumptions(revRow, { name: d.name }),
               ),
-            ),
-          );
-          row.merged_cells_filled =
-            parsedBudget.meta.mergedCellsFilled + parsedRevenue.meta.mergedCellsFilled;
+            );
+            parsedRevenue.meta.sheetsSelected.forEach((s) => s && selectedSheets.add(s));
+            row.merged_cells_filled =
+              (row.merged_cells_filled ?? 0) + parsedRevenue.meta.mergedCellsFilled;
+          } catch (error) {
+            warnings.push(
+              `${d.name}: rent-roll parsing failed (${error instanceof Error ? error.message : "unreadable"}); free-text values still used.`,
+            );
+          }
+          try {
+            const parsedBudget = parseBudgetWorkbook(buf);
+            // Aggregate line items by category within this document: multiple
+            // rows in one category are summed into a single category total, not
+            // treated as competing conflicts.
+            structuredBudgetMappings.push(
+              ...aggregateBudgetRows(parsedBudget.inserted, { name: d.name }),
+            );
+            row.sheets_scanned = parsedBudget.meta.sheetsScanned;
+            if (parsedBudget.meta.sheetSelected)
+              selectedSheets.add(parsedBudget.meta.sheetSelected);
+            row.merged_cells_filled =
+              (row.merged_cells_filled ?? 0) + parsedBudget.meta.mergedCellsFilled;
+          } catch (error) {
+            warnings.push(
+              `${d.name}: budget parsing failed (${error instanceof Error ? error.message : "unreadable"}); free-text values still used.`,
+            );
+          }
+          // 2D: record which sheet(s) fed the typed parsers so the trace shows the
+          // workbook was scanned.
+          row.sheets_selected = Array.from(selectedSheets);
         }
       } catch (error) {
         row.error = error instanceof Error ? error.message : "unreadable document";
@@ -457,7 +480,15 @@ export const extractAssumptions = createServerFn({ method: "POST" })
 
     // ===== Stage 2: deterministic alias mapping (authoritative) =====
     const deterministic = mapCandidates(allCandidates);
-    const deterministicKeys = new Set(deterministic.map((m) => m.field_key));
+    // Keys the AI must never be offered: everything ANY authoritative stage
+    // already resolved - the alias mapper AND the typed budget/rent-roll parsers.
+    // (Previously only alias-mapper keys were excluded, so the AI could be handed
+    // a structured-only key and manufacture a competing value for it.)
+    const deterministicKeys = new Set([
+      ...deterministic.map((m) => m.field_key),
+      ...structuredBudgetMappings.map((m) => m.field_key),
+      ...structuredRevenueMappings.map((m) => m.field_key),
+    ]);
     const mappedIndices = new Set<number>();
     for (let i = 0; i < allCandidates.length; i++) {
       if (mapCandidateToKey(allCandidates[i])) mappedIndices.add(i);

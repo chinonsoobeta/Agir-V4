@@ -88,7 +88,13 @@ function parseBudgetSheet(
     .map((h, i) => ({ h, i }))
     .filter(
       ({ h, i }) =>
-        i !== labelIndex && i !== categoryIndex && /amount|cost|budget|total|value|\$/.test(h),
+        i !== labelIndex &&
+        i !== categoryIndex &&
+        /amount|cost|budget|total|value|\$/.test(h) &&
+        // Exclude percent columns ("% of Total", "% Total", "% of TDC"): they are
+        // numeric and contain "total", so they were being picked as the dollar
+        // amount when they preceded the real Amount column.
+        !/%|percent/.test(h),
     );
   let amountIndex =
     moneyCols.find(({ i }) => numericShare(i) >= 0.6)?.i ??
@@ -140,10 +146,19 @@ function parseBudgetSheet(
     const itemLabel = String(row[labelIndex] ?? "").trim();
     const label = itemLabel || categoryLabel;
     const rawAmount = row[amountIndex];
-    const parsedAmount =
-      typeof rawAmount === "number"
-        ? rawAmount
-        : Number(String(rawAmount ?? "").replace(/[$,]/g, ""));
+    let parsedAmount: number;
+    if (typeof rawAmount === "number") {
+      parsedAmount = rawAmount;
+    } else {
+      // Accounting-format parentheses denote a negative (a credit / offset).
+      // Previously "(500,000)" parsed to NaN and the row was silently dropped,
+      // so a credit vanished and the category total was overstated.
+      const amountStr = String(rawAmount ?? "").trim();
+      const negative = /^\(.*\)$/.test(amountStr);
+      const cleaned = amountStr.replace(/[()$,\s]/g, "");
+      const magnitude = cleaned === "" ? NaN : Number(cleaned);
+      parsedAmount = Number.isFinite(magnitude) && negative ? -magnitude : magnitude;
+    }
     const amount = Number.isFinite(parsedAmount) ? parsedAmount * scale : parsedAmount;
     if (/^total$/i.test(categoryLabel) || /total development cost|^total$/i.test(label)) {
       rejected.push({

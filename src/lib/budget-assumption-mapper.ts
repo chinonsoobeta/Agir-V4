@@ -13,6 +13,13 @@ const BUDGET_KEY_BY_CATEGORY = {
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n);
 
+// A row whose label reads as a subtotal/total ("Total Hard Costs", "Subtotal",
+// "Hard Costs Total"). Used to avoid double-counting a subtotal alongside the
+// detail lines it summarizes.
+function isSubtotalLabel(label: string): boolean {
+  return /\b(?:sub)?total\b/i.test(label);
+}
+
 // Classify a budget "other" line item into a distinct reserve key so it is not
 // lost or summed with unrelated reserves.
 function reserveKeyFor(label: string): string | null {
@@ -58,15 +65,14 @@ export function aggregateBudgetRows(
   rows: ParsedBudgetRow[],
   sourceDocument: { name: string },
 ): MappedCandidate[] {
-  type Bucket = { key: string; total: number; lines: ParsedBudgetRow[] };
+  type Bucket = { key: string; lines: ParsedBudgetRow[] };
   const buckets = new Map<string, Bucket>();
 
   for (const row of rows) {
     let key: string | null = BUDGET_KEY_BY_CATEGORY[row.category];
     if (!key && row.category === "other") key = reserveKeyFor(row.label);
     if (!key) continue;
-    const b = buckets.get(key) ?? { key, total: 0, lines: [] };
-    b.total += row.amount;
+    const b = buckets.get(key) ?? { key, lines: [] };
     b.lines.push(row);
     buckets.set(key, b);
   }
@@ -75,16 +81,24 @@ export function aggregateBudgetRows(
   for (const b of buckets.values()) {
     const def = ASSUMPTION_BY_KEY[b.key];
     if (!def) continue;
-    const detail = b.lines.map((l) => `${l.label} $${money(l.amount)}`).join(" + ");
-    const ref = b.lines[0]?.sourceCellRef ?? "budget";
+    // A subtotal row ("Total Hard Costs", "Hard Costs Subtotal") summarizes the
+    // detail lines beneath it. If BOTH a subtotal and detail lines are present in
+    // the same category, sum only the detail (else the subtotal double-counts its
+    // own components). A summary budget that has ONLY subtotal rows keeps them.
+    const subtotals = b.lines.filter((l) => isSubtotalLabel(l.label));
+    const details = b.lines.filter((l) => !isSubtotalLabel(l.label));
+    const summed = subtotals.length > 0 && details.length > 0 ? details : b.lines;
+    const total = summed.reduce((sum, l) => sum + l.amount, 0);
+    const detail = summed.map((l) => `${l.label} $${money(l.amount)}`).join(" + ");
+    const ref = summed[0]?.sourceCellRef ?? b.lines[0]?.sourceCellRef ?? "budget";
     out.push({
       field_key: b.key,
-      value_numeric: b.total,
+      value_numeric: total,
       value_text: null,
       unit: def.unit,
       confidence: 99,
       source_doc_name: sourceDocument.name,
-      source_text: `${def.label} = ${detail} = $${money(b.total)} (${b.lines.length} line item${b.lines.length === 1 ? "" : "s"})`,
+      source_text: `${def.label} = ${detail} = $${money(total)} (${summed.length} line item${summed.length === 1 ? "" : "s"})`,
       source_location: ref,
       matched_alias: `${b.key} category total`,
       via: "alias",

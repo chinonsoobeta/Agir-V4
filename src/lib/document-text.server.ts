@@ -126,8 +126,12 @@ export async function xlsxBufferToText(buf: ArrayBuffer): Promise<string> {
     const columnScales = headers.map((h) => {
       const colScale = detectMoneyScale(h);
       if (colScale !== 1) return colScale;
+      // NOTE: bare "total" is intentionally NOT a money signal. A "Total Units" /
+      // "Total SF" / "Total Keys" column would otherwise be treated as money and
+      // rescaled 1000x under a "$ in thousands" sheet. Real money totals also
+      // carry cost/amount/$/value, so they are still caught.
       const isMoneyColumn =
-        /amount|budget|cost|price|value|loan|equity|debt|proceeds|income|revenue|noi|opex|expense|tdc|total|contingency|financing|acquisition|capital|reserve|fee|\$/i.test(
+        /amount|budget|cost|price|value|loan|equity|debt|proceeds|income|revenue|noi|opex|expense|tdc|contingency|financing|acquisition|capital|reserve|fee|\$/i.test(
           h,
         );
       return isMoneyColumn ? sheetScale : 1;
@@ -159,7 +163,25 @@ function formatSpreadsheetCell(
   if (cell == null) return "";
   const label = String(header ?? "").trim();
   const prefix = label ? `${label}=` : "";
-  if (typeof cell !== "number" || !isFinite(cell)) return `${prefix}${String(cell).trim()}`;
+
+  // Resolve the numeric value, coercing numbers that arrive as TEXT (leading
+  // apostrophe, imported strings, "(1,234)"). Without this, a "34,500" cell in a
+  // "$ in thousands" column never got the scale and was read as $34.5k, not
+  // $34.5M. Non-numeric text (real labels) is emitted verbatim.
+  let num: number;
+  if (typeof cell === "number" && isFinite(cell)) {
+    num = cell;
+  } else {
+    const raw = String(cell).trim();
+    if (/^\(?\s*-?\$?\s*[\d,]+(?:\.\d+)?\s*\)?$/.test(raw)) {
+      const negative = /^\(.*\)$/.test(raw);
+      const parsed = Number(raw.replace(/[()$,\s]/g, ""));
+      if (!isFinite(parsed)) return `${prefix}${raw}`;
+      num = negative ? -parsed : parsed;
+    } else {
+      return `${prefix}${raw}`;
+    }
+  }
 
   const rowLabel = row
     .slice(0, 2)
@@ -178,24 +200,51 @@ function formatSpreadsheetCell(
     /\b(occupancy|occupanc|occ\.?|percent|pct|%|vacancy|cap rate|caprate|exit cap|going-in|expense ratio|opex ratio|interest rate|discount rate|rent growth|expense growth|yield|ltv|ltc)\b/.test(
       financialContext,
     );
-  const looksLikePercent = percentContext && Math.abs(cell) <= 100;
+  const looksLikePercent = percentContext && Math.abs(num) <= 100;
 
   const looksLikeMoney =
-    /\b(amount|budget|cost|price|value|loan|equity|debt|proceeds|income|revenue|rent|noi|opex|expense|tdc|total|contingency|financing|acquisition|land|soft|hard|capital|reserve|fee)\b/.test(
+    /\b(amount|budget|cost|price|value|loan|equity|debt|proceeds|income|revenue|rent|noi|opex|expense|tdc|contingency|financing|acquisition|land|soft|hard|capital|reserve|fee)\b/.test(
       financialContext,
     );
 
   // Apply a declared "in thousands / millions" scale to money cells only, so a
   // percent or count column is never rescaled.
-  const value = looksLikeMoney && scale !== 1 ? cell * scale : cell;
+  const value = looksLikeMoney && scale !== 1 ? num * scale : num;
   const formatted = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
   if (looksLikePercent) {
     // A fraction (<=1) is scaled to N%; a whole-number percent (5.5, 35, 96) is
     // already in percent terms and emitted as-is, so neither is mis-scaled.
-    const asPercent = Math.abs(cell) <= 1 ? cell * 100 : cell;
+    const asPercent = Math.abs(num) <= 1 ? num * 100 : num;
     return `${prefix}${asPercent.toFixed(2)}%`;
   }
   return `${prefix}${looksLikeMoney ? `$${formatted}` : formatted}`;
+}
+
+// Convert WordprocessingML (word/document.xml) to plain text.
+//
+// Separators are inserted at TABLE-CELL / ROW / PARAGRAPH / tab / break
+// boundaries BEFORE tags are stripped, so distinct labels and values do not glue
+// together (e.g. "$162,500,000Preferred Equity"). A run boundary (</w:t>) gets
+// NO separator: Word routinely splits a single number across adjacent runs
+// (<w:t>$162,</w:t><w:t>500,000</w:t>), and a space there truncated the number
+// to $162 during extraction. In-word spaces live inside the run text itself.
+export function stripDocxXml(xml: string): string {
+  return xml
+    .replace(/<\/w:t>/g, "")
+    .replace(/<w:tab\b[^>]*\/?>/g, "\t")
+    .replace(/<w:br\b[^>]*\/?>/g, "\n")
+    .replace(/<\/w:tc>/g, "\t")
+    .replace(/<\/w:tr>/g, "\n")
+    .replace(/<\/w:p>/g, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
 }
 
 // Best-effort DOCX text extraction using only Node built-ins. A .docx is a ZIP
@@ -237,27 +286,7 @@ export async function docxBufferToText(buf: ArrayBuffer): Promise<string> {
         const dataStart = localOffset + 30 + lNameLen + lExtraLen;
         const comp = bytes.subarray(dataStart, dataStart + compSize);
         const xml = method === 0 ? comp : zlib.inflateRawSync(comp);
-        // Insert separators at run/cell/row/paragraph boundaries BEFORE stripping
-        // tags. Without this, adjacent text runs concatenate with no whitespace
-        // (e.g. "$162,500,000Preferred Equity"), which both glues labels to the
-        // next value and truncates numbers at internal commas during extraction.
-        const text = String(xml)
-          .replace(/<\/w:t>/g, " ")
-          .replace(/<w:tab\b[^>]*\/?>/g, "\t")
-          .replace(/<w:br\b[^>]*\/?>/g, "\n")
-          .replace(/<\/w:tc>/g, "\t")
-          .replace(/<\/w:tr>/g, "\n")
-          .replace(/<\/w:p>/g, "\n")
-          .replace(/<[^>]+>/g, "")
-          .replace(/&amp;/g, "&")
-          .replace(/&lt;/g, "<")
-          .replace(/&gt;/g, ">")
-          .replace(/&quot;/g, '"')
-          .replace(/&#39;/g, "'")
-          .replace(/[ \t]{2,}/g, " ")
-          .replace(/[ \t]+\n/g, "\n")
-          .trim();
-        return text;
+        return stripDocxXml(String(xml));
       }
       ptr += 46 + nameLen + extraLen + commentLen;
     }

@@ -112,11 +112,20 @@ export function extractCandidates(docName: string, text: string): Candidate[] {
     len: number,
     c: Omit<Candidate, "doc_name" | "context" | "label_hint" | "source_location">,
   ) => {
+    // For unit counts the descriptor that names the value usually sits BETWEEN
+    // the number and the noun ("220 residential units"), i.e. inside the match
+    // rather than to its left. Fold the matched phrase into the label hint so the
+    // mapper can classify it; other kinds keep the strict left-of-value label.
+    const baseHint = labelHint(text, idx);
+    const hint =
+      c.kind === "units"
+        ? `${baseHint} ${text.slice(idx, idx + len)}`.replace(/\s+/g, " ").trim()
+        : baseHint;
     out.push({
       ...c,
       doc_name: docName,
       context: contextAround(text, idx, len),
-      label_hint: labelHint(text, idx),
+      label_hint: hint,
       source_location: sourceLocation(text, idx),
       _idx: idx,
     });
@@ -173,6 +182,25 @@ export function extractCandidates(docName: string, text: string): Candidate[] {
         };
       },
     },
+    // Percent RANGE: "5.0% - 5.5%", "5% to 6%". A stated range is ONE estimate,
+    // so collapse it to a single midpoint candidate (claiming the whole span)
+    // instead of two values that downstream would treat as a blocking conflict.
+    // Runs before the single-percent pass so it claims the range first.
+    {
+      re: /([\d,]+(?:\.\d+)?)\s*%\s*(?:[-\u2013\u2014]|to\b|through\b)\s*([\d,]+(?:\.\d+)?)\s*%/gi,
+      handle: (m) => {
+        const a = toNumber(m[1]);
+        const b = toNumber(m[2]);
+        if (!isFinite(a) || !isFinite(b)) return null;
+        const mid = Math.round(((a + b) / 2) * 1000) / 1000;
+        return {
+          kind: "percent",
+          value_numeric: mid,
+          value_text: `${m[1]}%-${m[2]}% (mid ${mid}%)`,
+          unit: "%",
+        };
+      },
+    },
     // Basis points: "625 bps" → 6.25%.
     {
       re: /([\d,]+(?:\.\d+)?)\s*bps\b/gi,
@@ -191,9 +219,12 @@ export function extractCandidates(docName: string, text: string): Candidate[] {
         return { kind: "percent", value_numeric: n, value_text: m[0].trim(), unit: "%" };
       },
     },
-    // Bare scaled money: "34.5 million": only when the label denotes money.
+    // Bare scaled money: "34.5 million": only when the label denotes money AND
+    // the scaled number is not naming a non-money quantity ("5 million square
+    // feet", "2 thousand units", "5 million residents") - those would otherwise
+    // be emitted as $5,000,000 and would also pre-empt the SF/units passes.
     {
-      re: /\b([\d,]+(?:\.\d+)?)\s+(million|billion|thousand|mm|bn)\b/gi,
+      re: /\b([\d,]+(?:\.\d+)?)\s+(million|billion|thousand|mm|bn)\b(?!\s+(?:sq\b|square|sf\b|ft\b|feet|acres?|units?|keys?|rooms?|beds?|stalls?|spaces?|residents?|people|jobs|employees|tenants?|members?|households?|cars?|vehicles?))/gi,
       handle: (m) => {
         const n = toNumber(m[1]);
         if (!isFinite(n)) return null;
@@ -215,11 +246,14 @@ export function extractCandidates(docName: string, text: string): Candidate[] {
         return { kind: "sf", value_numeric: n, value_text: m[0].trim(), unit: "SF" };
       },
     },
-    // Unit counts: "220 units", "220 residential units". The decimal group
-    // matches the siblings above so "220.5 units" captures 220.5, not 5 (without
-    // it the engine skipped the "220." prefix and mis-read the fractional digit).
+    // Unit counts: "220 units", "220 residential units", "150 market-rate rental
+    // apartments". Up to two descriptor words may sit between the number and the
+    // noun (a very common prose phrasing the adjacent-only pattern missed). The
+    // decimal group matches the siblings above so "220.5 units" captures 220.5,
+    // not 5 (without it the engine skipped the "220." prefix and mis-read the
+    // fractional digit).
     {
-      re: /([\d,]+(?:\.\d+)?)\s*(?:units|apartments|condos|keys|rooms|beds|stalls|spaces)\b/gi,
+      re: /([\d,]+(?:\.\d+)?)\s*(?:(?!per\b)[a-z][a-z-]*\s+){0,2}(?:units|apartments|condos|keys|rooms|beds|stalls|spaces)\b/gi,
       handle: (m) => {
         const n = toNumber(m[1]);
         if (!isFinite(n)) return null;

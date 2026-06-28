@@ -435,7 +435,11 @@ export const importDealsCsv = createServerFn({ method: "POST" })
     const workspaceId = connection.workspace_id ?? null;
 
     const { records, errors } = connector.parseInbound(data.csv, data.mapping as FieldMapping);
-    const { created, updated, failed: writeFailures } = await importDealRecords(context.supabase, {
+    const {
+      created,
+      updated,
+      failed: writeFailures,
+    } = await importDealRecords(context.supabase, {
       connectionId: data.connection_id,
       ownerId: context.userId,
       workspaceId,

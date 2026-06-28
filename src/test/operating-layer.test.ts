@@ -27,10 +27,7 @@ import { importDealRecords } from "@/lib/operating-layer.functions";
 // Minimal PostgREST-shaped fake: records every (table, op) so tests can assert
 // query counts (the N+1 guard), executes filters/inserts against an in-memory
 // db, and can fail a project insert by name to exercise the per-row fallback.
-function fakeSupabase(
-  seed: Record<string, any[]> = {},
-  opts: { failProjectName?: string } = {},
-) {
+function fakeSupabase(seed: Record<string, any[]> = {}, opts: { failProjectName?: string } = {}) {
   const db: Record<string, any[]> = {
     projects: [...(seed.projects ?? [])],
     external_record_links: [...(seed.external_record_links ?? [])],
@@ -487,7 +484,9 @@ describe("3C integrations: deal import persistence batches its queries (N+1 guar
     // touch (not one per updated record).
     expect(countOps(supabase.calls, "projects", "update")).toBe(1);
     expect(countOps(supabase.calls, "external_record_links", "update")).toBe(1);
-    expect(supabase.db.external_record_links.find((l) => l.id === "l1")?.last_synced_at).toBeTruthy();
+    expect(
+      supabase.db.external_record_links.find((l) => l.id === "l1")?.last_synced_at,
+    ).toBeTruthy();
   });
 
   test("one unparseable row falls back to per-row inserts without poisoning the batch", async () => {

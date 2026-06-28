@@ -34,10 +34,22 @@ function kindFitsKey(cand: Candidate, def: AssumptionDef): boolean {
       return kind === "duration";
     case "$":
       // Absolute / monthly-per-unit dollar field: a per-SF rent must not land here.
-      return kind === "currency" || (kind === "rent" && cand.unit !== "$/SF");
+      // residential_rent_monthly is the ONLY $-unit field that is actually a
+      // monthly per-unit rent, so a multi-$M lump sum (a mislabelled total/loan)
+      // can never be a monthly rent - gate it by a plausible per-unit ceiling.
+      if (kind === "currency") {
+        if (def.key === "residential_rent_monthly")
+          return Math.abs(cand.value_numeric ?? 0) <= 100_000;
+        return true;
+      }
+      return kind === "rent" && cand.unit !== "$/SF";
     case "$/SF":
-      // Per-SF field: a monthly per-unit rent must not land here.
-      return (kind === "rent" && cand.unit !== "$/mo") || kind === "currency";
+      // Per-SF field: a monthly per-unit rent must not land here, and a lump-sum
+      // currency is only plausibly a per-SF rate when it is small (PSF rents are
+      // tens to low hundreds of dollars, never millions).
+      if (kind === "rent") return cand.unit !== "$/mo";
+      if (kind === "currency") return Math.abs(cand.value_numeric ?? 0) <= 1_000;
+      return false;
     case "text":
       return true;
     default:
@@ -55,9 +67,15 @@ function aliasStrings(def: AssumptionDef): string[] {
   return Array.from(set).filter((s) => s.length >= 3);
 }
 
-const ALIAS_TABLE: Array<{ def: AssumptionDef; alias: string }> = ASSUMPTION_DEFS.flatMap((def) =>
-  aliasStrings(def).map((alias) => ({ def, alias })),
-).sort((a, b) => b.alias.length - a.alias.length);
+// Word tokens (>=2 chars) for loose, order-independent alias matching.
+function tokenize(s: string): string[] {
+  return (s.toLowerCase().match(/[a-z0-9]{2,}/g) ?? []).filter(Boolean);
+}
+
+const ALIAS_TABLE: Array<{ def: AssumptionDef; alias: string; tokens: string[] }> =
+  ASSUMPTION_DEFS.flatMap((def) =>
+    aliasStrings(def).map((alias) => ({ def, alias, tokens: tokenize(alias) })),
+  ).sort((a, b) => b.alias.length - a.alias.length);
 
 export type CandidateMapping = {
   field_key: string;
@@ -90,7 +108,7 @@ const LOAN_DEBT_LABEL_RE =
 type Guard = { need: RegExp; deny?: RegExp; min?: number; max?: number };
 const SENSITIVE_GUARDS: Record<string, Guard> = {
   opex_ratio: {
-    need: /operating expense|opex|expense ratio|expense load|operating cost ratio|normalized expense|expense assumption|expense %/,
+    need: /operating expense|opex|\boer\b|expense ratio|expense load|operating cost ratio|normalized expense|expense assumption|expense %/,
     deny: /exit cap|terminal cap|cap rate|capitalization rate|valuation cap|yield on cost|interest rate|debt yield/,
     min: 10,
     max: 65,
@@ -101,14 +119,26 @@ const SENSITIVE_GUARDS: Record<string, Guard> = {
     max: 12,
   },
   interest_rate: {
-    need: /interest rate|loan rate|all-in rate|sofr|spread|rate lock|financing rate|coupon|note rate/,
-    deny: /exit cap|terminal cap|cap rate|debt yield|expense ratio/,
+    // Bare "sofr"/"spread" removed from `need`: a spread over an index is not the
+    // all-in rate. A mezzanine/subordinate label is denied so a junior-tranche
+    // rate never lands on the senior interest rate (it re-picks to mezz_interest_rate).
+    need: /interest rate|loan rate|all-in rate|rate lock|financing rate|coupon|note rate/,
+    deny: /exit cap|terminal cap|cap rate|debt yield|expense ratio|mezzanine|\bmezz\b|subordinate/,
     min: 1,
     max: 20,
   },
+  min_dscr: {
+    // A DSCR covenant is a small ratio (~1.0-2.5x); an EBITDA/valuation multiple
+    // (e.g. 7.5x) sharing a "dscr" hint must not land here.
+    need: /dscr|debt service coverage|coverage ratio/,
+    min: 1,
+    max: 3,
+  },
   min_debt_yield: { need: /debt yield/, min: 4, max: 20 },
   stabilized_occupancy: {
-    need: /stabilized occupancy|overall occupancy|portfolio occupancy|blended occupancy|average occupancy/,
+    // `need` mirrors the taxonomy aliases (incl. economic/physical occupancy) so
+    // a validly-labelled REQUIRED value is never rejected by a narrower guard.
+    need: /stabilized occupancy|economic occupancy|physical occupancy|overall occupancy|portfolio occupancy|blended occupancy|average occupancy/,
     min: 40,
     max: 100,
   },
@@ -163,6 +193,52 @@ export function mapCandidateToKey(
         where: "hint",
       };
     }
+  }
+
+  // Token-subset fallback: only when no alias matched as a contiguous substring.
+  // A real-world label often interleaves words ("office asking rent" never
+  // contains the literal alias "office rent"), so match a multi-word alias when
+  // ALL its tokens appear as whole words in the hint. Lower confidence than a
+  // contiguous hit; prefers the alias with the most tokens then the longest, so
+  // a more specific label wins. Single-token aliases are skipped (a contiguous
+  // pass already covers them) to avoid matching on one incidental word.
+  if (!best) {
+    const hintTokens = new Set(tokenize(hint));
+    let bestTokens = -1;
+    let bestTokenLen = -1;
+    let ambiguous = false;
+    for (const { def, alias, tokens } of ALIAS_TABLE) {
+      if (exclude.has(def.key)) continue;
+      if (!kindFitsKey(cand, def)) continue;
+      if (tokens.length < 2) continue;
+      if (!tokens.every((t) => hintTokens.has(t))) continue;
+      if (
+        tokens.length > bestTokens ||
+        (tokens.length === bestTokens && alias.length > bestTokenLen)
+      ) {
+        // A strictly better match supersedes any prior tie.
+        ambiguous = false;
+        bestTokens = tokens.length;
+        bestTokenLen = alias.length;
+        best = {
+          field_key: def.key,
+          confidence: 72,
+          via: "alias",
+          matched_alias: alias,
+          where: "hint",
+        };
+      } else if (
+        tokens.length === bestTokens &&
+        alias.length === bestTokenLen &&
+        best &&
+        def.key !== best.field_key
+      ) {
+        // A different key matched equally well (e.g. "residential and retail
+        // occupancy" satisfies both). Refuse to guess: a miss beats a wrong field.
+        ambiguous = true;
+      }
+    }
+    if (ambiguous) best = null;
   }
 
   // Hard guard: a value whose nearest label is a loan/debt/equity tranche term
@@ -270,6 +346,10 @@ const PLAUSIBILITY_FLOOR: Record<string, number> = {
   hard_costs: 250_000,
   debt_amount: 250_000,
   equity_amount: 250_000,
+  // Whole-deal loan aggregates share the same units-slip failure mode (a
+  // "$ in thousands" takeout/mezz loan read 1000x too small).
+  refinance_amount: 250_000,
+  mezz_debt_amount: 250_000,
 };
 
 // Group mapped candidates by key and resolve each group. Multiple DISTINCT

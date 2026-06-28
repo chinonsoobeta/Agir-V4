@@ -25,10 +25,14 @@ export type RentRollParseResult = {
   meta: RentRollParseMeta;
 };
 
-// Match the rent/rate column but NOT lookalike headers such as "Rentable SF"
-// (contains "rent"), "Rent Basis", or count columns.
+// Match the rent/rate column. Uses \brent\b so "Rentable SF" (the word
+// "rentable", not "rent") is NOT taken as rent. Crucially it does NOT exclude
+// "sf"/"square": the most common commercial rent header states its basis inline
+// ("Rent ($/SF)", "Rent/SF", "Base Rent $/SF/yr") and previously those were
+// dropped, silently zeroing retail/office revenue. Count/basis columns are still
+// excluded so they are not mistaken for the rent column.
 const isRentHeader = (h: string) =>
-  /rent|rate/.test(h) && !/\bsf\b|square|basis|count|units|qty|gpr|egi/.test(h);
+  /\brent\b|\brate\b/.test(h) && !/basis|count|\bunits\b|qty|gpr|egi/.test(h);
 
 // Header heuristic for rent-roll tabs: a unit-type/component column, a count
 // column, and a rent/rate column. A budget tab scores 0.
@@ -58,13 +62,16 @@ function parseRentRollSheet(
   const typeIndex = header.findIndex((h) => /unit type|type|plan|component/.test(h));
   const countIndex = header.findIndex((h) => /count|units|qty/.test(h));
   const rentIndex = header.findIndex(isRentHeader);
-  if (typeIndex < 0 || countIndex < 0 || rentIndex < 0) {
-    return { inserted, rejected };
-  }
-  const tenantIndex = header.findIndex((h) => /tenant|lessee|occupant/.test(h));
   // Word-boundary \bsf\b so a rent column like "Rent PSF" (the "sf" inside
   // "psf") is NOT taken as the square-footage column; also exclude rent headers.
   const sfIndex = header.findIndex((h) => /\bsf\b|square/.test(h) && !isRentHeader(h));
+  // A commercial schedule is keyed by SF, not a unit count: accept a sheet that
+  // has a type + rent column and EITHER a count or an SF column. (Requiring a
+  // count column silently zeroed every retail/office rent roll.)
+  if (typeIndex < 0 || rentIndex < 0 || (countIndex < 0 && sfIndex < 0)) {
+    return { inserted, rejected };
+  }
+  const tenantIndex = header.findIndex((h) => /tenant|lessee|occupant/.test(h));
   const rentBasisIndex = header.findIndex((h) => /basis|rent basis|billing/.test(h));
   const occupancyIndex = header.findIndex((h) => /occupanc|occ\.?\s|occ%|occ$/.test(h));
   const rentHeader = header[rentIndex] ?? "";
@@ -74,17 +81,19 @@ function parseRentRollSheet(
     const rowNumber = headerRowIndex + i + 2;
     const unitType = String(row[typeIndex] ?? "").trim();
     const tenant = tenantIndex >= 0 ? String(row[tenantIndex] ?? "").trim() || null : null;
-    const unitCount = parseNumeric(row[countIndex] ?? 0);
+    // No count column (an SF-keyed commercial schedule): each row is one suite.
+    const unitCount = countIndex >= 0 ? parseNumeric(row[countIndex] ?? 0) : 1;
     const avgSf = sfIndex >= 0 ? parseNumeric(row[sfIndex] ?? 0) || null : null;
     const rent = parseNumeric(row[rentIndex]);
     const occupancyRaw = occupancyIndex >= 0 ? parseNumeric(row[occupancyIndex]) : NaN;
-    // Accept either 0-1 fractions or 0-100 percents from the sheet.
-    const occupancyPct =
-      Number.isFinite(occupancyRaw) && occupancyRaw > 0
-        ? occupancyRaw <= 1
-          ? occupancyRaw * 100
-          : occupancyRaw
-        : null;
+    // Accept either 0-1 fractions or 0-100 percents from the sheet. A reported
+    // 0% (a vacant / just-delivered component) is a real value, not "unknown":
+    // keep it as 0 rather than null so revenue is not silently assumed stabilized.
+    const occupancyPct = !Number.isFinite(occupancyRaw)
+      ? null
+      : occupancyRaw > 0 && occupancyRaw <= 1
+        ? occupancyRaw * 100
+        : occupancyRaw;
     if (!unitType || !Number.isFinite(unitCount) || !Number.isFinite(rent) || rent <= 0) {
       rejected.push({ row: rowNumber, reason: "Missing unit type, count, or rent.", values: row });
       return;

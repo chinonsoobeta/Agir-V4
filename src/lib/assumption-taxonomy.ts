@@ -537,7 +537,10 @@ export const ASSUMPTION_DEFS: AssumptionDef[] = [
     unit: "%",
     numeric: true,
     required: true,
-    aliases: ["interest rate", "coupon", "loan rate", "sofr spread", "all-in rate", "note rate"],
+    // "sofr spread" deliberately excluded: a spread over an index is NOT the
+    // all-in rate; mapping it to interest_rate fed a ~2.5% spread to the engine
+    // as if it were the ~6%+ coupon.
+    aliases: ["interest rate", "coupon", "loan rate", "all-in rate", "note rate"],
   },
   {
     key: "ltc",
