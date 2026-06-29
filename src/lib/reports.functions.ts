@@ -178,15 +178,24 @@ export const generateReport = createServerFn({ method: "POST" })
       report.derived_values ?? [],
     );
     const provenance = verifyNumericProvenance(memoReportText(report), allowed);
+    const generatedAt = new Date().toISOString();
+    const { buildReportProvenanceManifest } = await import("./reports/provenance-manifest");
+    const provenance_manifest = buildReportProvenanceManifest({
+      reportType: data.report_type,
+      report,
+      provenance,
+      generatedAt,
+    });
+    report.provenance_manifest = provenance_manifest;
     const verification_report = {
       report_type: data.report_type,
       pass: provenance.pass,
       token_count: provenance.tokenCount,
       orphans: provenance.orphans,
       verified_at: new Date().toISOString(),
+      manifest: provenance_manifest,
     };
     const status = provenance.pass ? "generated" : "needs_review";
-    const generatedAt = new Date().toISOString();
 
     const { data: row, error: insErr } = await context.supabase
       .from("generated_reports")
@@ -196,7 +205,7 @@ export const generateReport = createServerFn({ method: "POST" })
         report_type: data.report_type,
         title: report.title,
         status,
-        content_json: { ...report, needs_review: !provenance.pass },
+        content_json: { ...report, needs_review: !provenance.pass, provenance_manifest },
         verification_report,
         generated_at: generatedAt,
       })

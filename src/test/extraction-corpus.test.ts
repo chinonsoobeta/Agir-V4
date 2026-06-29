@@ -12,6 +12,10 @@ import { parseRentRollWorkbook } from "@/lib/parsers/rent-roll.server";
 import { aggregateBudgetRows } from "@/lib/budget-assumption-mapper";
 import { mapRevenueProgramRowToAssumptions } from "@/lib/revenue-assumption-mapper";
 import { withinModelTolerance } from "@/lib/engine/tolerance-policy";
+import {
+  buildExtractionCorpusDashboard,
+  renderExtractionCorpusDashboard,
+} from "@/lib/extraction-corpus-dashboard";
 
 type ExpectedAssumption = {
   key: string;
@@ -25,6 +29,7 @@ type CorpusFixture = {
   buffer: ArrayBuffer;
   expected: ExpectedAssumption[];
   expectedAbsent?: string[];
+  expectedConflicts?: string[];
 };
 
 type RealCorpusFixture = {
@@ -244,10 +249,28 @@ function makeCorpus(): CorpusFixture[] {
       expected: [],
       expectedAbsent: ["lease_up_months", "office_rent_psf", "opex_ratio"],
     },
+    {
+      name: "adversarial_conflicting_terms.txt",
+      fileType: "text/plain",
+      buffer: textBuffer(
+        [
+          "Final IC memo",
+          "Exit cap rate: 5.25%",
+          "Broker sensitivity page",
+          "Exit cap rate: 4.75%",
+          "Office rent $42/SF; do not treat the tenant allowance of $65/SF as rent.",
+          "Lease terms are 12 years, not a lease-up period.",
+          "Senior construction debt amount: $162,500,000",
+        ].join("\n"),
+      ),
+      expected: [expected("debt_amount", 162_500_000)],
+      expectedAbsent: ["lease_up_months"],
+      expectedConflicts: ["exit_cap_rate"],
+    },
   ];
 }
 
-async function extractMappedAssumptions(fixture: CorpusFixture) {
+async function extractGroupedAssumptions(fixture: CorpusFixture) {
   const text = await extractFileText(fixture.name, fixture.fileType, fixture.buffer);
   const mapped: MappedCandidate[] = mapCandidates(extractCandidates(fixture.name, text));
 
@@ -264,7 +287,11 @@ async function extractMappedAssumptions(fixture: CorpusFixture) {
     );
   }
 
-  const grouped = groupAndResolve(mapped);
+  return groupAndResolve(mapped);
+}
+
+async function extractMappedAssumptions(fixture: CorpusFixture) {
+  const grouped = await extractGroupedAssumptions(fixture);
   return new Map(
     Array.from(grouped.values())
       .filter((row) => row.status === "extracted" && row.value_numeric != null)
@@ -328,15 +355,28 @@ describe("labeled extraction corpus", () => {
     const runs: { expectedRows: ExpectedAssumption[]; predictions: Map<string, number> }[] = [];
 
     for (const fixture of corpus) {
-      const extracted = await extractMappedAssumptions(fixture);
+      const grouped = await extractGroupedAssumptions(fixture);
+      const extracted = new Map(
+        Array.from(grouped.values())
+          .filter((row) => row.status === "extracted" && row.value_numeric != null)
+          .map((row) => [row.field_key, Number(row.value_numeric)]),
+      );
       for (const absent of fixture.expectedAbsent ?? []) {
         expect(extracted.has(absent), `${fixture.name} should not extract ${absent}`).toBe(false);
+      }
+      for (const conflict of fixture.expectedConflicts ?? []) {
+        expect(grouped.get(conflict)?.status, `${fixture.name} should conflict ${conflict}`).toBe(
+          "conflicting",
+        );
       }
       runs.push({ expectedRows: fixture.expected, predictions: extracted });
     }
 
     const metrics = computeMetrics(runs);
-    console.info(`\nExtraction corpus metrics\n${summarize(metrics)}`);
+    const dashboard = buildExtractionCorpusDashboard(metrics, FIELD_TYPE_FLOORS);
+    console.info(
+      `\nExtraction corpus metrics\n${summarize(metrics)}\n${renderExtractionCorpusDashboard(dashboard)}`,
+    );
 
     for (const [fieldType, floor] of Object.entries(FIELD_TYPE_FLOORS)) {
       const metric = metrics[fieldType];
@@ -344,6 +384,7 @@ describe("labeled extraction corpus", () => {
       expect(metric.recall, `${fieldType} recall`).toBeGreaterThanOrEqual(floor.recall);
       expect(metric.precision, `${fieldType} precision`).toBeGreaterThanOrEqual(floor.precision);
     }
+    expect(dashboard.every((row) => row.status === "pass")).toBe(true);
   }, 30_000);
 
   test("runs a real anonymized document corpus through extraction", async () => {

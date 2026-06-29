@@ -4,6 +4,7 @@ export {
   loanBalanceAfterYears,
   loanBalanceSchedule,
 } from "./debt";
+export { toCents, fromCents, roundMoney, splitMoney, compoundMoney } from "./decimal-money";
 export { irr, xirr } from "./metrics";
 export { runUnderwriting, componentGpr } from "./proforma";
 export type {

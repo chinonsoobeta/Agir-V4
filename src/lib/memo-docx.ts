@@ -5,6 +5,7 @@
 // imported so it stays out of the initial bundle.
 
 import type { MemoReport, ReportTable } from "./memo-report";
+import { provenanceManifestText } from "./reports/provenance-manifest";
 
 function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -226,6 +227,15 @@ export async function renderMemoDocxBase64(report: MemoReport): Promise<string> 
       children.push(
         para([new TextRun({ text: f, size: 13, color: MUTED })], { spacing: { after: 40 } }),
       ),
+    );
+  }
+
+  const manifest = provenanceManifestText(report.provenance_manifest);
+  if (manifest) {
+    children.push(
+      para([new TextRun({ text: manifest, size: 13, bold: true, color: MUTED })], {
+        spacing: { before: 80, after: 40 },
+      }),
     );
   }
 

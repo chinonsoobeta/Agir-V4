@@ -5,6 +5,7 @@
 // dynamically imported so it never weighs down the initial bundle.
 
 import type { MemoReport, ReportTable } from "./memo-report";
+import { provenanceManifestText } from "./reports/provenance-manifest";
 
 function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -204,6 +205,17 @@ export async function renderMemoPdfArrayBuffer(report: MemoReport): Promise<Arra
       doc.text(lines, M, y);
       y += lines.length * 9 + 4;
     });
+  }
+
+  const manifest = provenanceManifestText(report.provenance_manifest);
+  if (manifest) {
+    ensure(24);
+    doc
+      .setFont("helvetica", "bold")
+      .setFontSize(7)
+      .setTextColor(...MUTED);
+    doc.text(manifest, M, y);
+    y += 12;
   }
 
   footer();

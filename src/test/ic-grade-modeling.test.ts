@@ -12,6 +12,7 @@ import {
   isWaterfallActive,
   leaseUpAbsorptionIncome,
   mapleHeightsInput,
+  roundMoney,
   runUnderwriting,
   runWaterfall,
   STRESS_PRESETS,
@@ -249,14 +250,14 @@ describe("WS1.1C LP/GP waterfall and promote (hand-computed)", () => {
     // Hand math: LP preferred return = 1,000,000 x 1.08^5 = 1,469,328.08.
     const pref = 1_000_000 * Math.pow(1.08, 5);
     const residual = 2_000_000 - pref;
-    const lpExpected = pref + 0.8 * residual;
-    const gpExpected = 0.2 * residual;
+    const lpExpected = roundMoney(pref + 0.8 * residual);
+    const gpExpected = roundMoney(0.2 * residual);
 
-    expect(wf.lp.distributed).toBeCloseTo(lpExpected, 4);
-    expect(wf.gp.distributed).toBeCloseTo(gpExpected, 4);
+    expect(wf.lp.distributed).toBe(lpExpected);
+    expect(wf.gp.distributed).toBe(gpExpected);
     // GP has no capital, so all of its take is promote (carried interest).
-    expect(wf.gpPromote).toBeCloseTo(gpExpected, 4);
-    expect(wf.lpPreferredPaid).toBeCloseTo(pref - 1_000_000, 4);
+    expect(wf.gpPromote).toBe(gpExpected);
+    expect(roundMoney(wf.lpPreferredPaid)).toBe(roundMoney(pref - 1_000_000));
 
     // LP IRR from its own cash flows, hand-computed.
     const lpIrrExpected = (Math.pow(lpExpected / 1_000_000, 1 / 5) - 1) * 100;

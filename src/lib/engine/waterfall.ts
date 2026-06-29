@@ -26,6 +26,7 @@
 //    levered cash-flow vector.
 
 import { xirr } from "./metrics";
+import { compoundMoney, roundMoney, splitMoney } from "./decimal-money";
 
 export type PromoteTier = {
   // Upper return/IRR hurdle (annual %, compounded) bounding this carry tier. The
@@ -147,33 +148,34 @@ export function runWaterfall(events: WaterfallEvent[], cfg: WaterfallConfig): Wa
 
   const pay = (amount: number, lpShare: number, gpShare: number) => {
     if (amount <= 0) return;
-    const lpAmt = amount * lpShare;
-    const gpAmt = amount * gpShare;
+    const paid = roundMoney(amount);
+    const [lpAmt, gpAmt] = splitMoney(paid, [lpShare, gpShare]);
     if (lpAmt !== 0) lpFlows.push({ t: prevT, amount: lpAmt });
     if (gpAmt !== 0) gpFlows.push({ t: prevT, amount: gpAmt });
     lpDist += lpAmt;
     gpDist += gpAmt;
     // Every distributed dollar counts toward each return hurdle.
-    for (const s of stops) s.balance -= amount;
+    for (const s of stops) s.balance = roundMoney(s.balance - paid);
   };
 
   for (const event of sorted) {
     const dt = event.t - prevT;
     if (dt > 0)
       for (const s of stops)
-        if (s.rate != null && s.rate > 0) s.balance *= Math.pow(1 + s.rate, dt);
+        if (s.rate != null && s.rate > 0) s.balance = compoundMoney(s.balance, s.rate, dt);
     prevT = event.t;
 
     if (event.amount < 0) {
-      const c = -event.amount;
+      const c = roundMoney(-event.amount);
       for (const s of stops) s.balance += c; // contributed capital seeds every hurdle balance
-      lpFlows.push({ t: event.t, amount: -c * sLP });
-      gpFlows.push({ t: event.t, amount: -c * sGP });
-      lpCapital += c * sLP;
+      const [lpContribution, gpContribution] = splitMoney(c, [sLP, sGP]);
+      lpFlows.push({ t: event.t, amount: -lpContribution });
+      gpFlows.push({ t: event.t, amount: -gpContribution });
+      lpCapital += lpContribution;
       continue;
     }
 
-    let remaining = event.amount;
+    let remaining = roundMoney(event.amount);
     // 1. Preferred band: return of capital + preferred return, pari-passu.
     const pref = stops[0];
     if (pref.balance > 1e-6 && remaining > 1e-9) {

@@ -11,6 +11,8 @@
 import { componentGpr } from "./engine";
 import { ENGINE_SCALAR_TO_TAXONOMY } from "./taxonomy-engine-map";
 import { ASSUMPTION_BY_KEY } from "./assumption-taxonomy";
+import type { ReportProvenanceManifest } from "./reports/provenance-manifest";
+import { provenanceManifestText } from "./reports/provenance-manifest";
 
 export type ReportStat = { label: string; value: string; sub?: string };
 export type ReportTable = { columns: string[]; rows: string[][]; note?: string };
@@ -31,6 +33,7 @@ export type MemoReport = {
   sections: ReportSection[];
   footnotes: string[];
   derived_values: number[];
+  provenance_manifest?: ReportProvenanceManifest | null;
 };
 
 type Row = Record<string, any>;
@@ -144,6 +147,8 @@ export function memoReportText(report: MemoReport): string {
     }
   }
   for (const f of report.footnotes) parts.push(f);
+  const manifest = provenanceManifestText(report.provenance_manifest);
+  if (manifest) parts.push(manifest);
   return parts.join("\n");
 }
 

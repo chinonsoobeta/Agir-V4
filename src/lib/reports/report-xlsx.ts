@@ -4,6 +4,7 @@
 // stays out of the initial bundle.
 
 import type { MemoReport } from "../memo-report";
+import { provenanceManifestText } from "./provenance-manifest";
 
 function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -74,6 +75,14 @@ export function buildReportWorkbook(XLSX: any, report: MemoReport) {
     XLSX.utils.aoa_to_sheet(report.footnotes.map((f) => [f])),
     sheetName(used, "Disclosure"),
   );
+  const manifest = provenanceManifestText(report.provenance_manifest);
+  if (manifest) {
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([["Provenance manifest"], [manifest]]),
+      sheetName(used, "Provenance"),
+    );
+  }
   return wb;
 }
 

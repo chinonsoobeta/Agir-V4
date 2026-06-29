@@ -20,7 +20,8 @@
     "migrate:dry-run": "node run_migrations.mjs --dry-run",
     "migrate:seed": "node run_migrations.mjs --seed",
     "rls:bootstrap": "node src/test/rls/bootstrap-db.mjs",
-    "test:rls": "vitest run --config vitest.rls.config.ts"
+    "test:rls": "vitest run --config vitest.rls.config.ts",
+    "smoke:ephemeral-db": "node scripts/ephemeral-supabase-smoke.mjs"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.199",
