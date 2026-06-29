@@ -115,7 +115,12 @@ const TRANCHE_GENERIC_KEYS = new Set(["debt_amount", "amortization_years"]);
 // operating expense ratio). A guarded key requires matching context AND, where
 // relevant, a disqualifying context must be ABSENT, AND the value must fall in a
 // plausible range. Range alone is never sufficient: context must match.
-type Guard = { need: RegExp; deny?: RegExp; min?: number; max?: number };
+// `deny` is tested against the hint AND the broader context (a lookalike rate
+// betrays itself in nearby words). `denyHint` is tested against the LABEL HINT
+// ONLY -- used for tranche qualifiers (mezzanine/refinance) that legitimately
+// appear on neighbouring lines of a capital-stack doc and must not disqualify a
+// senior value via context bleed; they only disqualify when they name THIS value.
+type Guard = { need: RegExp; deny?: RegExp; denyHint?: RegExp; min?: number; max?: number };
 const SENSITIVE_GUARDS: Record<string, Guard> = {
   opex_ratio: {
     need: /operating expense|opex|\boer\b|expense ratio|expense load|operating cost ratio|normalized expense|expense assumption|expense %/,
@@ -133,7 +138,10 @@ const SENSITIVE_GUARDS: Record<string, Guard> = {
     // all-in rate. A mezzanine/subordinate label is denied so a junior-tranche
     // rate never lands on the senior interest rate (it re-picks to mezz_interest_rate).
     need: /interest rate|loan rate|all-in rate|rate lock|financing rate|coupon|note rate/,
-    deny: /exit cap|terminal cap|cap rate|debt yield|expense ratio|mezzanine|\bmezz\b|subordinate|refinanc|\brefi\b|takeout|permanent loan/,
+    deny: /exit cap|terminal cap|cap rate|debt yield|expense ratio/,
+    // Hint-only: a "Mezzanine loan amount" line near a senior "Interest rate" must
+    // not deny the senior rate; only "Interest rate (mezzanine)" should.
+    denyHint: /mezzanine|\bmezz\b|subordinate|refinanc|\brefi\b|takeout|permanent loan/,
     min: 1,
     max: 20,
   },
@@ -165,6 +173,7 @@ function passesSensitiveGuard(cand: Candidate, key: string): boolean {
   const text = `${cand.label_hint || ""} ${cand.context || ""}`.toLowerCase();
   if (!guard.need.test(text)) return false;
   if (guard.deny && guard.deny.test(text)) return false;
+  if (guard.denyHint && guard.denyHint.test((cand.label_hint || "").toLowerCase())) return false;
   const v = cand.value_numeric;
   if (v != null && Number.isFinite(v)) {
     if (guard.min != null && v < guard.min) return false;
