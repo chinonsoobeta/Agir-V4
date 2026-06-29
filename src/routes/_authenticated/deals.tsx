@@ -118,7 +118,12 @@ function DealsPage() {
     onSuccess: ({ project_id }) => {
       qc.invalidateQueries({ queryKey: ["portfolio"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
-      toast.success("Harbour Centre seeded: opening deal");
+      toast.success("Harbour Centre seeded", {
+        action: {
+          label: "Open demo",
+          onClick: () => navigate({ to: "/projects/$id", params: { id: project_id } }),
+        },
+      });
       navigate({ to: "/projects/$id", params: { id: project_id } });
     },
     onError: (e: Error) => toast.error(e.message),

@@ -1,9 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useSuspenseQuery, queryOptions } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { listPortfolio, type DealSummary } from "@/lib/portfolio.functions";
+import { deleteProject } from "@/lib/projects.functions";
 import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { fmtCompact } from "@/lib/finance";
 import {
   PIPELINE_STAGES,
@@ -12,9 +25,10 @@ import {
   RECOMMENDATION_TONE,
 } from "@/lib/decision";
 import { Eyebrow, TONE_TEXT } from "@/components/decision-ui";
-import { ArrowRight, Plus, Sparkles } from "lucide-react";
+import { ArrowRight, Plus, Sparkles, Trash2 } from "lucide-react";
 import { buildPortfolioInsights, summarizePortfolio } from "@/lib/platform-insights";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
+import { toast } from "sonner";
 
 const portfolioQ = queryOptions({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
 
@@ -159,22 +173,20 @@ function PortfolioPage() {
                   RECOMMENDATION_TONE[d.recommendation as keyof typeof RECOMMENDATION_TONE] ??
                   "neutral";
                 return (
-                  <Link
+                  <div
                     key={d.id}
-                    to="/projects/$id"
-                    params={{ id: d.id }}
                     className="flex items-center gap-4 px-5 py-4 hover:bg-accent/30 transition-colors group"
                   >
                     <div
                       className={`w-1 self-stretch rounded-full ${tone === "approve" ? "bg-success" : tone === "condition" ? "bg-warning" : tone === "reject" ? "bg-destructive" : "bg-chart-2"}`}
                     />
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium truncate">{d.name}</div>
+                    <Link to="/projects/$id" params={{ id: d.id }} className="min-w-0 flex-1">
+                      <div className="font-medium truncate hover:text-primary">{d.name}</div>
                       <div className="text-xs text-muted-foreground truncate">
                         {d.location || "Not available"} · {d.stage}
                         {d.topRisk ? ` · ${d.topRisk}` : ""}
                       </div>
-                    </div>
+                    </Link>
                     <div className="hidden sm:block text-right">
                       <div className="num text-sm">
                         {d.investmentScore ?? "Not available"}
@@ -189,8 +201,13 @@ function PortfolioPage() {
                     >
                       {(d.nextAction ?? "").toUpperCase()}
                     </div>
-                    <ArrowRight className="size-4 text-muted-foreground group-hover:text-foreground shrink-0" />
-                  </Link>
+                    <DeleteDealButton deal={d} />
+                    <Link to="/projects/$id" params={{ id: d.id }} aria-label={`Open ${d.name}`}>
+                      <Button variant="ghost" size="icon">
+                        <ArrowRight className="size-4" />
+                      </Button>
+                    </Link>
+                  </div>
                 );
               })
             )}
@@ -315,13 +332,20 @@ function PipelineColumn({ stage, deals }: { stage: PipelineStage; deals: DealSum
           <div className="text-[11px] text-muted-foreground/60 text-center py-3">None</div>
         )}
         {deals.map((d) => (
-          <Link
+          <div
             key={d.id}
-            to="/projects/$id"
-            params={{ id: d.id }}
             className="block rounded-md border border-border bg-card p-3 hover:border-primary/50 transition-colors"
           >
-            <div className="text-sm font-medium leading-tight truncate">{d.name}</div>
+            <div className="flex items-start justify-between gap-2">
+              <Link
+                to="/projects/$id"
+                params={{ id: d.id }}
+                className="min-w-0 text-sm font-medium leading-tight truncate hover:text-primary"
+              >
+                {d.name}
+              </Link>
+              <DeleteDealButton deal={d} compact />
+            </div>
             <div className="text-[11px] text-muted-foreground truncate mt-0.5">
               {d.location || d.type.replace("_", " ")}
             </div>
@@ -339,9 +363,57 @@ function PipelineColumn({ stage, deals }: { stage: PipelineStage; deals: DealSum
                 </span>
               )}
             </div>
-          </Link>
+          </div>
         ))}
       </div>
     </div>
+  );
+}
+
+function DeleteDealButton({ deal, compact = false }: { deal: DealSummary; compact?: boolean }) {
+  const qc = useQueryClient();
+  const deleteFn = useServerFn(deleteProject);
+  const del = useMutation({
+    mutationFn: () => deleteFn({ data: { id: deal.id } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["portfolio"] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["onboarding"] });
+      toast.success("Deal deleted");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={compact ? "size-6 shrink-0" : "shrink-0"}
+          aria-label={`Delete ${deal.name}`}
+          title={`Delete ${deal.name}`}
+        >
+          <Trash2 className={compact ? "size-3.5" : "size-4"} />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete {deal.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This removes the deal and its underwriting from your portfolio. This cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep deal</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={() => del.mutate()}
+          >
+            Delete deal
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

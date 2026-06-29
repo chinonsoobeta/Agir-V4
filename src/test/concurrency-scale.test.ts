@@ -163,6 +163,66 @@ describe("concurrency and scale guards", () => {
     );
   });
 
+  test("assumption updates retry without dual-control columns on older schemas", async () => {
+    const row = {
+      id: "a1",
+      current_version: 1,
+      status: "extracted",
+    };
+    const updates: Record<string, unknown>[] = [];
+    const supabase = {
+      from(table: string) {
+        expect(table).toBe("assumptions");
+        const query = {
+          patch: {} as Record<string, unknown>,
+          update(patch: Record<string, unknown>) {
+            this.patch = patch;
+            updates.push(patch);
+            return this;
+          },
+          eq() {
+            return this;
+          },
+          select() {
+            return this;
+          },
+          async maybeSingle() {
+            if ("dual_control_pending" in this.patch) {
+              return {
+                data: null,
+                error: {
+                  code: "PGRST204",
+                  message:
+                    "Could not find the 'dual_control_pending' column of 'assumptions' in the schema cache",
+                },
+              };
+            }
+            Object.assign(row, this.patch);
+            return { data: { ...row }, error: null };
+          },
+        };
+        return query;
+      },
+    };
+
+    const result = await updateAssumptionWithExpectedVersion(supabase, "a1", 1, {
+      current_version: 2,
+      status: "modified",
+      requires_dual_control: true,
+      dual_control_pending: true,
+      second_approval_by: null,
+      second_approval_at: null,
+      second_approver_name: null,
+    });
+
+    expect(result.status).toBe("modified");
+    expect(updates).toHaveLength(2);
+    expect(updates[0]).toHaveProperty("dual_control_pending", true);
+    expect(updates[1]).not.toHaveProperty("requires_dual_control");
+    expect(updates[1]).not.toHaveProperty("dual_control_pending");
+    expect(updates[1]).not.toHaveProperty("second_approval_by");
+  });
+
   test("underwriting refuses to run while approved assumptions are not synced to engine rows", async () => {
     const supabase = fakeSupabase({
       assumptions: [

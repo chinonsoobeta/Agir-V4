@@ -65,4 +65,15 @@ describe("UI hardening contract", () => {
       expect(source).not.toMatch(/>\s*A\s*</);
     }
   });
+
+  test("guided demo and portfolio deletion affordances are visible in source", () => {
+    const onboarding = read("src/components/onboarding-checklist.tsx");
+    const portfolio = read("src/routes/_authenticated/portfolio.tsx");
+
+    expect(onboarding).toContain('label: "Open demo"');
+    expect(onboarding).toContain("params: { id: project_id }");
+    expect(portfolio).toContain("function DeleteDealButton");
+    expect(portfolio).toContain("Delete {deal.name}?");
+    expect(portfolio).toContain("aria-label={`Delete ${deal.name}`}");
+  });
 });

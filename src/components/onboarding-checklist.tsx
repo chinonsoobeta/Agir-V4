@@ -59,12 +59,18 @@ export function OnboardingChecklist() {
   const seedFn = useServerFn(seedHarbourCentre);
   const seed = useMutation({
     mutationFn: () => seedFn(),
-    onSuccess: (project: any) => {
+    onSuccess: ({ project_id }: { project_id?: string }) => {
       qc.invalidateQueries({ queryKey: ["portfolio"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       qc.invalidateQueries({ queryKey: ["onboarding"] });
-      toast.success("Guided demo loaded: opening deal");
-      if (project?.id) navigate({ to: "/projects/$id", params: { id: project.id } });
+      toast.success("Guided demo loaded", {
+        action: project_id
+          ? {
+              label: "Open demo",
+              onClick: () => navigate({ to: "/projects/$id", params: { id: project_id } }),
+            }
+          : undefined,
+      });
     },
     onError: (e: any) => toast.error(e?.message ?? "Could not load demo"),
   });

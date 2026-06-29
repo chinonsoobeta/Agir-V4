@@ -4,6 +4,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { isMissingColumn } from "./db-compat";
 import {
   ASSUMPTION_DEFS,
   ASSUMPTION_BY_KEY,
@@ -208,6 +209,20 @@ export const EXTRACTION_TEXT_SCAN_CHAR_LIMIT = resolveScanCharLimit();
 export const STALE_ASSUMPTION_REVIEW_MESSAGE =
   "Assumption changed while you were reviewing it. Refresh and retry.";
 
+const DUAL_CONTROL_COLUMNS = [
+  "requires_dual_control",
+  "dual_control_pending",
+  "second_approval_by",
+  "second_approval_at",
+  "second_approver_name",
+] as const;
+
+function stripDualControlColumns<T extends Record<string, unknown>>(patch: T): Partial<T> {
+  const copy: Record<string, unknown> = { ...patch };
+  for (const column of DUAL_CONTROL_COLUMNS) delete copy[column];
+  return copy as Partial<T>;
+}
+
 export async function updateAssumptionWithExpectedVersion(
   supabase: any,
   id: string,
@@ -221,6 +236,19 @@ export async function updateAssumptionWithExpectedVersion(
     .eq("current_version", expectedVersion)
     .select()
     .maybeSingle();
+  if (isMissingColumn(error) && DUAL_CONTROL_COLUMNS.some((column) => column in patch)) {
+    const compatPatch = stripDualControlColumns(patch);
+    const retry = await supabase
+      .from("assumptions")
+      .update(compatPatch)
+      .eq("id", id)
+      .eq("current_version", expectedVersion)
+      .select()
+      .maybeSingle();
+    if (retry.error) throw new Error(retry.error.message);
+    if (!retry.data) throw new Error(STALE_ASSUMPTION_REVIEW_MESSAGE);
+    return retry.data;
+  }
   if (error) throw new Error(error.message);
   if (!data) throw new Error(STALE_ASSUMPTION_REVIEW_MESSAGE);
   return data;
