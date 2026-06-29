@@ -17,6 +17,8 @@ import {
   type ParentProject,
   type WorkspaceRole,
 } from "@/lib/workspace-access";
+import { computeReadiness, type ProjectInputRows } from "@/lib/engine";
+import { validatePersistedAssumptionUnits } from "@/lib/unit-contracts";
 
 const WS = "ws-A";
 const project: ParentProject = { owner_id: "creator", workspace_id: WS };
@@ -97,5 +99,62 @@ describe("workspace member management: owner protection", () => {
     expect(canManageMember("member", "viewer")).toBe(false);
     expect(canManageMember("viewer", "viewer")).toBe(false);
     expect(canManageMember(null, "member")).toBe(false);
+  });
+});
+
+describe("workspace + engine readiness integration contract", () => {
+  test("only writable members can submit unit-valid approved assumptions for engine readiness", () => {
+    const approvedAssumptions = [
+      { field_key: "debt_amount", unit: "$" },
+      { field_key: "interest_rate", unit: "%" },
+      { field_key: "min_all_in_dscr", unit: "x" },
+    ];
+    expect(validatePersistedAssumptionUnits(approvedAssumptions)).toEqual([]);
+    expect(canWriteDealChild(project, member)).toBe(true);
+    expect(canWriteDealChild(project, viewer)).toBe(false);
+
+    const rows: ProjectInputRows = {
+      scalars: [
+        { key: "loan_amount", value_numeric: 60, status: "approved", source: "assumption" },
+        { key: "equity_amount", value_numeric: 40, status: "approved", source: "assumption" },
+        { key: "interest_rate_pct", value_numeric: 6, status: "approved", source: "assumption" },
+        { key: "amort_years", value_numeric: 30, status: "approved", source: "assumption" },
+        { key: "exit_cap_rate_pct", value_numeric: 5, status: "approved", source: "assumption" },
+        {
+          key: "stabilized_occupancy_pct",
+          value_numeric: 95,
+          status: "approved",
+          source: "assumption",
+        },
+        { key: "expense_ratio_pct", value_numeric: 35, status: "approved", source: "assumption" },
+        { key: "hold_years", value_numeric: 5, status: "approved", source: "assumption" },
+        { key: "selling_costs_pct", value_numeric: 2, status: "approved", source: "assumption" },
+        { key: "rent_growth_pct", value_numeric: 3, status: "approved", source: "assumption" },
+        { key: "lease_up_months", value_numeric: 12, status: "approved", source: "assumption" },
+      ],
+      budget: [
+        { category: "land", amount: 10, status: "approved" },
+        { category: "hard", amount: 50, status: "approved" },
+        { category: "soft", amount: 10, status: "approved" },
+        { category: "contingency", amount: 5, status: "approved" },
+        { category: "financing_interest", amount: 5, status: "approved" },
+      ],
+      revenue: [
+        {
+          unit_type: "Residential",
+          unit_count: 10,
+          avg_sf: null,
+          rent: 2,
+          rent_basis: "per_unit",
+          occupancy_pct: 95,
+          status: "approved",
+        },
+      ],
+    };
+
+    expect(computeReadiness(rows).status).toBe("ready");
+    expect(
+      validatePersistedAssumptionUnits([{ field_key: "min_all_in_dscr", unit: "%" }])[0].message,
+    ).toContain("requires x");
   });
 });

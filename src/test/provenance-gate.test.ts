@@ -15,11 +15,8 @@ import { harbourSeedRows } from "@/lib/engine/harbour-fixture";
 import { ASSUMPTION_BY_KEY } from "@/lib/assumption-taxonomy";
 import { buildMemoReport, memoReportText, type MemoReport } from "@/lib/memo-report";
 import { buildReport } from "@/lib/reports/report-builders";
-import {
-  REPORT_DEFINITIONS,
-  type ReportFormat,
-  type ReportType,
-} from "@/lib/reports/report-definitions";
+import { REPORT_DEFINITIONS } from "@/lib/reports/report-definitions";
+import { ALL_NUMERIC_PROVENANCE_SURFACES } from "@/lib/reports/report-artifacts";
 import {
   deriveCore,
   generationLabel,
@@ -206,23 +203,36 @@ function verifyArtifact(data: ReportData, report: MemoReport) {
   };
 }
 
-const reportArtifacts = REPORT_DEFINITIONS.flatMap((def) =>
-  def.supportedFormats.map((format) => ({
-    label: `${def.type}:${format}`,
-    reportType: def.type,
-    format,
-  })),
-) satisfies Array<{ label: string; reportType: ReportType; format: ReportFormat }>;
-
-const memoArtifacts = [
-  { label: "memo:pdf", reportType: null, format: "pdf" },
-  { label: "memo:docx", reportType: null, format: "docx" },
-] satisfies Array<{ label: string; reportType: null; format: "pdf" | "docx" }>;
-
 describe("provenance gate for generated artifacts", () => {
   const data = harbourReportData();
 
-  test.each([...memoArtifacts, ...reportArtifacts])(
+  test("artifact provenance registry covers every report definition and memo renderer", () => {
+    const reportArtifacts = ALL_NUMERIC_PROVENANCE_SURFACES.filter((s) => s.reportType != null);
+    expect(reportArtifacts).toHaveLength(
+      REPORT_DEFINITIONS.reduce((sum, def) => sum + def.supportedFormats.length, 0),
+    );
+    for (const def of REPORT_DEFINITIONS) {
+      for (const format of def.supportedFormats) {
+        expect(reportArtifacts).toContainEqual({
+          label: `${def.type}:${format}`,
+          reportType: def.type,
+          format,
+        });
+      }
+    }
+    expect(ALL_NUMERIC_PROVENANCE_SURFACES).toContainEqual({
+      label: "memo:pdf",
+      reportType: null,
+      format: "pdf",
+    });
+    expect(ALL_NUMERIC_PROVENANCE_SURFACES).toContainEqual({
+      label: "memo:docx",
+      reportType: null,
+      format: "docx",
+    });
+  });
+
+  test.each(ALL_NUMERIC_PROVENANCE_SURFACES)(
     "$label requires every numeric token to trace to an approved input, derived value, or engine output",
     ({ reportType }) => {
       const report = reportType
@@ -235,6 +245,21 @@ describe("provenance gate for generated artifacts", () => {
       expect(gate.verification_report.pass).toBe(true);
       expect(gate.verification_report.tokenCount).toBeGreaterThan(0);
       expect(gate.verification_report.orphans).toEqual([]);
+    },
+  );
+
+  test.each(ALL_NUMERIC_PROVENANCE_SURFACES)(
+    "$label renders the same core deterministic figures",
+    ({ reportType }) => {
+      const report = reportType
+        ? buildReport(reportType, data, { generatedLabel: "June 2026" })
+        : memoArtifact(data);
+      const text = memoReportText(report);
+      const core = deriveCore(data);
+
+      expect(text).toContain("$250,000,000");
+      if (core.dscr != null) expect(text).toContain(core.dscr.toFixed(2));
+      if (core.minDscr != null) expect(text).toContain(core.minDscr.toFixed(2));
     },
   );
 

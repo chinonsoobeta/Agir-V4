@@ -370,6 +370,28 @@ export type GroupResolution = {
   conflict_values: Array<{ value: number | string | null; source: string }> | null;
 };
 
+export type ResolutionAuditMember = {
+  value: number | string | null;
+  confidence: number;
+  source_doc_name: string;
+  source_location: string | null;
+  source_text: string;
+  matched_alias: string;
+  candidate_role: CandidateRole | null;
+  selected: boolean;
+};
+
+export type ResolutionAudit = {
+  field_key: string;
+  status: GroupResolution["status"];
+  winner_source: string;
+  winner_value: number | string | null;
+  winner_reason: string;
+  distinct: Array<number | string | null>;
+  conflict_values: GroupResolution["conflict_values"];
+  members: ResolutionAuditMember[];
+};
+
 const roundKey = (m: MappedCandidate): number | string | null =>
   m.value_numeric != null ? roundForGrouping(m.value_numeric) : m.value_text;
 
@@ -387,6 +409,52 @@ function compareMappedCandidates(a: MappedCandidate, b: MappedCandidate): number
     compareMaybe(a.source_text, b.source_text) ||
     compareMaybe(a.matched_alias, b.matched_alias)
   );
+}
+
+function winnerReason(row: GroupResolution): string {
+  if (row.status === "conflicting") return "blocked: distinct values or implausible scale";
+  const winner = row.winner;
+  const structured = winner.candidate_role && STRUCTURED_ROLES.has(winner.candidate_role);
+  const value = roundKey(winner);
+  return [
+    structured ? `structured ${winner.candidate_role}` : "scalar candidate",
+    `confidence ${winner.confidence}`,
+    `value ${String(value)}`,
+    `source ${winner.source_doc_name}`,
+    winner.source_location ? `location ${winner.source_location}` : null,
+    `alias ${winner.matched_alias}`,
+  ]
+    .filter(Boolean)
+    .join("; ");
+}
+
+export function auditResolution(row: GroupResolution): ResolutionAudit {
+  const members = [...row.members].sort(compareMappedCandidates);
+  return {
+    field_key: row.field_key,
+    status: row.status,
+    winner_source: row.winner.source_doc_name,
+    winner_value: roundKey(row.winner),
+    winner_reason: winnerReason(row),
+    distinct: row.distinct,
+    conflict_values: row.conflict_values,
+    members: members.map((member) => ({
+      value: roundKey(member),
+      confidence: member.confidence,
+      source_doc_name: member.source_doc_name,
+      source_location: member.source_location,
+      source_text: member.source_text,
+      matched_alias: member.matched_alias,
+      candidate_role: member.candidate_role ?? null,
+      selected: member === row.winner,
+    })),
+  };
+}
+
+export function auditResolvedAssumptions(grouped: Map<string, GroupResolution>): ResolutionAudit[] {
+  return Array.from(grouped.values())
+    .sort((a, b) => a.field_key.localeCompare(b.field_key))
+    .map(auditResolution);
 }
 
 // Coarse plausibility floor for whole-deal AGGREGATE dollar keys. In

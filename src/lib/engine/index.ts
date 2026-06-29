@@ -119,6 +119,13 @@ export {
   type RiskEntry,
 } from "./reconciliation";
 export {
+  RECONCILIATION_CHECKS,
+  reconciliationDefinitionFor,
+  isRegisteredReconciliationCheck,
+  type ReconciliationCheckDefinition,
+  type ReconciliationCheckKey,
+} from "./reconciliation-registry";
+export {
   collectNumericTokens,
   buildAllowedValues,
   verifyNumericProvenance,

@@ -13,6 +13,7 @@
 import { describe, expect, test } from "vitest";
 import fc from "fast-check";
 import { applyStress, runUnderwriting, STRESS_PRESETS, type UnderwritingInput } from "@/lib/engine";
+import { TOLERANCE_POLICY } from "@/lib/engine/tolerance-policy";
 
 const SEED = 0x5eed;
 const NUM_RUNS = 300;
@@ -22,6 +23,10 @@ const NUM_RUNS = 300;
 // (hundreds-of-millions) magnitudes and is far tighter than any real bug.
 function approx(a: number, b: number, relEps = 1e-7, absEps = 1e-2): boolean {
   return Math.abs(a - b) <= Math.max(absEps, Math.abs(b) * relEps);
+}
+
+function invariantApprox(a: number, b: number): boolean {
+  return approx(a, b, TOLERANCE_POLICY.invariantRelative, TOLERANCE_POLICY.invariantAbsolute);
 }
 
 const finite = (n: number | undefined) => typeof n === "number" && Number.isFinite(n);
@@ -83,15 +88,17 @@ describe("engine invariants (property-based)", () => {
           expect(finite(n)).toBe(true);
         }
         // NOI = EGI - OpEx, and OpEx = EGI x expense ratio.
-        expect(approx(v.noi, v.egi - v.opex)).toBe(true);
-        expect(approx(v.opex, v.egi * (input.expenseRatioPct / 100))).toBe(true);
+        expect(invariantApprox(v.noi, v.egi - v.opex)).toBe(true);
+        expect(invariantApprox(v.opex, v.egi * (input.expenseRatioPct / 100))).toBe(true);
         // Sources = Uses: required equity + total debt = TDC.
-        expect(approx(v.requiredEquity + v.totalDebt, v.tdc)).toBe(true);
+        expect(invariantApprox(v.requiredEquity + v.totalDebt, v.tdc)).toBe(true);
         // Exit value = NOI / exit cap.
-        expect(approx(v.exitValue, v.noi / (input.exitCapRatePct / 100))).toBe(true);
+        expect(invariantApprox(v.exitValue, v.noi / (input.exitCapRatePct / 100))).toBe(true);
         // Effective occupancy cannot exceed 100% (other income is zero here).
-        expect(v.effectiveOccupancyPct).toBeLessThanOrEqual(100 + 1e-6);
-        expect(v.egi).toBeGreaterThanOrEqual(-1e-6);
+        expect(v.effectiveOccupancyPct).toBeLessThanOrEqual(
+          100 + TOLERANCE_POLICY.monotonicAbsolute,
+        );
+        expect(v.egi).toBeGreaterThanOrEqual(-TOLERANCE_POLICY.monotonicAbsolute);
       }),
       { numRuns: NUM_RUNS, seed: SEED },
     );
@@ -106,7 +113,7 @@ describe("engine invariants (property-based)", () => {
           const base = runUnderwriting(input).values.ltcPct;
           const more = runUnderwriting({ ...input, loanAmount: input.loanAmount + extra }).values
             .ltcPct;
-          expect(more).toBeGreaterThanOrEqual(base - 1e-6);
+          expect(more).toBeGreaterThanOrEqual(base - TOLERANCE_POLICY.monotonicAbsolute);
         },
       ),
       { numRuns: NUM_RUNS, seed: SEED },
@@ -122,7 +129,7 @@ describe("engine invariants (property-based)", () => {
           const rate = Math.min(20, input.interestRatePct + bump);
           const base = runUnderwriting(input).values.dscr;
           const higher = runUnderwriting({ ...input, interestRatePct: rate }).values.dscr;
-          expect(higher).toBeLessThanOrEqual(base + 1e-6);
+          expect(higher).toBeLessThanOrEqual(base + TOLERANCE_POLICY.monotonicAbsolute);
         },
       ),
       { numRuns: NUM_RUNS, seed: SEED },
@@ -135,7 +142,7 @@ describe("engine invariants (property-based)", () => {
         const cap = Math.min(20, input.exitCapRatePct + bump);
         const base = runUnderwriting(input).values.exitValue;
         const higher = runUnderwriting({ ...input, exitCapRatePct: cap }).values.exitValue;
-        expect(higher).toBeLessThanOrEqual(base + 1e-3);
+        expect(higher).toBeLessThanOrEqual(base + TOLERANCE_POLICY.monotonicMoneyAbsolute);
       }),
       { numRuns: NUM_RUNS, seed: SEED },
     );
@@ -147,7 +154,7 @@ describe("engine invariants (property-based)", () => {
         const er = Math.min(95, input.expenseRatioPct + bump);
         const base = runUnderwriting(input).values.noi;
         const higher = runUnderwriting({ ...input, expenseRatioPct: er }).values.noi;
-        expect(higher).toBeLessThanOrEqual(base + 1e-3);
+        expect(higher).toBeLessThanOrEqual(base + TOLERANCE_POLICY.monotonicMoneyAbsolute);
       }),
       { numRuns: NUM_RUNS, seed: SEED },
     );
@@ -159,8 +166,12 @@ describe("engine invariants (property-based)", () => {
       fc.property(arbInput(), (input) => {
         const base = runUnderwriting(input).values;
         const stressed = runUnderwriting(applyStress(input, combined)).values;
-        expect(stressed.noi).toBeLessThanOrEqual(base.noi + 1e-3);
-        expect(stressed.developmentProfit).toBeLessThanOrEqual(base.developmentProfit + 1e-3);
+        expect(stressed.noi).toBeLessThanOrEqual(
+          base.noi + TOLERANCE_POLICY.monotonicMoneyAbsolute,
+        );
+        expect(stressed.developmentProfit).toBeLessThanOrEqual(
+          base.developmentProfit + TOLERANCE_POLICY.monotonicMoneyAbsolute,
+        );
       }),
       { numRuns: NUM_RUNS, seed: SEED },
     );

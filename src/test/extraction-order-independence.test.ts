@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { groupAndResolve, type MappedCandidate } from "@/lib/assumption-mapping";
+import {
+  auditResolvedAssumptions,
+  groupAndResolve,
+  type MappedCandidate,
+} from "@/lib/assumption-mapping";
 
 function candidate(overrides: Partial<MappedCandidate>): MappedCandidate {
   return {
@@ -31,6 +35,10 @@ function resolvedShape(candidates: MappedCandidate[]) {
       distinct: row.distinct,
       conflict_values: row.conflict_values,
     }));
+}
+
+function auditShape(candidates: MappedCandidate[]) {
+  return auditResolvedAssumptions(groupAndResolve(candidates));
 }
 
 function permutations<T>(items: T[]): T[][] {
@@ -66,6 +74,25 @@ describe("extraction merge determinism", () => {
 
     for (const shuffled of permutations(candidates)) {
       expect(resolvedShape(shuffled)).toEqual(baseline);
+    }
+  });
+
+  test("resolution audit is stable and explains confidence/value/source tie breaks", () => {
+    const candidates = [
+      candidate({ source_doc_name: "Sponsor.pdf", source_location: "p3" }),
+      candidate({ source_doc_name: "Lender.pdf", source_location: "p2" }),
+      candidate({ source_doc_name: "Appraisal.pdf", source_location: "p1", confidence: 88 }),
+    ];
+    const baseline = auditShape(candidates);
+
+    expect(baseline[0].winner_source).toBe("Lender.pdf");
+    expect(baseline[0].winner_reason).toContain("confidence 90");
+    expect(baseline[0].winner_reason).toContain("value 5.25");
+    expect(baseline[0].winner_reason).toContain("source Lender.pdf");
+    expect(baseline[0].members.filter((m) => m.selected)).toHaveLength(1);
+
+    for (const shuffled of permutations(candidates)) {
+      expect(auditShape(shuffled)).toEqual(baseline);
     }
   });
 });

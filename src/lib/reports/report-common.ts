@@ -5,6 +5,7 @@
 import { computeInvestmentVerdict } from "../verdict";
 import { ENGINE_SCALAR_TO_TAXONOMY } from "../taxonomy-engine-map";
 import { ASSUMPTION_BY_KEY } from "../assumption-taxonomy";
+import { allowedValueForUnit, tokenUnitForCanonicalUnit } from "../unit-contracts";
 import {
   money,
   pct,
@@ -15,7 +16,7 @@ import {
   type ReportStat,
 } from "../memo-report";
 import type { ReportData } from "./report-data.server";
-import type { AllowedValue, TokenUnit } from "../engine/provenance";
+import type { AllowedValue } from "../engine/provenance";
 
 import type { ReportDefinition } from "./report-definitions";
 
@@ -282,21 +283,25 @@ export function reportAllowedValues(
   extra: number[] = [],
 ): AllowedValue[] {
   const out: AllowedValue[] = [];
-  const asUnit = (u: unknown): TokenUnit | undefined =>
-    u === "$" || u === "%" || u === "x" || u === "bps" ? u : undefined;
-  const push = (n: any, unit?: TokenUnit) => {
+  const push = (n: any, unit?: unknown) => {
     const v = Number(n);
     if (!Number.isFinite(v)) return;
-    if (unit) out.push({ value: v, unit }, { value: -v, unit });
-    else out.push(v, -v);
+    const allowed = allowedValueForUnit(v, unit);
+    if (allowed == null) return;
+    out.push(allowed);
+    const negated = allowedValueForUnit(-v, unit);
+    if (negated != null) out.push(negated);
   };
-  // Assumptions / engine inputs stay untyped: their unit is not carried here and
-  // leaving them permissive guarantees a legitimate rate is never orphaned.
-  data.assumptions.forEach((a) => push(a.value_numeric));
-  data.engineInputs.forEach((i) => push(i.value_numeric));
+  // Assumptions and engine inputs use the unit contract when available. Legacy
+  // engine input rows may not carry units, so they remain admissible as raw
+  // deterministic inputs after the typed pass.
+  data.assumptions.forEach((a) => push(a.value_numeric, a.unit));
+  data.engineInputs.forEach((i) =>
+    push(i.value_numeric, tokenUnitForCanonicalUnit((i as any).unit)),
+  );
   // Outputs and cash flows carry a known unit, so a rate token can no longer be
   // validated by an unrelated dollar magnitude (the old unit-blind hole).
-  data.outputs.forEach((o) => push(o.value_numeric, asUnit((o as any).unit)));
+  data.outputs.forEach((o) => push(o.value_numeric, (o as any).unit));
   data.cashFlows.forEach((c) => push(c.amount, "$"));
   data.budget.forEach((b) => push(b.amount, "$"));
   data.revenue.forEach((r) => {

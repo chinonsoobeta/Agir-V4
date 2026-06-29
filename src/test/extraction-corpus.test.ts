@@ -24,6 +24,7 @@ type CorpusFixture = {
   fileType: string;
   buffer: ArrayBuffer;
   expected: ExpectedAssumption[];
+  expectedAbsent?: string[];
 };
 
 type RealCorpusFixture = {
@@ -229,6 +230,20 @@ function makeCorpus(): CorpusFixture[] {
         expected("total_project_cost", 250_000_000),
       ],
     },
+    {
+      name: "false_positive_guards.txt",
+      fileType: "text/plain",
+      buffer: textBuffer(
+        [
+          "Broker narrative",
+          "The office lease term is 12 years and expires after stabilization.",
+          "Tenant improvement allowance is $65 psf, not office rent.",
+          "Exit cap rate range 5.0% - 5.5% for sensitivity only.",
+        ].join("\n"),
+      ),
+      expected: [],
+      expectedAbsent: ["lease_up_months", "office_rent_psf", "opex_ratio"],
+    },
   ];
 }
 
@@ -314,6 +329,9 @@ describe("labeled extraction corpus", () => {
 
     for (const fixture of corpus) {
       const extracted = await extractMappedAssumptions(fixture);
+      for (const absent of fixture.expectedAbsent ?? []) {
+        expect(extracted.has(absent), `${fixture.name} should not extract ${absent}`).toBe(false);
+      }
       runs.push({ expectedRows: fixture.expected, predictions: extracted });
     }
 
