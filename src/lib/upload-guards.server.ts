@@ -90,6 +90,76 @@ export function scanDocumentBuffer(name: string, buf: ArrayBuffer): ScanResult {
   }
 }
 
+export type FullScanResult = ScanResult & { engine: "structural" | "external" };
+
+/**
+ * Full pre-parse safety scan. Always runs the deterministic structural check
+ * first (cheap, no network). When DOCUMENT_SCAN_URL is configured, the bytes are
+ * additionally submitted to an external anti-virus / content-scanning service
+ * (e.g. a ClamAV REST gateway or a cloud scan API) and a verdict of "infected"
+ * hard-rejects the file. This is the single seam to plug a real AV engine into:
+ * the rest of the pipeline calls only this function.
+ *
+ * Contract for the external endpoint (POST raw bytes):
+ *   - HTTP 200            -> clean
+ *   - HTTP 422 / 4xx       -> infected/unsafe (body text becomes the detail)
+ *   - JSON { clean: bool, detail?: string } in a 200 body is also honored
+ * A network/timeout error fails CLOSED (rejects) so an unreachable scanner can
+ * never silently wave a file through. Set DOCUMENT_SCAN_FAIL_OPEN=1 to override
+ * (e.g. during a scanner outage) -- it is logged on the document's scan_detail.
+ */
+export async function scanDocument(name: string, buf: ArrayBuffer): Promise<FullScanResult> {
+  const structural = scanDocumentBuffer(name, buf);
+  if (!structural.ok) return { ...structural, engine: "structural" };
+
+  const url = process.env.DOCUMENT_SCAN_URL?.trim();
+  if (!url) return { ...structural, engine: "structural" };
+
+  const failOpen = process.env.DOCUMENT_SCAN_FAIL_OPEN === "1";
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/octet-stream", "x-file-name": name },
+        body: buf,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (res.ok) {
+      // A 200 may still carry a structured verdict.
+      const text = await res.text();
+      if (text) {
+        try {
+          const json = JSON.parse(text) as { clean?: boolean; detail?: string };
+          if (json && json.clean === false) {
+            return { ok: false, detail: json.detail ?? "Flagged by scanner", engine: "external" };
+          }
+        } catch {
+          /* non-JSON 200 body means clean */
+        }
+      }
+      return { ok: true, detail: "clean (external scan)", engine: "external" };
+    }
+    const detail = (await res.text().catch(() => "")) || `scanner rejected (HTTP ${res.status})`;
+    return { ok: false, detail: detail.slice(0, 500), engine: "external" };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (failOpen) {
+      return {
+        ok: true,
+        detail: `external scan unavailable (${message}); allowed by DOCUMENT_SCAN_FAIL_OPEN`,
+        engine: "structural",
+      };
+    }
+    return { ok: false, detail: `Safety scan unavailable: ${message}`, engine: "external" };
+  }
+}
+
 /**
  * Rolling 24h per-user upload quota. Throws a user-facing Error if accepting a
  * file of `incomingBytes` would breach the file-count or byte quota.

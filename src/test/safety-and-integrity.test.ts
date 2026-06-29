@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sha256Hex, stableJsonHash } from "@/lib/hash.server";
-import { scanDocumentBuffer, UPLOAD_LIMITS } from "@/lib/upload-guards.server";
+import { scanDocument, scanDocumentBuffer, UPLOAD_LIMITS } from "@/lib/upload-guards.server";
 import { isMaterialOverrideField, MATERIAL_OVERRIDE_KEYS } from "@/lib/dual-control";
 
 function buf(bytes: number[]): ArrayBuffer {
@@ -57,6 +57,21 @@ describe("scanDocumentBuffer", () => {
   });
   it("rejects unsupported extensions", () => {
     expect(scanDocumentBuffer("a.exe", buf([1, 2, 3, 4])).ok).toBe(false);
+  });
+});
+
+describe("scanDocument (async, AV-capable)", () => {
+  it("uses the structural engine when no external scanner is configured", async () => {
+    delete process.env.DOCUMENT_SCAN_URL;
+    const ok = await scanDocument("a.pdf", buf(PDF_HEADER));
+    expect(ok.ok).toBe(true);
+    expect(ok.engine).toBe("structural");
+  });
+  it("rejects a disguised file before any network call", async () => {
+    delete process.env.DOCUMENT_SCAN_URL;
+    const bad = await scanDocument("evil.pdf", buf(PNG_HEADER));
+    expect(bad.ok).toBe(false);
+    expect(bad.engine).toBe("structural");
   });
 });
 

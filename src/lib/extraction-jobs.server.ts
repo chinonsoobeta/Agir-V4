@@ -109,4 +109,12 @@ export async function failJob(ctx: Ctx, jobId: string, message: string): Promise
     .from("extraction_jobs")
     .update({ status: "failed", error: message, finished_at: new Date().toISOString() })
     .eq("id", jobId);
+  // Surface job failures to the error sink (structured stderr + optional
+  // webhook) so a spike in failed extractions is observable/alertable.
+  try {
+    const { captureServerError } = await import("./observability.server");
+    captureServerError(new Error(message), { kind: "extraction_job_failed", jobId });
+  } catch {
+    /* observability must never break the job path */
+  }
 }

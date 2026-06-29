@@ -122,6 +122,27 @@ POSTGRES_URL="postgresql://..." npm run migrate:dry-run
 7. Re-run `/api/health`, `npm run migrate:dry-run`, and the smoke checklist.
 8. Document root cause in the incident notes and add a regression test if drift escaped CI.
 
+## Extraction Jobs & Document Safety
+
+- Every document analysis / assumption extraction / underwriting run is recorded
+  in `public.extraction_jobs` with a status (queued/running/completed/failed/
+  canceled), progress, and an idempotency key of `(owner, kind, content-hash)`.
+  A double-click or retry re-attaches to the existing job instead of re-running
+  billing-relevant work.
+- A failed job emits a structured `[agir-error] {"kind":"extraction_job_failed"}`
+  line (and a webhook POST if `ERROR_WEBHOOK_URL` is set), so a spike is
+  alertable. Triage: query `extraction_jobs where status='failed'` for the deal.
+- Cancel a stuck job from the UI (Documents) or via `cancelExtractionJob`; retry
+  a failed/canceled job via the Documents "Retry" action (`retryExtractionJob`),
+  which clears the job so the next call re-claims cleanly.
+- Document safety: structural scan (signature/size/disguised-binary) always runs
+  before parsing. Set `DOCUMENT_SCAN_URL` to add an external AV/content scan;
+  it fails CLOSED on a scanner outage unless `DOCUMENT_SCAN_FAIL_OPEN=1`.
+- Known limitation (tracked): job execution is still in-request. The job/idempotency
+  contract is in place so moving execution to a cron/worker is a drop-in step;
+  until then a single >1000-page OCR is refused with a graceful message rather
+  than risking a timeout.
+
 ## Predeploy Checklist
 
 - Working tree contains only intended changes.

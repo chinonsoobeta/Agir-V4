@@ -31,6 +31,56 @@ export const listExtractionJobs = createServerFn({ method: "GET" })
     return rows ?? [];
   });
 
+// Cancel an in-flight / queued extraction job. A completed job is immutable.
+export const cancelExtractionJob = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: job, error } = await context.supabase
+      .from("extraction_jobs")
+      .select("status")
+      .eq("id", data.id)
+      .single();
+    if (error) throw new Error(error.message);
+    if (job.status === "completed") throw new Error("A completed job cannot be cancelled.");
+    const { error: updErr } = await context.supabase
+      .from("extraction_jobs")
+      .update({ status: "canceled", finished_at: new Date().toISOString() })
+      .eq("id", data.id);
+    if (updErr) throw new Error(updErr.message);
+    return { ok: true };
+  });
+
+// Retry a failed / cancelled job: clears the job so the next analyze/extract
+// call re-claims a fresh one (the work is keyed idempotently by content-hash).
+export const retryExtractionJob = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: job, error } = await context.supabase
+      .from("extraction_jobs")
+      .select("status, document_id")
+      .eq("id", data.id)
+      .single();
+    if (error) throw new Error(error.message);
+    if (job.status === "running") throw new Error("This job is still running.");
+    if (job.status === "completed") throw new Error("This job already completed.");
+    // Reset (not delete) so it stays under the owner-gated UPDATE policy; the
+    // next analyze/extract call re-runs the work (keyed idempotently by hash).
+    const { error: updErr } = await context.supabase
+      .from("extraction_jobs")
+      .update({ status: "queued", progress: 0, error: null, finished_at: null })
+      .eq("id", data.id);
+    if (updErr) throw new Error(updErr.message);
+    if (job.document_id) {
+      await context.supabase
+        .from("documents")
+        .update({ extraction_status: "pending", extraction_error: null })
+        .eq("id", job.document_id);
+    }
+    return { ok: true, document_id: job.document_id as string | null };
+  });
+
 const CreateDocSchema = z.object({
   project_id: z.string().uuid().optional().nullable(),
   name: z.string().min(1).max(255),
@@ -141,7 +191,7 @@ export const analyzeDocument = createServerFn({ method: "POST" })
     if (docErr) throw new Error(docErr.message);
 
     const { claimJob, completeJob, failJob } = await import("./extraction-jobs.server");
-    const { scanDocumentBuffer, UPLOAD_LIMITS } = await import("./upload-guards.server");
+    const { scanDocument, UPLOAD_LIMITS } = await import("./upload-guards.server");
 
     // Idempotent + observable: one job per (owner, document content). A retry or
     // double-click re-attaches to the existing job instead of re-running OCR/AI.
@@ -187,11 +237,15 @@ export const analyzeDocument = createServerFn({ method: "POST" })
       await failExtraction(dl.error?.message ?? "Unable to download document for extraction.");
     const buffer = await dl.data.arrayBuffer();
 
-    // Structural safety scan BEFORE any parsing (malformed / disguised files).
-    const scan = scanDocumentBuffer(doc.name, buffer);
+    // Safety scan BEFORE any parsing: structural checks always, plus an external
+    // AV/content scan when DOCUMENT_SCAN_URL is configured (fails closed).
+    const scan = await scanDocument(doc.name, buffer);
     await context.supabase
       .from("documents")
-      .update({ scan_status: scan.ok ? "clean" : "rejected", scan_detail: scan.detail })
+      .update({
+        scan_status: scan.ok ? "clean" : "rejected",
+        scan_detail: `[${scan.engine}] ${scan.detail}`,
+      })
       .eq("id", data.id);
     if (!scan.ok) await failExtraction(`File rejected by safety scan: ${scan.detail}`);
 

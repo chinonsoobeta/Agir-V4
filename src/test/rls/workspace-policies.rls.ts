@@ -365,4 +365,53 @@ describe("workspace RLS policies", () => {
     );
     expect(update.rowCount).toBe(0);
   });
+
+  test("extraction jobs are role-gated: member can write, viewer cannot", async () => {
+    // A member (non-viewer) can create and advance an extraction job.
+    const job = await asUser<{ id: string }>(
+      ids.member,
+      `INSERT INTO public.extraction_jobs (project_id, owner_id, kind, idempotency_key)
+       VALUES ($1, $2, 'document_analysis', 'mem-key-1') RETURNING id`,
+      [ids.project, ids.member],
+    );
+    expect(job.rowCount).toBe(1);
+    const upd = await asUser(
+      ids.member,
+      "UPDATE public.extraction_jobs SET progress = 50 WHERE id = $1 RETURNING id",
+      [job.rows[0].id],
+    );
+    expect(upd.rowCount).toBe(1);
+
+    // A read-only viewer must not be able to create extraction jobs, even for
+    // their own owner_id, on a workspace project.
+    await expectDenied(
+      asUser(
+        ids.viewer,
+        `INSERT INTO public.extraction_jobs (project_id, owner_id, kind, idempotency_key)
+         VALUES ($1, $2, 'document_analysis', 'viewer-key-1')`,
+        [ids.project, ids.viewer],
+      ),
+    );
+  });
+
+  test("extraction job idempotency key is unique per (owner, kind)", async () => {
+    const first = await asUser(
+      ids.member,
+      `INSERT INTO public.extraction_jobs (project_id, owner_id, kind, idempotency_key)
+       VALUES ($1, $2, 'assumption_extraction', 'dup-key') RETURNING id`,
+      [ids.project, ids.member],
+    );
+    expect(first.rowCount).toBe(1);
+    // A second insert with the same (owner, kind, idempotency_key) must fail the
+    // unique constraint (23505) -- this is what makes a double-click / retry
+    // idempotent. (A unique violation, not an RLS denial, so assert any reject.)
+    await expect(
+      asUser(
+        ids.member,
+        `INSERT INTO public.extraction_jobs (project_id, owner_id, kind, idempotency_key)
+         VALUES ($1, $2, 'assumption_extraction', 'dup-key')`,
+        [ids.project, ids.member],
+      ),
+    ).rejects.toThrow();
+  });
 });
