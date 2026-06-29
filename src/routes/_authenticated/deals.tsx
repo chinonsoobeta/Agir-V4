@@ -64,6 +64,7 @@ import { RecommendationPill, RiskPill, TONE_TEXT } from "@/components/decision-u
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { daysUntil } from "@/lib/platform-insights";
 import { useWorkspace } from "@/lib/workspace-context";
+import { usePreferences } from "@/lib/preferences";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -93,6 +94,7 @@ export const Route = createFileRoute("/_authenticated/deals")({
 });
 
 function DealsPage() {
+  const { t, tx } = usePreferences();
   const { data: deals } = useSuspenseQuery(portfolioQ);
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<string>("all");
@@ -199,9 +201,9 @@ function DealsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Pipeline"
-        title="Deals"
-        subtitle={`${deals.length} deals across the underwriting pipeline`}
+        eyebrow={t("page.deals.eyebrow")}
+        title={t("common.deals")}
+        subtitle={tx("deals.subtitle", { count: deals.length })}
         actions={
           <>
             <Button
@@ -211,12 +213,12 @@ function DealsPage() {
               disabled={seed.isPending}
             >
               <Sparkles className="size-4 mr-1.5" />
-              {seed.isPending ? "Seeding…" : "Seed demo deal"}
+              {seed.isPending ? t("deals.seeding") : t("deals.seedDemo")}
             </Button>
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button size="sm">
-                  <Plus className="size-4 mr-1.5" /> New deal
+                  <Plus className="size-4 mr-1.5" /> {t("action.newDeal")}
                 </Button>
               </DialogTrigger>
               <NewDealDialog onClose={() => setOpen(false)} createFn={createFn} />
@@ -247,7 +249,7 @@ function DealsPage() {
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search deals, markets, sources…"
+                placeholder={t("deals.searchPlaceholder")}
                 className="pl-9"
               />
             </div>
@@ -257,11 +259,11 @@ function DealsPage() {
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-9">
                   <ArrowUpDown className="size-3.5 mr-1.5" />
-                  {DEAL_SORTS.find((s) => s.value === sort)?.label ?? "Sort"}
+                  {DEAL_SORTS.find((s) => s.value === sort)?.label ?? t("deals.sort")}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                <DropdownMenuLabel>{t("deals.sortBy")}</DropdownMenuLabel>
                 {DEAL_SORTS.map((s) => (
                   <DropdownMenuItem key={s.value} onClick={() => setSort(s.value)}>
                     {sort === s.value && <Check className="size-3.5 mr-1.5" />}
@@ -277,11 +279,11 @@ function DealsPage() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="h-9">
                     <Columns3 className="size-3.5 mr-1.5" />
-                    Columns
+                    {t("deals.columns")}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Visible columns</DropdownMenuLabel>
+                  <DropdownMenuLabel>{t("deals.visibleColumns")}</DropdownMenuLabel>
                   {DEAL_COLUMNS.map((c) => (
                     <DropdownMenuCheckboxItem
                       key={c.key}
@@ -297,7 +299,7 @@ function DealsPage() {
                   ))}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => setColumns(DEFAULT_COLUMNS)}>
-                    Reset columns
+                    {t("deals.resetColumns")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -308,14 +310,14 @@ function DealsPage() {
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-9">
                   <Bookmark className="size-3.5 mr-1.5" />
-                  Views
+                  {t("deals.views")}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Saved views</DropdownMenuLabel>
+                <DropdownMenuLabel>{t("deals.savedViews")}</DropdownMenuLabel>
                 {views.length === 0 && (
                   <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                    No saved views yet
+                    {t("deals.noSavedViews")}
                   </div>
                 )}
                 {views.map((v) => (
@@ -342,9 +344,9 @@ function DealsPage() {
                     setSaveViewOpen(true);
                   }}
                 >
-                  Save current view…
+                  {t("deals.saveCurrentView")}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={resetView}>Reset to default</DropdownMenuItem>
+                <DropdownMenuItem onClick={resetView}>{t("deals.resetToDefault")}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -372,10 +374,12 @@ function DealsPage() {
         {/* Bulk action bar (list view) */}
         {selected.size > 0 && (
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/40 bg-primary/5 px-4 py-2.5">
-            <span className="text-sm font-medium">{selected.size} selected</span>
+            <span className="text-sm font-medium">
+              {tx("deals.selected", { count: selected.size })}
+            </span>
             <Select onValueChange={(v) => bulkUpdate.mutate(v)}>
               <SelectTrigger className="h-8 w-48 text-xs" disabled={bulkUpdate.isPending}>
-                <SelectValue placeholder="Set pipeline status…" />
+                <SelectValue placeholder={t("deals.setPipelineStatus")} />
               </SelectTrigger>
               <SelectContent>
                 {PROJECT_STATUSES.map((s) => (
@@ -386,16 +390,14 @@ function DealsPage() {
               </SelectContent>
             </Select>
             <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
-              <X className="size-3.5 mr-1" /> Clear
+              <X className="size-3.5 mr-1" /> {t("common.clear")}
             </Button>
           </div>
         )}
 
         {visible.length === 0 ? (
           <Card className="p-16 text-center elevated">
-            <p className="text-sm text-muted-foreground">
-              No deals here. Seed the Harbour Centre demo or create a new deal.
-            </p>
+            <p className="text-sm text-muted-foreground">{t("deals.emptyList")}</p>
           </Card>
         ) : view === "grid" ? (
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -417,7 +419,7 @@ function DealsPage() {
       <Dialog open={saveViewOpen} onOpenChange={setSaveViewOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Save current view</DialogTitle>
+            <DialogTitle>{t("deals.saveViewTitle")}</DialogTitle>
           </DialogHeader>
           <form
             onSubmit={(e) => {
@@ -427,13 +429,13 @@ function DealsPage() {
             className="space-y-4"
           >
             <div className="space-y-1.5">
-              <Label htmlFor="view-name">View name</Label>
+              <Label htmlFor="view-name">{t("deals.viewName")}</Label>
               <Input
                 id="view-name"
                 autoFocus
                 value={viewName}
                 onChange={(e) => setViewName(e.target.value)}
-                placeholder="e.g. Office deals, near close"
+                placeholder={t("deals.viewNamePlaceholder")}
               />
             </div>
             <DialogFooter>
@@ -445,10 +447,10 @@ function DealsPage() {
                   setSaveViewOpen(false);
                 }}
               >
-                Cancel
+                {t("action.cancel")}
               </Button>
               <Button type="submit" disabled={!viewName.trim()}>
-                Save view
+                {t("deals.saveView")}
               </Button>
             </DialogFooter>
           </form>
@@ -535,7 +537,8 @@ function DealCard({ d }: { d: DealSummary }) {
             <AlertDialogHeader>
               <AlertDialogTitle>Delete {d.name}?</AlertDialogTitle>
               <AlertDialogDescription>
-                This removes the deal and its underwriting from your pipeline. This cannot be undone.
+                This removes the deal and its underwriting from your pipeline. This cannot be
+                undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

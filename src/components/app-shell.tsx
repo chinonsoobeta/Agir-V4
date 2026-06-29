@@ -24,7 +24,6 @@ import {
   ContactRound,
   Sun,
   Moon,
-  Languages,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -169,7 +168,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const qc = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { t, theme, setTheme, language, setLanguage } = usePreferences();
+  const { t, theme, setTheme } = usePreferences();
 
   async function signOut() {
     await qc.cancelQueries();
@@ -207,24 +206,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         })}
       </nav>
       <div className="p-3 border-t border-sidebar-border space-y-0.5">
-        <div className="grid grid-cols-2 gap-1 mb-2">
+        <div className="mb-2">
           <Button
             variant="ghost"
             size="sm"
-            className="justify-start px-3 text-sidebar-foreground/65"
+            className="w-full justify-start px-3 text-sidebar-foreground/65"
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
           >
             {theme === "dark" ? <Sun className="size-4 mr-2" /> : <Moon className="size-4 mr-2" />}
             {theme === "dark" ? t("settings.light") : t("settings.dark")}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="justify-start px-3 text-sidebar-foreground/65"
-            onClick={() => setLanguage(language === "en" ? "fr" : "en")}
-          >
-            <Languages className="size-4 mr-2" />
-            {language === "en" ? "FR" : "EN"}
           </Button>
         </div>
         <Link

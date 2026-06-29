@@ -39,9 +39,8 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 
 function ExecutiveOverview() {
   const { data: deals } = useSuspenseQuery(portfolioQ);
-  const { language } = usePreferences();
+  const { t } = usePreferences();
   useRealtimeRefresh();
-  const fr = language === "fr";
 
   // One shared, deterministic rollup: no per-component ad-hoc reductions.
   const summary = summarizePortfolio(deals);
@@ -66,17 +65,13 @@ function ExecutiveOverview() {
   return (
     <>
       <PageHeader
-        eyebrow={fr ? "Centre de commande" : "Command center"}
-        title={fr ? "Vue d’ensemble des investissements" : "Investment overview"}
-        subtitle={
-          fr
-            ? "Pipeline, décisions, risques et exécution: mis à jour en direct."
-            : "Pipeline, decisions, risk and execution: updated live."
-        }
+        eyebrow={t("dash.eyebrow")}
+        title={t("dash.title")}
+        subtitle={t("dash.subtitle")}
         actions={
           <Link to="/deals">
             <Button size="sm">
-              {fr ? "Voir le flux" : "Open deal flow"}
+              {t("dash.openDealFlow")}
               <ArrowRight className="size-4 ml-1.5" />
             </Button>
           </Link>
@@ -86,49 +81,49 @@ function ExecutiveOverview() {
         <OnboardingChecklist />
         <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-success">
           <Radio className="size-3" />
-          {fr ? "Données opérationnelles en direct" : "Live operating data"}
+          {t("dash.liveData")}
         </div>
 
         <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-3">
           <Metric
             icon={BriefcaseBusiness}
-            label={fr ? "Affaires actives" : "Active deals"}
+            label={t("dash.activeDeals")}
             value={String(active.length)}
-            detail={`${deals.length} ${fr ? "au total" : "total"}`}
+            detail={`${deals.length} ${t("dash.total")}`}
           />
           <Metric
             icon={CircleDollarSign}
-            label={fr ? "Capital total" : "Gross pipeline"}
+            label={t("dash.grossPipeline")}
             value={fmtCompact(capital)}
-            detail={`${fmtCompact(weighted)} ${fr ? "pondéré" : "weighted"}`}
+            detail={`${fmtCompact(weighted)} ${t("dash.weighted")}`}
           />
           <Metric
             icon={TrendingUp}
-            label={fr ? "Score moyen" : "Avg investment score"}
-            value={averageScore ? String(averageScore) : "Not available"}
+            label={t("dash.avgScore")}
+            value={averageScore ? String(averageScore) : t("common.notAvailable")}
             detail="/ 100"
           />
           <Metric
             icon={Gauge}
-            label={fr ? "Vélocité" : "Pipeline velocity"}
+            label={t("dash.velocity")}
             value={String(averageVelocity)}
             detail="/ 100"
           />
           <Metric
             icon={ShieldAlert}
-            label={fr ? "Risque élevé" : "Elevated risk"}
+            label={t("dash.elevatedRisk")}
             value={String(summary.elevatedRiskCount)}
-            detail={fr ? "à examiner" : "need review"}
+            detail={t("dash.needReview")}
           />
         </div>
 
         <div className="grid xl:grid-cols-[1.45fr_1fr] gap-5">
           <section>
             <SectionTitle
-              title={fr ? "Flux du pipeline" : "Pipeline flow"}
+              title={t("dash.pipelineFlow")}
               action={
                 <Link to="/deals" className="text-xs text-primary">
-                  {fr ? "Gérer" : "Manage"}
+                  {t("dash.manage")}
                 </Link>
               }
             />
@@ -160,10 +155,10 @@ function ExecutiveOverview() {
 
           <section>
             <SectionTitle
-              title={fr ? "Prochaines dates" : "Upcoming dates"}
+              title={t("dash.upcomingDates")}
               action={
                 <Link to="/execution" className="text-xs text-primary">
-                  {fr ? "Exécution" : "Execution"}
+                  {t("nav.execution")}
                 </Link>
               }
             />
@@ -187,23 +182,15 @@ function ExecutiveOverview() {
                     </div>
                     <div className="num text-xs">
                       {days < 0
-                        ? `${Math.abs(days)}d ${fr ? "en retard" : "overdue"}`
+                        ? `${Math.abs(days)}d ${t("dash.overdueShort")}`
                         : days === 0
-                          ? fr
-                            ? "Aujourd’hui"
-                            : "Today"
+                          ? t("common.today")
                           : `${days}d`}
                     </div>
                   </Link>
                 ))
               ) : (
-                <Empty
-                  text={
-                    fr
-                      ? "Ajoutez des dates cibles aux affaires pour suivre les échéances."
-                      : "Add target dates to deals to track deadlines here."
-                  }
-                />
+                <Empty text={t("dash.addTargetDates")} />
               )}
             </Card>
           </section>
@@ -211,12 +198,12 @@ function ExecutiveOverview() {
 
         <div className="grid xl:grid-cols-[1.15fr_1fr] gap-5">
           <section>
-            <SectionTitle title={fr ? "Meilleures opportunités" : "Top opportunities"} />
+            <SectionTitle title={t("dash.topOpportunities")} />
             <Card className="overflow-hidden elevated">
               <div className="grid grid-cols-[1fr_auto_auto] gap-3 px-4 py-2.5 bg-muted/35 text-[10px] uppercase tracking-widest text-muted-foreground">
-                <span>{fr ? "Affaire" : "Deal"}</span>
-                <span>{fr ? "Confiance" : "Confidence"}</span>
-                <span>Score</span>
+                <span>{t("common.deal")}</span>
+                <span>{t("dash.confidence")}</span>
+                <span>{t("dash.score")}</span>
               </div>
               {opportunities.map((deal) => {
                 const tone =
@@ -242,24 +229,16 @@ function ExecutiveOverview() {
                   </Link>
                 );
               })}
-              {!opportunities.length && (
-                <Empty
-                  text={
-                    fr
-                      ? "Les opportunités apparaîtront après la souscription."
-                      : "Opportunities will rank after underwriting is complete."
-                  }
-                />
-              )}
+              {!opportunities.length && <Empty text={t("dash.opportunitiesRank")} />}
             </Card>
           </section>
 
           <section>
             <SectionTitle
-              title={fr ? "Aperçus prioritaires" : "Priority insights"}
+              title={t("dash.priorityInsights")}
               action={
                 <Link to="/portfolio" className="text-xs text-primary">
-                  {fr ? "Portefeuille" : "Portfolio"}
+                  {t("nav.portfolio")}
                 </Link>
               }
             />

@@ -6,6 +6,7 @@ import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { DealSelector } from "@/components/deal-selector";
 import { CommitteePanel } from "@/components/committee-panel";
+import { usePreferences } from "@/lib/preferences";
 
 const projectsQ = queryOptions({ queryKey: ["projects"], queryFn: () => listProjects() });
 
@@ -20,6 +21,7 @@ export const Route = createFileRoute("/_authenticated/committee")({
 
 function CommitteePage() {
   const { deal } = Route.useSearch();
+  const { t } = usePreferences();
   const { data: projects } = useSuspenseQuery(projectsQ);
   const [dealId, setDealId] = useState<string | null>(null);
   useEffect(() => {
@@ -31,14 +33,14 @@ function CommitteePage() {
   return (
     <>
       <PageHeader
-        eyebrow="Decision"
-        title="Investment Committee"
-        subtitle="Recommendation, conditions, and the recorded decision: with a permanent audit trail."
+        eyebrow={t("page.committee.eyebrow")}
+        title={t("nav.committee")}
+        subtitle={t("page.committee.subtitle")}
       />
       <PageBody>
         {projects.length === 0 ? (
           <Card className="p-16 text-center elevated">
-            <p className="text-sm text-muted-foreground">No deals to bring to committee yet.</p>
+            <p className="text-sm text-muted-foreground">{t("committee.empty")}</p>
           </Card>
         ) : (
           <>
