@@ -139,10 +139,13 @@ const SENSITIVE_GUARDS: Record<string, Guard> = {
     // all-in rate. A mezzanine/subordinate label is denied so a junior-tranche
     // rate never lands on the senior interest rate (it re-picks to mezz_interest_rate).
     need: /interest rate|loan rate|all-in rate|rate lock|financing rate|coupon|note rate/,
-    deny: /exit cap|terminal cap|cap rate|debt yield|expense ratio/,
-    // Hint-only: a "Mezzanine loan amount" line near a senior "Interest rate" must
-    // not deny the senior rate; only "Interest rate (mezzanine)" should.
-    denyHint: /mezzanine|\bmezz\b|subordinate|refinanc|\brefi\b|takeout|permanent loan/,
+    // ALL contamination terms are hint-only. A neighbouring "Exit cap rate" /
+    // "Mezzanine loan" line (rate and cap sit side by side on every term sheet)
+    // must not deny a value whose OWN label is "Interest rate" via context bleed;
+    // a value genuinely labelled "cap rate" maps to exit_cap_rate by its longer
+    // alias and never becomes interest_rate's pick in the first place.
+    denyHint:
+      /exit cap|terminal cap|cap rate|debt yield|expense ratio|mezzanine|\bmezz\b|subordinate|refinanc|\brefi\b|takeout|permanent loan/,
     min: 1,
     max: 20,
   },
