@@ -17,7 +17,14 @@ export function roundMoney(value: number): number {
 export function splitCents(totalCents: number, shares: number[]): number[] {
   const total = Math.round(totalCents);
   if (!shares.length || total === 0) return shares.map(() => 0);
-  const raw = shares.map((share) => total * share);
+  // Treat shares as weights and normalize so the parts always sum to EXACTLY
+  // `total` (the largest-remainder pass below only distributes rounding dust, so
+  // un-normalized shares would otherwise fabricate or drop money). A caller
+  // passing complementary shares that already sum to 1 (e.g. the waterfall) is
+  // unaffected.
+  const shareSum = shares.reduce((sum, s) => sum + s, 0);
+  const norm = shareSum > 0 ? shares.map((s) => s / shareSum) : shares.map(() => 1 / shares.length);
+  const raw = norm.map((share) => total * share);
   const floors = raw.map((value) => Math.trunc(value));
   let remainder = total - floors.reduce((sum, value) => sum + value, 0);
   const order = raw

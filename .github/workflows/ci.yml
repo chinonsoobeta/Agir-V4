@@ -90,3 +90,38 @@ jobs:
       - run: npm run migrate
       - run: npm run migrate:dry-run
       - run: npm run test:rls
+
+  ephemeral-db-smoke:
+    name: Ephemeral DB migration + RLS smoke
+    runs-on: ubuntu-latest
+    # A GitHub Actions service container is created fresh for every job run, so
+    # each push/PR gets a brand-new, disposable Postgres. The smoke script
+    # bootstraps the Supabase-compatible auth/storage schema, applies all
+    # migrations against the empty DB, and runs the live RLS suite -- proving a
+    # clean-room deploy from zero (not just an incremental migration on an
+    # already-migrated DB). The DB name contains "test" to satisfy the
+    # destructive-RLS guard in src/test/rls/assert-test-db.mjs.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: agir_ephemeral_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agir_ephemeral_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      EPHEMERAL_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agir_ephemeral_test
+      PGSSLMODE: disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run smoke:ephemeral-db
