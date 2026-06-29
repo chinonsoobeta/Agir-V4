@@ -308,6 +308,7 @@ export type Database = {
           seq: number | null;
           user_id: string;
           user_name: string | null;
+          workspace_id: string | null;
         };
         Insert: {
           action: string;
@@ -323,6 +324,7 @@ export type Database = {
           seq?: number | null;
           user_id: string;
           user_name?: string | null;
+          workspace_id?: string | null;
         };
         Update: {
           action?: string;
@@ -338,6 +340,7 @@ export type Database = {
           seq?: number | null;
           user_id?: string;
           user_name?: string | null;
+          workspace_id?: string | null;
         };
         Relationships: [
           {
@@ -345,6 +348,13 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "audit_logs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },
         ];
@@ -424,6 +434,62 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "counterparty_templates_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      data_governance_requests: {
+        Row: {
+          completed_at: string | null;
+          created_at: string;
+          due_at: string;
+          evidence_url: string | null;
+          id: string;
+          metadata: Json;
+          reason: string | null;
+          request_type: string;
+          requester_id: string;
+          status: string;
+          subject: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          completed_at?: string | null;
+          created_at?: string;
+          due_at?: string;
+          evidence_url?: string | null;
+          id?: string;
+          metadata?: Json;
+          reason?: string | null;
+          request_type: string;
+          requester_id: string;
+          status?: string;
+          subject: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          completed_at?: string | null;
+          created_at?: string;
+          due_at?: string;
+          evidence_url?: string | null;
+          id?: string;
+          metadata?: Json;
+          reason?: string | null;
+          request_type?: string;
+          requester_id?: string;
+          status?: string;
+          subject?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "data_governance_requests_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -2155,27 +2221,75 @@ export type Database = {
         Row: {
           allowed_email_domains: string[];
           approval_threshold: number | null;
+          audit_log_retention_days: number;
+          backup_rpo_hours: number;
+          backup_rto_hours: number;
           created_at: string;
+          data_residency_region: string | null;
           data_retention_days: number;
+          dpa_status: string;
+          incident_severity_policy: string;
+          last_dr_test_at: string | null;
+          last_pen_test_at: string | null;
+          on_call_rotation_url: string | null;
           require_two_person_approval: boolean;
+          scim_enabled: boolean;
+          soc2_observation_started_at: string | null;
+          sso_enforced: boolean;
+          sso_metadata_url: string | null;
+          sso_provider: string | null;
+          status_page_url: string | null;
+          tenant_encryption_mode: string;
           updated_at: string;
           workspace_id: string;
         };
         Insert: {
           allowed_email_domains?: string[];
           approval_threshold?: number | null;
+          audit_log_retention_days?: number;
+          backup_rpo_hours?: number;
+          backup_rto_hours?: number;
           created_at?: string;
+          data_residency_region?: string | null;
           data_retention_days?: number;
+          dpa_status?: string;
+          incident_severity_policy?: string;
+          last_dr_test_at?: string | null;
+          last_pen_test_at?: string | null;
+          on_call_rotation_url?: string | null;
           require_two_person_approval?: boolean;
+          scim_enabled?: boolean;
+          soc2_observation_started_at?: string | null;
+          sso_enforced?: boolean;
+          sso_metadata_url?: string | null;
+          sso_provider?: string | null;
+          status_page_url?: string | null;
+          tenant_encryption_mode?: string;
           updated_at?: string;
           workspace_id: string;
         };
         Update: {
           allowed_email_domains?: string[];
           approval_threshold?: number | null;
+          audit_log_retention_days?: number;
+          backup_rpo_hours?: number;
+          backup_rto_hours?: number;
           created_at?: string;
+          data_residency_region?: string | null;
           data_retention_days?: number;
+          dpa_status?: string;
+          incident_severity_policy?: string;
+          last_dr_test_at?: string | null;
+          last_pen_test_at?: string | null;
+          on_call_rotation_url?: string | null;
           require_two_person_approval?: boolean;
+          scim_enabled?: boolean;
+          soc2_observation_started_at?: string | null;
+          sso_enforced?: boolean;
+          sso_metadata_url?: string | null;
+          sso_provider?: string | null;
+          status_page_url?: string | null;
+          tenant_encryption_mode?: string;
           updated_at?: string;
           workspace_id?: string;
         };

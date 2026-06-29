@@ -6,7 +6,7 @@ const read = (path: string) => readFileSync(`${root}/${path}`, "utf8");
 
 describe("enterprise compliance contract", () => {
   test("migration adds governed request tracking and workspace audit scope", () => {
-    const sql = read("supabase/migrations/20260629000200_enterprise_compliance_controls.sql");
+    const sql = read("supabase/migrations/20260629000700_enterprise_compliance_controls.sql");
 
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS public.data_governance_requests");
     expect(sql).toContain("ALTER TABLE public.audit_logs");
