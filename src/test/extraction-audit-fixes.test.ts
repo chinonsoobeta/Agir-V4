@@ -48,6 +48,28 @@ describe("candidate extractor", () => {
   });
 });
 
+describe("bare compact-suffix money vs item references", () => {
+  test("'250M' / '162.5M' next to money labels are extracted as currency", () => {
+    expect(kinds("Total development cost: 250M")).toContain("currency:250000000");
+    expect(kinds("Senior debt amount: 162.5M")).toContain("currency:162500000");
+  });
+
+  test("an enumerator like 'Phase 2b' / 'Exhibit 4k' is NOT read as a money magnitude", () => {
+    // A money word ("budget"/"cost") elsewhere on the line must not promote the
+    // section reference to a dollar figure.
+    expect(kinds("Phase 2b construction budget is on schedule.")).not.toContain(
+      "currency:2000000000",
+    );
+    expect(kinds("Refer to Exhibit 4k of the cost report.")).not.toContain("currency:4000");
+    expect(kinds("Building 3b cost overruns noted.")).not.toContain("currency:3000000000");
+  });
+
+  test("'12 km' and '18 months' are never money", () => {
+    const ks = kinds("The trail is 12 km away; schedule is 18 months.");
+    expect(ks.some((k) => k.startsWith("currency:"))).toBe(false);
+  });
+});
+
 describe("scaled non-money quantities (millions/thousands of SF or units)", () => {
   test("'5 million square feet' is extracted as 5,000,000 SF, not $5M", () => {
     const ks = kinds("Rentable area of 5 million square feet");

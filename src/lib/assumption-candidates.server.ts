@@ -36,6 +36,14 @@ export type Candidate = {
 const MONEY_LABEL_RE =
   /\b(cost|costs|loan|equity|rent|value|proceeds|budget|tdc|tpc|noi|revenue|financing|contingency|acquisition|debt|price|amount|reserve|capital|fee|fees|income|contribution|hard|soft)\b/i;
 
+// Enumerator / reference words that immediately precede a bare alphanumeric
+// token ("Phase 2b", "Exhibit 4k", "Line 7m"): the number is an item reference,
+// not a money magnitude. Used to reject a bare scaled-money match whose number
+// is actually a section/figure label even though a money word appears elsewhere
+// on the line. Matched against the trailing text of the left-of-value label.
+const ENUMERATOR_TRAILING_RE =
+  /\b(?:phase|section|building|bldg|line|exhibit|item|lot|floor|figure|fig|table|appendix|schedule|step|option|round|unit|note|tier|block|parcel|page|article|clause|chart|diagram|wing|level|suite|ste|room|grade|tab|column|col|row|footnote|attachment|annex|addendum|amendment|rev|version|sheet)\.?\s*$/i;
+
 function scaleMultiplier(suffix?: string): number {
   if (!suffix) return 1;
   const s = suffix.toLowerCase();
@@ -328,8 +336,12 @@ export function extractCandidates(docName: string, text: string): Candidate[] {
       // Bare scaled money requires a money label nearby; otherwise drop it.
       if ((parsed as any).__needsMoneyLabel) {
         delete (parsed as any).__needsMoneyLabel;
-        const hint = `${labelHint(text, idx)} ${contextAround(text, idx, m[0].length, 40)}`;
+        const left = labelHint(text, idx);
+        const hint = `${left} ${contextAround(text, idx, m[0].length, 40)}`;
         if (!MONEY_LABEL_RE.test(hint)) continue;
+        // "Phase 2b", "Exhibit 4k": the number is an item reference, not a
+        // magnitude, even when a money word appears elsewhere on the line.
+        if (ENUMERATOR_TRAILING_RE.test(left)) continue;
       }
       claims.claim(idx, end);
       const value_text = parsed.value_text || m[0].trim();
