@@ -325,7 +325,7 @@ export function PageHeader({
 }) {
   return (
     <header className="border-b border-border bg-card/40 backdrop-blur sticky top-0 z-10">
-      <div className="px-8 py-5 flex items-center justify-between gap-4">
+      <div className="px-5 sm:px-8 py-5 flex items-center justify-between gap-4">
         <div className="min-w-0">
           {eyebrow && (
             <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-semibold mb-1.5">
@@ -339,4 +339,19 @@ export function PageHeader({
       </div>
     </header>
   );
+}
+
+/**
+ * Standard page content wrapper. Owns the horizontal gutters and vertical
+ * rhythm so every route lines up with the PageHeader above it. Pass a
+ * className to override spacing for special layouts (e.g. flex + gap).
+ */
+export function PageBody({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <div className={cn("px-5 sm:px-8 py-6 space-y-6", className)}>{children}</div>;
 }

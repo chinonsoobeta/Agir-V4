@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { listPortfolio, type DealSummary } from "@/lib/portfolio.functions";
 import { createProject, deleteProject, updateProject } from "@/lib/projects.functions";
 import { seedHarbourCentre } from "@/lib/demo.functions";
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -209,7 +209,7 @@ function DealsPage() {
           </>
         }
       />
-      <div className="p-8 space-y-5">
+      <PageBody>
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
             <FilterChip
@@ -390,7 +390,7 @@ function DealsPage() {
             onToggleAll={toggleAll}
           />
         )}
-      </div>
+      </PageBody>
     </>
   );
 }

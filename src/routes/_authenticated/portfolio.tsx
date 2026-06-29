@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import { listPortfolio, type DealSummary } from "@/lib/portfolio.functions";
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { fmtCompact } from "@/lib/finance";
@@ -69,7 +69,7 @@ function PortfolioPage() {
             </Link>
           }
         />
-        <div className="p-8">
+        <PageBody>
           <Card className="p-16 text-center elevated">
             <p className="text-sm text-muted-foreground">
               No deals yet. Open{" "}
@@ -79,7 +79,7 @@ function PortfolioPage() {
               and seed the Harbour Centre demo to see the platform in action.
             </p>
           </Card>
-        </div>
+        </PageBody>
       </>
     );
   }
@@ -100,7 +100,7 @@ function PortfolioPage() {
         }
       />
 
-      <div className="p-8 space-y-8">
+      <PageBody>
         {/* Overview band */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
           <Kpi label="Active Deals" value={String(active.length)} />
@@ -258,7 +258,7 @@ function PortfolioPage() {
             )}
           </Card>
         </section>
-      </div>
+      </PageBody>
     </>
   );
 }

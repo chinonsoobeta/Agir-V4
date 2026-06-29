@@ -1,4 +1,11 @@
 import { Card } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export function DealSelector({
   projects,
@@ -14,17 +21,18 @@ export function DealSelector({
       <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold pl-1">
         Deal
       </span>
-      <select
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-        className="bg-background border border-border rounded-md px-3 py-1.5 text-sm min-w-[260px]"
-      >
-        {projects.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-      </select>
+      <Select value={value ?? ""} onValueChange={onChange}>
+        <SelectTrigger className="w-full sm:w-auto sm:min-w-[260px]">
+          <SelectValue placeholder="Select a deal" />
+        </SelectTrigger>
+        <SelectContent>
+          {projects.map((p) => (
+            <SelectItem key={p.id} value={p.id}>
+              {p.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </Card>
   );
 }

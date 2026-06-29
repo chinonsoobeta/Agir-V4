@@ -7,6 +7,13 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Send, Bot, User as UserIcon, Sparkles } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -91,21 +98,25 @@ function ChatUI({
             : "Decision-aware analyst across your portfolio"
         }
         actions={
-          <select
-            value={focused?.id ?? ""}
-            onChange={(e) => setDealId(e.target.value || null)}
-            className="bg-background border border-border rounded-md px-3 py-1.5 text-sm"
+          <Select
+            value={focused?.id ?? "__all__"}
+            onValueChange={(v) => setDealId(v === "__all__" ? null : v)}
           >
-            <option value="">Whole portfolio</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="w-full sm:w-[220px]">
+              <SelectValue placeholder="Whole portfolio" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Whole portfolio</SelectItem>
+              {projects.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         }
       />
-      <div className="px-8 py-6 flex flex-col h-[calc(100vh-89px)]">
+      <div className="px-5 sm:px-8 py-6 flex flex-col h-[calc(100dvh-5.5rem)]">
         <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 pr-2">
           {messages.length === 0 && (
             <Card className="p-8 text-center elevated">

@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -181,7 +181,7 @@ function IntegrationsPage() {
         title="Integrations"
         subtitle="See what is connected, when it last synced, and whether it needs attention."
       />
-      <div className="p-5 md:p-8 space-y-6">
+      <PageBody>
         <Card className="p-5 elevated bg-primary/[0.04]">
           <div className="flex items-start gap-3">
             <Plug className="size-5 text-primary mt-0.5" />
@@ -389,7 +389,7 @@ function IntegrationsPage() {
             </div>
           </Card>
         </div>
-      </div>
+      </PageBody>
       <Dialog open={webhookOpen} onOpenChange={setWebhookOpen}>
         <DialogContent>
           <DialogHeader>

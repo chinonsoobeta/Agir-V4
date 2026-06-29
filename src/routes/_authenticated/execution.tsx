@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,7 +102,7 @@ function ExecutionPage() {
           </>
         }
       />
-      <div className="p-5 md:p-8 space-y-6">
+      <PageBody>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <Stat
             icon={CalendarCheck}
@@ -163,7 +163,7 @@ function ExecutionPage() {
             </div>
           </Card>
         )}
-      </div>
+      </PageBody>
     </>
   );
 }

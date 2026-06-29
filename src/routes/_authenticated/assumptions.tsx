@@ -5,7 +5,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { listAssumptionsAcrossProjects } from "@/lib/assumptions.functions";
 import { listProjects } from "@/lib/projects.functions";
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
@@ -57,7 +57,7 @@ function AssumptionsReviewCenter() {
         title="Assumption Review Center"
         subtitle={`${stats.total} assumptions across ${projects.length} projects · ${stats.approved} approved · ${stats.pending} in queue`}
       />
-      <div className="p-6 space-y-4">
+      <PageBody>
         <div className="flex gap-2 flex-wrap">
           {[
             ["queue", `Review queue (${queue.length})`],
@@ -135,7 +135,7 @@ function AssumptionsReviewCenter() {
             </table>
           </Card>
         )}
-      </div>
+      </PageBody>
     </>
   );
 }

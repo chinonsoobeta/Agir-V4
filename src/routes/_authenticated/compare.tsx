@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { queryOptions, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Download, GitCompareArrows, ExternalLink, Check } from "lucide-react";
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -73,7 +73,7 @@ function ComparePage() {
           ) : null
         }
       />
-      <div className="p-5 md:p-6 space-y-5">
+      <PageBody>
         {/* Deal picker */}
         <Card className="p-4">
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2">
@@ -116,7 +116,7 @@ function ComparePage() {
             <FindingsGrid deals={compared} />
           </>
         )}
-      </div>
+      </PageBody>
     </>
   );
 }

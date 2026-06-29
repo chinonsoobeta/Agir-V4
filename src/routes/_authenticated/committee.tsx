@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import { listProjects } from "@/lib/projects.functions";
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { DealSelector } from "@/components/deal-selector";
 import { CommitteePanel } from "@/components/committee-panel";
@@ -35,7 +35,7 @@ function CommitteePage() {
         title="Investment Committee"
         subtitle="Recommendation, conditions, and the recorded decision: with a permanent audit trail."
       />
-      <div className="p-8 space-y-5">
+      <PageBody>
         {projects.length === 0 ? (
           <Card className="p-16 text-center elevated">
             <p className="text-sm text-muted-foreground">No deals to bring to committee yet.</p>
@@ -46,7 +46,7 @@ function CommitteePage() {
             {dealId && <CommitteePanel key={dealId} projectId={dealId} />}
           </>
         )}
-      </div>
+      </PageBody>
     </>
   );
 }

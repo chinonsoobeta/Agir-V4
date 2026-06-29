@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { listPortfolio, type DealSummary } from "@/lib/portfolio.functions";
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -82,7 +82,7 @@ function ExecutiveOverview() {
           </Link>
         }
       />
-      <div className="p-5 md:p-8 space-y-7">
+      <PageBody>
         <OnboardingChecklist />
         <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-success">
           <Radio className="size-3" />
@@ -283,7 +283,7 @@ function ExecutiveOverview() {
             </div>
           </section>
         </div>
-      </div>
+      </PageBody>
     </>
   );
 }

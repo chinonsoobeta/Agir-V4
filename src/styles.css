@@ -228,8 +228,8 @@
 
 .landing-grid {
   background-image:
-    linear-gradient(rgb(30 39 80 / 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(30 39 80 / 0.05) 1px, transparent 1px);
+    linear-gradient(rgb(13 36 54 / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(13 36 54 / 0.05) 1px, transparent 1px);
   background-size: 48px 48px;
   mask-image: linear-gradient(to bottom, black 20%, transparent 88%);
 }

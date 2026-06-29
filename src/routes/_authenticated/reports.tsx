@@ -13,7 +13,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -96,7 +96,7 @@ function ReportsPage() {
         title={t("page.reports.title")}
         subtitle={t("page.reports.subtitle")}
       />
-      <div className="p-5 md:p-6 space-y-8">
+      <PageBody>
         {/* Portfolio analytics: aggregate, filterable, exportable */}
         <section className="space-y-3">
           <div>
@@ -126,7 +126,7 @@ function ReportsPage() {
             </>
           )}
         </section>
-      </div>
+      </PageBody>
     </>
   );
 }

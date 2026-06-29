@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,7 +92,7 @@ function RelationshipsPage() {
           </Dialog>
         }
       />
-      <div className="p-5 md:p-8 space-y-5">
+      <PageBody>
         <div className="grid sm:grid-cols-3 gap-3">
           <Stat label="Relationships" value={contacts.length} icon={Users} />
           <Stat
@@ -131,7 +131,7 @@ function RelationshipsPage() {
             </p>
           </Card>
         )}
-      </div>
+      </PageBody>
     </>
   );
 }

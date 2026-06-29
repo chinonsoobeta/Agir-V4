@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { queryOptions, useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,7 +65,7 @@ function MarketsPage() {
           </Dialog>
         }
       />
-      <div className="p-5 md:p-8 space-y-5">
+      <PageBody>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-success">
             <Radar className="size-3" />
@@ -100,7 +100,7 @@ function MarketsPage() {
             </p>
           </Card>
         )}
-      </div>
+      </PageBody>
     </>
   );
 }

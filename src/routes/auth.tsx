@@ -82,22 +82,22 @@ function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-[1.05fr_0.95fr] bg-[#f7f7f2] text-[#10241e]">
-      <div className="hidden lg:flex flex-col justify-between p-12 xl:p-16 border-r border-[#173d31]/10 bg-[#112e26] text-white">
+    <div className="min-h-screen grid lg:grid-cols-[1.05fr_0.95fr] bg-[#f9fafc] text-[#0d2436]">
+      <div className="hidden lg:flex flex-col justify-between p-12 xl:p-16 border-r border-[#183046]/10 bg-[#0d2436] text-white">
         <Link to="/" className="flex items-center gap-3 w-fit">
-          <div className="size-9 rounded-lg bg-[#d9f35e] text-[#173d31] flex items-center justify-center font-semibold">
+          <div className="size-9 rounded-lg bg-[#00628e] text-white flex items-center justify-center font-semibold">
             A
           </div>
           <div className="text-xl font-semibold tracking-[-0.03em]">Agir</div>
         </Link>
         <div className="max-w-xl">
-          <div className="text-xs uppercase tracking-[0.2em] text-[#8ed2b6] font-semibold">
+          <div className="text-xs uppercase tracking-[0.2em] text-[#8ec5e0] font-semibold">
             One record from source to close
           </div>
           <h2 className="mt-5 text-4xl xl:text-5xl font-semibold leading-tight tracking-[-0.05em]">
             Your team should know what to do next.
           </h2>
-          <p className="mt-6 text-lg leading-8 text-[#bed0c9] max-w-lg">
+          <p className="mt-6 text-lg leading-8 text-[#b6c6d6] max-w-lg">
             Open the pipeline, review the evidence, make the decision, and keep the closing work
             moving.
           </p>
@@ -107,8 +107,8 @@ function AuthPage() {
               "Every decision has a clear rationale and audit trail",
               "Deadlines, blockers, and owners remain visible",
             ].map((item) => (
-              <div key={item} className="flex items-center gap-3 text-sm text-[#dce7e2]">
-                <span className="flex size-6 items-center justify-center rounded-full bg-white/10 text-[#d9f35e]">
+              <div key={item} className="flex items-center gap-3 text-sm text-[#cdd9e4]">
+                <span className="flex size-6 items-center justify-center rounded-full bg-white/10 text-[#8ec5e0]">
                   <Check className="size-3.5" />
                 </span>
                 {item}
@@ -116,7 +116,7 @@ function AuthPage() {
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-[#8fa9a0]">
+        <div className="flex items-center gap-2 text-xs text-[#8294a4]">
           <ShieldCheck className="size-4" />
           Deterministic underwriting with source-level traceability
         </div>
@@ -125,22 +125,22 @@ function AuthPage() {
       <div className="flex min-h-screen flex-col p-5 sm:p-8">
         <Link
           to="/"
-          className="inline-flex w-fit items-center gap-2 text-sm text-[#48645b] hover:text-[#0b6b4b]"
+          className="inline-flex w-fit items-center gap-2 text-sm text-[#5b6b7a] hover:text-[#00628e]"
         >
           <ArrowLeft className="size-4" />
           Back to Agir
         </Link>
         <div className="flex flex-1 items-center justify-center py-8">
-          <Card className="w-full max-w-md border-[#173d31]/10 bg-white p-7 shadow-[0_25px_70px_-44px_rgba(16,36,30,0.55)] sm:p-9">
+          <Card className="w-full max-w-md border-[#183046]/10 bg-white p-7 shadow-[0_25px_70px_-44px_rgba(16,36,30,0.55)] sm:p-9">
             <div className="mb-6">
               <div className="lg:hidden flex items-center gap-2 mb-7">
-                <div className="size-8 rounded-lg bg-[#0b6b4b] text-white flex items-center justify-center font-semibold">
+                <div className="size-8 rounded-lg bg-[#00628e] text-white flex items-center justify-center font-semibold">
                   A
                 </div>
                 <div className="text-lg font-semibold">Agir</div>
               </div>
               <h1 className="text-2xl font-semibold tracking-[-0.03em]">Welcome back</h1>
-              <p className="text-sm text-[#657a72] mt-2">
+              <p className="text-sm text-[#6b7785] mt-2">
                 Sign in to open your investment workspace.
               </p>
             </div>
@@ -148,7 +148,7 @@ function AuthPage() {
             <Button
               onClick={handleGoogle}
               variant="outline"
-              className="w-full mb-4 border-[#173d31]/15"
+              className="w-full mb-4 border-[#183046]/15"
             >
               <svg className="size-4 mr-2" viewBox="0 0 24 24">
                 <path
@@ -175,10 +175,10 @@ function AuthPage() {
             </Button>
             <div className="relative my-4">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-[#173d31]/10" />
+                <div className="w-full border-t border-[#183046]/10" />
               </div>
               <div className="relative flex justify-center text-[10px] uppercase tracking-widest">
-                <span className="bg-white px-2 text-[#789087]">or</span>
+                <span className="bg-white px-2 text-[#7f8b97]">or</span>
               </div>
             </div>
 

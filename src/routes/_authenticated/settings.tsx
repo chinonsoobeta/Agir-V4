@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,7 +92,7 @@ function SettingsPage() {
   return (
     <>
       <PageHeader title={t("settings.title")} subtitle={t("settings.subtitle")} />
-      <div className="p-5 md:p-6 flex flex-col lg:flex-row gap-6 max-w-5xl">
+      <PageBody className="!space-y-0 flex flex-col lg:flex-row gap-6 max-w-5xl">
         {/* Section nav */}
         <nav className="lg:w-56 shrink-0 flex lg:flex-col gap-1 overflow-x-auto lg:overflow-visible pb-1">
           {SECTIONS.map((s) => {
@@ -127,7 +127,7 @@ function SettingsPage() {
           {active === "data" && <DataSection />}
           {active === "about" && <AboutSection />}
         </div>
-      </div>
+      </PageBody>
     </>
   );
 }

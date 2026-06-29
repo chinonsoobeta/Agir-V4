@@ -9,7 +9,7 @@ import {
 } from "@/lib/documents.functions";
 import { listProjects } from "@/lib/projects.functions";
 import { listAssumptionsAcrossProjects } from "@/lib/assumptions.functions";
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -109,7 +109,7 @@ function DocumentsPage() {
         title="Documents"
         subtitle={`${docs.length} documents · ${totalContribued} assumptions extracted`}
       />
-      <div className="p-8 space-y-5">
+      <PageBody>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Cov label="Documents" value={String(docs.length)} />
           <Cov label="Analysed" value={`${analysed} / ${docs.length}`} />
@@ -269,7 +269,7 @@ function DocumentsPage() {
             ))}
           </div>
         )}
-      </div>
+      </PageBody>
     </>
   );
 }
