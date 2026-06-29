@@ -39,6 +39,13 @@ import {
 } from "@/lib/workspaces.functions";
 import { getWorkspaceGovernance, saveWorkspaceGovernance } from "@/lib/operating-depth.functions";
 import {
+  createDataGovernanceRequest,
+  exportWorkspaceAuditLog,
+  getWorkspaceCompliance,
+  listDataGovernanceRequests,
+  saveWorkspaceCompliance,
+} from "@/lib/compliance.functions";
+import {
   User,
   Lock,
   Palette,
@@ -55,10 +62,13 @@ import {
   Save,
   Mail,
   Copy,
+  Download,
   Trash2,
   UserPlus,
   Building2,
   Landmark,
+  KeyRound,
+  ServerCog,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -798,6 +808,141 @@ function TeamSection() {
 // ---- Data & privacy ----
 function DataSection() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { activeWorkspace } = useWorkspace();
+  const workspaceId = activeWorkspace?.personal ? null : activeWorkspace?.id;
+  const canManage = activeWorkspace?.role === "owner" || activeWorkspace?.role === "admin";
+  const complianceQuery = useQuery({
+    queryKey: ["workspace-compliance", workspaceId],
+    queryFn: () => getWorkspaceCompliance({ data: { workspace_id: workspaceId! } }),
+    enabled: Boolean(workspaceId),
+  });
+  const requestsQuery = useQuery({
+    queryKey: ["data-governance-requests", workspaceId],
+    queryFn: () => listDataGovernanceRequests({ data: { workspace_id: workspaceId! } }),
+    enabled: Boolean(workspaceId),
+  });
+  const saveComplianceFn = useServerFn(saveWorkspaceCompliance);
+  const auditExportFn = useServerFn(exportWorkspaceAuditLog);
+  const requestFn = useServerFn(createDataGovernanceRequest);
+  const settings = complianceQuery.data?.settings;
+  const [form, setForm] = useState({
+    sso_provider: "",
+    sso_metadata_url: "",
+    sso_enforced: false,
+    scim_enabled: false,
+    data_residency_region: "",
+    dpa_status: "not_started",
+    tenant_encryption_mode: "platform_managed",
+    audit_log_retention_days: "2555",
+    backup_rto_hours: "24",
+    backup_rpo_hours: "24",
+    incident_severity_policy: "docs/ops/incident-response.md",
+    on_call_rotation_url: "",
+    status_page_url: "",
+    soc2_observation_started_at: "",
+    last_pen_test_at: "",
+    last_dr_test_at: "",
+  });
+  const [requestType, setRequestType] = useState("data_export");
+  const [requestSubject, setRequestSubject] = useState("");
+  const [requestReason, setRequestReason] = useState("");
+
+  useEffect(() => {
+    if (!settings) return;
+    setForm({
+      sso_provider: settings.sso_provider ?? "",
+      sso_metadata_url: settings.sso_metadata_url ?? "",
+      sso_enforced: Boolean(settings.sso_enforced),
+      scim_enabled: Boolean(settings.scim_enabled),
+      data_residency_region: settings.data_residency_region ?? "",
+      dpa_status: settings.dpa_status,
+      tenant_encryption_mode: settings.tenant_encryption_mode,
+      audit_log_retention_days: String(settings.audit_log_retention_days),
+      backup_rto_hours: String(settings.backup_rto_hours),
+      backup_rpo_hours: String(settings.backup_rpo_hours),
+      incident_severity_policy: settings.incident_severity_policy,
+      on_call_rotation_url: settings.on_call_rotation_url ?? "",
+      status_page_url: settings.status_page_url ?? "",
+      soc2_observation_started_at: settings.soc2_observation_started_at?.slice(0, 10) ?? "",
+      last_pen_test_at: settings.last_pen_test_at?.slice(0, 10) ?? "",
+      last_dr_test_at: settings.last_dr_test_at?.slice(0, 10) ?? "",
+    });
+  }, [settings]);
+
+  const saveCompliance = useMutation({
+    mutationFn: () =>
+      saveComplianceFn({
+        data: {
+          workspace_id: workspaceId!,
+          sso_provider: form.sso_provider || null,
+          sso_metadata_url: form.sso_metadata_url || null,
+          sso_enforced: form.sso_enforced,
+          scim_enabled: form.scim_enabled,
+          data_residency_region: form.data_residency_region || null,
+          dpa_status: form.dpa_status as "not_started" | "in_review" | "approved",
+          tenant_encryption_mode: form.tenant_encryption_mode as
+            | "platform_managed"
+            | "per_tenant"
+            | "customer_managed",
+          audit_log_retention_days: Number(form.audit_log_retention_days),
+          backup_rto_hours: Number(form.backup_rto_hours),
+          backup_rpo_hours: Number(form.backup_rpo_hours),
+          incident_severity_policy: form.incident_severity_policy,
+          on_call_rotation_url: form.on_call_rotation_url || null,
+          status_page_url: form.status_page_url || null,
+          soc2_observation_started_at: form.soc2_observation_started_at || null,
+          last_pen_test_at: form.last_pen_test_at || null,
+          last_dr_test_at: form.last_dr_test_at || null,
+        },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["workspace-compliance", workspaceId] });
+      toast.success("Compliance controls saved");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const downloadAudit = useMutation({
+    mutationFn: () => auditExportFn({ data: { workspace_id: workspaceId!, limit: 5000 } }),
+    onSuccess: (result) => {
+      const blob = new Blob([result.csv], { type: result.contentType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${result.rowCount} audit rows`);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const createRequest = useMutation({
+    mutationFn: () =>
+      requestFn({
+        data: {
+          workspace_id: workspaceId!,
+          request_type: requestType as
+            | "data_export"
+            | "deletion"
+            | "retention_exception"
+            | "dpa_review"
+            | "audit_export"
+            | "residency_review",
+          subject: requestSubject,
+          reason: requestReason || null,
+        },
+      }),
+    onSuccess: () => {
+      setRequestSubject("");
+      setRequestReason("");
+      qc.invalidateQueries({ queryKey: ["data-governance-requests", workspaceId] });
+      toast.success("Data request logged");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   return (
     <>
       <SectionCard title="Determinism & provenance" description="How Agir handles your numbers.">
@@ -840,6 +985,296 @@ function DataSection() {
           Excel exports use real numeric cells (no screenshots). Audit trails are exportable per
           deal from the deal timeline.
         </p>
+      </SectionCard>
+      <SectionCard
+        title="Enterprise trust controls"
+        description="Workspace controls for security review, procurement, and customer audits."
+      >
+        {!workspaceId ? (
+          <p className="text-sm text-muted-foreground">
+            Select a shared workspace to manage enterprise controls.
+          </p>
+        ) : (
+          <div className="space-y-5">
+            <div className="grid gap-2 sm:grid-cols-3">
+              {(["implemented", "ready_for_vendor", "external_required"] as const).map((key) => (
+                <div key={key} className="rounded-md border p-3">
+                  <div className="text-xs text-muted-foreground capitalize">
+                    {key.replaceAll("_", " ")}
+                  </div>
+                  <div className="text-xl font-semibold num">
+                    {complianceQuery.data?.summary[key] ?? 0}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <Label>SSO provider</Label>
+                <Input
+                  disabled={!canManage}
+                  value={form.sso_provider}
+                  onChange={(event) => setForm({ ...form, sso_provider: event.target.value })}
+                  placeholder="Okta, Azure AD"
+                />
+              </div>
+              <div>
+                <Label>SAML metadata URL</Label>
+                <Input
+                  disabled={!canManage}
+                  value={form.sso_metadata_url}
+                  onChange={(event) => setForm({ ...form, sso_metadata_url: event.target.value })}
+                  placeholder="https://idp.example.com/metadata"
+                />
+              </div>
+              <div>
+                <Label>DPA status</Label>
+                <Select
+                  value={form.dpa_status}
+                  disabled={!canManage}
+                  onValueChange={(value) => setForm({ ...form, dpa_status: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="not_started">Not started</SelectItem>
+                    <SelectItem value="in_review">In review</SelectItem>
+                    <SelectItem value="approved">Approved</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Encryption mode</Label>
+                <Select
+                  value={form.tenant_encryption_mode}
+                  disabled={!canManage}
+                  onValueChange={(value) => setForm({ ...form, tenant_encryption_mode: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="platform_managed">Platform managed</SelectItem>
+                    <SelectItem value="per_tenant">Per tenant</SelectItem>
+                    <SelectItem value="customer_managed">Customer managed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Data residency region</Label>
+                <Input
+                  disabled={!canManage}
+                  value={form.data_residency_region}
+                  onChange={(event) =>
+                    setForm({ ...form, data_residency_region: event.target.value })
+                  }
+                  placeholder="US, Canada, EU"
+                />
+              </div>
+              <div>
+                <Label>Audit retention, days</Label>
+                <Input
+                  type="number"
+                  min="365"
+                  disabled={!canManage}
+                  value={form.audit_log_retention_days}
+                  onChange={(event) =>
+                    setForm({ ...form, audit_log_retention_days: event.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <Label>RTO, hours</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="168"
+                  disabled={!canManage}
+                  value={form.backup_rto_hours}
+                  onChange={(event) => setForm({ ...form, backup_rto_hours: event.target.value })}
+                />
+              </div>
+              <div>
+                <Label>RPO, hours</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="168"
+                  disabled={!canManage}
+                  value={form.backup_rpo_hours}
+                  onChange={(event) => setForm({ ...form, backup_rpo_hours: event.target.value })}
+                />
+              </div>
+              <div>
+                <Label>On-call rotation URL</Label>
+                <Input
+                  disabled={!canManage}
+                  value={form.on_call_rotation_url}
+                  onChange={(event) =>
+                    setForm({ ...form, on_call_rotation_url: event.target.value })
+                  }
+                  placeholder="https://pager.example.com/schedule"
+                />
+              </div>
+              <div>
+                <Label>Status page URL</Label>
+                <Input
+                  disabled={!canManage}
+                  value={form.status_page_url}
+                  onChange={(event) => setForm({ ...form, status_page_url: event.target.value })}
+                  placeholder="https://status.example.com"
+                />
+              </div>
+              <div>
+                <Label>SOC 2 observation start</Label>
+                <Input
+                  type="date"
+                  disabled={!canManage}
+                  value={form.soc2_observation_started_at}
+                  onChange={(event) =>
+                    setForm({ ...form, soc2_observation_started_at: event.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <Label>Last penetration test</Label>
+                <Input
+                  type="date"
+                  disabled={!canManage}
+                  value={form.last_pen_test_at}
+                  onChange={(event) => setForm({ ...form, last_pen_test_at: event.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Last DR test</Label>
+                <Input
+                  type="date"
+                  disabled={!canManage}
+                  value={form.last_dr_test_at}
+                  onChange={(event) => setForm({ ...form, last_dr_test_at: event.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Incident policy path</Label>
+                <Input
+                  disabled={!canManage}
+                  value={form.incident_severity_policy}
+                  onChange={(event) =>
+                    setForm({ ...form, incident_severity_policy: event.target.value })
+                  }
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 rounded-md border p-3">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <KeyRound className="size-4 text-muted-foreground" />
+                <span className="text-sm">Enforce SSO</span>
+              </div>
+              <Switch
+                disabled={!canManage}
+                checked={form.sso_enforced}
+                onCheckedChange={(value) => setForm({ ...form, sso_enforced: value })}
+              />
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <ServerCog className="size-4 text-muted-foreground" />
+                <span className="text-sm">SCIM provisioning</span>
+              </div>
+              <Switch
+                disabled={!canManage}
+                checked={form.scim_enabled}
+                onCheckedChange={(value) => setForm({ ...form, scim_enabled: value })}
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {canManage && (
+                <Button onClick={() => saveCompliance.mutate()} disabled={saveCompliance.isPending}>
+                  <Save className="size-4 mr-1.5" />
+                  Save controls
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                onClick={() => downloadAudit.mutate()}
+                disabled={!canManage || downloadAudit.isPending}
+              >
+                <Download className="size-4 mr-1.5" />
+                Export audit log
+              </Button>
+            </div>
+            <Separator />
+            <div className="space-y-2">
+              {(complianceQuery.data?.controls ?? []).map((control) => (
+                <div key={control.id} className="flex items-center gap-2 text-sm">
+                  <Badge
+                    variant={control.status === "implemented" ? "default" : "secondary"}
+                    className="w-32 justify-center"
+                  >
+                    {control.status.replaceAll("_", " ")}
+                  </Badge>
+                  <span className="font-medium">{control.title}</span>
+                  {control.externalDependency && (
+                    <span className="text-xs text-muted-foreground truncate">
+                      {control.externalDependency}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </SectionCard>
+      <SectionCard
+        title="Data governance requests"
+        description="Track exports, deletion requests, DPA review, retention exceptions, and residency review."
+      >
+        {!workspaceId ? (
+          <p className="text-sm text-muted-foreground">Shared workspace required.</p>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid gap-2 md:grid-cols-[12rem_1fr]">
+              <Select value={requestType} onValueChange={setRequestType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="data_export">Data export</SelectItem>
+                  <SelectItem value="deletion">Deletion</SelectItem>
+                  <SelectItem value="retention_exception">Retention exception</SelectItem>
+                  <SelectItem value="dpa_review">DPA review</SelectItem>
+                  <SelectItem value="audit_export">Audit export</SelectItem>
+                  <SelectItem value="residency_review">Residency review</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                value={requestSubject}
+                onChange={(event) => setRequestSubject(event.target.value)}
+                placeholder="Customer, workspace, deal, or data subject"
+              />
+            </div>
+            <Input
+              value={requestReason}
+              onChange={(event) => setRequestReason(event.target.value)}
+              placeholder="Reason or ticket reference"
+            />
+            <Button
+              variant="outline"
+              onClick={() => createRequest.mutate()}
+              disabled={!requestSubject.trim() || createRequest.isPending}
+            >
+              Log request
+            </Button>
+            <div className="space-y-2">
+              {(requestsQuery.data ?? []).slice(0, 6).map((request: any) => (
+                <div key={request.id} className="flex items-center gap-2 text-sm">
+                  <Badge variant="secondary">{request.status}</Badge>
+                  <span className="capitalize">{request.request_type.replaceAll("_", " ")}</span>
+                  <span className="text-muted-foreground truncate">{request.subject}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </SectionCard>
     </>
   );
