@@ -83,7 +83,7 @@
   --input: oklch(0.92 0.008 250);
   --ring: oklch(0.47 0.105 238);
   --chart-1: oklch(0.47 0.105 238);
-  --chart-2: oklch(0.55 0.12 250);
+  --chart-2: oklch(0.58 0.1 205); /* teal: return-to-underwriting, kept clear of primary */
   --chart-3: oklch(0.53 0.13 158);
   --chart-4: oklch(0.53 0.12 300);
   --chart-5: oklch(0.67 0.14 72);
@@ -131,7 +131,7 @@
   --ring: oklch(0.74 0.075 235);
 
   --chart-1: oklch(0.74 0.075 235); /* steel blue */
-  --chart-2: oklch(0.66 0.1 245); /* blue: return-to-underwriting */
+  --chart-2: oklch(0.72 0.09 203); /* teal: return-to-underwriting, kept clear of primary */
   --chart-3: oklch(0.7 0.14 158); /* green */
   --chart-4: oklch(0.62 0.1 300); /* muted violet */
   --chart-5: oklch(0.8 0.13 78); /* amber */

@@ -27,11 +27,11 @@ export const Route = createFileRoute("/_authenticated/assumptions")({
 });
 
 const STATUS_STYLES: Record<string, string> = {
-  approved: "bg-success/20 text-success border-success/30",
-  modified: "bg-primary/20 text-primary border-primary/30",
-  pending: "bg-chart-5/20 text-chart-5 border-chart-5/30",
-  needs_review: "bg-chart-2/20 text-chart-2 border-chart-2/30",
-  rejected: "bg-destructive/20 text-destructive border-destructive/30",
+  approved: "bg-success/15 text-success border-success/30",
+  modified: "bg-primary/15 text-primary border-primary/30",
+  pending: "bg-warning/15 text-warning border-warning/30",
+  needs_review: "bg-chart-2/15 text-chart-2 border-chart-2/30",
+  rejected: "bg-destructive/15 text-destructive border-destructive/30",
   missing: "bg-muted text-muted-foreground border-border",
 };
 

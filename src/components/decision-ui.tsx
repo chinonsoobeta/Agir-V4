@@ -136,9 +136,13 @@ export function ScoreDial({
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <div className="num text-3xl font-semibold leading-none">
-            {value == null ? "Not available" : Math.round(value)}
+            {value == null ? <span className="text-muted-foreground">&ndash;</span> : Math.round(value)}
           </div>
-          {value != null && <div className="text-[10px] text-muted-foreground mt-0.5">/ 100</div>}
+          {value != null ? (
+            <div className="text-[10px] text-muted-foreground mt-0.5">/ 100</div>
+          ) : (
+            <div className="text-[10px] text-muted-foreground mt-0.5">Not run yet</div>
+          )}
         </div>
       </div>
       <div className="mt-3 text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">

@@ -106,10 +106,10 @@ const SCENARIO_ORDER = [
 ];
 const SEV_STYLES: Record<string, string> = {
   info: "bg-muted text-muted-foreground border-border",
-  warning: "bg-chart-5/20 text-chart-5 border-chart-5/30",
-  yellow: "bg-chart-5/20 text-chart-5 border-chart-5/30",
-  error: "bg-destructive/20 text-destructive border-destructive/30",
-  red: "bg-destructive/20 text-destructive border-destructive/30",
+  warning: "bg-warning/15 text-warning border-warning/30",
+  yellow: "bg-warning/15 text-warning border-warning/30",
+  error: "bg-destructive/15 text-destructive border-destructive/30",
+  red: "bg-destructive/15 text-destructive border-destructive/30",
   critical: "bg-destructive text-destructive-foreground border-destructive",
 };
 
@@ -697,7 +697,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                   key={r.id}
                   className="flex items-start gap-3 p-3 rounded border border-border bg-muted/10"
                 >
-                  <Icon className="size-4 mt-0.5 text-chart-5 shrink-0" />
+                  <Icon className="size-4 mt-0.5 text-warning shrink-0" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{r.title}</span>
@@ -758,7 +758,7 @@ function bandClass(band: string): string {
     return "text-primary border-primary/40 bg-primary/5";
   if (band === "weak" || band === "critical")
     return "text-destructive border-destructive/40 bg-destructive/5";
-  if (band === "soft") return "text-chart-5 border-chart-5/40 bg-chart-5/5";
+  if (band === "soft") return "text-warning border-warning/40 bg-warning/5";
   return "text-muted-foreground border-border";
 }
 
@@ -1006,7 +1006,7 @@ export function ICPanel({ projectId }: { projectId: string }) {
                 <p className="mt-2 text-sm whitespace-pre-wrap">{d.rationale}</p>
                 {d.conditions && (
                   <div className="mt-2 text-xs text-muted-foreground">
-                    <span className="font-semibold uppercase tracking-widest text-chart-5">
+                    <span className="font-semibold uppercase tracking-widest text-warning">
                       Conditions:{" "}
                     </span>
                     <span className="whitespace-pre-wrap">{d.conditions}</span>
@@ -1105,7 +1105,7 @@ export function MemoSection({ projectId }: { projectId: string }) {
 
       {/* Preconditions */}
       {!debug.can_generate && (
-        <div className="flex items-start gap-2 text-xs text-chart-5 bg-chart-5/5 border border-chart-5/20 rounded p-3">
+        <div className="flex items-start gap-2 text-xs text-warning bg-warning/5 border border-warning/20 rounded p-3">
           <AlertTriangle className="size-4 shrink-0 mt-0.5" />
           <div>
             <div className="font-semibold uppercase tracking-widest">Cannot generate memo yet</div>
@@ -1155,7 +1155,7 @@ export function MemoSection({ projectId }: { projectId: string }) {
 
       {/* needs_review warning */}
       {needsReview && (
-        <div className="flex items-start gap-2 text-xs text-chart-5 bg-chart-5/5 border border-chart-5/20 rounded p-3">
+        <div className="flex items-start gap-2 text-xs text-warning bg-warning/5 border border-warning/20 rounded p-3">
           <AlertTriangle className="size-4 shrink-0 mt-0.5" />
           <span>
             Memo generated but <strong>requires review</strong> because some numeric tokens lacked
@@ -1318,7 +1318,7 @@ function MemoReportView({ report }: { report: any }) {
       )}
 
       <div
-        className={`rounded px-3 py-2 text-sm font-semibold ${isReject ? "bg-destructive text-destructive-foreground" : report.verdict_code === "APPROVE" ? "bg-success text-success-foreground" : "bg-chart-5 text-warning-foreground"}`}
+        className={`rounded px-3 py-2 text-sm font-semibold ${isReject ? "bg-destructive text-destructive-foreground" : report.verdict_code === "APPROVE" ? "bg-success text-success-foreground" : "bg-warning text-warning-foreground"}`}
       >
         {report.verdict_banner}
       </div>

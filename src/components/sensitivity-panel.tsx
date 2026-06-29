@@ -15,6 +15,13 @@ import {
   type UnderwritingInput,
 } from "@/lib/engine";
 import { Card } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { SectionLabel, Eyebrow } from "@/components/decision-ui";
 import { Activity } from "lucide-react";
 
@@ -109,6 +116,7 @@ export function SensitivityPanel({ input }: { input: UnderwritingInput }) {
   };
 
   const selectCls = "rounded border border-border bg-background px-2 py-1 text-xs";
+  const triggerCls = "h-8 w-auto gap-1 text-xs";
 
   return (
     <section className="space-y-4">
@@ -119,17 +127,18 @@ export function SensitivityPanel({ input }: { input: UnderwritingInput }) {
         </div>
         <div className="flex items-center gap-2">
           <label className="text-[11px] text-muted-foreground">Metric</label>
-          <select
-            className={selectCls}
-            value={metricKey}
-            onChange={(e) => onMetric(e.target.value)}
-          >
-            {SENSITIVITY_METRICS.map((m) => (
-              <option key={m.key} value={m.key}>
-                {m.label}
-              </option>
-            ))}
-          </select>
+          <Select value={metricKey} onValueChange={onMetric}>
+            <SelectTrigger className={triggerCls}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SENSITIVITY_METRICS.map((m) => (
+                <SelectItem key={m.key} value={m.key}>
+                  {m.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <span className="text-[11px] text-muted-foreground">base</span>
           <span className="num text-sm">{fmtMetric(baseMetric, metric.unit)}</span>
         </div>
@@ -141,17 +150,18 @@ export function SensitivityPanel({ input }: { input: UnderwritingInput }) {
           <SectionLabel>Tornado · {metric.label} sensitivity</SectionLabel>
           <div className="flex items-center gap-2">
             <label className="text-[11px] text-muted-foreground">Flex</label>
-            <select
-              className={selectCls}
-              value={delta}
-              onChange={(e) => setDelta(Number(e.target.value))}
-            >
-              {[5, 10, 20].map((d) => (
-                <option key={d} value={d}>
-                  +/- {d}%
-                </option>
-              ))}
-            </select>
+            <Select value={String(delta)} onValueChange={(v) => setDelta(Number(v))}>
+              <SelectTrigger className={triggerCls}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[5, 10, 20].map((d) => (
+                  <SelectItem key={d} value={String(d)}>
+                    +/- {d}%
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <div className="mt-4 space-y-1.5">
@@ -195,13 +205,18 @@ export function SensitivityPanel({ input }: { input: UnderwritingInput }) {
           <SectionLabel>Breakeven solver</SectionLabel>
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
             <span className="text-muted-foreground">Solve</span>
-            <select className={selectCls} value={beVar} onChange={(e) => setBeVar(e.target.value)}>
-              {SENSITIVITY_VARS.map((v) => (
-                <option key={v.key} value={v.key}>
-                  {v.label}
-                </option>
-              ))}
-            </select>
+            <Select value={beVar} onValueChange={setBeVar}>
+              <SelectTrigger className={triggerCls}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SENSITIVITY_VARS.map((v) => (
+                  <SelectItem key={v.key} value={v.key}>
+                    {v.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <span className="text-muted-foreground">so {metric.label} =</span>
             <input
               type="number"
@@ -234,21 +249,31 @@ export function SensitivityPanel({ input }: { input: UnderwritingInput }) {
           <div className="flex items-center justify-between">
             <SectionLabel>Scenario grid</SectionLabel>
             <div className="flex items-center gap-1.5 text-[11px]">
-              <select className={selectCls} value={xVar} onChange={(e) => setXVar(e.target.value)}>
-                {SENSITIVITY_VARS.map((v) => (
-                  <option key={v.key} value={v.key}>
-                    {v.label}
-                  </option>
-                ))}
-              </select>
+              <Select value={xVar} onValueChange={setXVar}>
+                <SelectTrigger className={triggerCls}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SENSITIVITY_VARS.map((v) => (
+                    <SelectItem key={v.key} value={v.key}>
+                      {v.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <span className="text-muted-foreground">x</span>
-              <select className={selectCls} value={yVar} onChange={(e) => setYVar(e.target.value)}>
-                {SENSITIVITY_VARS.filter((v) => v.key !== xVar).map((v) => (
-                  <option key={v.key} value={v.key}>
-                    {v.label}
-                  </option>
-                ))}
-              </select>
+              <Select value={yVar} onValueChange={setYVar}>
+                <SelectTrigger className={triggerCls}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SENSITIVITY_VARS.filter((v) => v.key !== xVar).map((v) => (
+                    <SelectItem key={v.key} value={v.key}>
+                      {v.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="mt-3 overflow-x-auto">

@@ -26,6 +26,17 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Plus,
   Trash2,
   Sparkles,
@@ -90,6 +101,8 @@ function DealsPage() {
   const [sort, setSort] = useState<DealSort>("updated");
   const [columns, setColumns] = useState<DealColumnKey[]>(DEFAULT_COLUMNS);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [saveViewOpen, setSaveViewOpen] = useState(false);
+  const [viewName, setViewName] = useState("");
   const qc = useQueryClient();
   const navigate = useNavigate();
   const createFn = useServerFn(createProject);
@@ -156,10 +169,12 @@ function DealsPage() {
     setSelected(new Set());
   }
   function saveCurrentView() {
-    const name = window.prompt("Name this view");
-    if (!name?.trim()) return;
-    save(name.trim(), { filter, search, sort, view, columns });
-    toast.success(`Saved view "${name.trim()}"`);
+    const name = viewName.trim();
+    if (!name) return;
+    save(name, { filter, search, sort, view, columns });
+    toast.success(`Saved view "${name}"`);
+    setViewName("");
+    setSaveViewOpen(false);
   }
   function resetView() {
     applyView({
@@ -321,7 +336,14 @@ function DealsPage() {
                   </div>
                 ))}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={saveCurrentView}>Save current view…</DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setSaveViewOpen(true);
+                  }}
+                >
+                  Save current view…
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={resetView}>Reset to default</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -391,6 +413,47 @@ function DealsPage() {
           />
         )}
       </PageBody>
+
+      <Dialog open={saveViewOpen} onOpenChange={setSaveViewOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Save current view</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveCurrentView();
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="view-name">View name</Label>
+              <Input
+                id="view-name"
+                autoFocus
+                value={viewName}
+                onChange={(e) => setViewName(e.target.value)}
+                placeholder="e.g. Office deals, near close"
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setViewName("");
+                  setSaveViewOpen(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!viewName.trim()}>
+                Save view
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -457,16 +520,35 @@ function DealCard({ d }: { d: DealSummary }) {
             {d.location || "Not available"} · <span>{assetTypeLabel(d.type)}</span>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-          onClick={() => {
-            if (confirm(`Delete ${d.name}?`)) del.mutate(d.id);
-          }}
-        >
-          <Trash2 className="size-3.5" />
-        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+              aria-label={`Delete ${d.name}`}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {d.name}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This removes the deal and its underwriting from your pipeline. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep deal</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => del.mutate(d.id)}
+              >
+                Delete deal
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -493,7 +575,7 @@ function DealCard({ d }: { d: DealSummary }) {
           </div>
           <div className="h-8 flex items-center gap-1.5 text-xs">
             <CalendarClock className="size-3.5 text-muted-foreground" />
-            {d.targetCloseDate ?? "Not set"}
+            {d.targetCloseDate ?? "Not available"}
           </div>
         </div>
       </div>

@@ -45,18 +45,18 @@ const readinessQ = (pid: string) =>
   });
 
 const STATUS_STYLES: Record<string, string> = {
-  approved: "bg-success/20 text-success border-success/30",
-  modified: "bg-primary/20 text-primary border-primary/30",
-  pending: "bg-chart-5/20 text-chart-5 border-chart-5/30",
-  needs_review: "bg-chart-2/20 text-chart-2 border-chart-2/30",
-  rejected: "bg-destructive/20 text-destructive border-destructive/30",
+  approved: "bg-success/15 text-success border-success/30",
+  modified: "bg-primary/15 text-primary border-primary/30",
+  pending: "bg-warning/15 text-warning border-warning/30",
+  needs_review: "bg-chart-2/15 text-chart-2 border-chart-2/30",
+  rejected: "bg-destructive/15 text-destructive border-destructive/30",
   missing: "bg-muted text-muted-foreground border-border",
-  extracted: "bg-chart-1/20 text-chart-1 border-chart-1/30",
-  conflicting: "bg-destructive/20 text-destructive border-destructive/30",
+  extracted: "bg-chart-1/15 text-chart-1 border-chart-1/30",
+  conflicting: "bg-destructive/15 text-destructive border-destructive/30",
 };
 const BAND_STYLES: Record<string, string> = {
   high: "text-success",
-  medium: "text-chart-5",
+  medium: "text-warning",
   low: "text-destructive",
   missing: "text-muted-foreground",
 };
@@ -284,7 +284,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
           <Field label="Missing">{confidenceCounts.missing}</Field>
         </div>
         {readiness.missing_required.length > 0 && (
-          <div className="mt-4 flex items-start gap-2 text-xs text-chart-5 bg-chart-5/5 border border-chart-5/20 rounded p-3">
+          <div className="mt-4 flex items-start gap-2 text-xs text-warning bg-warning/5 border border-warning/20 rounded p-3">
             <AlertCircle className="size-4 shrink-0 mt-0.5" />
             <div>
               <div className="font-semibold uppercase tracking-widest">
@@ -640,7 +640,7 @@ function ExtractionReportCard({ report, onClose }: { report: any; onClose: () =>
             <strong className="font-mono">{report.stage2_classified}</strong> · Stage 3 inferred{" "}
             <strong className="font-mono">{report.stage3_inferred_via_alias}</strong> via alias
           </div>
-          {report.ai_note && <div className="text-[11px] text-chart-5 mt-1">{report.ai_note}</div>}
+          {report.ai_note && <div className="text-[11px] text-warning mt-1">{report.ai_note}</div>}
         </div>
         <Button variant="ghost" size="sm" onClick={onClose}>
           Dismiss
@@ -664,7 +664,7 @@ function ExtractionReportCard({ report, onClose }: { report: any; onClose: () =>
       )}
       {report.missing_required?.length > 0 && (
         <div className="mt-2 text-xs">
-          <span className="font-semibold text-chart-5 uppercase tracking-widest">
+          <span className="font-semibold text-warning uppercase tracking-widest">
             Missing required:
           </span>{" "}
           <span className="text-muted-foreground">{report.missing_required.join(" · ")}</span>
@@ -696,10 +696,10 @@ function ExtractionDebugCard({ debug }: { debug: any }) {
       {/* Auto-extraction is a checkable first pass, not gospel: flag anything
           recovered via OCR (low confidence) for human verification. */}
       {needsVerification.length > 0 && (
-        <div className="mt-3 flex items-start gap-2 rounded border border-chart-5/30 bg-chart-5/10 p-3 text-xs">
-          <AlertCircle className="size-4 shrink-0 mt-0.5 text-chart-5" />
+        <div className="mt-3 flex items-start gap-2 rounded border border-warning/30 bg-warning/10 p-3 text-xs">
+          <AlertCircle className="size-4 shrink-0 mt-0.5 text-warning" />
           <div>
-            <span className="font-semibold uppercase tracking-widest text-chart-5">
+            <span className="font-semibold uppercase tracking-widest text-warning">
               Verify before approving:
             </span>{" "}
             <span className="text-muted-foreground">
@@ -746,12 +746,12 @@ function ExtractionDebugCard({ debug }: { debug: any }) {
             {perDoc.map((d: any) => (
               <tr
                 key={d.document_id}
-                className={`align-top hover:bg-accent/30 ${d.needs_verification ? "bg-chart-5/10" : ""}`}
+                className={`align-top hover:bg-accent/30 ${d.needs_verification ? "bg-warning/10" : ""}`}
               >
                 <td className="font-medium">
                   {d.name}
                   {d.needs_verification && (
-                    <span className="ml-1 text-chart-5" title="Recovered via OCR: verify">
+                    <span className="ml-1 text-warning" title="Recovered via OCR: verify">
                       !
                     </span>
                   )}
@@ -783,7 +783,7 @@ function ExtractionDebugCard({ debug }: { debug: any }) {
       </div>
 
       {debug.warnings?.length > 0 && (
-        <div className="mt-3 text-xs text-chart-5">
+        <div className="mt-3 text-xs text-warning">
           <span className="font-semibold uppercase tracking-widest">Warnings:</span>{" "}
           <span className="text-muted-foreground">{debug.warnings.join(" · ")}</span>
         </div>

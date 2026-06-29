@@ -18,6 +18,13 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { listProjects } from "@/lib/projects.functions";
 import { getReportReadiness, generateReport } from "@/lib/reports.functions";
 import {
@@ -60,16 +67,16 @@ const STATUS_LABEL: Record<string, string> = {
   ready: "Ready",
   needs_underwriting: "Needs underwriting",
   needs_memo: "Needs memo",
-  has_unresolved_errors: "Ready (has errors)",
-  missing_project: "No project",
+  has_unresolved_errors: "Has unresolved errors",
+  missing_project: "No project selected",
   missing_required_data: "Missing data",
 };
 const STATUS_STYLE: Record<string, string> = {
-  ready: "bg-success/20 text-success border-success/30",
-  has_unresolved_errors: "bg-chart-5/20 text-chart-5 border-chart-5/30",
-  needs_underwriting: "bg-destructive/20 text-destructive border-destructive/30",
-  needs_memo: "bg-chart-5/20 text-chart-5 border-chart-5/30",
-  missing_required_data: "bg-destructive/20 text-destructive border-destructive/30",
+  ready: "bg-success/15 text-success border-success/30",
+  has_unresolved_errors: "bg-warning/15 text-warning border-warning/30",
+  needs_underwriting: "bg-destructive/15 text-destructive border-destructive/30",
+  needs_memo: "bg-warning/15 text-warning border-warning/30",
+  missing_required_data: "bg-destructive/15 text-destructive border-destructive/30",
   missing_project: "bg-muted text-muted-foreground border-border",
 };
 
@@ -145,17 +152,18 @@ function ProjectSelector({
       <label className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
         Project
       </label>
-      <select
-        value={projectId ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-        className="bg-background border border-border rounded px-3 py-1.5 text-sm min-w-[220px]"
-      >
-        {projects.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-      </select>
+      <Select value={projectId ?? undefined} onValueChange={onChange}>
+        <SelectTrigger className="min-w-[220px]">
+          <SelectValue placeholder="Select a project" />
+        </SelectTrigger>
+        <SelectContent>
+          {projects.map((p) => (
+            <SelectItem key={p.id} value={p.id}>
+              {p.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       {projectId && <ProjectStatusLine projectId={projectId} />}
     </Card>
   );
@@ -184,7 +192,7 @@ function ProjectStatusLine({ projectId }: { projectId: string }) {
         {c.reconciliation_errors} errors
       </span>
       {" / "}
-      <span className={c.reconciliation_warnings > 0 ? "text-chart-5" : ""}>
+      <span className={c.reconciliation_warnings > 0 ? "text-warning" : ""}>
         {c.reconciliation_warnings} warnings
       </span>
     </div>
@@ -321,7 +329,7 @@ function ReportCard({
         </div>
       )}
       {warnings.length > 0 && (
-        <div className="text-xs text-chart-5 bg-chart-5/5 border border-chart-5/20 rounded p-2 flex items-start gap-1.5">
+        <div className="text-xs text-warning bg-warning/5 border border-warning/20 rounded p-2 flex items-start gap-1.5">
           <AlertTriangle className="size-3.5 mt-0.5 shrink-0" />
           <div>
             {warnings.map((w) => (
@@ -388,13 +396,13 @@ function ReportPreview({
             {report.subtitle} · {report.prepared}
           </div>
           {verification && !verification.pass && (
-            <div className="text-xs text-chart-5 bg-chart-5/5 border border-chart-5/20 rounded p-2">
+            <div className="text-xs text-warning bg-warning/5 border border-warning/20 rounded p-2">
               Needs review: {verification.orphans?.length ?? 0} numeric token(s) lacked provenance.
             </div>
           )}
           {report.verdict_banner && (
             <div
-              className={`rounded px-3 py-2 text-sm font-semibold ${isReject ? "bg-destructive text-destructive-foreground" : report.verdict_code === "APPROVE" ? "bg-success text-success-foreground" : "bg-chart-5 text-warning-foreground"}`}
+              className={`rounded px-3 py-2 text-sm font-semibold ${isReject ? "bg-destructive text-destructive-foreground" : report.verdict_code === "APPROVE" ? "bg-success text-success-foreground" : "bg-warning text-warning-foreground"}`}
             >
               {report.verdict_banner}
             </div>

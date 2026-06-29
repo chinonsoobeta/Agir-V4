@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -345,29 +346,67 @@ function useMilestoneUpdate(item: any) {
 
 function MilestoneStatusSelect({ item }: { item: any }) {
   const mutation = useMilestoneUpdate(item);
+  const [blockOpen, setBlockOpen] = useState(false);
+  const [reason, setReason] = useState<string>(item.notes ?? "");
+
   function onChange(value: string) {
     if (value === "blocked") {
-      const reason = window.prompt("What is blocking this milestone?", item.notes ?? "");
-      if (reason === null) return; // cancelled
-      mutation.mutate({ status: "blocked", notes: reason || null });
+      setReason(item.notes ?? "");
+      setBlockOpen(true); // capture a reason before flagging
     } else if (item.status === "blocked") {
       mutation.mutate({ status: value, notes: null }); // unblock clears the reason
     } else {
       mutation.mutate({ status: value });
     }
   }
+
   return (
-    <Select value={item.status} onValueChange={onChange}>
-      <SelectTrigger className="h-8 w-36 text-xs" disabled={mutation.isPending}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="not_started">Not started</SelectItem>
-        <SelectItem value="in_progress">In progress</SelectItem>
-        <SelectItem value="blocked">Blocked</SelectItem>
-        <SelectItem value="complete">Complete</SelectItem>
-      </SelectContent>
-    </Select>
+    <>
+      <Select value={item.status} onValueChange={onChange}>
+        <SelectTrigger className="h-8 w-36 text-xs" disabled={mutation.isPending}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="not_started">Not started</SelectItem>
+          <SelectItem value="in_progress">In progress</SelectItem>
+          <SelectItem value="blocked">Blocked</SelectItem>
+          <SelectItem value="complete">Complete</SelectItem>
+        </SelectContent>
+      </Select>
+      <Dialog open={blockOpen} onOpenChange={setBlockOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark milestone as blocked</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              mutation.mutate({ status: "blocked", notes: reason.trim() || null });
+              setBlockOpen(false);
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor={`block-reason-${item.id}`}>What is blocking this milestone?</Label>
+              <Textarea
+                id={`block-reason-${item.id}`}
+                autoFocus
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="e.g. Waiting on lender term sheet"
+                rows={3}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => setBlockOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Mark blocked</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -383,7 +422,10 @@ function MilestoneRow({ item }: { item: any }) {
         <div className="font-medium">{item.title}</div>
         <div className="text-[11px] text-muted-foreground capitalize">{item.category}</div>
         {item.status === "blocked" && item.notes && (
-          <div className="text-[11px] text-destructive mt-0.5">⛔ {item.notes}</div>
+          <div className="text-[11px] text-destructive mt-0.5 flex items-start gap-1">
+            <Ban className="size-3 mt-0.5 shrink-0" />
+            <span>{item.notes}</span>
+          </div>
         )}
       </td>
       <td>
@@ -436,7 +478,10 @@ function MilestoneCard({ item }: { item: any }) {
         <MilestoneStatusSelect item={item} />
       </div>
       {item.status === "blocked" && item.notes && (
-        <div className="text-[11px] text-destructive mt-2">⛔ {item.notes}</div>
+        <div className="text-[11px] text-destructive mt-2 flex items-start gap-1">
+          <Ban className="size-3 mt-0.5 shrink-0" />
+          <span>{item.notes}</span>
+        </div>
       )}
     </Card>
   );
