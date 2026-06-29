@@ -91,6 +91,29 @@ const CATALOG = [
   },
 ] as const;
 
+function setupRequirements(provider: string) {
+  switch (provider) {
+    case "salesforce":
+      return [
+        "Connected app client ID and secret",
+        "OAuth callback URL approved in Salesforce",
+        "Opportunity, account, contact and owner field mapping",
+      ];
+    case "dealcloud":
+      return ["API base URL", "Service account token", "Deal, company and contact field mapping"];
+    case "snowflake":
+      return ["Account locator", "Warehouse/database/schema", "Read-only role and key-pair auth"];
+    case "microsoft-365":
+      return [
+        "Azure app registration",
+        "Graph scopes for SharePoint/OneDrive files",
+        "Target document library and workbook mapping",
+      ];
+    default:
+      return ["API credentials", "Field mapping", "Sync ownership and retry policy"];
+  }
+}
+
 export const Route = createFileRoute("/_authenticated/integrations")({
   head: () => ({ meta: [{ title: "Integrations | Agir" }] }),
   loader: ({ context }) => context.queryClient.ensureQueryData(integrationsQ),
@@ -116,6 +139,7 @@ function IntegrationsPage() {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [webhookOpen, setWebhookOpen] = useState(false);
+  const [setupApp, setSetupApp] = useState<(typeof CATALOG)[number] | null>(null);
   const [webhook, setWebhook] = useState({
     name: "",
     endpoint_url: "",
@@ -127,6 +151,26 @@ function IntegrationsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["integrations"] });
       toast.success("Integration updated");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const setupRequest = useMutation({
+    mutationFn: () =>
+      setupApp
+        ? fn({
+            data: {
+              provider: setupApp.provider,
+              category: setupApp.category,
+              display_name: setupApp.name,
+              status: "attention",
+              workspace_id: workspaceId,
+            },
+          })
+        : Promise.reject(new Error("Choose an integration first.")),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["integrations"] });
+      setSetupApp(null);
+      toast.success("Integration setup request saved");
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -259,6 +303,7 @@ function IntegrationsPage() {
           {CATALOG.map((app) => {
             const connection: any = byProvider.get(app.provider);
             const connected = connection?.status === "connected";
+            const pending = connection?.status === "attention";
             const Icon = app.icon;
             return (
               <Card key={app.provider} className="p-5 flex flex-col elevated">
@@ -271,11 +316,13 @@ function IntegrationsPage() {
                     className={
                       connected
                         ? "text-success border-success/30 bg-success/5"
-                        : "text-muted-foreground"
+                        : pending
+                          ? "text-warning border-warning/30 bg-warning/5"
+                          : "text-muted-foreground"
                     }
                   >
                     {connected ? <Check className="size-3 mr-1" /> : null}
-                    {connected ? "Connected" : "Not connected"}
+                    {connected ? "Connected" : pending ? "Setup pending" : "Not connected"}
                   </Badge>
                 </div>
                 <div className="font-semibold mt-4">{app.name}</div>
@@ -294,21 +341,29 @@ function IntegrationsPage() {
                     size="sm"
                     variant={connected ? "outline" : "default"}
                     disabled={mutation.isPending}
-                    onClick={() =>
-                      mutation.mutate({
-                        provider: app.provider,
-                        category: app.category,
-                        display_name: app.name,
-                        status: connected ? "disconnected" : "connected",
-                      })
-                    }
+                    onClick={() => {
+                      if (app.provider === "webhooks") {
+                        setWebhookOpen(true);
+                        return;
+                      }
+                      if (connected || pending) {
+                        mutation.mutate({
+                          provider: app.provider,
+                          category: app.category,
+                          display_name: app.name,
+                          status: "disconnected",
+                        });
+                        return;
+                      }
+                      setSetupApp(app);
+                    }}
                   >
-                    {connected ? (
+                    {connected || pending ? (
                       <Unplug className="size-3.5 mr-1.5" />
                     ) : (
                       <Plug className="size-3.5 mr-1.5" />
                     )}
-                    {connected ? "Disconnect" : "Connect"}
+                    {connected ? "Disconnect" : pending ? "Clear setup" : "Start setup"}
                   </Button>
                   {connected && (
                     <Button
@@ -435,6 +490,38 @@ function IntegrationsPage() {
               onClick={() => createWebhook.mutate()}
             >
               Create endpoint
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={Boolean(setupApp)} onOpenChange={(open) => !open && setSetupApp(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{setupApp?.name} setup</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              This connector needs provider credentials and field mapping before it can run a real
+              sync. Marking setup requested keeps it visible without showing a false connected
+              state.
+            </p>
+            <div className="rounded-md border p-3">
+              <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Required before connection
+              </div>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                {setupRequirements(setupApp?.provider ?? "").map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSetupApp(null)}>
+              Cancel
+            </Button>
+            <Button disabled={setupRequest.isPending} onClick={() => setupRequest.mutate()}>
+              Mark setup requested
             </Button>
           </DialogFooter>
         </DialogContent>

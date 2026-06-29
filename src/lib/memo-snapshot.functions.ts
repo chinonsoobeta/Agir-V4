@@ -8,6 +8,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { isMissingRelation } from "./db-compat";
 
 const SNAPSHOT_ASSUMPTION_STATUSES = ["approved", "modified", "default_accepted", "calculated"];
 
@@ -72,13 +73,17 @@ export async function createMemoSnapshotInternal(
     .maybeSingle();
   const createdByName = prof?.full_name || prof?.email || "user";
 
-  const { data: last } = await ctx.supabase
+  const { data: last, error: lastError } = await ctx.supabase
     .from("memo_snapshots")
     .select("version")
     .eq("project_id", projectId)
     .order("version", { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (isMissingRelation(lastError)) {
+    throw new Error("Memo snapshots need the latest database migration.");
+  }
+  if (lastError) throw new Error(lastError.message);
   const version = (last?.version ?? 0) + 1;
 
   const { data: row, error } = await ctx.supabase
@@ -99,6 +104,9 @@ export async function createMemoSnapshotInternal(
     })
     .select()
     .single();
+  if (isMissingRelation(error)) {
+    throw new Error("Memo snapshots need the latest database migration.");
+  }
   if (error) throw new Error(error.message);
   return row;
 }
@@ -117,6 +125,7 @@ export const listMemoSnapshots = createServerFn({ method: "GET" })
       .select("id, version, verdict_code, content_hash, decision_id, created_at, created_by_name")
       .eq("project_id", data.project_id)
       .order("version", { ascending: false });
+    if (isMissingRelation(error)) return [];
     if (error) throw new Error(error.message);
     return rows ?? [];
   });
@@ -135,6 +144,19 @@ export const diffMemoSnapshot = createServerFn({ method: "GET" })
       .select("*")
       .eq("id", data.snapshot_id)
       .single();
+    if (isMissingRelation(error)) {
+      return {
+        snapshot_id: data.snapshot_id,
+        version: null,
+        locked_at: null,
+        content_hash: null,
+        current_hash: null,
+        drifted: false,
+        assumption_changes: [],
+        output_changes: [],
+        unavailable: "Memo snapshots need the latest database migration.",
+      };
+    }
     if (error) throw new Error(error.message);
 
     const current = await loadSnapshotInputs(context, snap.project_id);

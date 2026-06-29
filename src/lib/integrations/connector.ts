@@ -169,6 +169,8 @@ export const CONNECTOR_REGISTRY: ConnectorMeta[] = [
   { provider: "http_generic", label: "Generic HTTP / Webhook", category: "api", status: "planned" },
   { provider: "salesforce", label: "Salesforce", category: "crm", status: "planned" },
   { provider: "dealcloud", label: "DealCloud", category: "crm", status: "planned" },
+  { provider: "snowflake", label: "Snowflake", category: "data warehouse", status: "planned" },
+  { provider: "microsoft-365", label: "Microsoft 365", category: "documents", status: "planned" },
 ];
 
 export function getConnector(provider: string): Connector | null {

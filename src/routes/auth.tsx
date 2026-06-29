@@ -14,6 +14,9 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
+const authInputClass =
+  "bg-white text-black caret-black placeholder:text-[#6b7785] selection:bg-[#00628e]/20";
+
 function AuthPage() {
   const navigate = useNavigate();
   const router = useRouter();
@@ -196,6 +199,7 @@ function AuthPage() {
                     <Input
                       type="email"
                       required
+                      className={authInputClass}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                     />
@@ -205,6 +209,7 @@ function AuthPage() {
                     <Input
                       type="password"
                       required
+                      className={authInputClass}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                     />
@@ -220,6 +225,7 @@ function AuthPage() {
                     <Label>Full name</Label>
                     <Input
                       required
+                      className={authInputClass}
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                     />
@@ -229,6 +235,7 @@ function AuthPage() {
                     <Input
                       type="email"
                       required
+                      className={authInputClass}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                     />
@@ -239,6 +246,7 @@ function AuthPage() {
                       type="password"
                       required
                       minLength={6}
+                      className={authInputClass}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                     />
@@ -255,6 +263,7 @@ function AuthPage() {
                     <Input
                       type="email"
                       required
+                      className={authInputClass}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                     />

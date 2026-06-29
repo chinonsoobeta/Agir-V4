@@ -8,7 +8,9 @@ import {
   renderAuditExportCsv,
   type ComplianceControl,
 } from "./compliance";
+import { buildCustomerAuditArchive } from "./customer-audit-archive.server";
 import { buildCustomerAuditPackage } from "./customer-audit-package";
+import { buildComplianceEvidence } from "./compliance-evidence";
 
 type ComplianceSettings = {
   workspace_id: string;
@@ -109,6 +111,20 @@ function readinessFromSettings(settings: ComplianceSettings): ComplianceControl[
   });
 }
 
+function evidenceFromSettings(settings: ComplianceSettings) {
+  return buildComplianceEvidence({
+    ssoProvider: settings.sso_provider,
+    ssoMetadataUrl: settings.sso_metadata_url,
+    scimEnabled: settings.scim_enabled,
+    dpaStatus: settings.dpa_status,
+    soc2ObservationStartedAt: settings.soc2_observation_started_at,
+    lastPenTestAt: settings.last_pen_test_at,
+    lastDrTestAt: settings.last_dr_test_at,
+    onCallRotationUrl: settings.on_call_rotation_url,
+    statusPageUrl: settings.status_page_url,
+  });
+}
+
 async function loadWorkspaceProjects(supabase: any, workspaceId: string) {
   const { data: projects, error } = await supabase
     .from("projects")
@@ -166,12 +182,20 @@ export const getWorkspaceCompliance = createServerFn({ method: "GET" })
     if (isMissingRelation(error) || isMissingColumn(error)) {
       const settings = defaultComplianceSettings(data.workspace_id);
       const controls = readinessFromSettings(settings);
-      return { settings, controls, summary: complianceSummary(controls), available: false };
+      const evidence = evidenceFromSettings(settings);
+      return {
+        settings,
+        controls,
+        evidence,
+        summary: complianceSummary(controls),
+        available: false,
+      };
     }
     if (error) throw new Error(error.message);
     const settings = normalizeSettings(row, data.workspace_id);
     const controls = readinessFromSettings(settings);
-    return { settings, controls, summary: complianceSummary(controls), available: true };
+    const evidence = evidenceFromSettings(settings);
+    return { settings, controls, evidence, summary: complianceSummary(controls), available: true };
   });
 
 const complianceSaveSchema = z.object({
@@ -224,7 +248,8 @@ export const saveWorkspaceCompliance = createServerFn({ method: "POST" })
     });
     const settings = normalizeSettings(row, data.workspace_id);
     const controls = readinessFromSettings(settings);
-    return { settings, controls, summary: complianceSummary(controls) };
+    const evidence = evidenceFromSettings(settings);
+    return { settings, controls, evidence, summary: complianceSummary(controls) };
   });
 
 export const exportWorkspaceAuditLog = createServerFn({ method: "GET" })
@@ -326,9 +351,13 @@ export const exportCustomerAuditPackage = createServerFn({ method: "GET" })
       audit_events: events.length,
       projects: projects.length,
     });
+    const archive = buildCustomerAuditArchive(pkg);
     return {
-      filename: `agir-customer-audit-package-${data.workspace_id}.json`,
-      contentType: "application/json",
+      filename: archive.filename,
+      contentType: archive.contentType,
+      sha256: archive.sha256,
+      signature: archive.signature,
+      archiveBase64: archive.base64,
       package: pkg,
     };
   });

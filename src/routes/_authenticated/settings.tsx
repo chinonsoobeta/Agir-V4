@@ -923,7 +923,8 @@ function DataSection() {
   const downloadAuditPackage = useMutation({
     mutationFn: () => auditPackageExportFn({ data: { workspace_id: workspaceId!, limit: 5000 } }),
     onSuccess: (result) => {
-      const blob = new Blob([JSON.stringify(result.package, null, 2)], {
+      const bytes = Uint8Array.from(atob(result.archiveBase64), (char) => char.charCodeAt(0));
+      const blob = new Blob([bytes], {
         type: result.contentType,
       });
       const url = URL.createObjectURL(blob);
@@ -932,7 +933,7 @@ function DataSection() {
       a.download = result.filename;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success("Exported customer audit package");
+      toast.success(`Exported signed audit package (${result.sha256.slice(0, 12)}…)`);
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -1247,6 +1248,37 @@ function DataSection() {
                   )}
                 </div>
               ))}
+            </div>
+            <Separator />
+            <div>
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="size-4 text-muted-foreground" />
+                <div className="text-sm font-semibold">Evidence tracker</div>
+              </div>
+              <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                {(complianceQuery.data?.evidence ?? []).map((item: any) => (
+                  <div key={item.id} className="rounded-md border p-3 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium">{item.title}</span>
+                      <Badge
+                        variant={item.status === "current" ? "default" : "secondary"}
+                        className="capitalize"
+                      >
+                        {item.status.replaceAll("_", " ")}
+                      </Badge>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {item.evidence ?? item.action}
+                    </div>
+                    {item.expiresAt && (
+                      <div className="mt-2 text-[10px] uppercase tracking-widest text-muted-foreground">
+                        Expires {new Date(item.expiresAt).toLocaleDateString()} ·{" "}
+                        {item.daysUntilExpiry} days
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
