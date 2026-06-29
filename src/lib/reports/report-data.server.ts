@@ -2,6 +2,12 @@
 // A failed table query is an ERROR (thrown with a clear message): never a
 // silently-empty array: so a report is never built against partial data.
 
+import {
+  validatePersistedAssumptionUnits,
+  validateFinancialOutputUnits,
+  type UnitContractIssue,
+} from "../unit-contracts";
+
 export type ReportData = {
   project: Record<string, any> | null;
   documents: Record<string, any>[];
@@ -18,6 +24,11 @@ export type ReportData = {
   decisions: Record<string, any>[];
   auditLogs: Record<string, any>[];
   scenarios: Record<string, any>[];
+  // Unit-contract drift surfaced (non-blocking) at the DB-read / report-build
+  // boundary: a persisted assumption whose stored unit no longer matches the
+  // taxonomy, or a financial output emitting a non-canonical unit. Empty in the
+  // healthy case; a report builder / UI can show it for review.
+  unitContractIssues: UnitContractIssue[];
 };
 
 export async function loadReportData(supabase: any, projectId: string): Promise<ReportData> {
@@ -125,6 +136,21 @@ export async function loadReportData(supabase: any, projectId: string): Promise<
       )
     : [];
 
+  // Unit-contract validation at the boundary (non-blocking): only assumptions
+  // that actually carry a stored unit are checked (a null unit predates the
+  // unit column and is not drift); financial outputs are checked for canonical
+  // units. Never throws -- a report still builds, with the issues surfaced.
+  const unitContractIssues: UnitContractIssue[] = [
+    ...validatePersistedAssumptionUnits(
+      (assumptions as any[])
+        .filter((a) => typeof a.unit === "string" && a.unit.length > 0)
+        .map((a) => ({ field_key: a.field_key, unit: a.unit })),
+    ),
+    ...validateFinancialOutputUnits(
+      (outputs as any[]).map((o) => ({ key: o.metric_key, unit: o.unit })),
+    ),
+  ];
+
   return {
     project: projectRes.data ?? null,
     documents,
@@ -141,5 +167,6 @@ export async function loadReportData(supabase: any, projectId: string): Promise<
     decisions,
     auditLogs,
     scenarios,
+    unitContractIssues,
   };
 }

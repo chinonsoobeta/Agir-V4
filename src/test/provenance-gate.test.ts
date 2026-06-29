@@ -175,6 +175,7 @@ function harbourReportData(): ReportData {
     decisions: [],
     auditLogs: [],
     scenarios: [],
+    unitContractIssues: [],
   };
 }
 
