@@ -69,6 +69,35 @@ Restore drill:
 4. Run smoke tests against the restored app environment.
 5. Only promote or swap traffic after product and data checks pass.
 
+### One-command restore drill
+
+After step 1 (restore into a staging/branch DB whose name contains `staging`,
+`restore`, or `test`), validate it in a single command:
+
+```bash
+STAGING_DATABASE_URL="postgresql://...staging..." npm run restore:drill
+```
+
+The drill (read-only, refuses to run against a non-staging-named DB):
+
+- confirms connectivity and reads the migration ledger,
+- checks for schema drift vs. `supabase/migrations` (pending / extra),
+- smoke-checks that the key tables exist (`projects`, `assumptions`,
+  `financial_outputs`, `documents`, `decision_logs`, `audit_logs`,
+  `memo_snapshots`, `extraction_jobs`).
+
+It exits non-zero on any failure, so it can be run on a schedule as a recurring
+recovery rehearsal, not just by hand during an incident.
+
+### Schema-drift deploy gate
+
+`npm run drift:check` (CI job **Schema drift deploy gate**) BLOCKS a deploy when
+the live DB has pending or extra migrations relative to the commit. Arm it by
+setting the `SCHEMA_DRIFT_DATABASE_URL` GitHub secret to a read-capable URL for
+the target database; without the secret the gate is a no-op so fork PRs are not
+broken. This is the blocking counterpart to the advisory runtime check in
+`src/lib/schema-drift.server.ts`.
+
 ## Schema Drift Incident
 
 Signals:

@@ -26,6 +26,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { ExplainableNumber } from "@/components/provenance-popover";
 import {
   AlertTriangle,
   ShieldAlert,
@@ -594,11 +595,13 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                     <tr key={mk}>
                       <td className="font-medium">{baseRow?.metric_label}</td>
                       <td className="text-right num text-primary">
-                        {fmtValue(
-                          baseRow?.value_numeric == null ? null : Number(baseRow.value_numeric),
-                          baseRow?.unit ?? "",
-                          baseRow?.formula_text,
-                        )}
+                        <ExplainableNumber row={baseRow} label={baseRow?.metric_label ?? undefined}>
+                          {fmtValue(
+                            baseRow?.value_numeric == null ? null : Number(baseRow.value_numeric),
+                            baseRow?.unit ?? "",
+                            baseRow?.formula_text,
+                          )}
+                        </ExplainableNumber>
                       </td>
                       {scenarioKeys.map((sk) => {
                         const r = byScenario[sk].find((b) => b.metric_key === mk);
@@ -745,7 +748,15 @@ function UnderwritingMetric({
   return (
     <Card className="p-4">
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className={`num text-2xl mt-1 ${highlight ?? "text-primary"}`}>{display}</div>
+      <div className={`num text-2xl mt-1 ${highlight ?? "text-primary"}`}>
+        {row && text == null ? (
+          <ExplainableNumber row={row} label={label}>
+            {display}
+          </ExplainableNumber>
+        ) : (
+          display
+        )}
+      </div>
       <div className="text-[10px] text-muted-foreground mt-1 font-mono line-clamp-2">
         {sub ?? row?.formula_text ?? "Pending underwriting run"}
       </div>

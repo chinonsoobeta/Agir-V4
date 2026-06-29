@@ -5,8 +5,14 @@
 import { useState } from "react";
 import { useSuspenseQuery, useMutation, useQueryClient, queryOptions } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listFinancialOutputs, listDecisions, recordDecision } from "@/lib/assumptions.functions";
+import {
+  listFinancialOutputs,
+  listDecisions,
+  recordDecision,
+  verifyAuditChain,
+} from "@/lib/assumptions.functions";
 import { listAssumptions } from "@/lib/assumptions.functions";
+import { listMemoSnapshots, diffMemoSnapshot } from "@/lib/memo-snapshot.functions";
 import { listReconciliationFlags } from "@/lib/underwriting.functions";
 import { listMemos } from "@/lib/memo.functions";
 import {
@@ -41,8 +47,12 @@ import {
   RotateCcw,
   XCircle,
   ShieldAlert,
+  ShieldCheck,
   ListChecks,
   Gavel,
+  Lock,
+  Loader2,
+  GitCompareArrows,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -392,11 +402,17 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
       {/* Investment Committee memo */}
       <MemoSection projectId={projectId} />
 
+      {/* Snapshots locked at IC submission */}
+      <MemoSnapshots projectId={projectId} />
+
       {/* Permanent audit trail */}
       <Card className="overflow-hidden elevated">
         <div className="px-5 py-3 border-b border-border bg-muted/20 flex items-center justify-between">
           <SectionLabel>Decision History · Audit Trail</SectionLabel>
-          <span className="num text-xs text-muted-foreground">{decisionRows.length}</span>
+          <div className="flex items-center gap-3">
+            <AuditIntegrity projectId={projectId} />
+            <span className="num text-xs text-muted-foreground">{decisionRows.length}</span>
+          </div>
         </div>
         {decisionRows.length === 0 ? (
           <p className="p-8 text-sm text-muted-foreground text-center">
@@ -444,6 +460,159 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
         )}
       </Card>
     </div>
+  );
+}
+
+// Verify the tamper-evident hash chain over this project's audit trail. The
+// recompute happens in-database, so a green result is a real cryptographic
+// proof that no historical row was altered, inserted, or deleted.
+function AuditIntegrity({ projectId }: { projectId: string }) {
+  const verifyFn = useServerFn(verifyAuditChain);
+  const [result, setResult] = useState<{
+    valid: boolean;
+    reason: string | null;
+    total: number;
+    broken_seq: number | null;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function run() {
+    setBusy(true);
+    try {
+      const r = await verifyFn({ data: { project_id: projectId } });
+      setResult(r);
+      if (r.valid) toast.success(`Audit chain intact (${r.total} entries verified)`);
+      else toast.error(`Audit chain BROKEN at #${r.broken_seq} (${r.reason})`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Verification failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="flex items-center gap-2">
+      {result &&
+        (result.valid ? (
+          <span className="inline-flex items-center gap-1 text-[11px] text-success">
+            <ShieldCheck className="size-3.5" /> Verified · {result.total}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-[11px] text-destructive">
+            <ShieldAlert className="size-3.5" /> Broken at #{result.broken_seq}
+          </span>
+        ))}
+      <Button size="sm" variant="outline" onClick={run} disabled={busy} className="h-7 text-xs">
+        {busy ? (
+          <Loader2 className="size-3.5 animate-spin" />
+        ) : (
+          <ShieldCheck className="size-3.5" />
+        )}
+        Verify integrity
+      </Button>
+    </div>
+  );
+}
+
+// Memos frozen at IC submission, with a one-click diff against the deal's
+// current inputs/outputs so re-runs after submission are visible, never silent.
+function MemoSnapshots({ projectId }: { projectId: string }) {
+  const { data: snapshots } = useSuspenseQuery(
+    queryOptions({
+      queryKey: ["memo-snapshots", projectId],
+      queryFn: () => listMemoSnapshots({ data: { project_id: projectId } }),
+    }),
+  );
+  const diffFn = useServerFn(diffMemoSnapshot);
+  const [diff, setDiff] = useState<any | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  if (!snapshots.length) return null;
+  async function showDiff(id: string) {
+    setBusyId(id);
+    try {
+      setDiff(await diffFn({ data: { snapshot_id: id } }));
+    } catch (e: any) {
+      toast.error(e?.message ?? "Diff failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+  return (
+    <Card className="overflow-hidden elevated">
+      <div className="px-5 py-3 border-b border-border bg-muted/20 flex items-center gap-2">
+        <Lock className="size-3.5 text-muted-foreground" />
+        <SectionLabel>Locked at IC Submission</SectionLabel>
+      </div>
+      <ul className="divide-y divide-border">
+        {snapshots.map((s: any) => (
+          <li key={s.id} className="p-4 flex items-center gap-3 text-sm">
+            <Badge variant="outline" className="text-[10px] uppercase">
+              v{s.version}
+            </Badge>
+            <span className="text-xs text-muted-foreground flex-1">
+              {new Date(s.created_at).toLocaleString()} · {s.created_by_name}
+              {s.verdict_code ? ` · ${s.verdict_code}` : ""}
+            </span>
+            <span className="font-mono text-[10px] text-muted-foreground">
+              {String(s.content_hash).slice(0, 12)}…
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              disabled={busyId === s.id}
+              onClick={() => showDiff(s.id)}
+            >
+              {busyId === s.id ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <GitCompareArrows className="size-3.5" />
+              )}
+              Diff vs current
+            </Button>
+          </li>
+        ))}
+      </ul>
+      {diff && (
+        <div className="border-t border-border p-4 text-sm">
+          {diff.drifted ? (
+            <div className="text-warning font-medium mb-2">
+              ⚠ Inputs/outputs changed since this version was locked.
+            </div>
+          ) : (
+            <div className="text-success font-medium mb-2">
+              ✓ Current state matches the locked version exactly.
+            </div>
+          )}
+          {diff.assumption_changes?.length > 0 && (
+            <div className="mb-2">
+              <div className="text-[10px] uppercase text-muted-foreground mb-1">
+                Assumption changes ({diff.assumption_changes.length})
+              </div>
+              <ul className="space-y-0.5 font-mono text-xs">
+                {diff.assumption_changes.slice(0, 12).map((c: any) => (
+                  <li key={c.field_key}>
+                    {c.field_label}: {String(c.was)} → {String(c.now)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {diff.output_changes?.length > 0 && (
+            <div>
+              <div className="text-[10px] uppercase text-muted-foreground mb-1">
+                Output changes ({diff.output_changes.length})
+              </div>
+              <ul className="space-y-0.5 font-mono text-xs">
+                {diff.output_changes.slice(0, 12).map((c: any) => (
+                  <li key={`${c.scenario_key}:${c.metric_key}`}>
+                    {c.metric_label} [{c.scenario_key}]: {String(c.was)} → {String(c.now)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
 

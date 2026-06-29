@@ -16,6 +16,21 @@ export const listDocuments = createServerFn({ method: "GET" })
     return rows ?? [];
   });
 
+export const listExtractionJobs = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { project_id?: string }) => d)
+  .handler(async ({ data, context }) => {
+    let q = context.supabase
+      .from("extraction_jobs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (data?.project_id) q = q.eq("project_id", data.project_id);
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+    return rows ?? [];
+  });
+
 const CreateDocSchema = z.object({
   project_id: z.string().uuid().optional().nullable(),
   name: z.string().min(1).max(255),
@@ -23,15 +38,49 @@ const CreateDocSchema = z.object({
   category: z.string().max(255).optional().nullable(),
   storage_path: z.string().min(1),
   size_bytes: z.number().int().min(0).optional(),
+  // SHA-256 of the file content, computed client-side, used for idempotent
+  // upload (same content in the same project is one document) and dedup.
+  content_hash: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional()
+    .nullable(),
 });
 
 export const createDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => CreateDocSchema.parse(d))
   .handler(async ({ data, context }) => {
+    const { UPLOAD_LIMITS, enforceUploadQuota } = await import("./upload-guards.server");
+    const size = data.size_bytes ?? 0;
+    if (size > UPLOAD_LIMITS.maxFileBytes) {
+      throw new Error(
+        `File exceeds the ${Math.round(UPLOAD_LIMITS.maxFileBytes / (1024 * 1024))} MB upload limit.`,
+      );
+    }
+    await enforceUploadQuota(context, size);
+
+    // Idempotency / dedup: an identical file already in this project is reused
+    // rather than re-inserted (a double-click or retry is a no-op).
+    if (data.content_hash) {
+      let dq = context.supabase
+        .from("documents")
+        .select("*")
+        .eq("owner_id", context.userId)
+        .eq("content_hash", data.content_hash);
+      dq = data.project_id ? dq.eq("project_id", data.project_id) : dq.is("project_id", null);
+      const { data: existing } = await dq.maybeSingle();
+      if (existing) return { ...existing, deduped: true };
+    }
+
     const { data: row, error } = await context.supabase
       .from("documents")
-      .insert({ ...data, owner_id: context.userId })
+      .insert({
+        ...data,
+        owner_id: context.userId,
+        extraction_status: "pending",
+        scan_status: "pending",
+      })
       .select()
       .single();
     if (error) throw new Error(error.message);
@@ -91,20 +140,81 @@ export const analyzeDocument = createServerFn({ method: "POST" })
       .single();
     if (docErr) throw new Error(docErr.message);
 
+    const { claimJob, completeJob, failJob } = await import("./extraction-jobs.server");
+    const { scanDocumentBuffer, UPLOAD_LIMITS } = await import("./upload-guards.server");
+
+    // Idempotent + observable: one job per (owner, document content). A retry or
+    // double-click re-attaches to the existing job instead of re-running OCR/AI.
+    const idempotencyKey = (doc as any).content_hash || `doc:${doc.id}`;
+    const { job, existed } = await claimJob(context, {
+      kind: "document_analysis",
+      idempotencyKey,
+      projectId: doc.project_id,
+      documentId: doc.id,
+      message: "Extracting document text",
+    });
+    if (existed && job.status === "completed") {
+      return (
+        (job.result_json as { summary: string; assumptions: string; risks: string }) ?? {
+          summary: "",
+          assumptions: "",
+          risks: "",
+        }
+      );
+    }
+
     const failExtraction = async (message: string) => {
       await context.supabase
         .from("documents")
-        .update({ status: "extraction_failed", extraction_error: message })
+        .update({
+          status: "extraction_failed",
+          extraction_status: "failed",
+          extraction_error: message,
+        })
         .eq("id", data.id);
+      await failJob(context, job.id, message);
       throw new Error(message);
     };
+
+    await context.supabase
+      .from("documents")
+      .update({ extraction_status: "running" })
+      .eq("id", data.id);
 
     const { downloadDocumentBlob } = await import("./storage-download.server");
     const dl = await downloadDocumentBlob(context.supabase, doc.storage_path);
     if (dl.error || !dl.data)
       await failExtraction(dl.error?.message ?? "Unable to download document for extraction.");
-    const { extractFileText } = await import("./document-text.server");
-    const text = await extractFileText(doc.name, doc.file_type, await dl.data.arrayBuffer());
+    const buffer = await dl.data.arrayBuffer();
+
+    // Structural safety scan BEFORE any parsing (malformed / disguised files).
+    const scan = scanDocumentBuffer(doc.name, buffer);
+    await context.supabase
+      .from("documents")
+      .update({ scan_status: scan.ok ? "clean" : "rejected", scan_detail: scan.detail })
+      .eq("id", data.id);
+    if (!scan.ok) await failExtraction(`File rejected by safety scan: ${scan.detail}`);
+
+    const { extractFileTextWithMeta } = await import("./document-text.server");
+    const extracted = await extractFileTextWithMeta(doc.name, doc.file_type, buffer);
+    const pageCount = extracted.ocrTotalPages;
+    // Max-pages guard with graceful messaging for very large uploads.
+    if (pageCount != null && pageCount > UPLOAD_LIMITS.maxDocumentPages) {
+      await context.supabase.from("documents").update({ page_count: pageCount }).eq("id", data.id);
+      await failExtraction(
+        `Document has ${pageCount} pages, above the ${UPLOAD_LIMITS.maxDocumentPages}-page limit for automated extraction. Split the file or request a manual review.`,
+      );
+    }
+    // Persist per-document extraction signals so low-confidence (OCR) docs are
+    // visibly flagged for analyst review before they can drive a verdict.
+    await context.supabase
+      .from("documents")
+      .update({
+        page_count: pageCount,
+        ocr_confidence: extracted.ocrConfidence,
+      })
+      .eq("id", data.id);
+    const text = extracted.text;
     if (!text.trim()) await failExtraction("No extractable text was found in this document.");
 
     const { getAgirModel } = await import("./ai-gateway.server");
@@ -159,9 +269,12 @@ Respond as compact JSON only with keys: summary, key_assumptions, risks, importa
         ai_assumptions: assumptions,
         ai_risks: risks,
         status: "analyzed",
+        extraction_status: "completed",
         extraction_error: null,
       })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
-    return { summary, assumptions, risks };
+    const extractionResult = { summary, assumptions, risks };
+    await completeJob(context, job.id, extractionResult);
+    return extractionResult;
   });

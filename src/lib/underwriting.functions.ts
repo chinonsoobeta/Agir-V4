@@ -634,6 +634,25 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
     await assertApprovedAssumptionsSynced(context.supabase, data.project_id);
 
     const input = assembleEngineInput(rows);
+
+    // Idempotency: key the run by (project, content-hash of the engine input +
+    // mode). A double-click or retry with identical inputs returns the cached
+    // result instead of re-running the (billing-relevant) insight/findings work
+    // and re-writing the output tables.
+    const { stableJsonHash } = await import("./hash.server");
+    const { claimJob, completeJob } = await import("./extraction-jobs.server");
+    const runKey = stableJsonHash({ input, mode: analysisMode });
+    const { job: runJob, existed: runExisted } = await claimJob(context, {
+      kind: "underwriting",
+      idempotencyKey: runKey,
+      projectId: data.project_id,
+      message: "Running underwriting",
+    });
+    if (runExisted && runJob.status === "completed" && runJob.result_json) {
+      // Cached identical run: shape matches the success return below.
+      return runJob.result_json as any;
+    }
+
     const base = runUnderwriting(input);
 
     // Derived tier: persist the calculated TDC with its formula so a derivable
@@ -887,7 +906,7 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
       },
     });
 
-    return {
+    const result = {
       blocked: false as const,
       readiness,
       verdict,
@@ -898,6 +917,8 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
       values: base.values,
       ...aiMeta,
     };
+    await completeJob(context, runJob.id, result);
+    return result;
   });
 
 export const listReconciliationFlags = createServerFn({ method: "GET" })

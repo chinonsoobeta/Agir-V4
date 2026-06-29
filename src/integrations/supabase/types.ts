@@ -187,14 +187,20 @@ export type Database = {
           conflict_values: Json | null;
           created_at: string;
           current_version: number;
+          dual_control_pending: boolean;
           field_key: string;
           field_label: string;
           formula_text: string | null;
           id: string;
           impact_amount: number | null;
           impact_rank: number | null;
+          override_reason: string | null;
           owner_id: string;
           project_id: string;
+          requires_dual_control: boolean;
+          second_approval_at: string | null;
+          second_approval_by: string | null;
+          second_approver_name: string | null;
           source_document_id: string | null;
           source_location: string | null;
           source_text: string | null;
@@ -214,14 +220,20 @@ export type Database = {
           conflict_values?: Json | null;
           created_at?: string;
           current_version?: number;
+          dual_control_pending?: boolean;
           field_key: string;
           field_label: string;
           formula_text?: string | null;
           id?: string;
           impact_amount?: number | null;
           impact_rank?: number | null;
+          override_reason?: string | null;
           owner_id: string;
           project_id: string;
+          requires_dual_control?: boolean;
+          second_approval_at?: string | null;
+          second_approval_by?: string | null;
+          second_approver_name?: string | null;
           source_document_id?: string | null;
           source_location?: string | null;
           source_text?: string | null;
@@ -241,14 +253,20 @@ export type Database = {
           conflict_values?: Json | null;
           created_at?: string;
           current_version?: number;
+          dual_control_pending?: boolean;
           field_key?: string;
           field_label?: string;
           formula_text?: string | null;
           id?: string;
           impact_amount?: number | null;
           impact_rank?: number | null;
+          override_reason?: string | null;
           owner_id?: string;
           project_id?: string;
+          requires_dual_control?: boolean;
+          second_approval_at?: string | null;
+          second_approval_by?: string | null;
+          second_approver_name?: string | null;
           source_document_id?: string | null;
           source_location?: string | null;
           source_text?: string | null;
@@ -284,7 +302,10 @@ export type Database = {
           id: string;
           owner_id: string;
           payload: Json | null;
+          prev_hash: string | null;
           project_id: string | null;
+          row_hash: string | null;
+          seq: number | null;
           user_id: string;
           user_name: string | null;
         };
@@ -296,7 +317,10 @@ export type Database = {
           id?: string;
           owner_id: string;
           payload?: Json | null;
+          prev_hash?: string | null;
           project_id?: string | null;
+          row_hash?: string | null;
+          seq?: number | null;
           user_id: string;
           user_name?: string | null;
         };
@@ -308,7 +332,10 @@ export type Database = {
           id?: string;
           owner_id?: string;
           payload?: Json | null;
+          prev_hash?: string | null;
           project_id?: string | null;
+          row_hash?: string | null;
+          seq?: number | null;
           user_id?: string;
           user_name?: string | null;
         };
@@ -359,6 +386,47 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      counterparty_templates: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          field_key: string;
+          fingerprint: string;
+          id: string;
+          label: string;
+          owner_id: string;
+          workspace_id: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          field_key: string;
+          fingerprint: string;
+          id?: string;
+          label: string;
+          owner_id: string;
+          workspace_id?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          field_key?: string;
+          fingerprint?: string;
+          id?: string;
+          label?: string;
+          owner_id?: string;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "counterparty_templates_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },
         ];
@@ -653,12 +721,18 @@ export type Database = {
           ai_risks: string | null;
           ai_summary: string | null;
           category: string | null;
+          content_hash: string | null;
           extraction_error: string | null;
+          extraction_status: string;
           file_type: string | null;
           id: string;
           name: string;
+          ocr_confidence: number | null;
           owner_id: string;
+          page_count: number | null;
           project_id: string | null;
+          scan_detail: string | null;
+          scan_status: string;
           size_bytes: number | null;
           status: string;
           storage_path: string;
@@ -669,12 +743,18 @@ export type Database = {
           ai_risks?: string | null;
           ai_summary?: string | null;
           category?: string | null;
+          content_hash?: string | null;
           extraction_error?: string | null;
+          extraction_status?: string;
           file_type?: string | null;
           id?: string;
           name: string;
+          ocr_confidence?: number | null;
           owner_id: string;
+          page_count?: number | null;
           project_id?: string | null;
+          scan_detail?: string | null;
+          scan_status?: string;
           size_bytes?: number | null;
           status?: string;
           storage_path: string;
@@ -685,12 +765,18 @@ export type Database = {
           ai_risks?: string | null;
           ai_summary?: string | null;
           category?: string | null;
+          content_hash?: string | null;
           extraction_error?: string | null;
+          extraction_status?: string;
           file_type?: string | null;
           id?: string;
           name?: string;
+          ocr_confidence?: number | null;
           owner_id?: string;
+          page_count?: number | null;
           project_id?: string | null;
+          scan_detail?: string | null;
+          scan_status?: string;
           size_bytes?: number | null;
           status?: string;
           storage_path?: string;
@@ -747,6 +833,122 @@ export type Database = {
           },
           {
             foreignKeyName: "external_record_links_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      extraction_aliases: {
+        Row: {
+          alias_text: string;
+          created_at: string;
+          created_by: string | null;
+          field_key: string;
+          id: string;
+          owner_id: string;
+          updated_at: string;
+          usage_count: number;
+          workspace_id: string | null;
+        };
+        Insert: {
+          alias_text: string;
+          created_at?: string;
+          created_by?: string | null;
+          field_key: string;
+          id?: string;
+          owner_id: string;
+          updated_at?: string;
+          usage_count?: number;
+          workspace_id?: string | null;
+        };
+        Update: {
+          alias_text?: string;
+          created_at?: string;
+          created_by?: string | null;
+          field_key?: string;
+          id?: string;
+          owner_id?: string;
+          updated_at?: string;
+          usage_count?: number;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "extraction_aliases_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      extraction_jobs: {
+        Row: {
+          created_at: string;
+          document_id: string | null;
+          error: string | null;
+          finished_at: string | null;
+          id: string;
+          idempotency_key: string;
+          kind: string;
+          message: string | null;
+          owner_id: string;
+          progress: number;
+          project_id: string | null;
+          result_json: Json | null;
+          started_at: string | null;
+          status: string;
+          total: number | null;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          document_id?: string | null;
+          error?: string | null;
+          finished_at?: string | null;
+          id?: string;
+          idempotency_key: string;
+          kind: string;
+          message?: string | null;
+          owner_id: string;
+          progress?: number;
+          project_id?: string | null;
+          result_json?: Json | null;
+          started_at?: string | null;
+          status?: string;
+          total?: number | null;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          document_id?: string | null;
+          error?: string | null;
+          finished_at?: string | null;
+          id?: string;
+          idempotency_key?: string;
+          kind?: string;
+          message?: string | null;
+          owner_id?: string;
+          progress?: number;
+          project_id?: string | null;
+          result_json?: Json | null;
+          started_at?: string | null;
+          status?: string;
+          total?: number | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "extraction_jobs_document_id_fkey";
+            columns: ["document_id"];
+            isOneToOne: false;
+            referencedRelation: "documents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "extraction_jobs_project_id_fkey";
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
@@ -1125,6 +1327,79 @@ export type Database = {
           value_numeric?: number;
         };
         Relationships: [];
+      };
+      memo_snapshots: {
+        Row: {
+          assumptions_json: Json;
+          content_hash: string;
+          created_at: string;
+          created_by: string;
+          created_by_name: string | null;
+          decision_id: string | null;
+          id: string;
+          memo_id: string | null;
+          outputs_json: Json;
+          owner_id: string;
+          project_id: string;
+          report_json: Json;
+          verdict_code: string | null;
+          version: number;
+        };
+        Insert: {
+          assumptions_json: Json;
+          content_hash: string;
+          created_at?: string;
+          created_by: string;
+          created_by_name?: string | null;
+          decision_id?: string | null;
+          id?: string;
+          memo_id?: string | null;
+          outputs_json: Json;
+          owner_id: string;
+          project_id: string;
+          report_json: Json;
+          verdict_code?: string | null;
+          version: number;
+        };
+        Update: {
+          assumptions_json?: Json;
+          content_hash?: string;
+          created_at?: string;
+          created_by?: string;
+          created_by_name?: string | null;
+          decision_id?: string | null;
+          id?: string;
+          memo_id?: string | null;
+          outputs_json?: Json;
+          owner_id?: string;
+          project_id?: string;
+          report_json?: Json;
+          verdict_code?: string | null;
+          version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "memo_snapshots_decision_id_fkey";
+            columns: ["decision_id"];
+            isOneToOne: false;
+            referencedRelation: "decision_logs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "memo_snapshots_memo_id_fkey";
+            columns: ["memo_id"];
+            isOneToOne: false;
+            referencedRelation: "investment_memos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "memo_snapshots_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       notifications: {
         Row: {
@@ -1609,6 +1884,21 @@ export type Database = {
           },
         ];
       };
+      schema_migrations: {
+        Row: {
+          applied_at: string;
+          version: string;
+        };
+        Insert: {
+          applied_at?: string;
+          version: string;
+        };
+        Update: {
+          applied_at?: string;
+          version?: string;
+        };
+        Relationships: [];
+      };
       underwriting_inputs: {
         Row: {
           approved_at: string | null;
@@ -1944,6 +2234,24 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      audit_log_canonical: {
+        Args: {
+          p_action: string;
+          p_created_at: string;
+          p_entity_id: string;
+          p_entity_type: string;
+          p_owner_id: string;
+          p_payload: Json;
+          p_project_id: string;
+          p_seq: number;
+          p_user_id: string;
+        };
+        Returns: string;
+      };
+      audit_log_row_hash: {
+        Args: { p_canonical: string; p_prev_hash: string };
+        Returns: string;
+      };
       create_workspace: {
         Args: { p_name: string };
         Returns: {
@@ -1968,6 +2276,7 @@ export type Database = {
         Returns: boolean;
       };
       is_workspace_member: { Args: { ws: string }; Returns: boolean };
+      verify_audit_chain: { Args: { p_project: string }; Returns: Json };
       workspace_role: { Args: { ws: string }; Returns: string };
     };
     Enums: {

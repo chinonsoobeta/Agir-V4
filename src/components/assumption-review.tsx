@@ -8,6 +8,7 @@ import {
   listAssumptions,
   listAssumptionVersions,
   reviewAssumption,
+  secondApproveOverride,
   extractAssumptions,
   getReadiness,
 } from "@/lib/assumptions.functions";
@@ -190,6 +191,15 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
     onSuccess: () => {
       invalidate();
       toast.success("Updated");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const secondApproveFn = useServerFn(secondApproveOverride);
+  const secondApprove = useMutation({
+    mutationFn: (id: string) => secondApproveFn({ data: { id } }),
+    onSuccess: () => {
+      invalidate();
+      toast.success("Override second-approved -- now applied to the engine");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -462,7 +472,8 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
                   onReject={() =>
                     review.mutate({ id: a.id, action: "reject", change_reason: "Rejected" })
                   }
-                  pending={review.isPending}
+                  onSecondApprove={() => secondApprove.mutate(a.id)}
+                  pending={review.isPending || secondApprove.isPending}
                 />
               ))}
             </div>
@@ -799,6 +810,7 @@ function AssumptionCard({
   onHistory,
   onApprove,
   onReject,
+  onSecondApprove,
   pending,
 }: {
   a: any;
@@ -807,11 +819,35 @@ function AssumptionCard({
   onHistory: () => void;
   onApprove: () => void;
   onReject: () => void;
+  onSecondApprove: () => void;
   pending: boolean;
 }) {
   const band = a.confidence_band as keyof typeof BAND_STYLES;
   return (
     <Card className="p-4 flex flex-col gap-3">
+      {a.dual_control_pending && (
+        <div className="rounded border border-warning/40 bg-warning/5 px-2.5 py-2 text-[11px] text-warning">
+          <div className="font-semibold uppercase tracking-wide">Awaiting second approval</div>
+          <div className="text-muted-foreground mt-0.5">
+            Material override entered{a.override_reason ? `: "${a.override_reason}"` : ""}. A
+            second, different approver must confirm before it reaches the engine.
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 mt-1.5 text-[11px]"
+            disabled={pending}
+            onClick={onSecondApprove}
+          >
+            Second-approve override
+          </Button>
+        </div>
+      )}
+      {!a.dual_control_pending && a.second_approval_by && (
+        <div className="text-[10px] text-success">
+          ✓ Dual-control satisfied{a.second_approver_name ? ` · ${a.second_approver_name}` : ""}
+        </div>
+      )}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-sm font-medium leading-tight">{a.field_label}</div>

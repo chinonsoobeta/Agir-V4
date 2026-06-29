@@ -91,6 +91,24 @@ jobs:
       - run: npm run migrate:dry-run
       - run: npm run test:rls
 
+  schema-drift-gate:
+    name: Schema drift deploy gate
+    runs-on: ubuntu-latest
+    # Hard gate: fails the build if the live DB has pending/extra migrations
+    # relative to this commit. It is a no-op (passes) when no DB secret is
+    # configured, so fork PRs are unaffected; arm it by setting the
+    # SCHEMA_DRIFT_DATABASE_URL secret (a read-capable URL to prod/staging).
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run drift:check
+        env:
+          SCHEMA_DRIFT_DATABASE_URL: ${{ secrets.SCHEMA_DRIFT_DATABASE_URL }}
+
   ephemeral-db-smoke:
     name: Ephemeral DB migration + RLS smoke
     runs-on: ubuntu-latest

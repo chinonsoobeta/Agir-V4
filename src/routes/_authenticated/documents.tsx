@@ -198,6 +198,7 @@ function DocumentsPage() {
                           No data extracted
                         </Badge>
                       )}
+                      <DocQuality d={d} />
                     </div>
                   </div>
                   <div className="flex gap-1">
@@ -271,6 +272,48 @@ function DocumentsPage() {
         )}
       </PageBody>
     </>
+  );
+}
+
+// Per-document extraction confidence, surfaced so a low-confidence (OCR) doc is
+// visibly flagged for analyst review BEFORE it can drive a verdict. OCR
+// confidence < 70% is shown in warning colour; a rejected safety scan or a
+// page-cap failure is shown as a hard flag.
+function DocQuality({ d }: { d: any }) {
+  const conf = d.ocr_confidence == null ? null : Number(d.ocr_confidence);
+  const lowConf = conf != null && conf < 70;
+  const chips: { label: string; cls: string }[] = [];
+  if (conf != null) {
+    chips.push({
+      label: `OCR ${Math.round(conf)}%${lowConf ? " · verify" : ""}`,
+      cls: lowConf
+        ? "bg-warning/10 text-warning border-warning/30"
+        : "bg-success/10 text-success border-success/30",
+    });
+  }
+  if (d.page_count) {
+    chips.push({ label: `${d.page_count} pp`, cls: "text-muted-foreground" });
+  }
+  if (d.scan_status === "rejected") {
+    chips.push({
+      label: "scan: rejected",
+      cls: "bg-destructive/10 text-destructive border-destructive/30",
+    });
+  } else if (d.scan_status === "clean") {
+    chips.push({ label: "scan: clean", cls: "text-muted-foreground" });
+  }
+  if (d.extraction_status === "running") {
+    chips.push({ label: "extracting…", cls: "bg-primary/10 text-primary border-primary/30" });
+  }
+  if (!chips.length) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {chips.map((c) => (
+        <Badge key={c.label} variant="outline" className={`text-[10px] ${c.cls}`}>
+          {c.label}
+        </Badge>
+      ))}
+    </div>
   );
 }
 

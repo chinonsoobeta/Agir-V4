@@ -7,6 +7,19 @@ import { cn } from "@/lib/utils";
 
 const ACCEPT = ".pdf,.xlsx,.xls,.doc,.docx,.csv,.png,.jpg,.jpeg";
 const ACCEPT_RE = /\.(pdf|xlsx|xls|docx?|csv|png|jpe?g)$/i;
+// Mirror of UPLOAD_LIMITS.maxFileBytes (server is authoritative); enforced here
+// for immediate, graceful feedback before bytes are sent.
+const MAX_FILE_BYTES = 75 * 1024 * 1024;
+
+async function sha256Hex(file: File): Promise<string | null> {
+  try {
+    const buf = await file.arrayBuffer();
+    const digest = await crypto.subtle.digest("SHA-256", buf);
+    return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return null; // hashing is best-effort; server still enforces guards
+  }
+}
 
 type ItemStatus = "queued" | "uploading" | "analyzing" | "done" | "failed" | "duplicate";
 type QueueItem = { id: string; name: string; status: ItemStatus; error?: string };
@@ -57,6 +70,13 @@ export function DocumentDropzone({
       setItem(id, { status: "failed", error: "Unsupported file type" });
       return;
     }
+    if (file.size > MAX_FILE_BYTES) {
+      setItem(id, {
+        status: "failed",
+        error: `Too large (max ${Math.round(MAX_FILE_BYTES / (1024 * 1024))} MB)`,
+      });
+      return;
+    }
     if (existing.has(file.name.toLowerCase())) {
       setItem(id, { status: "duplicate" });
       return;
@@ -65,6 +85,7 @@ export function DocumentDropzone({
       setItem(id, { status: "uploading" });
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) throw new Error("Not authenticated");
+      const contentHash = await sha256Hex(file);
       const path = `${u.user.id}/${id}-${file.name}`;
       const { error: upErr } = await supabase.storage.from("documents").upload(path, file);
       if (upErr) throw upErr;
@@ -76,8 +97,15 @@ export function DocumentDropzone({
           category,
           storage_path: path,
           size_bytes: file.size,
+          content_hash: contentHash,
         },
       });
+      // Server treated this as a duplicate of already-uploaded content.
+      if (doc?.deduped) {
+        setItem(id, { status: "duplicate" });
+        onChanged();
+        return;
+      }
       if (autoAnalyze) {
         setItem(id, { status: "analyzing" });
         try {

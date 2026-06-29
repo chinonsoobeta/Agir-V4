@@ -12,6 +12,7 @@ import {
   bandFor,
 } from "./assumption-taxonomy";
 import { type Candidate } from "./assumption-candidates.server";
+import { isMaterialOverrideField } from "./dual-control";
 import {
   mapCandidates,
   groupAndResolve,
@@ -103,6 +104,28 @@ export const listAudit = createServerFn({ method: "GET" })
       .limit(200);
     if (error) throw new Error(error.message);
     return rows ?? [];
+  });
+
+// Re-walk the tamper-evident hash chain for a project's audit trail and report
+// whether it is intact. The recompute happens in-database (verify_audit_chain)
+// so the canonicalization is identical, by construction, to the one used when
+// each row was written -- there is no app/DB serialization-mismatch risk.
+export const verifyAuditChain = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: result, error } = await context.supabase.rpc("verify_audit_chain", {
+      p_project: data.project_id,
+    });
+    if (error) throw new Error(error.message);
+    return result as {
+      valid: boolean;
+      reason: string | null;
+      broken_seq: number | null;
+      broken_id: string | null;
+      total: number;
+      head_hash?: string | null;
+    };
   });
 
 // Cross-project Review Center listing
@@ -333,6 +356,30 @@ export const extractAssumptions = createServerFn({ method: "POST" })
     if (dErr) throw new Error(dErr.message);
     if (!docs?.length)
       throw new Error("Upload documents to this project before extracting assumptions.");
+
+    // Idempotency + observability: one extraction job per (project, document-set
+    // content, mode). A double-click or retry re-attaches to the existing job
+    // and returns the cached result instead of re-running the (billing-relevant)
+    // AI classification over the whole corpus.
+    const { stableJsonHash } = await import("./hash.server");
+    const { claimJob, completeJob } = await import("./extraction-jobs.server");
+    const extractionKey = stableJsonHash({
+      docs: docs
+        .map((d) => ({ id: d.id, hash: (d as any).content_hash ?? null }))
+        .sort((a, b) => a.id.localeCompare(b.id)),
+      mode: data.mode,
+    });
+    const { job: extractJob, existed: extractExisted } = await claimJob(context, {
+      kind: "assumption_extraction",
+      idempotencyKey: extractionKey,
+      projectId: data.project_id,
+      total: docs.length,
+      message: `Extracting assumptions from ${docs.length} document(s)`,
+    });
+    if (extractExisted && extractJob.status === "completed" && extractJob.result_json) {
+      // Cached identical extraction: shape matches the report returned below.
+      return extractJob.result_json as any;
+    }
 
     const { extractFileTextWithMeta } = await import("./document-text.server");
     const { extractCandidates } = await import("./assumption-candidates.server");
@@ -898,6 +945,7 @@ export const extractAssumptions = createServerFn({ method: "POST" })
       "extract_assumptions",
       report,
     );
+    await completeJob(context, extractJob.id, report);
     return report;
   });
 
@@ -1091,6 +1139,15 @@ export const reviewAssumption = createServerFn({ method: "POST" })
           );
         }
       }
+      // An override of a MATERIAL field (debt, cap, equity, ...) is subject to
+      // a two-person rule: it is staged as dual_control_pending and does NOT
+      // reach the engine until a *different* user second-approves it.
+      const material = isMaterialOverrideField(cur.field_key);
+      if (material && !(data.change_reason && data.change_reason.trim())) {
+        throw new Error(
+          "Overriding a material field (debt, cap rate, equity, ...) requires a written reason.",
+        );
+      }
       patch.status = "modified";
       patch.value_numeric = data.value_numeric ?? cur.value_numeric;
       patch.value_text = data.value_text ?? cur.value_text;
@@ -1099,6 +1156,13 @@ export const reviewAssumption = createServerFn({ method: "POST" })
       // Modified values get high confidence (human-entered)
       patch.confidence_score = 100;
       patch.confidence_band = "high";
+      patch.override_reason = data.change_reason ?? null;
+      patch.requires_dual_control = material;
+      patch.dual_control_pending = material;
+      // A fresh override clears any prior second approval.
+      patch.second_approval_by = null;
+      patch.second_approval_at = null;
+      patch.second_approver_name = null;
     } else if (data.action === "reject") {
       patch.status = "rejected";
     } else {
@@ -1116,17 +1180,85 @@ export const reviewAssumption = createServerFn({ method: "POST" })
       data.change_reason || `Status set to ${upd.status} by ${by}`,
       by,
     );
-    await auditLog(context, cur.project_id, "assumption", cur.id, `assumption_${data.action}`, {
-      from: { value_numeric: cur.value_numeric, value_text: cur.value_text, status: cur.status },
-      to: { value_numeric: upd.value_numeric, value_text: upd.value_text, status: upd.status },
-      reason: data.change_reason ?? null,
-    });
+    const pendingDual = !!(upd as any).dual_control_pending;
+    await auditLog(
+      context,
+      cur.project_id,
+      "assumption",
+      cur.id,
+      pendingDual ? "assumption_override_pending_second_approval" : `assumption_${data.action}`,
+      {
+        from: { value_numeric: cur.value_numeric, value_text: cur.value_text, status: cur.status },
+        to: { value_numeric: upd.value_numeric, value_text: upd.value_text, status: upd.status },
+        reason: data.change_reason ?? null,
+        requires_dual_control: !!(upd as any).requires_dual_control,
+        dual_control_pending: pendingDual,
+      },
+    );
     // Approval propagates into the engine-readable tables; rejection demotes.
-    if (upd.status === "approved" || upd.status === "modified") {
+    // A material override held for dual control is intentionally NOT propagated
+    // until a second approver confirms it (see secondApproveOverride).
+    if ((upd.status === "approved" || upd.status === "modified") && !pendingDual) {
       await propagateApprovedToEngine(context, upd);
     } else if (upd.status === "rejected") {
       await demoteEngineRows(context, upd);
     }
+    return upd;
+  });
+
+// Second-approve a material override that is awaiting dual control. The approver
+// must be a different user than the one who entered the override; the value then
+// propagates into the engine-readable tables. This is the two-person rule.
+export const secondApproveOverride = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) =>
+    z.object({ id: z.string().uuid(), note: z.string().max(1000).optional() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: cur, error } = await context.supabase
+      .from("assumptions")
+      .select("*")
+      .eq("id", data.id)
+      .single();
+    if (error) throw new Error(error.message);
+    if (!(cur as any).dual_control_pending) {
+      throw new Error("This assumption is not awaiting a second approval.");
+    }
+    if (cur.approved_by && cur.approved_by === context.userId) {
+      throw new Error(
+        "Dual control requires a second, different approver: the analyst who entered the override cannot also confirm it.",
+      );
+    }
+    const by = await userName(context);
+    const upd = await updateAssumptionWithExpectedVersion(
+      context.supabase,
+      data.id,
+      cur.current_version,
+      {
+        current_version: cur.current_version + 1,
+        dual_control_pending: false,
+        second_approval_by: context.userId,
+        second_approval_at: new Date().toISOString(),
+        second_approver_name: by,
+      },
+    );
+    await recordVersion(context, upd, data.note || `Override second-approved by ${by}`, by);
+    await auditLog(
+      context,
+      cur.project_id,
+      "assumption",
+      cur.id,
+      "assumption_override_second_approved",
+      {
+        value_numeric: upd.value_numeric,
+        value_text: upd.value_text,
+        first_approver: cur.approved_by,
+        second_approver: context.userId,
+        note: data.note ?? null,
+      },
+    );
+    // Now that the two-person rule is satisfied, push it into the engine.
+    await propagateApprovedToEngine(context, upd);
     return upd;
   });
 
@@ -1177,7 +1309,25 @@ export const recordDecision = createServerFn({ method: "POST" })
     await auditLog(context, data.project_id, "decision", row.id, "ic_decision", {
       decision: data.decision,
     });
-    return row;
+    // Freeze exactly what the committee saw behind an immutable version, tied to
+    // this decision. A later input edit can be diffed but never rewrites it.
+    let snapshot: { id: string; version: number } | null = null;
+    try {
+      const { createMemoSnapshotInternal } = await import("./memo-snapshot.functions");
+      const snap = await createMemoSnapshotInternal(context, data.project_id, row.id);
+      snapshot = { id: snap.id, version: snap.version };
+      await auditLog(context, data.project_id, "decision", row.id, "memo_snapshot_locked", {
+        snapshot_id: snap.id,
+        version: snap.version,
+        content_hash: snap.content_hash,
+      });
+    } catch (e) {
+      // A snapshot failure must not lose the decision; surface it in the audit.
+      await auditLog(context, data.project_id, "decision", row.id, "memo_snapshot_failed", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+    return { ...row, snapshot };
   });
 
 // ---------- Readiness ----------
