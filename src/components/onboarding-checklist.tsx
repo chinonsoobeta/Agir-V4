@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { CheckCircle2, Circle, ArrowRight, Sparkles, X, Rocket } from "lucide-react";
@@ -16,7 +16,7 @@ import {
 } from "@/lib/preferences.functions";
 import { trackOnboardingEvent } from "@/lib/operating-depth.functions";
 import { useWorkspace } from "@/lib/workspace-context";
-import { seedHarbourCentre } from "@/lib/demo.functions";
+import { DemoPackagePicker } from "@/components/demo-package-picker";
 
 const LOCAL_KEY = "agir-onboarding-dismissed";
 
@@ -34,7 +34,6 @@ function localDismissed(): boolean {
 export function OnboardingChecklist() {
   const { t, tx } = usePreferences();
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const [dismissedLocal, setDismissedLocal] = useState(localDismissed);
   const { activeWorkspace } = useWorkspace();
   const trackFn = useServerFn(trackOnboardingEvent);
@@ -54,25 +53,6 @@ export function OnboardingChecklist() {
       qc.invalidateQueries({ queryKey: ["onboarding"] });
     },
     onError: () => toast.error("Could not save: hidden for this session"),
-  });
-
-  const seedFn = useServerFn(seedHarbourCentre);
-  const seed = useMutation({
-    mutationFn: () => seedFn(),
-    onSuccess: ({ project_id }: { project_id?: string }) => {
-      qc.invalidateQueries({ queryKey: ["portfolio"] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      qc.invalidateQueries({ queryKey: ["onboarding"] });
-      toast.success("Guided demo loaded", {
-        action: project_id
-          ? {
-              label: "Open demo",
-              onClick: () => navigate({ to: "/projects/$id", params: { id: project_id } }),
-            }
-          : undefined,
-      });
-    },
-    onError: (e: any) => toast.error(e?.message ?? "Could not load demo"),
   });
 
   const state = stateQ.data;
@@ -222,10 +202,14 @@ export function OnboardingChecklist() {
         <span className="text-xs text-muted-foreground flex-1 min-w-[12rem]">
           {t("onb.demoHint")}
         </span>
-        <Button variant="outline" size="sm" onClick={() => seed.mutate()} disabled={seed.isPending}>
-          <Rocket className="size-4 mr-1.5" />
-          {seed.isPending ? t("common.loading") : t("onb.loadDemo")}
-        </Button>
+        <DemoPackagePicker
+          trigger={
+            <Button variant="outline" size="sm">
+              <Rocket className="mr-1.5 size-4" />
+              {t("onb.loadDemo")}
+            </Button>
+          }
+        />
       </div>
     </Card>
   );

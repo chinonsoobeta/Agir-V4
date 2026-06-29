@@ -58,8 +58,11 @@ describe("pilot readiness controls", () => {
     expect(PILOT_DEAL_PACKAGES.length).toBeGreaterThanOrEqual(5);
     for (const pkg of PILOT_DEAL_PACKAGES) {
       expect(pkg.documents.length).toBeGreaterThan(0);
+      expect(pkg.intendedOutcome).not.toEqual("");
+      expect(["seedable", "fixture_only", "corpus_harness"]).toContain(pkg.availability);
       expect(pkg.expectedWorkflow.length).toBeGreaterThan(0);
       expect(pkg.knownWatchpoints.length).toBeGreaterThan(0);
     }
+    expect(PILOT_DEAL_PACKAGES.some((pkg) => pkg.availability === "seedable")).toBe(true);
   });
 });

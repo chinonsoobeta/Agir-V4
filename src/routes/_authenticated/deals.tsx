@@ -1,9 +1,8 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useSuspenseQuery, queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listPortfolio, type DealSummary } from "@/lib/portfolio.functions";
 import { createProject, deleteProject, updateProject } from "@/lib/projects.functions";
-import { seedHarbourCentre } from "@/lib/demo.functions";
 import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -66,6 +65,7 @@ import { daysUntil } from "@/lib/platform-insights";
 import { useWorkspace } from "@/lib/workspace-context";
 import { usePreferences } from "@/lib/preferences";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DemoPackagePicker } from "@/components/demo-package-picker";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -106,28 +106,10 @@ function DealsPage() {
   const [saveViewOpen, setSaveViewOpen] = useState(false);
   const [viewName, setViewName] = useState("");
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const createFn = useServerFn(createProject);
-  const seedFn = useServerFn(seedHarbourCentre);
   const updateFn = useServerFn(updateProject);
   const { views, save, remove } = useSavedDealViews();
   useRealtimeRefresh();
-
-  const seed = useMutation({
-    mutationFn: () => seedFn(),
-    onSuccess: ({ project_id }) => {
-      qc.invalidateQueries({ queryKey: ["portfolio"] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      toast.success("Harbour Centre seeded", {
-        action: {
-          label: "Open demo",
-          onClick: () => navigate({ to: "/projects/$id", params: { id: project_id } }),
-        },
-      });
-      navigate({ to: "/projects/$id", params: { id: project_id } });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
 
   // Bulk stage update across the selected deals: invalidates once at the end.
   const bulkUpdate = useMutation({
@@ -211,15 +193,14 @@ function DealsPage() {
         subtitle={tx("deals.subtitle", { count: deals.length })}
         actions={
           <>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => seed.mutate()}
-              disabled={seed.isPending}
-            >
-              <Sparkles className="size-4 mr-1.5" />
-              {seed.isPending ? t("deals.seeding") : t("deals.seedDemo")}
-            </Button>
+            <DemoPackagePicker
+              trigger={
+                <Button size="sm" variant="outline">
+                  <Sparkles className="mr-1.5 size-4" />
+                  {t("deals.seedDemo")}
+                </Button>
+              }
+            />
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button size="sm">

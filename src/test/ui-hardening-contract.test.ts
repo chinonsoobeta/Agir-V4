@@ -68,10 +68,16 @@ describe("UI hardening contract", () => {
 
   test("guided demo and portfolio deletion affordances are visible in source", () => {
     const onboarding = read("src/components/onboarding-checklist.tsx");
+    const deals = read("src/routes/_authenticated/deals.tsx");
+    const picker = read("src/components/demo-package-picker.tsx");
     const portfolio = read("src/routes/_authenticated/portfolio.tsx");
 
-    expect(onboarding).toContain('label: "Open demo"');
-    expect(onboarding).toContain("params: { id: project_id }");
+    expect(onboarding).toContain("DemoPackagePicker");
+    expect(deals).toContain("DemoPackagePicker");
+    expect(picker).toContain("Demo packages");
+    expect(picker).toContain("Seed package");
+    expect(picker).toContain('label: "Open demo"');
+    expect(picker).toContain("PILOT_DEAL_PACKAGES.map");
     expect(portfolio).toContain("function DeleteDealButton");
     expect(portfolio).toContain("Delete {deal.name}?");
     expect(portfolio).toContain("aria-label={`Delete ${deal.name}`}");
