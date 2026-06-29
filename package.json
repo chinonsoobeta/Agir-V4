@@ -22,8 +22,11 @@
     "rls:bootstrap": "node src/test/rls/bootstrap-db.mjs",
     "test:rls": "vitest run --config vitest.rls.config.ts",
     "smoke:ephemeral-db": "node scripts/ephemeral-supabase-smoke.mjs",
+    "smoke:fresh-env": "node scripts/fresh-environment-smoke.mjs",
     "drift:check": "node scripts/check-schema-drift.mjs",
-    "restore:drill": "node scripts/restore-staging-from-backup.mjs"
+    "restore:drill": "node scripts/restore-staging-from-backup.mjs",
+    "pilot:audit": "node scripts/audit-pilot-readiness.mjs",
+    "worker:extraction": "node scripts/extraction-worker.mjs"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.199",

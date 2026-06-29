@@ -8,7 +8,7 @@ not a substitute for that test.
 - Authentication and session handling.
 - Workspace RLS and tenant isolation.
 - Role escalation: owner, admin, member, viewer.
-- Signed document URL scope and expiry.
+- Signed document URL scope and expiry, including a signed document URL replay test.
 - File upload and document parsing.
 - Prompt-injection boundary for extraction and copilot features.
 - SQL injection and PostgREST filter misuse.
@@ -28,9 +28,9 @@ not a substitute for that test.
 
 ## Remediation Tracker
 
-| Finding | Severity | Owner | Status | Regression Test | Notes |
-| --- | --- | --- | --- | --- | --- |
-| Pending external test | TBD | Security | Open | TBD | Schedule vendor |
+| Finding               | Severity | Owner    | Status | Regression Test | Notes           |
+| --------------------- | -------- | -------- | ------ | --------------- | --------------- |
+| Pending external test | TBD      | Security | Open   | TBD             | Schedule vendor |
 
 ## Clean-Test Exit Criteria
 

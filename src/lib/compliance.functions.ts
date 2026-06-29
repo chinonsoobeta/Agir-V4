@@ -8,6 +8,7 @@ import {
   renderAuditExportCsv,
   type ComplianceControl,
 } from "./compliance";
+import { buildCustomerAuditPackage } from "./customer-audit-package";
 
 type ComplianceSettings = {
   workspace_id: string;
@@ -108,6 +109,50 @@ function readinessFromSettings(settings: ComplianceSettings): ComplianceControl[
   });
 }
 
+async function loadWorkspaceProjects(supabase: any, workspaceId: string) {
+  const { data: projects, error } = await supabase
+    .from("projects")
+    .select("id,name,status")
+    .eq("workspace_id", workspaceId);
+  if (error) throw new Error(error.message);
+  return projects ?? [];
+}
+
+async function loadWorkspaceAuditEvents(supabase: any, workspaceId: string, limit: number) {
+  const projects = await loadWorkspaceProjects(supabase, workspaceId);
+  const projectIds = projects.map((project: any) => project.id);
+  const select =
+    "id,created_at,workspace_id,project_id,user_id,entity_type,entity_id,action,payload";
+  const projectAudit =
+    projectIds.length > 0
+      ? await supabase
+          .from("audit_logs")
+          .select(select)
+          .in("project_id", projectIds)
+          .order("created_at", { ascending: false })
+          .limit(limit)
+      : { data: [], error: null };
+  if (isMissingColumn(projectAudit.error)) {
+    throw new Error("Audit export needs the latest database migration to be applied.");
+  }
+  if (projectAudit.error) throw new Error(projectAudit.error.message);
+  const { data: workspaceAudit, error: workspaceAuditError } = await supabase
+    .from("audit_logs")
+    .select(select)
+    .eq("workspace_id", workspaceId)
+    .is("project_id", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (isMissingColumn(workspaceAuditError)) {
+    throw new Error("Audit export needs the latest database migration to be applied.");
+  }
+  if (workspaceAuditError) throw new Error(workspaceAuditError.message);
+  const events = [...(workspaceAudit ?? []), ...(projectAudit.data ?? [])]
+    .sort((a: any, b: any) => String(b.created_at).localeCompare(String(a.created_at)))
+    .slice(0, limit);
+  return { projects, projectIds, events };
+}
+
 export const getWorkspaceCompliance = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((value: unknown) => z.object({ workspace_id: z.string().uuid() }).parse(value))
@@ -195,41 +240,7 @@ export const exportWorkspaceAuditLog = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const supabase = context.supabase as any;
     await requireWorkspaceAdmin(supabase, data.workspace_id);
-    const { data: projects, error: projectError } = await supabase
-      .from("projects")
-      .select("id")
-      .eq("workspace_id", data.workspace_id);
-    if (projectError) throw new Error(projectError.message);
-    const projectIds = (projects ?? []).map((project: any) => project.id);
-    const projectAudit =
-      projectIds.length > 0
-        ? await supabase
-            .from("audit_logs")
-            .select(
-              "id,created_at,workspace_id,project_id,user_id,entity_type,entity_id,action,payload",
-            )
-            .in("project_id", projectIds)
-            .order("created_at", { ascending: false })
-            .limit(data.limit)
-        : { data: [], error: null };
-    if (isMissingColumn(projectAudit.error)) {
-      throw new Error("Audit export needs the latest database migration to be applied.");
-    }
-    if (projectAudit.error) throw new Error(projectAudit.error.message);
-    const { data: workspaceAudit, error: workspaceAuditError } = await supabase
-      .from("audit_logs")
-      .select("id,created_at,workspace_id,project_id,user_id,entity_type,entity_id,action,payload")
-      .eq("workspace_id", data.workspace_id)
-      .is("project_id", null)
-      .order("created_at", { ascending: false })
-      .limit(data.limit);
-    if (isMissingColumn(workspaceAuditError)) {
-      throw new Error("Audit export needs the latest database migration to be applied.");
-    }
-    if (workspaceAuditError) throw new Error(workspaceAuditError.message);
-    const events = [...(workspaceAudit ?? []), ...(projectAudit.data ?? [])]
-      .sort((a: any, b: any) => String(b.created_at).localeCompare(String(a.created_at)))
-      .slice(0, data.limit);
+    const { events } = await loadWorkspaceAuditEvents(supabase, data.workspace_id, data.limit);
     await auditWorkspaceEvent(context, data.workspace_id, "audit_log_exported", {
       rows: events.length,
     });
@@ -238,6 +249,87 @@ export const exportWorkspaceAuditLog = createServerFn({ method: "GET" })
       contentType: "text/csv",
       rowCount: events.length,
       csv: renderAuditExportCsv(events),
+    };
+  });
+
+export const exportCustomerAuditPackage = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((value: unknown) =>
+    z
+      .object({
+        workspace_id: z.string().uuid(),
+        limit: z.number().int().min(1).max(10000).default(5000),
+      })
+      .parse(value),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as any;
+    await requireWorkspaceAdmin(supabase, data.workspace_id);
+    const { data: row, error: settingsError } = await supabase
+      .from("workspace_settings")
+      .select("*")
+      .eq("workspace_id", data.workspace_id)
+      .maybeSingle();
+    if (isMissingRelation(settingsError) || isMissingColumn(settingsError)) {
+      throw new Error("Customer audit package needs the latest compliance migration.");
+    }
+    if (settingsError) throw new Error(settingsError.message);
+    const settings = normalizeSettings(row, data.workspace_id);
+    const controls = readinessFromSettings(settings);
+    const { projects, projectIds, events } = await loadWorkspaceAuditEvents(
+      supabase,
+      data.workspace_id,
+      data.limit,
+    );
+    const documents =
+      projectIds.length > 0
+        ? await supabase
+            .from("documents")
+            .select("id,project_id,name,category")
+            .in("project_id", projectIds)
+        : { data: [], error: null };
+    if (documents.error) throw new Error(documents.error.message);
+    const reports =
+      projectIds.length > 0
+        ? await supabase
+            .from("generated_reports")
+            .select("id,project_id,report_type,created_at")
+            .in("project_id", projectIds)
+        : { data: [], error: null };
+    if (isMissingRelation(reports.error)) {
+      throw new Error("Customer audit package needs the generated reports migration.");
+    }
+    if (reports.error) throw new Error(reports.error.message);
+    const snapshots =
+      projectIds.length > 0
+        ? await supabase
+            .from("memo_snapshots")
+            .select("id,project_id,version,content_hash")
+            .in("project_id", projectIds)
+        : { data: [], error: null };
+    if (isMissingRelation(snapshots.error)) {
+      throw new Error("Customer audit package needs the memo snapshots migration.");
+    }
+    if (snapshots.error) throw new Error(snapshots.error.message);
+    const pkg = buildCustomerAuditPackage({
+      workspaceId: data.workspace_id,
+      generatedAt: new Date().toISOString(),
+      controls,
+      auditEvents: events,
+      projects,
+      documents: documents.data ?? [],
+      reports: reports.data ?? [],
+      memoSnapshots: snapshots.data ?? [],
+    });
+    await auditWorkspaceEvent(context, data.workspace_id, "customer_audit_package_exported", {
+      files: Object.keys(pkg.files),
+      audit_events: events.length,
+      projects: projects.length,
+    });
+    return {
+      filename: `agir-customer-audit-package-${data.workspace_id}.json`,
+      contentType: "application/json",
+      package: pkg,
     };
   });
 

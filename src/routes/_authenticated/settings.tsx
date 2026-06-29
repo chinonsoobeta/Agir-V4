@@ -40,6 +40,7 @@ import {
 import { getWorkspaceGovernance, saveWorkspaceGovernance } from "@/lib/operating-depth.functions";
 import {
   createDataGovernanceRequest,
+  exportCustomerAuditPackage,
   exportWorkspaceAuditLog,
   getWorkspaceCompliance,
   listDataGovernanceRequests,
@@ -824,6 +825,7 @@ function DataSection() {
   });
   const saveComplianceFn = useServerFn(saveWorkspaceCompliance);
   const auditExportFn = useServerFn(exportWorkspaceAuditLog);
+  const auditPackageExportFn = useServerFn(exportCustomerAuditPackage);
   const requestFn = useServerFn(createDataGovernanceRequest);
   const settings = complianceQuery.data?.settings;
   const [form, setForm] = useState({
@@ -914,6 +916,23 @@ function DataSection() {
       a.click();
       URL.revokeObjectURL(url);
       toast.success(`Exported ${result.rowCount} audit rows`);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const downloadAuditPackage = useMutation({
+    mutationFn: () => auditPackageExportFn({ data: { workspace_id: workspaceId!, limit: 5000 } }),
+    onSuccess: (result) => {
+      const blob = new Blob([JSON.stringify(result.package, null, 2)], {
+        type: result.contentType,
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Exported customer audit package");
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -1200,6 +1219,14 @@ function DataSection() {
               >
                 <Download className="size-4 mr-1.5" />
                 Export audit log
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => downloadAuditPackage.mutate()}
+                disabled={!canManage || downloadAuditPackage.isPending}
+              >
+                <Download className="size-4 mr-1.5" />
+                Export audit package
               </Button>
             </div>
             <Separator />
