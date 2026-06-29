@@ -1,4 +1,5 @@
 import { interestOnlyDebtService } from "./debt";
+import { validateEngineInput } from "./input-validation";
 import { pct, xirr } from "./metrics";
 import {
   buildDebtStack,
@@ -256,6 +257,16 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   ];
 
   const warnings: EngineWarning[] = [];
+  // Defense-in-depth: surface any present-but-implausible input (a units/scale
+  // slip) as a warning before it drives a metric. Sensible deals add nothing, so
+  // a deal that does not opt into the monthly spine stays byte-identical.
+  for (const violation of validateEngineInput(input)) {
+    warnings.push({
+      key: `input_plausibility:${violation.field}`,
+      message: violation.message,
+      actual: violation.value,
+    });
+  }
   if (input.equityAmount && Math.abs(input.equityAmount - impliedEquity) > 1) {
     warnings.push({
       key: "equity_mismatch",

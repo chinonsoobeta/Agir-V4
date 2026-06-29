@@ -114,6 +114,7 @@ export {
   type AllowedValue,
   type TokenUnit,
 } from "./provenance";
+export { validateEngineInput, type InputViolation } from "./input-validation";
 
 // Golden fixture 1: Maple Heights: marginal deal, correct math.
 export function mapleHeightsInput() {

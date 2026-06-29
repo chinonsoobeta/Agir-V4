@@ -11,6 +11,7 @@ import {
   REQUIRED_KEYS,
   bandFor,
 } from "./assumption-taxonomy";
+import { type Candidate } from "./assumption-candidates.server";
 import {
   mapCandidates,
   groupAndResolve,
@@ -257,6 +258,45 @@ const ClassificationSchema = z.object({
   confidence_score: z.number().min(0).max(100),
   reasoning: z.string().optional(),
 });
+
+export type AiClassification = z.infer<typeof ClassificationSchema>;
+
+// Apply the AI classifier's output under the hard boundary the platform
+// guarantees: the model may only ASSIGN a regex-extracted candidate to a
+// canonical key. It can never (1) invent a value -- value_numeric/value_text
+// always come from the candidate, never the model; (2) override a key any
+// authoritative stage already resolved (deterministicKeys); (3) reach a key
+// outside the taxonomy or an out-of-range candidate index. Pure and total so the
+// guarantee is unit-testable against adversarial model output.
+export function applyAiClassifications(
+  classifications: AiClassification[],
+  candidates: Candidate[],
+  deterministicKeys: Set<string>,
+): MappedCandidate[] {
+  const out: MappedCandidate[] = [];
+  for (const cls of classifications) {
+    if (cls.field_key === "ignore" || !ASSUMPTION_KEYS.includes(cls.field_key)) continue;
+    if (deterministicKeys.has(cls.field_key)) continue; // never override an authoritative mapping
+    const cand = candidates[cls.candidate_index];
+    if (!cand) continue; // out-of-range / hallucinated index
+    const def = ASSUMPTION_BY_KEY[cls.field_key];
+    if (!def || (def.numeric && cand.value_numeric == null)) continue;
+    out.push({
+      field_key: def.key,
+      // The numeric value is ALWAYS the candidate's regex-extracted token.
+      value_numeric: def.numeric ? cand.value_numeric : null,
+      value_text: def.numeric ? null : cand.value_text,
+      unit: def.unit,
+      confidence: Math.round(cls.confidence_score),
+      source_doc_name: cand.doc_name,
+      source_text: cand.context,
+      source_location: cand.source_location,
+      matched_alias: "(ai)",
+      via: "alias",
+    });
+  }
+  return out;
+}
 
 export const extractAssumptions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -534,27 +574,15 @@ export const extractAssumptions = createServerFn({ method: "POST" })
         const parsed = m ? JSON.parse(m[0]) : [];
         const safe = z.array(ClassificationSchema).safeParse(parsed);
         if (safe.success) {
-          for (const cls of safe.data) {
-            if (cls.field_key === "ignore" || !ASSUMPTION_KEYS.includes(cls.field_key)) continue;
-            if (deterministicKeys.has(cls.field_key)) continue; // never override deterministic
-            const u = subset[cls.candidate_index];
-            if (!u) continue;
-            const def = ASSUMPTION_BY_KEY[cls.field_key];
-            if (!def || (def.numeric && u.c.value_numeric == null)) continue;
-            aiMapped.push({
-              field_key: def.key,
-              value_numeric: def.numeric ? u.c.value_numeric : null,
-              value_text: def.numeric ? null : u.c.value_text,
-              unit: def.unit,
-              confidence: Math.round(cls.confidence_score),
-              source_doc_name: u.c.doc_name,
-              source_text: u.c.context,
-              source_location: u.c.source_location,
-              matched_alias: "(ai)",
-              via: "alias",
-            });
-            classifiedCount++;
-          }
+          // Indices in the model output address `subset`; pass the candidates in
+          // that exact order so the boundary's index check is meaningful.
+          const classified = applyAiClassifications(
+            safe.data,
+            subset.map((u) => u.c),
+            deterministicKeys,
+          );
+          aiMapped.push(...classified);
+          classifiedCount += classified.length;
         }
       } catch (error) {
         // The deterministic mapping already ran and stands on its own: an AI
