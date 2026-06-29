@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeft, Check, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Building2, Check, ShieldCheck } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Sign in | Agir" }] }),
@@ -89,7 +89,7 @@ function AuthPage() {
       <div className="hidden lg:flex flex-col justify-between p-12 xl:p-16 border-r border-[#183046]/10 bg-[#0d2436] text-white">
         <Link to="/" className="flex items-center gap-3 w-fit">
           <div className="size-9 rounded-lg bg-[#00628e] text-white flex items-center justify-center font-semibold">
-            A
+            <Building2 className="size-[18px]" />
           </div>
           <div className="text-xl font-semibold tracking-[-0.03em]">Agir</div>
         </Link>
@@ -138,7 +138,7 @@ function AuthPage() {
             <div className="mb-6">
               <div className="lg:hidden flex items-center gap-2 mb-7">
                 <div className="size-8 rounded-lg bg-[#00628e] text-white flex items-center justify-center font-semibold">
-                  A
+                  <Building2 className="size-4" />
                 </div>
                 <div className="text-lg font-semibold">Agir</div>
               </div>

@@ -56,8 +56,8 @@ function deal(p: Partial<DealSummary> = {}): DealSummary {
 describe("i18n", () => {
   it("falls back to English for a missing French key", () => {
     // nav.home exists in fr; invent a key only in en by using a real en-only-ish key.
-    expect(translate("fr", "nav.home")).toBe("Vue d’ensemble");
-    expect(translate("en", "nav.home")).toBe("Overview");
+    expect(translate("fr", "nav.home")).toBe("Tableau de bord");
+    expect(translate("en", "nav.home")).toBe("Dashboard");
   });
   it("returns the key itself if entirely unknown", () => {
     expect(translate("en", "totally.unknown" as any)).toBe("totally.unknown");

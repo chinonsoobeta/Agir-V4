@@ -250,7 +250,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="px-6 py-6 border-b border-sidebar-border">
           <div className="flex items-center gap-2.5">
             <div className="size-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center">
-              <span className="display text-primary text-base font-semibold">A</span>
+              <Building2 className="size-4 text-primary" />
             </div>
             <div>
               <div className="display text-lg font-semibold tracking-tight text-sidebar-foreground leading-none">
@@ -274,7 +274,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
       <main className="flex-1 min-w-0 overflow-x-hidden">
         <div className="lg:hidden sticky top-0 z-50 h-14 border-b border-border bg-background/95 backdrop-blur flex items-center justify-between px-4">
-          <div className="display text-lg font-semibold">Agir</div>
+          <div className="flex items-center gap-2.5">
+            <div className="size-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center">
+              <Building2 className="size-4 text-primary" />
+            </div>
+            <div className="display text-lg font-semibold">Agir</div>
+          </div>
           <div className="ml-auto mr-2">
             <NotificationCenter />
           </div>
@@ -286,9 +291,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </SheetTrigger>
             <SheetContent side="left" className="w-72 p-0 bg-sidebar flex flex-col">
               <div className="px-5 py-5 border-b border-sidebar-border">
-                <div className="display text-xl font-semibold text-sidebar-foreground">Agir</div>
-                <div className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground mt-1">
-                  {t("shell.workspace")}
+                <div className="flex items-center gap-2.5">
+                  <div className="size-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center">
+                    <Building2 className="size-4 text-primary" />
+                  </div>
+                  <div>
+                    <div className="display text-xl font-semibold text-sidebar-foreground">
+                      Agir
+                    </div>
+                    <div className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground mt-1">
+                      {t("shell.workspace")}
+                    </div>
+                  </div>
                 </div>
                 <WorkspaceSwitcher />
               </div>

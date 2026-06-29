@@ -41,4 +41,28 @@ describe("UI hardening contract", () => {
 
     expect(ci).toContain("npm run pilot:audit");
   });
+
+  test("branding and dashboard navigation use the approved product language", () => {
+    const shell = read("src/components/app-shell.tsx");
+    const auth = read("src/routes/auth.tsx");
+    const dashboard = read("src/routes/_authenticated/dashboard.tsx");
+    const landing = read("src/routes/index.tsx");
+    const i18n = read("src/lib/i18n.ts");
+
+    expect(i18n).toContain('"nav.home": "Dashboard"');
+    expect(i18n).toContain('"shell.workspace": "Investment workspace"');
+    expect(i18n).toContain('"nav.home": "Tableau de bord"');
+    expect(i18n).toContain('"shell.workspace": "Espace d’investissement"');
+    expect(dashboard).toContain("Dashboard | Agir");
+    expect(dashboard).not.toContain('eyebrow={t("dash.eyebrow")}');
+    for (const source of [shell, auth, landing, dashboard, i18n]) {
+      expect(source).not.toContain("Command center");
+      expect(source).not.toContain("Investment OS");
+      expect(source).not.toContain("Investment overview");
+    }
+    for (const source of [shell, auth, landing]) {
+      expect(source).toContain("Building2");
+      expect(source).not.toMatch(/>\s*A\s*</);
+    }
+  });
 });

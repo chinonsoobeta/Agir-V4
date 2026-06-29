@@ -404,7 +404,7 @@ function LandingPage() {
 function BrandMark() {
   return (
     <span className="flex size-9 items-center justify-center rounded-lg bg-[#00628e] text-base font-semibold text-white shadow-sm">
-      A
+      <Building2 className="size-[18px]" />
     </span>
   );
 }
@@ -463,7 +463,7 @@ function ProductPreview() {
               <BrandMark />
               <span className="font-semibold">Agir</span>
             </div>
-            {["Overview", "Portfolio", "Deal flow", "Execution", "Reports"].map((item, index) => (
+            {["Dashboard", "Portfolio", "Deal flow", "Execution", "Reports"].map((item, index) => (
               <div
                 key={item}
                 className={`mb-1 rounded-md px-2.5 py-2 text-[10px] ${index === 0 ? "bg-white font-semibold text-[#00628e] shadow-sm" : "text-[#6e7799]"}`}
@@ -477,7 +477,7 @@ function ProductPreview() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[#8a93b4]">
-                  Investment overview
+                  Dashboard
                 </div>
                 <div className="mt-1 text-xl font-semibold tracking-[-0.04em]">Good morning</div>
               </div>

@@ -32,7 +32,7 @@ import { TONE_TEXT } from "@/components/decision-ui";
 const portfolioQ = queryOptions({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
-  head: () => ({ meta: [{ title: "Overview | Agir" }] }),
+  head: () => ({ meta: [{ title: "Dashboard | Agir" }] }),
   loader: ({ context }) => context.queryClient.ensureQueryData(portfolioQ),
   component: ExecutiveOverview,
 });
@@ -65,7 +65,6 @@ function ExecutiveOverview() {
   return (
     <>
       <PageHeader
-        eyebrow={t("dash.eyebrow")}
         title={t("dash.title")}
         subtitle={t("dash.subtitle")}
         actions={

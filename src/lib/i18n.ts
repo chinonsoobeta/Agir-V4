@@ -15,7 +15,7 @@ export type AppLanguage = "en" | "fr";
 // parity at build time via `TranslationKey` but missing keys fall back to en.
 export const en = {
   // ---- Navigation ----
-  "nav.home": "Overview",
+  "nav.home": "Dashboard",
   "nav.portfolio": "Portfolio",
   "nav.deals": "Deal flow",
   "nav.relationships": "Relationships",
@@ -32,7 +32,7 @@ export const en = {
   "nav.signOut": "Sign out",
 
   // ---- Shell ----
-  "shell.workspace": "Investment OS",
+  "shell.workspace": "Investment workspace",
   "shell.live": "Live",
   "shell.offline": "Offline",
 
@@ -123,8 +123,8 @@ export const en = {
   "mstatus.complete": "Complete",
 
   // ---- Page headers ----
-  "page.dashboard.eyebrow": "Investment OS",
-  "page.dashboard.title": "Overview",
+  "page.dashboard.eyebrow": "Investment workspace",
+  "page.dashboard.title": "Dashboard",
   "page.dashboard.subtitle": "What requires your attention right now",
   "page.deals.eyebrow": "Pipeline",
   "page.deals.title": "Deal flow",
@@ -223,8 +223,8 @@ export const en = {
   "common.clear": "Clear",
 
   // ---- Dashboard ----
-  "dash.eyebrow": "Command center",
-  "dash.title": "Investment overview",
+  "dash.eyebrow": "Dashboard",
+  "dash.title": "Dashboard",
   "dash.subtitle": "Pipeline, decisions, risk and execution: updated live.",
   "dash.openDealFlow": "Open deal flow",
   "dash.liveData": "Live operating data",
@@ -281,7 +281,7 @@ export type TranslationKey = keyof typeof en;
 
 // French: Canadian. Missing keys fall back to English at lookup time.
 export const fr: Partial<Record<TranslationKey, string>> = {
-  "nav.home": "Vue d’ensemble",
+  "nav.home": "Tableau de bord",
   "nav.portfolio": "Portefeuille",
   "nav.deals": "Flux d’affaires",
   "nav.relationships": "Relations",
@@ -297,7 +297,7 @@ export const fr: Partial<Record<TranslationKey, string>> = {
   "nav.settings": "Paramètres",
   "nav.signOut": "Déconnexion",
 
-  "shell.workspace": "Système d’investissement",
+  "shell.workspace": "Espace d’investissement",
   "shell.live": "En direct",
   "shell.offline": "Hors ligne",
 
@@ -381,8 +381,8 @@ export const fr: Partial<Record<TranslationKey, string>> = {
   "mstatus.blocked": "Bloqué",
   "mstatus.complete": "Terminé",
 
-  "page.dashboard.eyebrow": "Système d’investissement",
-  "page.dashboard.title": "Vue d’ensemble",
+  "page.dashboard.eyebrow": "Espace d’investissement",
+  "page.dashboard.title": "Tableau de bord",
   "page.dashboard.subtitle": "Ce qui requiert votre attention maintenant",
   "page.deals.eyebrow": "Pipeline",
   "page.deals.title": "Flux d’affaires",
@@ -478,8 +478,8 @@ export const fr: Partial<Record<TranslationKey, string>> = {
   "common.today": "Aujourd’hui",
   "common.clear": "Effacer",
 
-  "dash.eyebrow": "Centre de commande",
-  "dash.title": "Vue d’ensemble des investissements",
+  "dash.eyebrow": "Tableau de bord",
+  "dash.title": "Tableau de bord",
   "dash.subtitle": "Pipeline, décisions, risques et exécution : mis à jour en direct.",
   "dash.openDealFlow": "Voir le flux",
   "dash.liveData": "Données opérationnelles en direct",
