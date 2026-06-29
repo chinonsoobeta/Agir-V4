@@ -21,6 +21,10 @@ dist-ssr
 !.env.example
 backups/
 
+# Local/generated scenario artifacts
+outputs/
+sample-scenario.json
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
