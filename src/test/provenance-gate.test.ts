@@ -214,11 +214,16 @@ const reportArtifacts = REPORT_DEFINITIONS.flatMap((def) =>
   })),
 ) satisfies Array<{ label: string; reportType: ReportType; format: ReportFormat }>;
 
+const memoArtifacts = [
+  { label: "memo:pdf", reportType: null, format: "pdf" },
+  { label: "memo:docx", reportType: null, format: "docx" },
+] satisfies Array<{ label: string; reportType: null; format: "pdf" | "docx" }>;
+
 describe("provenance gate for generated artifacts", () => {
   const data = harbourReportData();
 
-  test.each([{ label: "memo:pdf/docx", reportType: null, format: "memo" }, ...reportArtifacts])(
-    "$label runs numeric provenance before it is considered generated",
+  test.each([...memoArtifacts, ...reportArtifacts])(
+    "$label requires every numeric token to trace to an approved input, derived value, or engine output",
     ({ reportType }) => {
       const report = reportType
         ? buildReport(reportType, data, { generatedLabel: "June 2026" })
@@ -228,6 +233,7 @@ describe("provenance gate for generated artifacts", () => {
       expect(gate.status).toBe("generated");
       expect(gate.needs_review).toBe(false);
       expect(gate.verification_report.pass).toBe(true);
+      expect(gate.verification_report.tokenCount).toBeGreaterThan(0);
       expect(gate.verification_report.orphans).toEqual([]);
     },
   );

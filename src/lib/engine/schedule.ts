@@ -20,6 +20,7 @@
 
 import { annualDebtService, interestOnlyDebtService, loanBalanceAfterMonths } from "./debt";
 import { xirr } from "./metrics";
+import { moneyRollupTolerance } from "./tolerance-policy";
 import {
   collectLiterals,
   collectReferences,
@@ -615,7 +616,6 @@ export function applyMonthlySchedule(
   // ---- Roll-up reconciliation ----------------------------------------------
   const sumNodes = (predicate: (n: PeriodNode) => boolean) =>
     nodes.filter(predicate).reduce((s, n) => s + n.amount, 0);
-  const tol = (annual: number) => Math.max(1, Math.abs(annual) * 1e-6);
   const recon = (
     key: string,
     label: string,
@@ -623,7 +623,14 @@ export function applyMonthlySchedule(
     rolledUp: number,
   ): ScheduleReconciliation => {
     const diff = rolledUp - annual;
-    return { key, label, annual, rolledUp, diff, withinTolerance: Math.abs(diff) <= tol(annual) };
+    return {
+      key,
+      label,
+      annual,
+      rolledUp,
+      diff,
+      withinTolerance: Math.abs(diff) <= moneyRollupTolerance(annual),
+    };
   };
   // Year-1 debt service must reconcile against the loan basis ACTUALLY in force
   // during stabilization year 1. When a refinance has taken effect by then, the

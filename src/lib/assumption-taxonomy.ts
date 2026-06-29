@@ -569,6 +569,21 @@ export const ASSUMPTION_DEFS: AssumptionDef[] = [
     required: false,
     aliases: ["minimum dscr", "dscr covenant", "required dscr"],
   },
+  {
+    key: "min_all_in_dscr",
+    label: "Minimum All-In DSCR Covenant",
+    category: "Capital Stack",
+    unit: "x",
+    numeric: true,
+    required: false,
+    aliases: [
+      "minimum all-in dscr",
+      "all-in dscr covenant",
+      "required all-in dscr",
+      "minimum whole-stack dscr",
+      "whole-stack dscr covenant",
+    ],
+  },
 
   // ---- Multi-tranche debt (mezzanine). Optional; absent => senior-only. ----
   {

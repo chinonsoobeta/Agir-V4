@@ -1,4 +1,6 @@
 import { describe, expect, test } from "vitest";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import { extractFileText } from "@/lib/document-text.server";
@@ -9,6 +11,7 @@ import { parseBudgetWorkbook } from "@/lib/parsers/budget.server";
 import { parseRentRollWorkbook } from "@/lib/parsers/rent-roll.server";
 import { aggregateBudgetRows } from "@/lib/budget-assumption-mapper";
 import { mapRevenueProgramRowToAssumptions } from "@/lib/revenue-assumption-mapper";
+import { withinModelTolerance } from "@/lib/engine/tolerance-policy";
 
 type ExpectedAssumption = {
   key: string;
@@ -21,6 +24,12 @@ type CorpusFixture = {
   fileType: string;
   buffer: ArrayBuffer;
   expected: ExpectedAssumption[];
+};
+
+type RealCorpusFixture = {
+  name: string;
+  fixturePath: string;
+  fileType: string;
 };
 
 type FieldMetrics = {
@@ -76,6 +85,34 @@ function pdfBuffer(lines: string[]) {
   doc.setFontSize(10);
   doc.text(lines, 18, 18, { lineHeightFactor: 1.25 });
   return doc.output("arraybuffer") as ArrayBuffer;
+}
+
+const realFixture = (folder: "rivergate" | "summit-point", name: string): RealCorpusFixture => ({
+  name,
+  fixturePath: path.join(import.meta.dirname, "fixtures", folder, name),
+  fileType: name.endsWith(".pdf")
+    ? "application/pdf"
+    : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+});
+
+function makeRealAnonymizedCorpus(): RealCorpusFixture[] {
+  return [
+    realFixture("rivergate", "Rivergate_Appraisal_Valuation_Memo.pdf"),
+    realFixture("rivergate", "Rivergate_Construction_Budget.xlsx"),
+    realFixture("rivergate", "Rivergate_Lender_Term_Sheet.pdf"),
+    realFixture("rivergate", "Rivergate_Market_Study.pdf"),
+    realFixture("rivergate", "Rivergate_Rate_Lock_Addendum.pdf"),
+    realFixture("rivergate", "Rivergate_Rent_Roll.xlsx"),
+    realFixture("rivergate", "Rivergate_Sponsor_Investment_Summary.pdf"),
+    realFixture("summit-point", "Summit_Point_Appraisal_Valuation_Memo.pdf"),
+    realFixture("summit-point", "Summit_Point_Construction_Budget.xlsx"),
+    realFixture("summit-point", "Summit_Point_Lender_Term_Sheet.pdf"),
+  ];
+}
+
+async function readArrayBuffer(filePath: string): Promise<ArrayBuffer> {
+  const bytes = await readFile(filePath);
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
 function makeCorpus(): CorpusFixture[] {
@@ -222,7 +259,7 @@ async function extractMappedAssumptions(fixture: CorpusFixture) {
 
 function valuesMatch(actual: number | undefined, expectedValue: number) {
   if (actual == null || !Number.isFinite(actual)) return false;
-  return Math.abs(actual - expectedValue) <= Math.max(1e-6, Math.abs(expectedValue) * 1e-9);
+  return withinModelTolerance(actual, expectedValue);
 }
 
 function computeMetrics(
@@ -288,6 +325,51 @@ describe("labeled extraction corpus", () => {
       expect(metric, `${fieldType} metrics should be reported`).toBeDefined();
       expect(metric.recall, `${fieldType} recall`).toBeGreaterThanOrEqual(floor.recall);
       expect(metric.precision, `${fieldType} precision`).toBeGreaterThanOrEqual(floor.precision);
+    }
+  }, 30_000);
+
+  test("runs a real anonymized document corpus through extraction", async () => {
+    const corpus = makeRealAnonymizedCorpus();
+    expect(corpus.length).toBeGreaterThanOrEqual(10);
+
+    const allMapped: MappedCandidate[] = [];
+    for (const fixture of corpus) {
+      const buffer = await readArrayBuffer(fixture.fixturePath);
+      const text = await extractFileText(fixture.name, fixture.fileType, buffer);
+      const candidates = extractCandidates(fixture.name, text);
+      expect(candidates.length, `${fixture.name} should produce candidates`).toBeGreaterThan(0);
+      allMapped.push(...mapCandidates(candidates));
+
+      if (fixture.name.endsWith(".xlsx")) {
+        if (fixture.name.includes("Budget")) {
+          allMapped.push(
+            ...aggregateBudgetRows(parseBudgetWorkbook(buffer).inserted, {
+              name: fixture.name,
+            }),
+          );
+        }
+        if (fixture.name.includes("Rent_Roll")) {
+          allMapped.push(
+            ...parseRentRollWorkbook(buffer).inserted.flatMap((row) =>
+              mapRevenueProgramRowToAssumptions(row, { name: fixture.name }),
+            ),
+          );
+        }
+      }
+    }
+
+    const grouped = groupAndResolve(allMapped);
+    for (const key of [
+      "land_cost",
+      "hard_costs",
+      "soft_costs",
+      "debt_amount",
+      "interest_rate",
+      "exit_cap_rate",
+      "residential_units",
+      "residential_rent_monthly",
+    ]) {
+      expect(grouped.has(key), `${key} should be covered by the real corpus`).toBe(true);
     }
   }, 30_000);
 });

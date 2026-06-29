@@ -4,6 +4,8 @@
 // caller. Any orphan number fails verification -- this is the structural
 // guarantee that a synthesized figure cannot reach a screen silently.
 
+import { provenanceTolerance } from "./tolerance-policy";
+
 export type TokenUnit = "$" | "%" | "x" | "bps";
 
 export type NumericToken = {
@@ -92,7 +94,7 @@ function tokenMatches(token: NumericToken, allowed: AllowedValue[]): boolean {
     // the same unit. An untyped allowed value (or an untyped token) stays
     // permissive, so a legitimate figure is never falsely orphaned.
     if (unit != null && token.unit != null && unit !== token.unit) return false;
-    return Math.abs(token.value - value) <= Math.max(token.tolerance, Math.abs(value) * 1e-9);
+    return Math.abs(token.value - value) <= provenanceTolerance(value, token.tolerance);
   });
 }
 

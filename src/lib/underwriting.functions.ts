@@ -28,6 +28,7 @@ import {
   type ReconciliationFlag,
   type UnderwritingInput,
 } from "./engine";
+import { withinModelTolerance } from "./engine/tolerance-policy";
 import { computeInvestmentVerdict } from "./verdict";
 import {
   buildInsight,
@@ -57,11 +58,7 @@ function valuesMatch(actual: unknown, expected: unknown) {
   if (actual == null || expected == null) return false;
   const a = Number(actual);
   const e = Number(expected);
-  return (
-    Number.isFinite(a) &&
-    Number.isFinite(e) &&
-    Math.abs(a - e) <= Math.max(1e-6, Math.abs(e) * 1e-9)
-  );
+  return withinModelTolerance(a, e);
 }
 
 function revenueColumnFor(field: string) {
@@ -313,6 +310,8 @@ export function buildReconciliationContext(
     ioCoversHold: (input.ioMonths ?? 0) >= input.holdYears * 12,
     statedLtcPct: scalarValue(rows, "stated_ltc_pct"),
     minDscr: scalarValue(rows, "min_dscr"),
+    minAllInDscr: scalarValue(rows, "min_all_in_dscr"),
+    allInDscr: output.values.allInDscr,
     minDebtYield: scalarValue(rows, "min_debt_yield"),
     debtYieldPct: output.values.debtYieldPct,
     lenderStabilizedOccupancyPct: scalarValue(rows, "lender_stabilized_occupancy_pct"),

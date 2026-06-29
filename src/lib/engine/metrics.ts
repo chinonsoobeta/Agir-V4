@@ -5,6 +5,8 @@
 // bisection that expands the upper bound, with an explicit near-total-loss
 // fallback at the -99% floor. Returns a percentage, or NaN when the flows lack
 // both a positive and a negative value (no meaningful IRR).
+import { TOLERANCE_POLICY } from "./tolerance-policy";
+
 export function xirr(flows: { t: number; amount: number }[]) {
   if (flows.length < 2) return Number.NaN;
   const hasPositive = flows.some((f) => f.amount > 0);
@@ -43,13 +45,13 @@ export function xirr(flows: { t: number; amount: number }[]) {
     // bound (a near-total loss that recovers a sliver of equity): return it
     // when NPV there is ~0. Otherwise the flows truly have no finite IRR
     // (e.g. a loss exceeding 100%).
-    return Math.abs(fLow) < 1e-6 ? low * 100 : Number.NaN;
+    return Math.abs(fLow) < TOLERANCE_POLICY.irrNpv ? low * 100 : Number.NaN;
   }
 
   for (let i = 0; i < 200; i++) {
     const mid = (low + high) / 2;
     const fMid = npv(mid);
-    if (Math.abs(fMid) < 1e-6) return mid * 100;
+    if (Math.abs(fMid) < TOLERANCE_POLICY.irrNpv) return mid * 100;
     if (Math.sign(fMid) === Math.sign(fLow)) {
       low = mid;
       fLow = fMid;

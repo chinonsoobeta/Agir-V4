@@ -8,6 +8,7 @@
 
 import type { Candidate, CandidateKind } from "./assumption-candidates.server";
 import { ASSUMPTION_DEFS, ASSUMPTION_BY_KEY, type AssumptionDef } from "./assumption-taxonomy";
+import { roundForGrouping } from "./engine/tolerance-policy";
 
 // Candidate kinds (and rent denomination) admissible for a taxonomy unit. This
 // guards against gross mismatches (e.g. a percentage on a dollar field); the
@@ -149,6 +150,11 @@ const SENSITIVE_GUARDS: Record<string, Guard> = {
     // A DSCR covenant is a small ratio (~1.0-2.5x); an EBITDA/valuation multiple
     // (e.g. 7.5x) sharing a "dscr" hint must not land here.
     need: /dscr|debt service coverage|coverage ratio/,
+    min: 1,
+    max: 3,
+  },
+  min_all_in_dscr: {
+    need: /all-in dscr|whole-stack dscr|all in dscr|debt service coverage/,
     min: 1,
     max: 3,
   },
@@ -365,7 +371,23 @@ export type GroupResolution = {
 };
 
 const roundKey = (m: MappedCandidate): number | string | null =>
-  m.value_numeric != null ? Math.round(m.value_numeric * 1000) / 1000 : m.value_text;
+  m.value_numeric != null ? roundForGrouping(m.value_numeric) : m.value_text;
+
+const compareMaybe = (
+  a: string | number | null | undefined,
+  b: string | number | null | undefined,
+) => String(a ?? "").localeCompare(String(b ?? ""));
+
+function compareMappedCandidates(a: MappedCandidate, b: MappedCandidate): number {
+  return (
+    b.confidence - a.confidence ||
+    compareMaybe(roundKey(a), roundKey(b)) ||
+    compareMaybe(a.source_doc_name, b.source_doc_name) ||
+    compareMaybe(a.source_location, b.source_location) ||
+    compareMaybe(a.source_text, b.source_text) ||
+    compareMaybe(a.matched_alias, b.matched_alias)
+  );
+}
 
 // Coarse plausibility floor for whole-deal AGGREGATE dollar keys. In
 // institutional CRE these are never sub-$250k; a value below the floor is almost
@@ -405,7 +427,7 @@ export function groupAndResolve(mapped: MappedCandidate[]): Map<string, GroupRes
       (m) => m.candidate_role && STRUCTURED_ROLES.has(m.candidate_role),
     );
     const members = structured.length > 0 ? structured : allMembers;
-    members.sort((a, b) => b.confidence - a.confidence);
+    members.sort(compareMappedCandidates);
     const distinct = Array.from(new Set(members.map(roundKey)));
     const isConflict = distinct.length > 1;
     const winner = members[0];

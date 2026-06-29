@@ -3,6 +3,7 @@
 // views and cannot be silently dropped.
 
 import type { EngineOutput } from "./types";
+import { TOLERANCE_POLICY } from "./tolerance-policy";
 
 export type ReconciliationFlag = {
   check_key: string;
@@ -27,6 +28,8 @@ export type ReconciliationContext = {
   ioCoversHold?: boolean | null;
   statedLtcPct?: number | null;
   minDscr?: number | null;
+  minAllInDscr?: number | null;
+  allInDscr?: number | null;
   // Debt-yield covenant (NOI / loan) and the engine's computed debt yield.
   minDebtYield?: number | null;
   debtYieldPct?: number | null;
@@ -47,7 +50,7 @@ export function runReconciliationChecks(ctx: ReconciliationContext): Reconciliat
   // 1. Sources vs uses: equity + debt must fund TDC.
   const sources = ctx.equity + ctx.loan;
   const gap = ctx.tdc - sources;
-  if (Math.abs(gap) > 1) {
+  if (Math.abs(gap) > TOLERANCE_POLICY.moneyAbsoluteDollars) {
     flags.push({
       check_key: "sources_vs_uses",
       severity: gap > 0 ? "error" : "warning",
@@ -63,7 +66,7 @@ export function runReconciliationChecks(ctx: ReconciliationContext): Reconciliat
   // 2. LTC consistency: stated LTC vs loan / TDC, +/- 1%.
   if (ctx.statedLtcPct != null && ctx.tdc > 0) {
     const computedLtc = (ctx.loan / ctx.tdc) * 100;
-    if (Math.abs(computedLtc - ctx.statedLtcPct) > 1) {
+    if (Math.abs(computedLtc - ctx.statedLtcPct) > TOLERANCE_POLICY.ltcPctPoints) {
       flags.push({
         check_key: "ltc_consistency",
         severity: "error",
@@ -98,6 +101,25 @@ export function runReconciliationChecks(ctx: ReconciliationContext): Reconciliat
         actual: ctx.noi,
       });
     }
+  }
+
+  // 3a. Optional all-in DSCR covenant: senior DSCR remains the headline lender
+  // covenant, while this catches thin coverage once mezzanine/subordinate debt
+  // exists in the stack.
+  if (
+    ctx.minAllInDscr != null &&
+    ctx.minAllInDscr > 0 &&
+    ctx.allInDscr != null &&
+    ctx.allInDscr > 0 &&
+    ctx.allInDscr < ctx.minAllInDscr
+  ) {
+    flags.push({
+      check_key: "all_in_dscr_covenant",
+      severity: "error",
+      message: `All-in DSCR ${ctx.allInDscr.toFixed(2)}x is below the ${ctx.minAllInDscr.toFixed(2)}x whole-stack covenant.`,
+      expected: ctx.minAllInDscr,
+      actual: ctx.allInDscr,
+    });
   }
 
   // 3b. Debt-yield covenant: NOI / loan must clear the lender's minimum debt
@@ -158,7 +180,7 @@ export function runReconciliationChecks(ctx: ReconciliationContext): Reconciliat
       });
     } else if (
       Math.abs(ctx.budgetSum - ctx.statedTotalProjectCost) / ctx.statedTotalProjectCost >
-      0.005
+      TOLERANCE_POLICY.budgetStatedTotalRelative
     ) {
       flags.push({
         check_key: "budget_vs_stated_total",

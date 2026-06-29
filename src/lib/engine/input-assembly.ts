@@ -8,6 +8,7 @@
 // assembly is BLOCKED and the engine never runs. There is no "best effort".
 
 import type { RevenueUnitInput, UnderwritingInput } from "./types";
+import { brandUnderwritingInput, type BrandedUnderwritingInput } from "./units";
 
 export type EngineInputStatus =
   | "proposed"
@@ -254,7 +255,7 @@ export class UnderwritingBlockedError extends Error {
 }
 
 // The single loader-side assembly. Throws (fail-closed) when blocked.
-export function assembleEngineInput(rows: ProjectInputRows): UnderwritingInput {
+export function assembleEngineInput(rows: ProjectInputRows): BrandedUnderwritingInput {
   const readiness = computeReadiness(rows);
   if (readiness.status !== "ready") throw new UnderwritingBlockedError(readiness);
 
@@ -354,7 +355,7 @@ export function assembleEngineInput(rows: ProjectInputRows): UnderwritingInput {
         }
       : null;
 
-  return {
+  return brandUnderwritingInput({
     budget: {
       land: budgetSum("land"),
       hard: budgetSum("hard"),
@@ -389,5 +390,5 @@ export function assembleEngineInput(rows: ProjectInputRows): UnderwritingInput {
     monthlyModel: (scalar("monthly_model") ?? 0) > 0,
     constructionDrawCurve: (scalar("construction_s_curve") ?? 0) > 0 ? "s_curve" : "straight_line",
     refinance,
-  };
+  });
 }

@@ -9,6 +9,7 @@ export const TAXONOMY_TO_ENGINE_SCALAR: Record<string, string> = {
   interest_rate: "interest_rate_pct",
   amortization_years: "amort_years",
   min_dscr: "min_dscr",
+  min_all_in_dscr: "min_all_in_dscr",
   exit_cap_rate: "exit_cap_rate_pct",
   stabilized_occupancy: "stabilized_occupancy_pct",
   opex_ratio: "expense_ratio_pct",

@@ -217,4 +217,25 @@ describe("reconciliation gates", () => {
       true,
     );
   });
+
+  test("all-in DSCR covenant flags thin whole-stack coverage without changing senior DSCR", () => {
+    const pass = runReconciliationChecks({
+      ...ctxBase,
+      minDscr: 1.1,
+      minAllInDscr: 1.05,
+      allInDscr: 1.08,
+    });
+    expect(pass.some((f) => f.check_key === "all_in_dscr_covenant")).toBe(false);
+
+    const fail = runReconciliationChecks({
+      ...ctxBase,
+      minDscr: 1.1,
+      minAllInDscr: 1.1,
+      allInDscr: 1.02,
+    });
+    expect(fail.some((f) => f.check_key === "all_in_dscr_covenant" && f.severity === "error")).toBe(
+      true,
+    );
+    expect(fail.some((f) => f.check_key === "covenant_feasibility")).toBe(false);
+  });
 });
