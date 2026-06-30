@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Json } from "@/integrations/supabase/types";
 import { z } from "zod";
 import { isMissingRelation } from "./db-compat";
 
@@ -16,7 +17,7 @@ const milestoneSchema = z.object({
 export const listMilestones = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await (context.supabase as any)
+    const { data, error } = await context.supabase
       .from("deal_milestones")
       .select("*, projects(name,location)")
       .order("due_date", { ascending: true, nullsFirst: false });
@@ -29,7 +30,7 @@ export const createMilestone = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((value: unknown) => milestoneSchema.parse(value))
   .handler(async ({ data, context }) => {
-    const { data: row, error } = await (context.supabase as any)
+    const { data: row, error } = await context.supabase
       .from("deal_milestones")
       .insert({ ...data, owner_id: context.userId })
       .select()
@@ -55,7 +56,7 @@ export const updateMilestone = createServerFn({ method: "POST" })
     const { id, ...patch } = data;
     const complete =
       patch.status === "complete" ? new Date().toISOString() : patch.status ? null : undefined;
-    const { data: row, error } = await (context.supabase as any)
+    const { data: row, error } = await context.supabase
       .from("deal_milestones")
       .update({ ...patch, ...(complete !== undefined ? { completed_at: complete } : {}) })
       .eq("id", id)
@@ -79,7 +80,7 @@ const marketSignalSchema = z.object({
 export const listMarketSignals = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await (context.supabase as any)
+    const { data, error } = await context.supabase
       .from("market_signals")
       .select("*")
       .order("observed_at", { ascending: false });
@@ -92,7 +93,7 @@ export const createMarketSignal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((value: unknown) => marketSignalSchema.parse(value))
   .handler(async ({ data, context }) => {
-    const { data: row, error } = await (context.supabase as any)
+    const { data: row, error } = await context.supabase
       .from("market_signals")
       .insert({ ...data, owner_id: context.userId })
       .select()
@@ -104,7 +105,7 @@ export const createMarketSignal = createServerFn({ method: "POST" })
 export const listIntegrations = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await (context.supabase as any)
+    const { data, error } = await context.supabase
       .from("integration_connections")
       .select("*")
       .order("created_at", { ascending: true });
@@ -148,7 +149,7 @@ export const setIntegration = createServerFn({ method: "POST" })
       owner_id: context.userId,
       last_synced_at: data.status === "connected" ? new Date().toISOString() : null,
     };
-    const { data: row, error } = await (context.supabase as any)
+    const { data: row, error } = await context.supabase
       .from("integration_connections")
       .upsert(payload, { onConflict: "owner_id,provider" })
       .select()
@@ -184,7 +185,7 @@ type IntegrationConnection = {
   category: string;
   display_name: string;
   status: "connected" | "attention" | "disconnected";
-  config: Record<string, unknown>;
+  config: Json;
   last_synced_at: string | null;
   created_at: string;
   updated_at: string;

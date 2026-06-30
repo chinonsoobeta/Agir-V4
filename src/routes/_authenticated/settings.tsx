@@ -45,6 +45,7 @@ import {
   getWorkspaceCompliance,
   listDataGovernanceRequests,
   saveWorkspaceCompliance,
+  type DataGovernanceRequest,
 } from "@/lib/compliance.functions";
 import {
   User,
@@ -595,7 +596,7 @@ function TeamSection() {
   const [newWs, setNewWs] = useState("");
   const create = useMutation({
     mutationFn: () => createFn({ data: { name: newWs.trim() } }),
-    onSuccess: (ws: any) => {
+    onSuccess: (ws) => {
       qc.invalidateQueries({ queryKey: ["workspaces"] });
       refetch();
       if (ws?.id) setActiveWorkspace(ws.id);
@@ -624,7 +625,7 @@ function TeamSection() {
   const invite = useMutation({
     mutationFn: () =>
       inviteFn({ data: { workspace_id: wsId, email: email.trim(), role: inviteRole } }),
-    onSuccess: (inv: any) => {
+    onSuccess: (inv) => {
       qc.invalidateQueries({ queryKey: ["ws-invites", wsId] });
       setEmail("");
       const link = inv?.token ? `${window.location.origin}/accept-invite?token=${inv.token}` : null;
@@ -1324,7 +1325,7 @@ function DataSection() {
               Log request
             </Button>
             <div className="space-y-2">
-              {(requestsQuery.data ?? []).slice(0, 6).map((request: any) => (
+              {(requestsQuery.data ?? []).slice(0, 6).map((request: DataGovernanceRequest) => (
                 <div key={request.id} className="flex items-center gap-2 text-sm">
                   <Badge variant="secondary">{request.status}</Badge>
                   <span className="capitalize">{request.request_type.replaceAll("_", " ")}</span>

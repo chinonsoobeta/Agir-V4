@@ -12,8 +12,9 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 267",
     "verify": "npm run test && npm run build",
     "format": "prettier --write .",
     "migrate": "node run_migrations.mjs",
@@ -31,7 +32,8 @@
     "governance:dry-run": "node scripts/enforce-data-governance.mjs --dry-run",
     "restore:drill": "node scripts/restore-staging-from-backup.mjs",
     "pilot:audit": "node scripts/audit-pilot-readiness.mjs",
-    "worker:extraction": "node scripts/extraction-worker.mjs"
+    "worker:extraction": "node scripts/extraction-worker.mjs",
+    "sla:probe": "node scripts/sla-probe.mjs"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.199",
@@ -98,8 +100,9 @@
   "devDependencies": {
     "@ai-sdk/anthropic": "^3.0.84",
     "@eslint/js": "^9.32.0",
+    "@playwright/test": "^1.61.1",
     "@tanstack/router-plugin": "^1.168.18",
-    "@types/node": "^22.16.5",
+    "@types/node": "^22.20.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.2.0",

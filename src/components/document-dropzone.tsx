@@ -1,9 +1,13 @@
 import { useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { UploadCloud, FileText, Loader2, CheckCircle2, XCircle, CopyX } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { createDocument, analyzeDocument } from "@/lib/documents.functions";
 import { cn } from "@/lib/utils";
+import type { Tables } from "@/integrations/supabase/types";
+
+type CreatedDocument = Tables<"documents"> & { deduped?: boolean };
 
 const ACCEPT = ".pdf,.xlsx,.xls,.doc,.docx,.csv,.png,.jpg,.jpeg";
 const ACCEPT_RE = /\.(pdf|xlsx|xls|docx?|csv|png|jpe?g)$/i;
@@ -24,7 +28,7 @@ async function sha256Hex(file: File): Promise<string | null> {
 type ItemStatus = "queued" | "uploading" | "analyzing" | "done" | "failed" | "duplicate";
 type QueueItem = { id: string; name: string; status: ItemStatus; error?: string };
 
-const STATUS_META: Record<ItemStatus, { icon: any; cls: string; label: string }> = {
+const STATUS_META: Record<ItemStatus, { icon: LucideIcon; cls: string; label: string }> = {
   queued: { icon: FileText, cls: "text-muted-foreground", label: "Queued" },
   uploading: { icon: Loader2, cls: "text-primary animate-spin", label: "Uploading…" },
   analyzing: { icon: Loader2, cls: "text-primary animate-spin", label: "Extracting…" },
@@ -89,7 +93,7 @@ export function DocumentDropzone({
       const path = `${u.user.id}/${id}-${file.name}`;
       const { error: upErr } = await supabase.storage.from("documents").upload(path, file);
       if (upErr) throw upErr;
-      const doc: any = await createFn({
+      const doc: CreatedDocument = await createFn({
         data: {
           project_id: projectId,
           name: file.name,
@@ -110,17 +114,20 @@ export function DocumentDropzone({
         setItem(id, { status: "analyzing" });
         try {
           await analyzeFn({ data: { id: doc.id, name: file.name, category } });
-        } catch (e: any) {
+        } catch (e) {
           // Extraction failure is non-fatal: the file is uploaded; surface why.
-          setItem(id, { status: "failed", error: e?.message ?? "Extraction failed" });
+          setItem(id, {
+            status: "failed",
+            error: e instanceof Error ? e.message : "Extraction failed",
+          });
           onChanged();
           return;
         }
       }
       setItem(id, { status: "done" });
       onChanged();
-    } catch (e: any) {
-      setItem(id, { status: "failed", error: e?.message ?? "Upload failed" });
+    } catch (e) {
+      setItem(id, { status: "failed", error: e instanceof Error ? e.message : "Upload failed" });
     }
   }
 

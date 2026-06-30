@@ -26,6 +26,9 @@ import { createMarketSignal, listMarketSignals } from "@/lib/operations.function
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Plus, Radar } from "lucide-react";
 import { toast } from "sonner";
+import type { Tables } from "@/integrations/supabase/types";
+
+type MarketSignal = Tables<"market_signals">;
 
 const signalsQ = queryOptions({ queryKey: ["market-signals"], queryFn: () => listMarketSignals() });
 
@@ -36,16 +39,15 @@ export const Route = createFileRoute("/_authenticated/markets")({
 });
 
 function MarketsPage() {
-  const { data: signals } = useSuspenseQuery(signalsQ);
+  const { data: signals } = useSuspenseQuery(signalsQ) as { data: MarketSignal[] };
   const [open, setOpen] = useState(false);
   const [market, setMarket] = useState("all");
   useRealtimeRefresh();
   const markets = useMemo<string[]>(
-    () => Array.from(new Set<string>((signals as any[]).map((signal) => String(signal.market)))),
+    () => Array.from(new Set<string>(signals.map((signal) => String(signal.market)))),
     [signals],
   );
-  const visible =
-    market === "all" ? signals : signals.filter((signal: any) => signal.market === market);
+  const visible = market === "all" ? signals : signals.filter((signal) => signal.market === market);
 
   return (
     <>
@@ -87,7 +89,7 @@ function MarketsPage() {
         </div>
         {visible.length ? (
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {visible.map((signal: any) => (
+            {visible.map((signal) => (
               <SignalCard key={signal.id} signal={signal} />
             ))}
           </div>
@@ -105,7 +107,7 @@ function MarketsPage() {
   );
 }
 
-function SignalCard({ signal }: { signal: any }) {
+function SignalCard({ signal }: { signal: MarketSignal }) {
   const Icon =
     signal.trend === "up" ? ArrowUpRight : signal.trend === "down" ? ArrowDownRight : ArrowRight;
   return (
@@ -148,7 +150,7 @@ function SignalDialog({ onClose }: { onClose: () => void }) {
   });
   const mutation = useMutation({
     mutationFn: () =>
-      fn({ data: { ...form, period: form.period || null, source: form.source || null } as any }),
+      fn({ data: { ...form, period: form.period || null, source: form.source || null } }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["market-signals"] });
       toast.success("Market signal added");

@@ -24,6 +24,26 @@ export type OcrResult = {
 };
 export type OcrRunner = (buf: ArrayBuffer) => Promise<OcrResult>;
 
+// Minimal structural shapes describing only the members we actually call on the
+// optional `unpdf` and `tesseract.js` runtime dependencies.
+type UnpdfModule = {
+  getDocumentProxy?: (data: Uint8Array) => Promise<{ numPages?: number } | null>;
+  renderPageAsImage?: (
+    data: Uint8Array,
+    page: number,
+    opts: { canvas: () => Promise<unknown>; scale: number },
+  ) => Promise<Uint8Array | ArrayBuffer | null>;
+};
+
+type TesseractWorker = {
+  recognize: (input: Buffer) => Promise<{ data?: { text?: string; confidence?: number } }>;
+  terminate: () => Promise<unknown>;
+};
+
+type TesseractModule = {
+  createWorker?: (lang: string) => Promise<TesseractWorker>;
+};
+
 // Optional dynamic import: never throws, returns null when the module is not
 // installed. The variable specifier + @vite-ignore keep it out of the bundle.
 async function optionalImport<T = unknown>(spec: string): Promise<T | null> {
@@ -48,7 +68,7 @@ function resolveMaxOcrPages(): number {
 export const MAX_OCR_PAGES = resolveMaxOcrPages();
 
 export const defaultOcrRunner: OcrRunner = async (buf) => {
-  const unpdf = await optionalImport<any>("unpdf");
+  const unpdf = await optionalImport<UnpdfModule>("unpdf");
   if (!unpdf?.renderPageAsImage || !unpdf?.getDocumentProxy) return { text: "", confidence: 0 };
 
   let pageCount = 1;
@@ -62,10 +82,10 @@ export const defaultOcrRunner: OcrRunner = async (buf) => {
     return { text: "", confidence: 0 };
   }
 
-  const tesseract = await optionalImport<any>("tesseract.js");
+  const tesseract = await optionalImport<TesseractModule>("tesseract.js");
   if (!tesseract?.createWorker) return { text: "", confidence: 0 };
 
-  let worker: any;
+  let worker: TesseractWorker;
   try {
     worker = await tesseract.createWorker("eng");
   } catch {

@@ -98,7 +98,7 @@ function AssumptionsReviewCenter() {
                 </tr>
               </thead>
               <tbody>
-                {visible.map((a: any) => (
+                {visible.map((a) => (
                   <tr key={a.id} className="hover:bg-accent/30">
                     <td>
                       <Link
@@ -106,7 +106,7 @@ function AssumptionsReviewCenter() {
                         params={{ id: a.project_id }}
                         className="font-medium hover:text-primary"
                       >
-                        {a.projects?.name ?? "Not available"}
+                        {a.projects?.name ?? "–"}
                       </Link>
                     </td>
                     <td>{a.field_label}</td>
@@ -114,7 +114,7 @@ function AssumptionsReviewCenter() {
                     <td className="text-right num">
                       {a.value_numeric != null
                         ? Number(a.value_numeric).toLocaleString()
-                        : (a.value_text ?? "Not available")}{" "}
+                        : (a.value_text ?? "–")}{" "}
                       {a.unit && a.unit !== "text" ? a.unit : ""}
                     </td>
                     <td className="text-center font-mono text-xs">{a.confidence_score}%</td>
@@ -127,7 +127,7 @@ function AssumptionsReviewCenter() {
                       </Badge>
                     </td>
                     <td className="text-xs text-muted-foreground max-w-[220px] truncate">
-                      {a.source_location || "Not available"}
+                      {a.source_location || "–"}
                     </td>
                   </tr>
                 ))}

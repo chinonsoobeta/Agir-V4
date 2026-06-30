@@ -159,7 +159,7 @@ function report() {
     },
     generationMode: "deterministic",
     generatedLabel: "June 2026",
-  });
+  } as unknown as Parameters<typeof buildMemoReport>[0]);
 }
 
 describe("Memo report content rules", () => {

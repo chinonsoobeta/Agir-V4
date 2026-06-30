@@ -7,11 +7,13 @@ import { listFinancialOutputs, listAssumptions } from "@/lib/assumptions.functio
 import { getEngineInput } from "@/lib/underwriting.functions";
 import { Card } from "@/components/ui/card";
 import { buildDecision } from "@/lib/decision";
+import type { AssumptionRow, OutputRow } from "@/lib/decision";
 import { SectionLabel, Eyebrow, TONE_TEXT } from "@/components/decision-ui";
 import { UnderwritingPanel } from "@/components/underwriting-panel";
 import { SensitivityPanel } from "@/components/sensitivity-panel";
 import { ScheduleGrid } from "@/components/schedule-grid";
 import { ArrowDownRight, ArrowUpRight, GitBranch, Activity, ShieldCheck } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 const outputsQ = (pid: string) =>
   queryOptions({
@@ -62,7 +64,7 @@ export function AnalysisPanel({ projectId }: { projectId: string }) {
   const { data: outputs } = useSuspenseQuery(outputsQ(projectId));
   const { data: assumptions } = useSuspenseQuery(assumptionsQ(projectId));
   const { data: engineInput } = useSuspenseQuery(engineInputQ(projectId));
-  const decision = buildDecision(outputs as any, assumptions as any);
+  const decision = buildDecision(outputs as OutputRow[], assumptions as AssumptionRow[]);
   const f = decision.findings;
   const scenarios = decision.norm.scenarios;
   const presentStress = STRESS_ORDER.filter((k) => scenarios[k]);
@@ -107,7 +109,7 @@ export function AnalysisPanel({ projectId }: { projectId: string }) {
                         key={sk}
                         className={`text-right num ${v == null ? "text-muted-foreground" : breaks ? "text-destructive font-semibold" : "text-success"}`}
                       >
-                        {v == null ? "Not available" : g.fmt(v)}
+                        {v == null ? "–" : g.fmt(v)}
                       </td>
                     );
                   })}
@@ -163,7 +165,7 @@ export function AnalysisPanel({ projectId }: { projectId: string }) {
                   <span
                     className={`num text-sm ${worst == null ? "text-muted-foreground" : breaks ? "text-destructive" : "text-success"}`}
                   >
-                    {worst == null ? "Not available" : g.fmt(worst)}
+                    {worst == null ? "–" : g.fmt(worst)}
                   </span>
                 </div>
               );
@@ -235,7 +237,7 @@ function DriverBlock({
   drivers,
 }: {
   title: string;
-  icon: any;
+  icon: LucideIcon;
   tone: "approve" | "reject";
   drivers: { rank: number; name: string; rationale: string }[];
 }) {

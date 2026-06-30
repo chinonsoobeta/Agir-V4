@@ -505,7 +505,7 @@ function DealCard({ d }: { d: DealSummary }) {
           </Link>
           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
             <MapPin className="size-3" />
-            {d.location || "Not available"} · <span>{assetTypeLabel(d.type)}</span>
+            {d.location || "–"} · <span>{assetTypeLabel(d.type)}</span>
           </div>
         </div>
         <AlertDialog>
@@ -564,7 +564,7 @@ function DealCard({ d }: { d: DealSummary }) {
           </div>
           <div className="h-8 flex items-center gap-1.5 text-xs">
             <CalendarClock className="size-3.5 text-muted-foreground" />
-            {d.targetCloseDate ?? "Not available"}
+            {d.targetCloseDate ?? "–"}
           </div>
         </div>
       </div>
@@ -578,7 +578,7 @@ function DealCard({ d }: { d: DealSummary }) {
           <div className="grid grid-cols-3 gap-2 border-t border-border pt-4">
             <Stat
               label="Investment"
-              value={d.investmentScore != null ? String(d.investmentScore) : "Not available"}
+              value={d.investmentScore != null ? String(d.investmentScore) : "–"}
               accent={tone}
             />
             <Stat label="Confidence" value={String(d.confidenceScore)} />
@@ -675,9 +675,7 @@ function DealTable({
                   >
                     {deal.name}
                   </Link>
-                  <div className="text-[11px] text-muted-foreground">
-                    {deal.location || "Not available"}
-                  </div>
+                  <div className="text-[11px] text-muted-foreground">{deal.location || "–"}</div>
                 </td>
                 {show("stage") && (
                   <td>
@@ -690,13 +688,13 @@ function DealTable({
                 {show("capital") && <td className="num text-right">{fmtCompact(deal.capital)}</td>}
                 {show("probability") && <td className="num text-right">{deal.probability}%</td>}
                 {show("investment") && (
-                  <td className="num text-right">{deal.investmentScore ?? "Not available"}</td>
+                  <td className="num text-right">{deal.investmentScore ?? "–"}</td>
                 )}
                 {show("confidence") && <td className="num text-right">{deal.confidenceScore}</td>}
                 {show("close") && (
                   <td>
                     <span className={overdue ? "text-destructive font-medium" : ""}>
-                      {deal.targetCloseDate || "Not available"}
+                      {deal.targetCloseDate || "–"}
                       {overdue && ` · ${Math.abs(days!)}d overdue`}
                     </span>
                   </td>

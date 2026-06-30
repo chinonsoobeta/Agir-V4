@@ -10,11 +10,13 @@ export const getDealTimeline = createServerFn({ method: "GET" })
   .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
   .middleware([requireSupabaseAuth])
   .handler(async ({ data, context }): Promise<TimelineEvent[]> => {
-    const supabase = context.supabase as any;
+    const supabase = context.supabase;
     const pid = data.project_id;
 
     // Optional source: resolve to [] on any missing-relation / error.
-    const safe = async (p: Promise<{ data: any; error: any }>) => {
+    const safe = async <T>(
+      p: PromiseLike<{ data: T[] | null; error: { code?: string; message?: string } | null }>,
+    ): Promise<T[]> => {
       try {
         const { data: rows, error } = await p;
         if (isMissingRelation(error) || error) return [];
@@ -63,6 +65,19 @@ export const getDealTimeline = createServerFn({ method: "GET" })
       ),
     ]);
 
-    const sources: RawSources = { activities, audit, decisions, documents, reports, milestones };
+    // audit_logs.payload is a Json column; the timeline mapper reads it as a
+    // plain object, so narrow it to the mapper's expected record shape.
+    const auditRows = audit.map((a) => ({
+      ...a,
+      payload: a.payload as Record<string, unknown> | null,
+    }));
+    const sources: RawSources = {
+      activities,
+      audit: auditRows,
+      decisions,
+      documents,
+      reports,
+      milestones,
+    };
     return mapTimeline(sources).slice(0, 120);
   });

@@ -4,7 +4,7 @@
 // an explicit Key Returns section that shows IRR status (N/M, never 0.00%).
 
 import { buildMemoReport, type MemoReport } from "../memo-report";
-import type { ReportData } from "./report-data.server";
+import type { ReportData, ProjectRow } from "./report-data.server";
 import { makeAccessors, reportVerdict, irrStatusText, money, pct, bps, x } from "./report-common";
 
 export function buildInvestorReport(
@@ -13,7 +13,7 @@ export function buildInvestorReport(
 ): MemoReport {
   const verdict = reportVerdict(data);
   const report = buildMemoReport({
-    project: data.project ?? {},
+    project: data.project ?? ({} as ProjectRow),
     assumptions: data.assumptions,
     engineInputs: data.engineInputs,
     outputs: data.outputs,

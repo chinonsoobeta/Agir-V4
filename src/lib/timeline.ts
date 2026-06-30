@@ -72,7 +72,7 @@ export type RawSources = {
         id?: string;
         action: string;
         entity_type?: string | null;
-        payload?: any;
+        payload?: Record<string, unknown> | null;
         user_name?: string | null;
         created_at: string;
       }[]
@@ -129,12 +129,12 @@ export function mapTimeline(src: RawSources): TimelineEvent[] {
     };
     let detail: string | null = null;
     if (a.payload && typeof a.payload === "object") {
-      if (a.action === "run_full_underwriting" && a.payload.verdict)
-        detail = `Verdict ${a.payload.verdict}${a.payload.risk_score != null ? ` · risk ${a.payload.risk_score}` : ""}`;
-      else if (a.action === "accept_defaults" && Array.isArray(a.payload.accepted))
-        detail = `${a.payload.accepted.length} default(s) accepted`;
-      else if (a.action === "resolve_conflict" && a.payload.key)
-        detail = `Resolved ${a.payload.key}`;
+      const p = a.payload;
+      if (a.action === "run_full_underwriting" && p.verdict)
+        detail = `Verdict ${String(p.verdict)}${p.risk_score != null ? ` · risk ${String(p.risk_score)}` : ""}`;
+      else if (a.action === "accept_defaults" && Array.isArray(p.accepted))
+        detail = `${p.accepted.length} default(s) accepted`;
+      else if (a.action === "resolve_conflict" && p.key) detail = `Resolved ${String(p.key)}`;
     }
     events.push({
       id: a.id ?? `aud:${a.created_at}:${a.action}`,

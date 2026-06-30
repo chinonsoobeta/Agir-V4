@@ -52,7 +52,7 @@ function PortfolioPage() {
   const underReview = deals.filter((d) => !["Approved", "Rejected"].includes(d.stage));
 
   const cap = (xs: DealSummary[]) => xs.reduce((s, d) => s + d.capital, 0);
-  const avgRisk = summary.avgRiskScore ?? 0;
+  const avgRisk = summary.avgRiskScore;
   const avgConf = summary.avgConfidence;
 
   // Investment queue: deals that need a human action, most urgent first.
@@ -121,7 +121,11 @@ function PortfolioPage() {
           <Kpi label="Capital Under Review" value={fmtCompact(cap(underReview))} />
           <Kpi label="Approved Capital" value={fmtCompact(cap(approved))} tone="approve" />
           <Kpi label="Rejected Capital" value={fmtCompact(cap(rejected))} tone="reject" />
-          <Kpi label="Avg Risk Score" value={String(avgRisk)} sub="/ 100" />
+          <Kpi
+            label="Avg Risk Score"
+            value={avgRisk != null ? String(avgRisk) : "–"}
+            sub={avgRisk != null ? "/ 100" : undefined}
+          />
           <Kpi label="Avg Confidence" value={String(avgConf)} sub="/ 100" tone="return" />
           <Kpi
             label="In IC"
@@ -183,14 +187,20 @@ function PortfolioPage() {
                     <Link to="/projects/$id" params={{ id: d.id }} className="min-w-0 flex-1">
                       <div className="font-medium truncate hover:text-primary">{d.name}</div>
                       <div className="text-xs text-muted-foreground truncate">
-                        {d.location || "Not available"} · {d.stage}
+                        {d.location || "–"} · {d.stage}
                         {d.topRisk ? ` · ${d.topRisk}` : ""}
                       </div>
                     </Link>
                     <div className="hidden sm:block text-right">
                       <div className="num text-sm">
-                        {d.investmentScore ?? "Not available"}
-                        <span className="text-muted-foreground text-xs"> / 100</span>
+                        {d.investmentScore != null ? (
+                          <>
+                            {d.investmentScore}
+                            <span className="text-muted-foreground text-xs"> / 100</span>
+                          </>
+                        ) : (
+                          "–"
+                        )}
                       </div>
                       <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
                         Score
@@ -306,7 +316,7 @@ function Kpi({
       </div>
       <div className={`num text-2xl mt-2 ${color}`}>
         {value}
-        <span className="text-muted-foreground text-sm">{sub}</span>
+        {sub ? <span className="text-muted-foreground text-sm ml-1">{sub}</span> : null}
       </div>
     </Card>
   );

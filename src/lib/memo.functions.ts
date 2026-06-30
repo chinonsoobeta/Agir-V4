@@ -4,6 +4,7 @@ import { z } from "zod";
 import { computeInvestmentVerdict } from "./verdict";
 import { buildAllowedValues, verifyNumericProvenance, type AllowedValue } from "./engine";
 import { DEFAULT_AI_MODEL } from "./ai-gateway.server";
+import type { MemoReportContext } from "./memo-report";
 
 // The LLM's only job here is PROSE around values injected from engine output.
 // It runs at temperature 0, and every generated memo is post-verified: each
@@ -130,12 +131,12 @@ export const generateMemo = createServerFn({ method: "POST" })
 
     const outputValue = (scenario: string, key: string) =>
       Number(
-        outputs.find((row: any) => row.scenario_key === scenario && row.metric_key === key)
+        outputs.find((row) => row.scenario_key === scenario && row.metric_key === key)
           ?.value_numeric ?? 0,
       );
-    const errorFlags = flags.filter((f: any) => f.severity === "error" && !f.resolved);
+    const errorFlags = flags.filter((f) => f.severity === "error" && !f.resolved);
     const verdictRow = outputs.find(
-      (row: any) => row.scenario_key === "base" && row.metric_key === "verdict",
+      (row) => row.scenario_key === "base" && row.metric_key === "verdict",
     );
     const verdict = computeInvestmentVerdict({
       equity_multiple: outputValue("base", "equity_multiple"),
@@ -158,12 +159,14 @@ export const generateMemo = createServerFn({ method: "POST" })
     const { buildMemoReport, memoReportText } = await import("./memo-report");
     const report = buildMemoReport({
       project,
-      assumptions,
-      engineInputs,
-      outputs,
-      flags,
-      risks,
-      documents,
+      // These are column-subset selects; the memo builder reads only the
+      // selected fields, so assert them to the full row shapes it expects.
+      assumptions: assumptions as unknown as MemoReportContext["assumptions"],
+      engineInputs: engineInputs as unknown as MemoReportContext["engineInputs"],
+      outputs: outputs as unknown as MemoReportContext["outputs"],
+      flags: flags as unknown as MemoReportContext["flags"],
+      risks: risks as unknown as MemoReportContext["risks"],
+      documents: documents as unknown as MemoReportContext["documents"],
       verdict,
       generationMode: generation_mode,
       generatedLabel: new Date().toLocaleString("en-US", { month: "long", year: "numeric" }),
@@ -195,17 +198,17 @@ export const generateMemo = createServerFn({ method: "POST" })
     // engine inputs and outputs stay untyped, so a legitimate rate is never
     // falsely orphaned.
     const cashFlowAllowed: AllowedValue[] = [];
-    for (const c of cashFlows as any[]) {
+    for (const c of cashFlows) {
       const v = Number(c.amount);
       if (Number.isFinite(v))
         cashFlowAllowed.push({ value: v, unit: "$" }, { value: -v, unit: "$" });
     }
     const allowed: AllowedValue[] = [
       ...buildAllowedValues(
-        assumptions.map((a: any) => (a.value_numeric == null ? null : Number(a.value_numeric))),
-        engineInputs.map((r: any) => (r.value_numeric == null ? null : Number(r.value_numeric))),
-        outputs.map((o: any) => (o.value_numeric == null ? null : Number(o.value_numeric))),
-        flags.flatMap((f: any) => [
+        assumptions.map((a) => (a.value_numeric == null ? null : Number(a.value_numeric))),
+        engineInputs.map((r) => (r.value_numeric == null ? null : Number(r.value_numeric))),
+        outputs.map((o) => (o.value_numeric == null ? null : Number(o.value_numeric))),
+        flags.flatMap((f) => [
           f.expected == null ? null : Number(f.expected),
           f.actual == null ? null : Number(f.actual),
         ]),
@@ -268,15 +271,16 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
       parse_warning = parsed.parse_warning;
     } else {
       const { buildDeterministicMemo } = await import("./memo-template");
+      type DetCtx = Parameters<typeof buildDeterministicMemo>[0];
       memo = buildDeterministicMemo({
         project,
-        assumptions,
-        engineInputs,
-        outputs,
-        cashFlows,
-        flags,
-        risks,
-        errorFlags,
+        assumptions: assumptions as unknown as DetCtx["assumptions"],
+        engineInputs: engineInputs as unknown as DetCtx["engineInputs"],
+        outputs: outputs as unknown as DetCtx["outputs"],
+        cashFlows: cashFlows as unknown as DetCtx["cashFlows"],
+        flags: flags as unknown as DetCtx["flags"],
+        risks: risks as unknown as DetCtx["risks"],
+        errorFlags: errorFlags as unknown as DetCtx["errorFlags"],
         verdict,
       });
     }
@@ -365,14 +369,18 @@ export const debugMemoReadiness = createServerFn({ method: "GET" })
       .eq("id", data.project_id)
       .maybeSingle();
 
+    type CountQuery = PromiseLike<{ count: number | null }> & {
+      eq: (column: string, value: string) => CountQuery;
+      in: (column: string, values: string[]) => CountQuery;
+    };
     const count = async (
       table: "assumptions" | "underwriting_inputs" | "cash_flows" | "reconciliation_flags",
-      filters?: (q: any) => any,
+      filters?: (q: CountQuery) => CountQuery,
     ) => {
       let q = context.supabase
         .from(table)
         .select("*", { count: "exact", head: true })
-        .eq("project_id", data.project_id);
+        .eq("project_id", data.project_id) as unknown as CountQuery;
       if (filters) q = filters(q);
       const { count: c } = await q;
       return c ?? 0;
@@ -390,12 +398,12 @@ export const debugMemoReadiness = createServerFn({ method: "GET" })
       .select("scenario_key,metric_key,value_numeric,formula_text,inputs")
       .eq("project_id", data.project_id);
     const financial_outputs_count = outputs?.length ?? 0;
-    const base_outputs_count = (outputs ?? []).filter((o: any) => o.scenario_key === "base").length;
+    const base_outputs_count = (outputs ?? []).filter((o) => o.scenario_key === "base").length;
     const combined_outputs_count = (outputs ?? []).filter(
-      (o: any) => o.scenario_key === "combined",
+      (o) => o.scenario_key === "combined",
     ).length;
     const verdictRow = (outputs ?? []).find(
-      (o: any) => o.scenario_key === "base" && o.metric_key === "verdict",
+      (o) => o.scenario_key === "base" && o.metric_key === "verdict",
     );
     const latest_verdict =
       (verdictRow?.inputs as { code?: string } | null)?.code ?? verdictRow?.formula_text ?? null;
@@ -405,7 +413,7 @@ export const debugMemoReadiness = createServerFn({ method: "GET" })
       .select("severity,resolved")
       .eq("project_id", data.project_id);
     const unresolved_error_flags_count = (flags ?? []).filter(
-      (f: any) => f.severity === "error" && !f.resolved,
+      (f) => f.severity === "error" && !f.resolved,
     ).length;
 
     // Detect which optional columns the table actually has.

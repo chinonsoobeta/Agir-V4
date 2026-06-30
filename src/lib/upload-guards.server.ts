@@ -7,6 +7,9 @@
 // which catches the common malformed / disguised-file cases without a network
 // dependency.
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
+
 export const UPLOAD_LIMITS = {
   // Authoritative per-file size cap (also enforced client-side for UX).
   maxFileBytes: 75 * 1024 * 1024, // 75 MB
@@ -165,7 +168,7 @@ export async function scanDocument(name: string, buf: ArrayBuffer): Promise<Full
  * file of `incomingBytes` would breach the file-count or byte quota.
  */
 export async function enforceUploadQuota(
-  ctx: { supabase: any; userId: string },
+  ctx: { supabase: SupabaseClient<Database>; userId: string },
   incomingBytes: number,
 ): Promise<void> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

@@ -24,6 +24,9 @@ import { FileText, Trash2, Sparkles, Download, Link2, AlertTriangle } from "luci
 import { useState } from "react";
 import { toast } from "sonner";
 import { DocumentDropzone } from "@/components/document-dropzone";
+import type { Tables } from "@/integrations/supabase/types";
+
+type DocumentRow = Tables<"documents">;
 
 const docsQ = queryOptions({
   queryKey: ["documents", "all"],
@@ -46,6 +49,17 @@ const CATEGORIES = [
   "Other",
 ];
 
+// Raw upload names are underscore-joined ("Harbour_Centre_Rent_Roll.xlsx"); show
+// a human title for the card and keep the exact filename in the tooltip.
+function friendlyDocName(name: string): string {
+  return (
+    name
+      .replace(/\.[a-z0-9]+$/i, "")
+      .replace(/_+/g, " ")
+      .trim() || name
+  );
+}
+
 export const Route = createFileRoute("/_authenticated/documents")({
   head: () => ({ meta: [{ title: "Documents | Agir" }] }),
   loader: ({ context }) =>
@@ -64,15 +78,15 @@ function DocumentsPage() {
 
   // Which document contributed which assumptions: the provenance link.
   const contributions = new Map<string, string[]>();
-  for (const a of allAssumptions as any[]) {
+  for (const a of allAssumptions) {
     if (!a.source_document_id) continue;
     const arr = contributions.get(a.source_document_id) ?? [];
     arr.push(a.field_label);
     contributions.set(a.source_document_id, arr);
   }
-  const analysed = docs.filter((d: any) => d.ai_summary).length;
-  const contributing = docs.filter((d: any) => contributions.has(d.id)).length;
-  const totalContribued = (allAssumptions as any[]).filter((a) => a.source_document_id).length;
+  const analysed = docs.filter((d) => d.ai_summary).length;
+  const contributing = docs.filter((d) => contributions.has(d.id)).length;
+  const totalContribued = allAssumptions.filter((a) => a.source_document_id).length;
   const qc = useQueryClient();
   const delFn = useServerFn(deleteDocument);
   const analyzeFn = useServerFn(analyzeDocument);
@@ -90,7 +104,8 @@ function DocumentsPage() {
     },
   });
   const analyze = useMutation({
-    mutationFn: (d: any) => analyzeFn({ data: { id: d.id, name: d.name, category: d.category } }),
+    mutationFn: (d: DocumentRow) =>
+      analyzeFn({ data: { id: d.id, name: d.name, category: d.category } }),
     onSuccess: () => toast.success("AI analysis ready"),
     onError: (e: Error) => toast.error(e.message),
     // Refetch on success AND failure so a persisted extraction_failed status surfaces.
@@ -157,7 +172,7 @@ function DocumentsPage() {
           <DocumentDropzone
             projectId={projectId !== UNASSIGNED ? projectId : null}
             category={category}
-            existingNames={docs.map((d: any) => d.name)}
+            existingNames={docs.map((d) => d.name)}
             onChanged={() => {
               qc.invalidateQueries({ queryKey: ["documents", "all"] });
               qc.invalidateQueries({ queryKey: ["assumptions", "all"] });
@@ -177,10 +192,11 @@ function DocumentsPage() {
                   <div className="flex items-start gap-3 min-w-0">
                     <FileText className="size-5 text-primary shrink-0 mt-0.5" />
                     <div className="min-w-0">
-                      <div className="font-medium text-sm truncate">{d.name}</div>
+                      <div className="font-medium text-sm truncate" title={d.name}>
+                        {friendlyDocName(d.name)}
+                      </div>
                       <div className="text-[11px] text-muted-foreground mt-0.5">
-                        {d.category || "Not available"} ·{" "}
-                        {new Date(d.upload_date).toLocaleDateString()}
+                        {d.category || "–"} · {new Date(d.upload_date).toLocaleDateString()}
                       </div>
                       {contributions.has(d.id) ? (
                         <Badge
@@ -279,7 +295,7 @@ function DocumentsPage() {
 // visibly flagged for analyst review BEFORE it can drive a verdict. OCR
 // confidence < 70% is shown in warning colour; a rejected safety scan or a
 // page-cap failure is shown as a hard flag.
-function DocQuality({ d }: { d: any }) {
+function DocQuality({ d }: { d: DocumentRow }) {
   const conf = d.ocr_confidence == null ? null : Number(d.ocr_confidence);
   const lowConf = conf != null && conf < 70;
   const chips: { label: string; cls: string }[] = [];

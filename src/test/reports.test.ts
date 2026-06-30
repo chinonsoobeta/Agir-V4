@@ -177,7 +177,9 @@ function harbourReportData(): ReportData {
     auditLogs: [],
     scenarios: [],
     unitContractIssues: [],
-  };
+    // Deterministic fixture carries only the fields the report builders read;
+    // assert to the full ReportData row shapes (test mock, not real DB rows).
+  } as unknown as ReportData;
 }
 
 const allText = (r: any) => memoReportText(r);

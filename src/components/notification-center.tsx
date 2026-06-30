@@ -11,6 +11,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { listNotifications, markNotificationRead } from "@/lib/operating-depth.functions";
+import type { Tables } from "@/integrations/supabase/types";
+
+type NotificationRow = Tables<"notifications">;
 
 export function NotificationCenter() {
   const qc = useQueryClient();
@@ -25,7 +28,7 @@ export function NotificationCenter() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
   });
   const items = query.data ?? [];
-  const unread = items.filter((item: any) => !item.read_at).length;
+  const unread = items.filter((item: NotificationRow) => !item.read_at).length;
 
   return (
     <DropdownMenu>
@@ -47,7 +50,7 @@ export function NotificationCenter() {
         <DropdownMenuSeparator />
         <div className="max-h-96 overflow-y-auto">
           {items.length ? (
-            items.slice(0, 12).map((item: any) => (
+            items.slice(0, 12).map((item: NotificationRow) => (
               <Link
                 key={item.id}
                 to={(item.action_url || "/dashboard") as string}

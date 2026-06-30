@@ -102,7 +102,10 @@ describe("unit-contract drift surfaced at the report-data boundary", () => {
       },
       { id: "p1", name: "Clean" },
     );
-    const report = await loadReportData(supabase, "p1");
+    const report = await loadReportData(
+      supabase as unknown as Parameters<typeof loadReportData>[0],
+      "p1",
+    );
     expect(report.unitContractIssues).toEqual([]);
   });
 
@@ -118,7 +121,10 @@ describe("unit-contract drift surfaced at the report-data boundary", () => {
       },
       { id: "p1", name: "Drifted" },
     );
-    const report = await loadReportData(supabase, "p1");
+    const report = await loadReportData(
+      supabase as unknown as Parameters<typeof loadReportData>[0],
+      "p1",
+    );
     const keys = report.unitContractIssues.map((i) => i.key);
     expect(keys).toContain("land_cost");
     expect(keys).toContain("noi");
@@ -133,7 +139,10 @@ describe("unit-contract drift surfaced at the report-data boundary", () => {
       },
       { id: "p1", name: "Legacy" },
     );
-    const report = await loadReportData(supabase, "p1");
+    const report = await loadReportData(
+      supabase as unknown as Parameters<typeof loadReportData>[0],
+      "p1",
+    );
     expect(report.unitContractIssues).toEqual([]);
   });
 });

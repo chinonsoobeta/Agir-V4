@@ -13,6 +13,32 @@ import { ENGINE_SCALAR_TO_TAXONOMY } from "./taxonomy-engine-map";
 import { ASSUMPTION_BY_KEY } from "./assumption-taxonomy";
 import type { ReportProvenanceManifest } from "./reports/provenance-manifest";
 import { provenanceManifestText } from "./reports/provenance-manifest";
+import type {
+  ProjectRow,
+  AssumptionRow,
+  EngineInputRow,
+  OutputRow,
+  FlagRow,
+  RiskRow,
+  DocumentRow,
+} from "./reports/report-data.server";
+
+// The memo builder consumes the same row shapes the report loader produces.
+type MemoProjectRow = ProjectRow;
+type MemoAssumptionRow = AssumptionRow;
+type MemoEngineInputRow = EngineInputRow;
+type MemoOutputRow = OutputRow;
+type MemoFlagRow = FlagRow;
+type MemoRiskRow = RiskRow;
+type MemoDocumentRow = DocumentRow;
+
+// Shapes the builder reads out of Json columns (financial_outputs.inputs and
+// the conflict_values arrays on inputs/assumptions).
+type MemoInsightInputs = {
+  levers?: { passing?: boolean; lever?: string }[];
+  narratives?: Record<string, string | undefined> | null;
+} & Record<string, unknown>;
+type ConflictEntry = { value: number | string | null; source?: string | null };
 
 export type ReportStat = { label: string; value: string; sub?: string };
 export type ReportTable = { columns: string[]; rows: string[][]; note?: string };
@@ -36,15 +62,14 @@ export type MemoReport = {
   provenance_manifest?: ReportProvenanceManifest | null;
 };
 
-type Row = Record<string, any>;
 export type MemoReportContext = {
-  project: Row;
-  assumptions: Row[];
-  engineInputs: Row[];
-  outputs: Row[];
-  flags: Row[];
-  risks: Row[];
-  documents: Row[];
+  project: MemoProjectRow;
+  assumptions: MemoAssumptionRow[];
+  engineInputs: MemoEngineInputRow[];
+  outputs: MemoOutputRow[];
+  flags: MemoFlagRow[];
+  risks: MemoRiskRow[];
+  documents: MemoDocumentRow[];
   verdict: {
     code: string;
     hardFail?: boolean;
@@ -164,7 +189,7 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
   // Short, readable provenance label for BODY tables: prefer the source document
   // name, then a file-like source_location, then a generic fallback: always run
   // through displaySourceLabel so long filenames don't wrap mid-word.
-  const sourceLabel = (a: Row | undefined): string => {
+  const sourceLabel = (a: MemoAssumptionRow | undefined): string => {
     if (!a) return "Approved assumption";
     const byId = a.source_document_id ? docNameById.get(a.source_document_id) : null;
     if (byId) return displaySourceLabel(null, String(byId));
@@ -179,7 +204,8 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
     const r = aByKey(key);
     return r && r.value_numeric != null ? Number(r.value_numeric) : null;
   };
-  const eRow = (key: string): Row | undefined => engineInputs.find((i) => i.key === key);
+  const eRow = (key: string): MemoEngineInputRow | undefined =>
+    engineInputs.find((i) => i.key === key);
   const eVal = (key: string): number | null => {
     const r = eRow(key);
     return r && r.value_numeric != null ? Number(r.value_numeric) : null;
@@ -218,9 +244,9 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
   // the underwriting run persisted it; its numbers are admitted via derived.
   // (Inlined lookup to avoid a circular import with report-common.)
   const memoInsightRow = outputs.find(
-    (o: any) => o.metric_key === "insight" && o.scenario_key === "base",
+    (o) => o.metric_key === "insight" && o.scenario_key === "base",
   );
-  const memoInsightInputs = (memoInsightRow?.inputs ?? null) as Record<string, any> | null;
+  const memoInsightInputs = (memoInsightRow?.inputs ?? null) as MemoInsightInputs | null;
   if (memoInsightRow && memoInsightInputs) {
     for (const n of Array.isArray(memoInsightInputs.derivedValues)
       ? memoInsightInputs.derivedValues
@@ -288,12 +314,12 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
   // unifiedRec is one of APPROVE / APPROVE_WITH_CONDITIONS /
   // RETURN_TO_UNDERWRITING / REJECT; underscores -> spaces gives the label.
   const recommendationLabel = unifiedRec.replace(/_/g, " ");
-  const sourceDoc = (a: Row | undefined): string => {
+  const sourceDoc = (a: MemoAssumptionRow | undefined): string => {
     if (!a) return "Insufficient evidence available";
     const byId = a.source_document_id ? docNameById.get(a.source_document_id) : null;
     return byId || "Approved assumption";
   };
-  const confidenceBand = (a: Row | undefined): string => {
+  const confidenceBand = (a: MemoAssumptionRow | undefined): string => {
     if (!a) return "missing";
     const score = Number(a.confidence_score ?? 0);
     if (score >= 85) return "high";
@@ -301,7 +327,7 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
     if (score > 0) return "low";
     return "not recorded";
   };
-  const statusOf = (a: Row | undefined): string =>
+  const statusOf = (a: MemoAssumptionRow | undefined): string =>
     a?.status ? String(a.status).replace(/_/g, " ") : "not available";
   const metricMeaning = (key: string, value: number | null, target?: string): string => {
     if (value == null) return "Insufficient evidence available.";
@@ -1002,7 +1028,7 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
   ];
   const provenanceRows = usedKeys
     .map((key) => aByKey(key))
-    .filter((a): a is Row => a != null && a.value_numeric != null)
+    .filter((a): a is MemoAssumptionRow => a != null && a.value_numeric != null)
     .map((a) => [
       a.field_label,
       fmtByUnit(a.value_numeric, a.unit),
@@ -1049,14 +1075,14 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
   // documented conflict for the cap (conflict_values on the engine input or the
   // assumption). Candidates and sources are pulled from that stored conflict.
   const capInput = eRow("exit_cap_rate_pct");
-  const capConflictRaw: any[] =
+  const capConflictRaw: ConflictEntry[] =
     Array.isArray(capInput?.conflict_values) && capInput!.conflict_values.length
-      ? capInput!.conflict_values
+      ? (capInput!.conflict_values as ConflictEntry[])
       : Array.isArray(aByKey("exit_cap_rate")?.conflict_values)
-        ? aByKey("exit_cap_rate")!.conflict_values
+        ? (aByKey("exit_cap_rate")!.conflict_values as ConflictEntry[])
         : [];
   const capCandidates = capConflictRaw
-    .map((c: any) => ({ value: Number(c.value), source: c.source as string | undefined }))
+    .map((c) => ({ value: Number(c.value), source: c.source ?? undefined }))
     .filter((c) => Number.isFinite(c.value))
     .filter((c, i, all) => all.findIndex((x) => x.value === c.value) === i);
   capCandidates.forEach((c) => derived.push(c.value));
@@ -1094,9 +1120,7 @@ export function buildMemoReport(ctx: MemoReportContext): MemoReport {
   ];
 
   // What-if levers from the Insight Layer (input changes that clear each gate).
-  const memoFailingLevers = ((memoInsightInputs?.levers ?? []) as any[]).filter(
-    (l) => l && !l.passing,
-  );
+  const memoFailingLevers = (memoInsightInputs?.levers ?? []).filter((l) => l && !l.passing);
   if (memoFailingLevers.length) {
     sections.push({
       heading: "What Would Move the Needle",

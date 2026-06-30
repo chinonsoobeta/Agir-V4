@@ -6,13 +6,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { Tables } from "@/integrations/supabase/types";
 
 export function DealSelector({
   projects,
   value,
   onChange,
 }: {
-  projects: any[];
+  projects: Pick<Tables<"projects">, "id" | "name">[];
   value: string | null;
   onChange: (id: string) => void;
 }) {

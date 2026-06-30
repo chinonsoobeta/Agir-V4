@@ -108,11 +108,14 @@ export async function renderMemoDocxBase64(report: MemoReport): Promise<string> 
     return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [header, ...body] });
   };
 
-  const para = (runs: any[], opts: any = {}) => new Paragraph({ ...opts, children: runs });
+  const para = (
+    runs: import("docx").ParagraphChild[],
+    opts: import("docx").IParagraphOptions = {},
+  ) => new Paragraph({ ...opts, children: runs });
   const spacer = () =>
     new Paragraph({ children: [new TextRun({ text: "" })], spacing: { after: 80 } });
 
-  const children: any[] = [];
+  const children: import("docx").FileChild[] = [];
 
   // Title block
   children.push(para([new TextRun({ text: report.title, bold: true, size: 36, color: INK })]));

@@ -1,7 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
 import { isMissingColumn } from "./db-compat";
+
+type ProjectInsert = Database["public"]["Tables"]["projects"]["Insert"];
+type ProjectUpdate = Database["public"]["Tables"]["projects"]["Update"];
 
 // Columns added by the operating-platform migration. If that migration has not
 // been applied to the target database yet, writes including these must degrade
@@ -14,10 +18,14 @@ const OPERATING_COLUMNS = [
   "workspace_id",
 ] as const;
 
-function stripOperatingColumns<T extends Record<string, any>>(row: T): Partial<T> {
-  const copy: Record<string, any> = { ...row };
+type OperatingColumn = (typeof OPERATING_COLUMNS)[number];
+
+function stripOperatingColumns<T extends Record<string, unknown>>(
+  row: T,
+): Omit<T, OperatingColumn> {
+  const copy: Record<string, unknown> = { ...row };
   for (const c of OPERATING_COLUMNS) delete copy[c];
-  return copy as Partial<T>;
+  return copy as Omit<T, OperatingColumn>;
 }
 
 const ProjectSchema = z.object({
@@ -86,17 +94,17 @@ export const createProject = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => ProjectSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const payload = { ...data, owner_id: context.userId };
+    const payload: ProjectInsert = { ...data, owner_id: context.userId };
     let { data: proj, error } = await context.supabase
       .from("projects")
-      .insert(payload as any)
+      .insert(payload)
       .select()
       .single();
     // Older schema without the operating-platform columns: retry with base fields.
     if (isMissingColumn(error)) {
       ({ data: proj, error } = await context.supabase
         .from("projects")
-        .insert(stripOperatingColumns(payload) as any)
+        .insert(stripOperatingColumns(payload))
         .select()
         .single());
     }
@@ -118,14 +126,15 @@ export const updateProject = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { id, ...patch } = data;
+    const projectPatch: ProjectUpdate = patch;
     let { data: proj, error } = await context.supabase
       .from("projects")
-      .update(patch as any)
+      .update(projectPatch)
       .eq("id", id)
       .select()
       .single();
     if (isMissingColumn(error)) {
-      const base = stripOperatingColumns(patch);
+      const base = stripOperatingColumns(projectPatch);
       // Nothing left to update once operating columns are stripped → re-read the row.
       if (Object.keys(base).length === 0) {
         ({ data: proj, error } = await context.supabase
@@ -136,7 +145,7 @@ export const updateProject = createServerFn({ method: "POST" })
       } else {
         ({ data: proj, error } = await context.supabase
           .from("projects")
-          .update(base as any)
+          .update(base)
           .eq("id", id)
           .select()
           .single());

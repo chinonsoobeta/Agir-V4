@@ -404,7 +404,7 @@ describe("WS1.1C LP/GP waterfall and promote (hand-computed)", () => {
       verdict,
       generationMode: "deterministic",
       generatedLabel: "June 2026",
-    });
+    } as unknown as Parameters<typeof buildMemoReport>[0]);
 
     // The LP / GP Returns section is present (the promote is active).
     expect(report.sections.some((s) => s.heading === "LP / GP Returns")).toBe(true);

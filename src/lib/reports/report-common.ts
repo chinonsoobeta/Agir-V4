@@ -15,8 +15,22 @@ import {
   displaySourceLabel,
   type ReportStat,
 } from "../memo-report";
-import type { ReportData } from "./report-data.server";
+import type { ReportData, AssumptionRow } from "./report-data.server";
 import type { AllowedValue } from "../engine/provenance";
+import type { WhatIfLever } from "../context/attribution";
+import type { Interpretation } from "../context/types";
+
+// Structured payload persisted on the "insight" financial_outputs row (Json).
+type InsightInputs = {
+  narratives?: Record<string, string | undefined> | null;
+  bullets?: unknown[];
+  levers?: unknown[];
+  interpretations?: unknown[];
+  derivedValues?: unknown[];
+  recommendation?: string | null;
+};
+// A conflict-value entry as persisted in the conflict_values Json column.
+type ConflictEntry = { value: number | string | null };
 
 import type { ReportDefinition } from "./report-definitions";
 
@@ -163,12 +177,9 @@ export function generationLabel(generatedAt?: string): string {
 }
 
 // Short provenance label for body tables (full filenames stay in appendices).
-export function assumptionSourceLabel(
-  data: ReportData,
-  a: Record<string, any> | undefined,
-): string {
+export function assumptionSourceLabel(data: ReportData, a: AssumptionRow | undefined): string {
   if (!a) return "Approved assumption";
-  const docName = a.documents?.name as string | undefined;
+  const docName = a.documents?.name;
   if (docName) return displaySourceLabel(null, docName);
   const loc = a.source_location;
   if (loc && /\.(pdf|xlsx|xls|docx|csv)$/i.test(String(loc)))
@@ -250,8 +261,8 @@ export type ReportInsight = {
   thesis: string;
   narrative: string;
   bullets: string[];
-  levers: any[];
-  interpretations: any[];
+  levers: WhatIfLever[];
+  interpretations: Interpretation[];
   derived: number[];
   recommendation: string | null;
 };
@@ -261,13 +272,15 @@ export function insightFor(
 ): ReportInsight | null {
   const row = data.outputs.find((o) => o.metric_key === "insight" && o.scenario_key === "base");
   if (!row) return null;
-  const i = (row.inputs ?? {}) as Record<string, any>;
+  const i = (row.inputs ?? {}) as InsightInputs;
   return {
     thesis: String(row.formula_text ?? ""),
     narrative: String(i.narratives?.[audience] ?? i.narratives?.ic ?? ""),
-    bullets: Array.isArray(i.bullets) ? i.bullets : [],
-    levers: Array.isArray(i.levers) ? i.levers : [],
-    interpretations: Array.isArray(i.interpretations) ? i.interpretations : [],
+    bullets: Array.isArray(i.bullets) ? (i.bullets as string[]) : [],
+    levers: Array.isArray(i.levers) ? (i.levers as WhatIfLever[]) : [],
+    interpretations: Array.isArray(i.interpretations)
+      ? (i.interpretations as Interpretation[])
+      : [],
     derived: Array.isArray(i.derivedValues)
       ? i.derivedValues.map(Number).filter((n: number) => Number.isFinite(n))
       : [],
@@ -283,7 +296,7 @@ export function reportAllowedValues(
   extra: number[] = [],
 ): AllowedValue[] {
   const out: AllowedValue[] = [];
-  const push = (n: any, unit?: unknown) => {
+  const push = (n: unknown, unit?: unknown) => {
     const v = Number(n);
     if (!Number.isFinite(v)) return;
     const allowed = allowedValueForUnit(v, unit);
@@ -296,12 +309,12 @@ export function reportAllowedValues(
   // engine input rows may not carry units, so they remain admissible as raw
   // deterministic inputs after the typed pass.
   data.assumptions.forEach((a) => push(a.value_numeric, a.unit));
-  data.engineInputs.forEach((i) =>
-    push(i.value_numeric, tokenUnitForCanonicalUnit((i as any).unit)),
-  );
+  // underwriting_inputs carry no unit column; legacy rows stay admissible as
+  // raw deterministic inputs (unit undefined).
+  data.engineInputs.forEach((i) => push(i.value_numeric, tokenUnitForCanonicalUnit(undefined)));
   // Outputs and cash flows carry a known unit, so a rate token can no longer be
   // validated by an unrelated dollar magnitude (the old unit-blind hole).
-  data.outputs.forEach((o) => push(o.value_numeric, (o as any).unit));
+  data.outputs.forEach((o) => push(o.value_numeric, o.unit));
   data.cashFlows.forEach((c) => push(c.amount, "$"));
   data.budget.forEach((b) => push(b.amount, "$"));
   data.revenue.forEach((r) => {
@@ -326,10 +339,10 @@ export function reportAllowedValues(
       if (a !== 0) push(e / a);
       if (e !== 0) push(a / e);
     }
-    if (Array.isArray(f.conflict_values)) f.conflict_values.forEach((c: any) => push(c.value));
   }
   data.engineInputs.forEach((i) => {
-    if (Array.isArray(i.conflict_values)) i.conflict_values.forEach((c: any) => push(c.value));
+    if (Array.isArray(i.conflict_values))
+      (i.conflict_values as ConflictEntry[]).forEach((c) => push(c.value));
   });
   // Fixed verdict thresholds (left untyped: they surface as both % and x).
   [1.5, 15, 100, 1.2, 1.0].forEach((n) => push(n));

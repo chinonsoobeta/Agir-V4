@@ -8,6 +8,25 @@
 // can run on the client (deal page, committee) or the server (copilot context).
 
 import { generateFindings, type FindingsReport, type FindingsRecommendation } from "./findings";
+import type { DealContext, Interpretation } from "./context/types";
+import type { WhatIfLever } from "./context/attribution";
+
+// The structured JSON persisted in a financial_outputs row's `inputs` column.
+// Different metric rows populate different subsets (the verdict row carries
+// `code`/`gates`/`hardFail`; the insight row carries the deterministic read);
+// every field is optional and read defensively.
+export type OutputRowInputs = {
+  code?: string;
+  hardFail?: boolean;
+  gates?: { pass: boolean }[];
+  recommendation?: DecisionRecommendation;
+  recommendationRationale?: string;
+  gateVerdict?: string;
+  context?: DealContext | null;
+  interpretations?: Interpretation[];
+  levers?: WhatIfLever[];
+  [key: string]: unknown;
+};
 
 export type OutputRow = {
   scenario_key: string;
@@ -16,7 +35,7 @@ export type OutputRow = {
   value_numeric: number | string | null;
   unit?: string | null;
   formula_text?: string | null;
-  inputs?: any;
+  inputs?: OutputRowInputs | null;
 };
 
 export type AssumptionRow = {
@@ -31,7 +50,7 @@ export type AssumptionRow = {
   source_text?: string | null;
   source_location?: string | null;
   confidence_score?: number | null;
-  conflict_values?: any;
+  conflict_values?: Array<{ value: number | string | null; source: string }> | null;
 };
 
 export type RiskRating = "Low" | "Moderate" | "High" | "Critical";
@@ -358,9 +377,9 @@ export const RISK_TONE: Record<RiskRating, "approve" | "condition" | "return" | 
 // The deterministic Insight Layer read, surfaced on the decision/findings tab.
 export type DecisionInsight = {
   thesis: string;
-  interpretations: any[];
-  levers: any[];
-  context: any;
+  interpretations: Interpretation[];
+  levers: WhatIfLever[];
+  context: DealContext | null;
 };
 
 export type DecisionSummary = {
@@ -390,7 +409,7 @@ export function buildDecision(outputs: OutputRow[], assumptions: AssumptionRow[]
   let recommendation: DecisionRecommendation;
   if (norm.hasUnderwriting && Object.keys(norm.base).length > 0) {
     try {
-      findings = generateFindings(outputs as any, assumptions as any);
+      findings = generateFindings(outputs, assumptions);
       recommendation = findings.recommendation;
     } catch {
       recommendation = mapVerdict(norm.verdict);
@@ -399,15 +418,13 @@ export function buildDecision(outputs: OutputRow[], assumptions: AssumptionRow[]
     recommendation = "RETURN_TO_UNDERWRITING";
   }
 
-  const insightRow = outputs.find(
-    (o: any) => o.metric_key === "insight" && o.scenario_key === "base",
-  );
+  const insightRow = outputs.find((o) => o.metric_key === "insight" && o.scenario_key === "base");
   const insight: DecisionInsight | null = insightRow
     ? {
-        thesis: String((insightRow as any).formula_text ?? ""),
-        interpretations: (insightRow as any).inputs?.interpretations ?? [],
-        levers: (insightRow as any).inputs?.levers ?? [],
-        context: (insightRow as any).inputs?.context ?? null,
+        thesis: String(insightRow.formula_text ?? ""),
+        interpretations: insightRow.inputs?.interpretations ?? [],
+        levers: insightRow.inputs?.levers ?? [],
+        context: insightRow.inputs?.context ?? null,
       }
     : null;
 
@@ -416,21 +433,19 @@ export function buildDecision(outputs: OutputRow[], assumptions: AssumptionRow[]
   // contextual read together here. Keeps the deal header, Decision tab, Analysis
   // thesis and memo from ever disagreeing.
   if (norm.hasUnderwriting && Object.keys(norm.base).length > 0) {
-    const persisted = (insightRow as any)?.inputs?.recommendation as
-      | DecisionRecommendation
-      | undefined;
+    const persisted = insightRow?.inputs?.recommendation;
     if (persisted) {
       recommendation = persisted;
     } else {
       const verdictRow = outputs.find(
-        (o: any) => o.metric_key === "verdict" && o.scenario_key === "base",
+        (o) => o.metric_key === "verdict" && o.scenario_key === "base",
       );
       recommendation = reconcileRecommendation({
-        verdictCode: (verdictRow as any)?.inputs?.code ?? null,
-        hardFail: Boolean((verdictRow as any)?.inputs?.hardFail),
+        verdictCode: verdictRow?.inputs?.code ?? null,
+        hardFail: Boolean(verdictRow?.inputs?.hardFail),
         findingsRec: findings?.recommendation ?? null,
         weakContext: (insight?.interpretations ?? []).some(
-          (i: any) => i.band === "weak" || i.band === "critical",
+          (i) => i.band === "weak" || i.band === "critical",
         ),
       }).code;
     }

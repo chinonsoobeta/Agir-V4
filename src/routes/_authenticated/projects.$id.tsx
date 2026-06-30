@@ -24,7 +24,14 @@ import { AnalysisPanel } from "@/components/analysis-panel";
 import { DealOverview } from "@/components/deal-overview";
 import { DealTimeline } from "@/components/deal-timeline";
 import { DealCollaboration } from "@/components/deal-collaboration";
-import { buildDecision, pipelineStageFor, RECOMMENDATION_TONE } from "@/lib/decision";
+import {
+  buildDecision,
+  pipelineStageFor,
+  RECOMMENDATION_TONE,
+  type OutputRow,
+  type AssumptionRow,
+} from "@/lib/decision";
+import type { Tables } from "@/integrations/supabase/types";
 import { assetTypeLabel } from "@/lib/asset-types";
 import { ScoreDial, RecommendationPill, RiskPill } from "@/components/decision-ui";
 
@@ -78,14 +85,18 @@ function DealDetail() {
   const { data: outputs = [] } = useSuspenseQuery(outputsQ(id));
   const { data: decisions = [] } = useSuspenseQuery(decisionsQ(id));
 
-  const decision = buildDecision(outputs as any, assumptions as any);
+  const decision = buildDecision(
+    outputs as unknown as OutputRow[],
+    assumptions as unknown as AssumptionRow[],
+  );
   const stage = pipelineStageFor({
     status: project.status,
     docCount: documents.length,
     hasUnderwriting: decision.hasUnderwriting,
-    decisions: decisions as any,
+    decisions,
   });
   const recTone = RECOMMENDATION_TONE[decision.recommendation];
+  const conflictCount = assumptions.filter((a) => a.status === "conflicting").length;
 
   return (
     <>
@@ -108,10 +119,29 @@ function DealDetail() {
               <h1 className="display text-3xl font-semibold tracking-tight">{project.name}</h1>
               <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
                 <MapPin className="size-3.5" />
-                {project.location || "Not available"}
+                {project.location || "–"}
                 <span className="text-border">·</span>
                 <span>{assetTypeLabel(project.type)}</span>
               </div>
+              {!decision.hasUnderwriting && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground mt-3">
+                  <span>
+                    {documents.length} document{documents.length === 1 ? "" : "s"}
+                  </span>
+                  <span className="text-border">·</span>
+                  <span>
+                    {assumptions.length} assumption{assumptions.length === 1 ? "" : "s"} extracted
+                  </span>
+                  {conflictCount > 0 && (
+                    <>
+                      <span className="text-border">·</span>
+                      <span className="text-warning">
+                        {conflictCount} conflict{conflictCount === 1 ? "" : "s"} to resolve
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
               {decision.hasUnderwriting && (
                 <div className="flex items-center gap-2.5 mt-4">
                   <RecommendationPill rec={decision.recommendation} />
@@ -143,7 +173,7 @@ function DealDetail() {
         <Tabs
           value={tab}
           onValueChange={(v) => {
-            setTab(v as any);
+            setTab(v as (typeof TABS)[number]["value"]);
             setVisited((p) => new Set(p).add(v));
           }}
         >
@@ -209,7 +239,7 @@ function DocumentsTab({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const [category, setCategory] = useState<string>("Other");
 
-  function extractionBadge(d: any) {
+  function extractionBadge(d: Tables<"documents">) {
     if (d.ai_summary)
       return { cls: "bg-success/10 text-success border-success/30", label: "Extracted" };
     if (d.status === "extraction_failed")
@@ -243,7 +273,7 @@ function DocumentsTab({ projectId }: { projectId: string }) {
         <DocumentDropzone
           projectId={projectId}
           category={category}
-          existingNames={docs.map((d: any) => d.name)}
+          existingNames={docs.map((d) => d.name)}
           onChanged={() => {
             qc.invalidateQueries({ queryKey: ["docs", projectId] });
             qc.invalidateQueries({ queryKey: ["assumptions", projectId] });
@@ -279,7 +309,7 @@ function DocumentsTab({ projectId }: { projectId: string }) {
                       {badge.label}
                     </span>
                     <span className="text-xs text-muted-foreground hidden sm:inline">
-                      {d.category || "Not available"}
+                      {d.category || "–"}
                     </span>
                   </span>
                 </li>
@@ -287,7 +317,7 @@ function DocumentsTab({ projectId }: { projectId: string }) {
             })}
           </ul>
         )}
-        {docs.some((d: any) => d.ai_summary) && (
+        {docs.some((d) => d.ai_summary) && (
           <Link
             to="/projects/$id"
             params={{ id: projectId }}

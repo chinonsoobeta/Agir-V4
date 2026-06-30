@@ -437,7 +437,7 @@ function MilestoneRow({ item }: { item: any }) {
         <span className={`capitalize ${priorityCls(item.priority)}`}>{item.priority}</span>
       </td>
       <td className={overdue ? "text-destructive" : ""}>
-        {item.due_date ?? "Not available"}
+        {item.due_date ?? "–"}
         {overdue ? ` · ${Math.abs(days!)}d overdue` : ""}
       </td>
       <td>

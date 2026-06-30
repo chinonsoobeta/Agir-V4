@@ -1,6 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
+
+type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
 
 // Profile + roles for the Settings hub. The `profiles` table ships in the base
 // schema, so these work against the live database today.
@@ -30,7 +33,7 @@ export const getMyProfile = createServerFn({ method: "GET" })
       email: profile?.email ?? null,
       full_name: profile?.full_name ?? null,
       avatar_url: profile?.avatar_url ?? null,
-      roles: (roleRows ?? []).map((r: any) => r.role),
+      roles: (roleRows ?? []).map((r) => r.role),
     };
   });
 
@@ -45,12 +48,12 @@ export const updateMyProfile = createServerFn({ method: "POST" })
   )
   .middleware([requireSupabaseAuth])
   .handler(async ({ data, context }) => {
-    const patch: Record<string, any> = {};
+    const patch: ProfileUpdate = {};
     if (data.full_name !== undefined) patch.full_name = data.full_name || null;
     if (data.avatar_url !== undefined) patch.avatar_url = data.avatar_url || null;
     const { data: row, error } = await context.supabase
       .from("profiles")
-      .update(patch as any)
+      .update(patch)
       .eq("id", context.userId)
       .select("id, email, full_name, avatar_url")
       .single();

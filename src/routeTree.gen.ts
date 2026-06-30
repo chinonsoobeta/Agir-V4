@@ -35,6 +35,8 @@ import { Route as AuthenticatedAnalysisRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedAcceptInviteRouteImport } from './routes/_authenticated/accept-invite'
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects.index'
 import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects.$id'
+import { Route as ApiScimV2UsersRouteImport } from './routes/api/scim/v2/Users'
+import { Route as ApiScimV2UsersIdRouteImport } from './routes/api/scim/v2/Users.$id'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
@@ -170,6 +172,16 @@ const AuthenticatedProjectsIdRoute = AuthenticatedProjectsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AuthenticatedProjectsRoute,
 } as any)
+const ApiScimV2UsersRoute = ApiScimV2UsersRouteImport.update({
+  id: '/api/scim/v2/Users',
+  path: '/api/scim/v2/Users',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiScimV2UsersIdRoute = ApiScimV2UsersIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiScimV2UsersRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -197,6 +209,8 @@ export interface FileRoutesByFullPath {
   '/api/health': typeof ApiHealthRoute
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/projects/': typeof AuthenticatedProjectsIndexRoute
+  '/api/scim/v2/Users': typeof ApiScimV2UsersRouteWithChildren
+  '/api/scim/v2/Users/$id': typeof ApiScimV2UsersIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -223,6 +237,8 @@ export interface FileRoutesByTo {
   '/api/health': typeof ApiHealthRoute
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/projects': typeof AuthenticatedProjectsIndexRoute
+  '/api/scim/v2/Users': typeof ApiScimV2UsersRouteWithChildren
+  '/api/scim/v2/Users/$id': typeof ApiScimV2UsersIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -252,6 +268,8 @@ export interface FileRoutesById {
   '/api/health': typeof ApiHealthRoute
   '/_authenticated/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/_authenticated/projects/': typeof AuthenticatedProjectsIndexRoute
+  '/api/scim/v2/Users': typeof ApiScimV2UsersRouteWithChildren
+  '/api/scim/v2/Users/$id': typeof ApiScimV2UsersIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -281,6 +299,8 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/projects/$id'
     | '/projects/'
+    | '/api/scim/v2/Users'
+    | '/api/scim/v2/Users/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -307,6 +327,8 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/projects/$id'
     | '/projects'
+    | '/api/scim/v2/Users'
+    | '/api/scim/v2/Users/$id'
   id:
     | '__root__'
     | '/'
@@ -335,6 +357,8 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/_authenticated/projects/$id'
     | '/_authenticated/projects/'
+    | '/api/scim/v2/Users'
+    | '/api/scim/v2/Users/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -344,6 +368,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   ApiChatRoute: typeof ApiChatRoute
   ApiHealthRoute: typeof ApiHealthRoute
+  ApiScimV2UsersRoute: typeof ApiScimV2UsersRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -530,6 +555,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProjectsIdRouteImport
       parentRoute: typeof AuthenticatedProjectsRoute
     }
+    '/api/scim/v2/Users': {
+      id: '/api/scim/v2/Users'
+      path: '/api/scim/v2/Users'
+      fullPath: '/api/scim/v2/Users'
+      preLoaderRoute: typeof ApiScimV2UsersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/scim/v2/Users/$id': {
+      id: '/api/scim/v2/Users/$id'
+      path: '/$id'
+      fullPath: '/api/scim/v2/Users/$id'
+      preLoaderRoute: typeof ApiScimV2UsersIdRouteImport
+      parentRoute: typeof ApiScimV2UsersRoute
+    }
   }
 }
 
@@ -593,6 +632,18 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface ApiScimV2UsersRouteChildren {
+  ApiScimV2UsersIdRoute: typeof ApiScimV2UsersIdRoute
+}
+
+const ApiScimV2UsersRouteChildren: ApiScimV2UsersRouteChildren = {
+  ApiScimV2UsersIdRoute: ApiScimV2UsersIdRoute,
+}
+
+const ApiScimV2UsersRouteWithChildren = ApiScimV2UsersRoute._addFileChildren(
+  ApiScimV2UsersRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
@@ -600,6 +651,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   ApiChatRoute: ApiChatRoute,
   ApiHealthRoute: ApiHealthRoute,
+  ApiScimV2UsersRoute: ApiScimV2UsersRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

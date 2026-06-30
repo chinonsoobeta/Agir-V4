@@ -32,6 +32,14 @@ import {
 } from "@/lib/operating-depth.functions";
 import { Building2, CalendarClock, Link2, Mail, Plus, Search, Users } from "lucide-react";
 import { toast } from "sonner";
+import type { Tables } from "@/integrations/supabase/types";
+
+type ProjectRow = Tables<"projects">;
+type DealLink = Pick<
+  Tables<"deal_relationships">,
+  "id" | "project_id" | "contact_id" | "role" | "influence"
+> & { projects: { name: string } | null };
+type RelationshipContact = Tables<"relationship_contacts"> & { deals: DealLink[] };
 
 export const Route = createFileRoute("/_authenticated/relationships")({
   head: () => ({ meta: [{ title: "Relationships | Agir" }] }),
@@ -60,18 +68,21 @@ function RelationshipsPage() {
     queryFn: () => listRelationshipContacts({ data: { workspace_id: workspaceId } }),
   });
   const projectsQ = useQuery({ queryKey: ["projects"], queryFn: () => listProjects() });
-  const contacts = useMemo(() => contactsQ.data ?? [], [contactsQ.data]);
+  const contacts = useMemo<RelationshipContact[]>(
+    () => (contactsQ.data ?? []) as RelationshipContact[],
+    [contactsQ.data],
+  );
   const filtered = useMemo(() => {
     const needle = search.toLowerCase().trim();
     if (!needle) return contacts;
-    return contacts.filter((contact: any) =>
+    return contacts.filter((contact) =>
       [contact.full_name, contact.company, contact.title, contact.email]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(needle)),
     );
   }, [contacts, search]);
   const overdue = contacts.filter(
-    (contact: any) =>
+    (contact) =>
       contact.next_follow_up_at && new Date(contact.next_follow_up_at).getTime() < Date.now(),
   ).length;
 

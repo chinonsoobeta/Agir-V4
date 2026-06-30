@@ -271,7 +271,10 @@ describe("concurrency and scale guards", () => {
       scenarios: [],
     });
 
-    const report = await loadReportData(supabase, "p1");
+    const report = await loadReportData(
+      supabase as unknown as Parameters<typeof loadReportData>[0],
+      "p1",
+    );
     expect(report.assumptionVersions).toHaveLength(2);
     const versionQueries = supabase.records.filter(
       (record) => record.table === "assumption_versions",

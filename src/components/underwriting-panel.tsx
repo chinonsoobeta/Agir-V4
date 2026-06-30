@@ -26,7 +26,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { ExplainableNumber } from "@/components/provenance-popover";
+import { ExplainableNumber, type ExplainableRow } from "@/components/provenance-popover";
 import {
   AlertTriangle,
   ShieldAlert,
@@ -39,6 +39,53 @@ import {
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
+import type { Tables } from "@/integrations/supabase/types";
+import type { DealContext, Interpretation } from "@/lib/context/types";
+import type { WhatIfLever } from "@/lib/context/attribution";
+import type { MemoReport } from "@/lib/memo-report";
+
+// The structured payload runFullUnderwriting writes into financial_outputs.inputs.
+// It is stored as Json in the row; every field is optional because different
+// metric rows (verdict, insight, plain metrics) carry different subsets.
+type OutputInputs = {
+  recommendation?: string;
+  recommendationRationale?: string;
+  code?: string;
+  context?: DealContext | null;
+  interpretations?: Interpretation[];
+  levers?: WhatIfLever[];
+  portfolioSample?: number;
+} | null;
+type OutputRow = Omit<Tables<"financial_outputs">, "inputs"> & { inputs: OutputInputs };
+type ReadinessResult = Awaited<ReturnType<typeof getUnderwritingReadiness>>;
+type ReadinessDefault = ReadinessResult["defaults"][number];
+type ReadinessConflict = ReadinessResult["conflicts"][number];
+type ConflictValue = { value: number | string; source?: string | null };
+type ReconciliationFlagRow = Tables<"reconciliation_flags">;
+type AssumptionRow = Tables<"assumptions"> & {
+  documents?: { name: string } | null;
+  source?: string | null;
+};
+type RunResult = Awaited<ReturnType<typeof runFullUnderwriting>>;
+type AcceptDefaultsResult = Awaited<ReturnType<typeof acceptDefaults>>;
+type ResolveConflictResult = Awaited<ReturnType<typeof resolveConflict>>;
+type DecisionLogRow = Tables<"decision_logs">;
+type AuditLogRow = Tables<"audit_logs">;
+type MemoVerificationReport = {
+  pass?: boolean;
+  orphans?: Array<{ value?: string } | string>;
+} | null;
+type MemoContent = {
+  report?: MemoReport;
+  generation_mode?: "ai" | "deterministic";
+  needs_review?: boolean;
+  deterministic_verdict?: { code?: string };
+  [section: string]: unknown;
+};
+type MemoRow = Omit<Tables<"investment_memos">, "content" | "verification_report"> & {
+  content: MemoContent | null;
+  verification_report: MemoVerificationReport;
+};
 
 const outputsQ = (pid: string) =>
   queryOptions({
@@ -134,9 +181,15 @@ const inputLabel = (key: string) =>
   INPUT_LABELS[key] ??
   (key.startsWith("occupancy:") ? `Stabilized occupancy: ${key.slice(10)}` : key);
 
-function fmtValue(v: number | null, unit: string, formula?: string | null) {
+// Conflict values are raw numbers; append the unit the key implies so e.g. an
+// exit cap reads "4.75%" not "4.75". Only percentage keys get a suffix; dollar
+// and count keys are left as-is.
+const conflictValueLabel = (key: string, value: number | string) =>
+  /(_pct$|occupancy|rate|ratio)/.test(key) ? `${value}%` : String(value);
+
+function fmtValue(v: number | null, unit: string | null, formula?: string | null) {
   if (v == null || !isFinite(v)) {
-    return formula?.includes("not meaningful") ? "not meaningful" : "Not available";
+    return formula?.includes("not meaningful") ? "not meaningful" : "–";
   }
   if (unit === "$")
     return new Intl.NumberFormat("en-US", {
@@ -177,7 +230,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
 
   const run = useMutation({
     mutationFn: () => runFn({ data: { project_id: projectId, mode } }),
-    onSuccess: (r: any) => {
+    onSuccess: (r: RunResult) => {
       invalidate();
       setLastMode(r.analysis_mode ?? null);
       if (r.ai_note) toast.message(r.ai_note);
@@ -196,7 +249,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   });
   const acceptDefaultsMut = useMutation({
     mutationFn: () => acceptDefaultsFn({ data: { project_id: projectId } }),
-    onSuccess: (r: any) => {
+    onSuccess: (r: AcceptDefaultsResult) => {
       invalidate();
       toast.success(`Accepted ${r.accepted.length} default(s)`);
     },
@@ -205,7 +258,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   const resolve = useMutation({
     mutationFn: (d: { key: string; mode: "pick" | "conservative"; value?: number }) =>
       resolveFn({ data: { project_id: projectId, ...d } }),
-    onSuccess: (r: any) => {
+    onSuccess: (r: ResolveConflictResult) => {
       invalidate();
       toast.success(`Resolved ${r.key} → ${r.resolved}`);
     },
@@ -239,7 +292,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                       <li key={k} className="text-sm flex items-center gap-2">
                         <span className="size-1.5 rounded-full bg-destructive inline-block" />
                         {inputLabel(k)}
-                        {readiness.defaults.some((d: any) => d.key === k) && (
+                        {readiness.defaults.some((d: ReadinessDefault) => d.key === k) && (
                           <Badge variant="outline" className="text-[10px]">
                             default available
                           </Badge>
@@ -254,32 +307,40 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                   <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
                     Conflicting inputs: resolve explicitly
                   </div>
-                  {readiness.conflicts.map((c: any) => (
+                  {readiness.conflicts.map((c: ReadinessConflict) => (
                     <div
                       key={c.key}
                       className="mt-2 p-3 rounded border border-destructive/30 bg-destructive/5"
                     >
                       <div className="text-sm font-medium">{inputLabel(c.key)}</div>
                       <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                        {c.conflict_values.map((v: any, i: number) => (
-                          <div key={i} className="p-2 rounded border border-border bg-background">
-                            <div className="num text-lg">{v.value}</div>
-                            <div className="text-[10px] text-muted-foreground truncate">
-                              {v.source ?? "unknown source"}
+                        {(c.conflict_values as ConflictValue[]).map(
+                          (v: ConflictValue, i: number) => (
+                            <div key={i} className="p-2 rounded border border-border bg-background">
+                              <div className="num text-lg">
+                                {conflictValueLabel(c.key, v.value)}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground truncate">
+                                {v.source ?? "unknown source"}
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="mt-2"
+                                disabled={resolve.isPending}
+                                onClick={() =>
+                                  resolve.mutate({
+                                    key: c.key,
+                                    mode: "pick",
+                                    value: Number(v.value),
+                                  })
+                                }
+                              >
+                                Use this value
+                              </Button>
                             </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="mt-2"
-                              disabled={resolve.isPending}
-                              onClick={() =>
-                                resolve.mutate({ key: c.key, mode: "pick", value: Number(v.value) })
-                              }
-                            >
-                              Use this value
-                            </Button>
-                          </div>
-                        ))}
+                          ),
+                        )}
                       </div>
                       <Button
                         size="sm"
@@ -304,7 +365,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                     Static defaults available
                   </div>
                   <ul className="mt-1 text-sm text-muted-foreground">
-                    {readiness.defaults.map((d: any) => (
+                    {readiness.defaults.map((d: ReadinessDefault) => (
                       <li key={d.key}>{d.label}</li>
                     ))}
                   </ul>
@@ -340,7 +401,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
     );
   }
 
-  const byScenario = outputs.reduce<Record<string, any[]>>((acc, o) => {
+  const byScenario = (outputs as OutputRow[]).reduce<Record<string, OutputRow[]>>((acc, o) => {
     (acc[o.scenario_key] ||= []).push(o);
     return acc;
   }, {});
@@ -356,8 +417,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   const insightRow = (byScenario.base ?? []).find((m) => m.metric_key === "insight");
   // ONE reconciled recommendation (gate verdict + findings + context); falls back
   // to the raw gate verdict for deals underwritten before reconciliation existed.
-  const recommendation =
-    insightRow?.inputs?.recommendation ?? verdictRow?.inputs?.code ?? "Not available";
+  const recommendation = insightRow?.inputs?.recommendation ?? verdictRow?.inputs?.code ?? "–";
   const recRationale =
     (insightRow?.inputs?.recommendationRationale as string | undefined) ?? verdictRow?.formula_text;
   const irrRow = metric("irr_estimate");
@@ -391,7 +451,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   ]);
   const sourceGroups: Array<[string, string[]]> = (() => {
     const groups = new Map<string, string[]>();
-    for (const a of (assumptions as any[]) ?? []) {
+    for (const a of (assumptions as AssumptionRow[]) ?? []) {
       if (!PROVENANCE_STATUSES.has(a.status)) continue;
       const docName: string | undefined = a.documents?.name;
       const origin = docName
@@ -449,7 +509,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
       {/* Reconciliation banners: error flags cannot be silently dropped */}
       {flags.length > 0 && (
         <div className="space-y-2">
-          {flags.map((f: any) => (
+          {flags.map((f: ReconciliationFlagRow) => (
             <div
               key={f.id}
               className={`flex items-start gap-2 rounded border p-3 text-sm ${SEV_STYLES[f.severity] ?? SEV_STYLES.info}`}
@@ -500,9 +560,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
         <UnderwritingMetric label="Break-even Occ." row={metric("break_even_occupancy")} />
         <UnderwritingMetric
           label="Risk Score"
-          text={
-            riskScoreRow ? String(Math.round(Number(riskScoreRow.value_numeric))) : "Not available"
-          }
+          text={riskScoreRow ? String(Math.round(Number(riskScoreRow.value_numeric))) : "–"}
           sub={riskScoreRow?.formula_text}
         />
       </div>
@@ -595,7 +653,10 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                     <tr key={mk}>
                       <td className="font-medium">{baseRow?.metric_label}</td>
                       <td className="text-right num text-primary">
-                        <ExplainableNumber row={baseRow} label={baseRow?.metric_label ?? undefined}>
+                        <ExplainableNumber
+                          row={baseRow as ExplainableRow}
+                          label={baseRow?.metric_label ?? undefined}
+                        >
                           {fmtValue(
                             baseRow?.value_numeric == null ? null : Number(baseRow.value_numeric),
                             baseRow?.unit ?? "",
@@ -614,7 +675,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                                     r.unit,
                                     r.formula_text,
                                   )
-                                : "Not available"}
+                                : "–"}
                             </div>
                             {r?.formula_text && (
                               <div className="mt-1 text-[10px] leading-snug text-muted-foreground font-mono max-w-56 ml-auto">
@@ -731,7 +792,7 @@ function UnderwritingMetric({
   highlight,
 }: {
   label: string;
-  row?: any;
+  row?: OutputRow;
   text?: string;
   sub?: string | null;
   highlight?: string;
@@ -744,13 +805,13 @@ function UnderwritingMetric({
           row.unit,
           row.formula_text,
         )
-      : "Not available");
+      : "–");
   return (
     <Card className="p-4">
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
       <div className={`num text-2xl mt-1 ${highlight ?? "text-primary"}`}>
         {row && text == null ? (
-          <ExplainableNumber row={row} label={label}>
+          <ExplainableNumber row={row as ExplainableRow} label={label}>
             {display}
           </ExplainableNumber>
         ) : (
@@ -776,11 +837,11 @@ function bandClass(band: string): string {
 // The deterministic "analyst read": context chips, a synthesized thesis,
 // metric-by-metric contextual interpretation, and what-if levers. Every word is
 // rule-derived from the engine output + the curated/portfolio benchmark norms.
-function DeterministicRead({ row }: { row?: any }) {
+function DeterministicRead({ row }: { row?: OutputRow }) {
   if (!row) return null;
   const ctx = row.inputs?.context;
-  const interps: any[] = row.inputs?.interpretations ?? [];
-  const levers: any[] = row.inputs?.levers ?? [];
+  const interps: Interpretation[] = row.inputs?.interpretations ?? [];
+  const levers: WhatIfLever[] = row.inputs?.levers ?? [];
   const failing = levers.filter((l) => !l.passing);
   const sample = Number(row.inputs?.portfolioSample ?? 0);
   const chips = ctx
@@ -931,11 +992,11 @@ export function ICPanel({ projectId }: { projectId: string }) {
     <div className="space-y-4">
       <MemoSection projectId={projectId} />
 
-      {flags.filter((f: any) => f.severity === "error").length > 0 && (
+      {flags.filter((f: ReconciliationFlagRow) => f.severity === "error").length > 0 && (
         <div className="space-y-2">
           {flags
-            .filter((f: any) => f.severity === "error")
-            .map((f: any) => (
+            .filter((f: ReconciliationFlagRow) => f.severity === "error")
+            .map((f: ReconciliationFlagRow) => (
               <div
                 key={f.id}
                 className={`flex items-start gap-2 rounded border p-3 text-sm ${SEV_STYLES.error}`}
@@ -1004,7 +1065,7 @@ export function ICPanel({ projectId }: { projectId: string }) {
           <p className="p-6 text-sm text-muted-foreground">No decisions recorded yet.</p>
         ) : (
           <ul className="divide-y divide-border">
-            {decisions.map((d: any) => (
+            {decisions.map((d: DecisionLogRow) => (
               <li key={d.id} className="p-4 text-sm">
                 <div className="flex items-center gap-3">
                   <Badge variant="outline" className="text-[10px] uppercase">

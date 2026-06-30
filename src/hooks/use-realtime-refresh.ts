@@ -25,7 +25,7 @@ export function useRealtimeRefresh(enabled = true) {
     if (!enabled) return;
     const channel = supabase.channel("agir-operating-console");
     for (const table of Object.keys(TABLE_QUERY_KEYS)) {
-      channel.on("postgres_changes" as any, { event: "*", schema: "public", table }, () => {
+      channel.on("postgres_changes", { event: "*", schema: "public", table }, () => {
         for (const queryKey of TABLE_QUERY_KEYS[table]) {
           queryClient.invalidateQueries({ queryKey });
         }

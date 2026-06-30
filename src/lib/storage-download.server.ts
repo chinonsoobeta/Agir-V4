@@ -1,6 +1,10 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
 
-export async function downloadDocumentBlob(authenticatedSupabase: any, storagePath: string) {
+export async function downloadDocumentBlob(
+  authenticatedSupabase: SupabaseClient<Database>,
+  storagePath: string,
+) {
   const primary = await authenticatedSupabase.storage.from("documents").download(storagePath);
   if (!primary.error && primary.data) return primary;
 

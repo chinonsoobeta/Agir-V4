@@ -17,13 +17,26 @@ const ReportTypeSchema = z.enum([
   "internal_team_report",
 ]);
 
+// Minimal structural shape of the count query this helper drives over arbitrary
+// tables. The concrete Supabase client is asserted to this at the call site (it
+// can't be matched nominally because .from() is keyed to literal table names).
+type CountQuery = PromiseLike<{ count: number | null; error: { message: string } | null }> & {
+  eq: (column: string, value: string) => CountQuery;
+  in: (column: string, values: string[]) => CountQuery;
+};
+type CountClient = {
+  from: (table: string) => {
+    select: (columns: string, options: { count: "exact"; head: true }) => CountQuery;
+  };
+};
+
 async function countRows(
-  supabase: any,
+  supabase: CountClient,
   table: string,
   projectId: string,
-  filters?: (q: any) => any,
+  filters?: (q: CountQuery) => CountQuery,
 ): Promise<number> {
-  let q = supabase
+  let q: CountQuery = supabase
     .from(table)
     .select("*", { count: "exact", head: true })
     .eq("project_id", projectId);
@@ -81,7 +94,7 @@ export const getReportReadiness = createServerFn({ method: "GET" })
       .select("scenario_key,metric_key")
       .eq("project_id", project_id);
     if (oErr) throw new Error(`Report readiness failed loading financial_outputs: ${oErr.message}`);
-    const baseOutputs = (outputs ?? []).filter((o: any) => o.scenario_key === "base").length;
+    const baseOutputs = (outputs ?? []).filter((o) => o.scenario_key === "base").length;
 
     const { data: flags, error: fErr } = await context.supabase
       .from("reconciliation_flags")
@@ -89,33 +102,29 @@ export const getReportReadiness = createServerFn({ method: "GET" })
       .eq("project_id", project_id);
     if (fErr)
       throw new Error(`Report readiness failed loading reconciliation_flags: ${fErr.message}`);
-    const reconErrors = (flags ?? []).filter(
-      (f: any) => f.severity === "error" && !f.resolved,
-    ).length;
+    const reconErrors = (flags ?? []).filter((f) => f.severity === "error" && !f.resolved).length;
     const reconWarnings = (flags ?? []).filter(
-      (f: any) => f.severity === "warning" && !f.resolved,
+      (f) => f.severity === "warning" && !f.resolved,
     ).length;
 
+    const sb = context.supabase as unknown as CountClient;
     const counts = {
-      documents: await countRows(context.supabase, "documents", project_id),
-      assumptions: await countRows(context.supabase, "assumptions", project_id),
-      approved_assumptions: await countRows(context.supabase, "assumptions", project_id, (q) =>
+      documents: await countRows(sb, "documents", project_id),
+      assumptions: await countRows(sb, "assumptions", project_id),
+      approved_assumptions: await countRows(sb, "assumptions", project_id, (q) =>
         q.in("status", ["approved", "modified", "calculated", "default_accepted"]),
       ),
-      default_accepted_inputs: await countRows(
-        context.supabase,
-        "underwriting_inputs",
-        project_id,
-        (q) => q.eq("status", "default_accepted"),
+      default_accepted_inputs: await countRows(sb, "underwriting_inputs", project_id, (q) =>
+        q.eq("status", "default_accepted"),
       ),
       financial_outputs: outputs?.length ?? 0,
       base_outputs: baseOutputs,
-      cash_flows: await countRows(context.supabase, "cash_flows", project_id),
+      cash_flows: await countRows(sb, "cash_flows", project_id),
       reconciliation_errors: reconErrors,
       reconciliation_warnings: reconWarnings,
-      risks: await countRows(context.supabase, "risk_register", project_id),
-      memos: await countRows(context.supabase, "investment_memos", project_id),
-      decisions: await countRows(context.supabase, "decision_logs", project_id),
+      risks: await countRows(sb, "risk_register", project_id),
+      memos: await countRows(sb, "investment_memos", project_id),
+      decisions: await countRows(sb, "decision_logs", project_id),
     };
 
     const { data: latest } = await context.supabase
@@ -165,7 +174,7 @@ export const generateReport = createServerFn({ method: "POST" })
     const reportData = await loadReportData(context.supabase, data.project_id);
     if (!reportData.project) throw new Error("Project not found.");
 
-    const baseOutputs = reportData.outputs.filter((o: any) => o.scenario_key === "base").length;
+    const baseOutputs = reportData.outputs.filter((o) => o.scenario_key === "base").length;
     if (def.requiresUnderwriting && baseOutputs === 0) {
       throw new Error("Run deterministic underwriting before generating this report.");
     }

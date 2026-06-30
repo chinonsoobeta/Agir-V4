@@ -138,65 +138,72 @@ export function OnboardingChecklist() {
         </span>
       </div>
 
-      <ol className="mt-4 grid gap-2 sm:grid-cols-2">
-        {ONBOARDING_STEPS.map((step, i) => {
-          const done = doneMap.get(step.key) ?? false;
-          const isNext = !done && step.key === state.nextStep;
-          return (
-            <li key={step.key}>
-              <Link
-                to={step.to as string}
-                onClick={() =>
-                  void trackFn({
-                    data: {
-                      workspace_id: activeWorkspace?.personal ? null : activeWorkspace?.id,
-                      event_name: "step_opened",
-                      step_key: step.key,
-                      metadata: { was_complete: done },
-                    },
-                  }).catch(() => {})
-                }
-                className={cn(
-                  "flex items-start gap-3 rounded-lg border p-3 transition-colors min-h-[44px]",
-                  done
-                    ? "border-success/30 bg-success/5"
-                    : isNext
-                      ? "border-primary/40 bg-primary/5 hover:bg-primary/10"
-                      : "border-border hover:bg-accent/40",
-                )}
-              >
-                {done ? (
-                  <CheckCircle2 className="size-5 text-success shrink-0 mt-0.5" />
-                ) : (
-                  <Circle
-                    className={cn(
-                      "size-5 shrink-0 mt-0.5",
-                      isNext ? "text-primary" : "text-muted-foreground/50",
-                    )}
-                  />
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="num text-[10px] text-muted-foreground">{i + 1}</span>
-                    <span
+      <details open={state.doneCount === 0} className="mt-4">
+        <summary className="cursor-pointer select-none list-none text-sm font-medium text-primary [&::-webkit-details-marker]:hidden">
+          {state.doneCount === 0
+            ? t("onb.title")
+            : `${t("onb.resume")} · ${tx("onb.progress", { done: state.doneCount, total: state.total })}`}
+        </summary>
+        <ol className="mt-3 grid gap-2 sm:grid-cols-2">
+          {ONBOARDING_STEPS.map((step, i) => {
+            const done = doneMap.get(step.key) ?? false;
+            const isNext = !done && step.key === state.nextStep;
+            return (
+              <li key={step.key}>
+                <Link
+                  to={step.to as string}
+                  onClick={() =>
+                    void trackFn({
+                      data: {
+                        workspace_id: activeWorkspace?.personal ? null : activeWorkspace?.id,
+                        event_name: "step_opened",
+                        step_key: step.key,
+                        metadata: { was_complete: done },
+                      },
+                    }).catch(() => {})
+                  }
+                  className={cn(
+                    "flex items-start gap-3 rounded-lg border p-3 transition-colors min-h-[44px]",
+                    done
+                      ? "border-success/30 bg-success/5"
+                      : isNext
+                        ? "border-primary/40 bg-primary/5 hover:bg-primary/10"
+                        : "border-border hover:bg-accent/40",
+                  )}
+                >
+                  {done ? (
+                    <CheckCircle2 className="size-5 text-success shrink-0 mt-0.5" />
+                  ) : (
+                    <Circle
                       className={cn(
-                        "text-sm font-medium truncate",
-                        done && "text-muted-foreground line-through",
+                        "size-5 shrink-0 mt-0.5",
+                        isNext ? "text-primary" : "text-muted-foreground/50",
                       )}
-                    >
-                      {t(step.titleKey as TranslationKey)}
-                    </span>
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="num text-[10px] text-muted-foreground">{i + 1}</span>
+                      <span
+                        className={cn(
+                          "text-sm font-medium truncate",
+                          done && "text-muted-foreground",
+                        )}
+                      >
+                        {t(step.titleKey as TranslationKey)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {t(step.bodyKey as TranslationKey)}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {t(step.bodyKey as TranslationKey)}
-                  </p>
-                </div>
-                {isNext && <ArrowRight className="size-4 text-primary shrink-0 mt-0.5" />}
-              </Link>
-            </li>
-          );
-        })}
-      </ol>
+                  {isNext && <ArrowRight className="size-4 text-primary shrink-0 mt-0.5" />}
+                </Link>
+              </li>
+            );
+          })}
+        </ol>
+      </details>
 
       <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-border pt-4">
         <span className="text-xs text-muted-foreground flex-1 min-w-[12rem]">

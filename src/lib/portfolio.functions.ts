@@ -6,10 +6,61 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { buildDecision, pipelineStageFor, type PipelineStage } from "./decision";
+import {
+  buildDecision,
+  pipelineStageFor,
+  type PipelineStage,
+  type DecisionSummary,
+  type OutputRow,
+  type AssumptionRow,
+} from "./decision";
 import type { ComparisonDeal } from "./reports/comparison-model";
 import type { DecisionHistoryRow } from "./reports/portfolio-analytics";
 import { isMissingRelation } from "./db-compat";
+import type { Database } from "@/integrations/supabase/types";
+
+type ProjectRow = Database["public"]["Tables"]["projects"]["Row"];
+
+// The financial_outputs / assumptions columns `inputs` and `conflict_values`
+// are stored as untyped `Json` in the DB schema, but the deterministic decision
+// layer reads them through the narrower structured shapes on OutputRow /
+// AssumptionRow. These map the selected rows to those shapes (the structured
+// JSON overlaps Json, so this is a type-only narrowing: values are unchanged and
+// the decision layer reads every field defensively).
+type SelectedOutputRow = {
+  project_id: string;
+  scenario_key: string;
+  metric_key: string;
+  metric_label: string | null;
+  value_numeric: number | null;
+  unit: string | null;
+  formula_text: string | null;
+  inputs: Database["public"]["Tables"]["financial_outputs"]["Row"]["inputs"];
+};
+type SelectedAssumptionRow = Pick<
+  Database["public"]["Tables"]["assumptions"]["Row"],
+  | "project_id"
+  | "field_key"
+  | "field_label"
+  | "category"
+  | "value_numeric"
+  | "value_text"
+  | "unit"
+  | "status"
+  | "source_document_id"
+  | "source_text"
+  | "source_location"
+  | "confidence_score"
+  | "conflict_values"
+>;
+const toOutputRow = (r: SelectedOutputRow): OutputRow => ({
+  ...r,
+  inputs: r.inputs as OutputRow["inputs"],
+});
+const toAssumptionRow = (r: SelectedAssumptionRow): AssumptionRow => ({
+  ...r,
+  conflict_values: r.conflict_values as AssumptionRow["conflict_values"],
+});
 
 export type DealSummary = {
   id: string;
@@ -38,7 +89,7 @@ export type DealSummary = {
   dscr: number | null;
 };
 
-function capitalFor(project: any, base: Record<string, number>): number {
+function capitalFor(project: ProjectRow, base: Record<string, number>): number {
   if (base.total_project_cost) return base.total_project_cost;
   const acq = Number(project.acquisition_cost || 0);
   const con = Number(project.construction_cost || 0);
@@ -47,7 +98,7 @@ function capitalFor(project: any, base: Record<string, number>): number {
 }
 
 // What the deal is waiting on: surfaced in the Investment Queue.
-function nextActionFor(stage: PipelineStage, dec: any): string | null {
+function nextActionFor(stage: PipelineStage, dec: DecisionSummary): string | null {
   switch (stage) {
     case "Screening":
       return "Begin Document Review";
@@ -80,7 +131,7 @@ export const listPortfolio = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     if (!projects?.length) return [];
 
-    const ids = projects.map((p: any) => p.id);
+    const ids = projects.map((p) => p.id);
     const [{ data: outputs }, { data: assumptions }, { data: decisions }, { data: docs }] =
       await Promise.all([
         context.supabase
@@ -103,8 +154,8 @@ export const listPortfolio = createServerFn({ method: "GET" })
         context.supabase.from("documents").select("project_id").in("project_id", ids),
       ]);
 
-    const byProject = <T extends { project_id: string }>(rows: T[] | null) => {
-      const m = new Map<string, T[]>();
+    const byProject = <T extends { project_id: string | null }>(rows: T[] | null) => {
+      const m = new Map<string | null, T[]>();
       for (const r of rows ?? []) {
         const arr = m.get(r.project_id);
         if (arr) arr.push(r);
@@ -112,22 +163,22 @@ export const listPortfolio = createServerFn({ method: "GET" })
       }
       return m;
     };
-    const outMap = byProject(outputs as any);
-    const asmMap = byProject(assumptions as any);
-    const decMap = byProject(decisions as any);
-    const docMap = byProject(docs as any);
+    const outMap = byProject(outputs);
+    const asmMap = byProject(assumptions);
+    const decMap = byProject(decisions);
+    const docMap = byProject(docs);
 
-    return projects.map((p: any) => {
+    return projects.map((p) => {
       const o = outMap.get(p.id) ?? [];
       const a = asmMap.get(p.id) ?? [];
       const d = decMap.get(p.id) ?? [];
       const docCount = (docMap.get(p.id) ?? []).length;
-      const dec = buildDecision(o as any, a as any);
+      const dec = buildDecision(o.map(toOutputRow), a.map(toAssumptionRow));
       const stage = pipelineStageFor({
         status: p.status,
         docCount,
         hasUnderwriting: dec.hasUnderwriting,
-        decisions: d as any,
+        decisions: d,
       });
       const topRisk =
         dec.findings?.risks?.[0]?.title ?? dec.findings?.weaknesses?.[0]?.title ?? null;
@@ -199,29 +250,29 @@ export const compareDeals = createServerFn({ method: "GET" })
         .in("project_id", ids),
     ]);
 
-    const out = new Map<string, any[]>();
-    const asm = new Map<string, any[]>();
-    for (const r of (outputs ?? []) as any[])
+    const out = new Map<string, SelectedOutputRow[]>();
+    const asm = new Map<string, SelectedAssumptionRow[]>();
+    for (const r of outputs ?? [])
       (out.get(r.project_id) ?? out.set(r.project_id, []).get(r.project_id)!).push(r);
-    for (const r of (assumptions ?? []) as any[])
+    for (const r of assumptions ?? [])
       (asm.get(r.project_id) ?? asm.set(r.project_id, []).get(r.project_id)!).push(r);
 
     // Preserve the requested order so the grid is stable.
-    const byId = new Map(projects.map((p: any) => [p.id, p]));
+    const byId = new Map(projects.map((p) => [p.id, p]));
     return ids
       .map((id) => byId.get(id))
-      .filter(Boolean)
-      .map((p: any) => {
+      .filter((p): p is ProjectRow => Boolean(p))
+      .map((p) => {
         const o = out.get(p.id) ?? [];
         const a = asm.get(p.id) ?? [];
-        const dec = buildDecision(o as any, a as any);
+        const dec = buildDecision(o.map(toOutputRow), a.map(toAssumptionRow));
         const findings = dec.findings;
         const keyFindings = [
           ...(findings?.criticalFindings ?? []),
           ...(findings?.highPriorityFindings ?? []),
         ]
           .slice(0, 3)
-          .map((f: any) => f.title);
+          .map((f) => f.title);
         const dataGaps = a.filter(
           (x) => x.status === "missing" || x.status === "conflicting",
         ).length;
@@ -262,7 +313,7 @@ export const listDecisionHistory = createServerFn({ method: "GET" })
       .limit(200);
     if (isMissingRelation(error)) return [];
     if (error) throw new Error(error.message);
-    return (data ?? []).map((d: any) => ({
+    return (data ?? []).map((d) => ({
       project_id: d.project_id,
       deal_name: d.projects?.name ?? "Not available",
       decision: d.decision,

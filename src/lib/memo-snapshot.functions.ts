@@ -9,10 +9,31 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { isMissingRelation } from "./db-compat";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database, Json } from "@/integrations/supabase/types";
 
-const SNAPSHOT_ASSUMPTION_STATUSES = ["approved", "modified", "default_accepted", "calculated"];
+const SNAPSHOT_ASSUMPTION_STATUSES: Database["public"]["Enums"]["assumption_status"][] = [
+  "approved",
+  "modified",
+  "default_accepted",
+  "calculated",
+];
 
-type Ctx = { supabase: any; userId: string };
+type Ctx = { supabase: SupabaseClient<Database>; userId: string };
+type MemoSnapshotRow = Database["public"]["Tables"]["memo_snapshots"]["Row"];
+
+// The investment_memos.content / financial_outputs.inputs and the *_json
+// snapshot columns are stored as untyped Json. These read nested fields off
+// that dynamic shape defensively (identical to the prior `any` access: a missing
+// or non-object value yields undefined/null).
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
 
 async function loadSnapshotInputs(ctx: Ctx, projectId: string) {
   const [{ data: assumptions }, { data: outputs }, { data: memos }] = await Promise.all([
@@ -33,9 +54,12 @@ async function loadSnapshotInputs(ctx: Ctx, projectId: string) {
       .limit(1),
   ]);
   const memo = (memos ?? [])[0] ?? null;
-  const report = memo?.content?.report ?? null;
-  const verdictRow = (outputs ?? []).find((o: any) => o.metric_key === "verdict");
-  const verdictCode = verdictRow?.inputs?.code ?? memo?.content?.report?.verdict_code ?? null;
+  const memoReport = asRecord(asRecord(memo?.content)?.report);
+  const report = (asRecord(memo?.content)?.report ?? null) as Json;
+  const verdictRow = (outputs ?? []).find((o) => o.metric_key === "verdict");
+  const verdictRaw =
+    asRecord(asRecord(verdictRow)?.inputs)?.code ?? memoReport?.verdict_code ?? null;
+  const verdictCode = typeof verdictRaw === "string" ? verdictRaw : null;
   return {
     assumptions: assumptions ?? [],
     outputs: outputs ?? [],
@@ -54,12 +78,12 @@ export async function createMemoSnapshotInternal(
   ctx: Ctx,
   projectId: string,
   decisionId: string | null,
-): Promise<any> {
+): Promise<MemoSnapshotRow> {
   const { stableJsonHash } = await import("./hash.server");
   const inputs = await loadSnapshotInputs(ctx, projectId);
   const contentHash = stableJsonHash({
     assumptions: inputs.assumptions,
-    outputs: inputs.outputs.map((o: any) => ({
+    outputs: inputs.outputs.map((o) => ({
       s: o.scenario_key,
       m: o.metric_key,
       v: o.value_numeric,
@@ -163,21 +187,43 @@ export const diffMemoSnapshot = createServerFn({ method: "GET" })
     const { stableJsonHash } = await import("./hash.server");
     const currentHash = stableJsonHash({
       assumptions: current.assumptions,
-      outputs: current.outputs.map((o: any) => ({
+      outputs: current.outputs.map((o) => ({
         s: o.scenario_key,
         m: o.metric_key,
         v: o.value_numeric,
       })),
     });
 
-    const lockedA = new Map(
-      ((snap.assumptions_json ?? []) as any[]).map((a: any) => [a.field_key, a]),
+    type AssumptionChange = {
+      field_key: string;
+      field_label: Json;
+      was: Json;
+      now: Json;
+      kind: "added" | "removed" | "changed";
+    };
+    type OutputChange = {
+      scenario_key: Json;
+      metric_key: Json;
+      metric_label: Json;
+      unit: Json;
+      was: Json;
+      now: Json;
+    };
+
+    type JsonRecord = Record<string, Json | undefined>;
+    const lockedA = new Map<string, JsonRecord>(
+      asArray(snap.assumptions_json)
+        .map(asRecord)
+        .filter((a): a is Record<string, unknown> => a !== undefined)
+        .map((a) => [String(a.field_key), a as JsonRecord]),
     );
-    const curA = new Map(current.assumptions.map((a: any) => [a.field_key, a]));
-    const assumptionChanges: any[] = [];
+    const curA = new Map<string, JsonRecord>(
+      current.assumptions.map((a) => [String(a.field_key), a as JsonRecord]),
+    );
+    const assumptionChanges: AssumptionChange[] = [];
     for (const key of new Set([...lockedA.keys(), ...curA.keys()])) {
-      const was = lockedA.get(key) as any;
-      const now = curA.get(key) as any;
+      const was = lockedA.get(key);
+      const now = curA.get(key);
       const wv = was?.value_numeric ?? was?.value_text ?? null;
       const nv = now?.value_numeric ?? now?.value_text ?? null;
       if (JSON.stringify(wv) !== JSON.stringify(nv)) {
@@ -191,21 +237,26 @@ export const diffMemoSnapshot = createServerFn({ method: "GET" })
       }
     }
 
-    const keyOf = (o: any) => `${o.scenario_key}::${o.metric_key}`;
-    const lockedO = new Map<string, any>(
-      ((snap.outputs_json ?? []) as any[]).map((o: any) => [keyOf(o), o]),
+    const keyOf = (o: JsonRecord) => `${o.scenario_key}::${o.metric_key}`;
+    const lockedO = new Map<string, JsonRecord>(
+      asArray(snap.outputs_json)
+        .map(asRecord)
+        .filter((o): o is Record<string, unknown> => o !== undefined)
+        .map((o) => [keyOf(o as JsonRecord), o as JsonRecord]),
     );
-    const curO = new Map<string, any>(current.outputs.map((o: any) => [keyOf(o), o]));
-    const outputChanges: any[] = [];
+    const curO = new Map<string, JsonRecord>(
+      current.outputs.map((o) => [keyOf(o as JsonRecord), o as JsonRecord]),
+    );
+    const outputChanges: OutputChange[] = [];
     for (const k of new Set([...lockedO.keys(), ...curO.keys()])) {
-      const was = lockedO.get(k) as any;
-      const now = curO.get(k) as any;
+      const was = lockedO.get(k);
+      const now = curO.get(k);
       if ((was?.value_numeric ?? null) !== (now?.value_numeric ?? null)) {
         outputChanges.push({
-          scenario_key: (now ?? was)?.scenario_key,
-          metric_key: (now ?? was)?.metric_key,
-          metric_label: (now ?? was)?.metric_label,
-          unit: (now ?? was)?.unit,
+          scenario_key: (now ?? was)?.scenario_key ?? null,
+          metric_key: (now ?? was)?.metric_key ?? null,
+          metric_label: (now ?? was)?.metric_label ?? null,
+          unit: (now ?? was)?.unit ?? null,
           was: was?.value_numeric ?? null,
           now: now?.value_numeric ?? null,
         });

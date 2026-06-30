@@ -52,7 +52,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useWorkspace } from "@/lib/workspace-context";
-import { createWorkspace } from "@/lib/workspaces.functions";
+import { createWorkspace, type Workspace } from "@/lib/workspaces.functions";
 import { NotificationCenter } from "@/components/notification-center";
 
 const nav = [
@@ -79,7 +79,7 @@ function WorkspaceSwitcher() {
   const createFn = useServerFn(createWorkspace);
   const create = useMutation({
     mutationFn: () => createFn({ data: { name: name.trim() } }),
-    onSuccess: (ws: any) => {
+    onSuccess: (ws: Workspace) => {
       setCreateOpen(false);
       setName("");
       qc.invalidateQueries({ queryKey: ["workspaces"] });
@@ -329,7 +329,7 @@ export function PageHeader({
 }) {
   return (
     <header className="border-b border-border bg-card/40 backdrop-blur sticky top-0 z-10">
-      <div className="px-5 sm:px-8 py-5 flex items-center justify-between gap-4">
+      <div className="px-5 sm:px-8 py-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="min-w-0">
           {eyebrow && (
             <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-semibold mb-1.5">
@@ -339,7 +339,9 @@ export function PageHeader({
           <h1 className="display text-2xl font-semibold tracking-tight">{title}</h1>
           {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
         </div>
-        <div className="flex items-center gap-2 shrink-0">{actions}</div>
+        {actions && (
+          <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">{actions}</div>
+        )}
       </div>
     </header>
   );

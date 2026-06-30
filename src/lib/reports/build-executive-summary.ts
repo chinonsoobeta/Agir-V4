@@ -85,11 +85,11 @@ export function buildExecutiveSummary(
 
   // "What would move the needle": the binding levers, with the input change
   // each one requires (magnitudes are provenance-backed via ins.derived).
-  const failingLevers = (ins?.levers ?? []).filter((l: any) => !l.passing);
+  const failingLevers = (ins?.levers ?? []).filter((l) => !l.passing);
   if (failingLevers.length) {
     sections.push({
       heading: "What Would Move the Needle",
-      body: failingLevers.map((l: any) => `- ${l.lever}`).join("\n"),
+      body: failingLevers.map((l) => `- ${l.lever}`).join("\n"),
     });
   }
 

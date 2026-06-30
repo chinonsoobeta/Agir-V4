@@ -13,6 +13,9 @@
 // underwriting work move out of the request path without changing the UI's job
 // polling contract.
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database, Json } from "@/integrations/supabase/types";
+
 export type JobKind = "document_analysis" | "assumption_extraction" | "underwriting";
 export type JobStatus =
   | "queued"
@@ -39,7 +42,7 @@ export type ExtractionJob = {
   dead_lettered_at?: string | null;
 };
 
-type Ctx = { supabase: any; userId: string };
+type Ctx = { supabase: SupabaseClient<Database>; userId: string };
 
 const QUEUE_LEASE_COLUMNS = [
   "attempts",
@@ -101,7 +104,7 @@ export async function claimJob(
     if (isMissingColumn(error)) {
       const retry = await ctx.supabase
         .from("extraction_jobs")
-        .insert(stripQueueLeaseColumns(insertPayload))
+        .insert(stripQueueLeaseColumns(insertPayload) as typeof insertPayload)
         .select()
         .single();
       row = retry.data;
@@ -136,7 +139,7 @@ export async function completeJob(ctx: Ctx, jobId: string, result: unknown): Pro
   const patch = {
     status: "completed",
     progress: 100,
-    result_json: result as object,
+    result_json: result as Json,
     finished_at: new Date().toISOString(),
     error: null,
     lease_owner: null,

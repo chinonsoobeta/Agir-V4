@@ -3,7 +3,7 @@ import type { Finding, NormalizedFindingsInput } from "../findings-types";
 
 export function reconciliationFindings(input: NormalizedFindingsInput): Finding[] {
   return input.reconciliation
-    .filter((flag) => !("resolved" in flag) || !(flag as any).resolved)
+    .filter((flag) => !(flag as { resolved?: unknown }).resolved)
     .map((flag) =>
       f(
         `reconciliation.${flag.check_key}`,

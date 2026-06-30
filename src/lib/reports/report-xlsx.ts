@@ -33,12 +33,12 @@ function sheetName(used: Set<string>, raw: string): string {
   return name;
 }
 
-export function buildReportWorkbook(XLSX: any, report: MemoReport) {
+export function buildReportWorkbook(XLSX: typeof import("xlsx"), report: MemoReport) {
   const wb = XLSX.utils.book_new();
   const used = new Set<string>();
 
   // Summary tab: title, project, verdict, stats, KPI cards.
-  const summaryAoa: any[][] = [
+  const summaryAoa: (string | number)[][] = [
     [report.title],
     [report.project_name],
     [report.subtitle ?? ""],
@@ -54,7 +54,7 @@ export function buildReportWorkbook(XLSX: any, report: MemoReport) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryAoa), sheetName(used, "Summary"));
 
   for (const sec of report.sections) {
-    let aoa: any[][];
+    let aoa: (string | number)[][];
     if (sec.table) {
       aoa = [sec.table.columns, ...sec.table.rows];
       if (sec.table.note) aoa.push([], [`Note: ${sec.table.note}`]);

@@ -48,6 +48,7 @@ function ExecutiveOverview() {
   const capital = summary.grossCapital;
   const weighted = summary.weightedCapital;
   const averageScore = summary.avgInvestmentScore ?? 0;
+  const scoredCount = deals.filter((d) => d.investmentScore != null).length;
   const averageVelocity = average(active.map(dealVelocityScore));
   const upcoming = deals
     .map((deal) => ({ deal, days: daysUntil(deal.targetCloseDate) }))
@@ -99,8 +100,12 @@ function ExecutiveOverview() {
           <Metric
             icon={TrendingUp}
             label={t("dash.avgScore")}
-            value={averageScore ? String(averageScore) : t("common.notAvailable")}
-            detail="/ 100"
+            value={averageScore ? String(averageScore) : "–"}
+            detail={
+              scoredCount
+                ? `avg of ${scoredCount} scored deal${scoredCount === 1 ? "" : "s"}`
+                : "no scored deals yet"
+            }
           />
           <Metric
             icon={Gauge}

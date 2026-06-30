@@ -89,7 +89,7 @@ export async function downloadReportXlsx(
 
   // Data sheet built cell-by-cell so numbers are genuine numeric cells.
   const header = report.columns.map((c) => c.label);
-  const aoa: any[][] = [[title], [`Data as of: ${asOf}`], [], header];
+  const aoa: (string | number)[][] = [[title], [`Data as of: ${asOf}`], [], header];
   const dataStartRow = aoa.length; // 0-based row index of first data row
   for (const row of report.rows) aoa.push(report.columns.map((c) => row.cells[c.key] ?? ""));
   const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -105,7 +105,7 @@ export async function downloadReportXlsx(
   XLSX.utils.book_append_sheet(wb, ws, "Data");
 
   if (report.summary.length) {
-    const sAoa: any[][] = [["Summary"], []];
+    const sAoa: (string | number)[][] = [["Summary"], []];
     const sStart = sAoa.length;
     for (const s of report.summary) sAoa.push([s.label, s.value ?? ""]);
     const sws = XLSX.utils.aoa_to_sheet(sAoa);

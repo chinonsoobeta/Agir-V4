@@ -446,12 +446,15 @@ describe("3C integrations: deal import persistence batches its queries (N+1 guar
     const supabase = fakeSupabase();
     const records = [deal("CRM-1", "Alpha"), deal("CRM-2", "Beta"), deal("CRM-3", "Gamma")];
 
-    const result = await importDealRecords(supabase, {
-      connectionId: "conn-1",
-      ownerId: "user-1",
-      workspaceId: null,
-      records,
-    });
+    const result = await importDealRecords(
+      supabase as unknown as Parameters<typeof importDealRecords>[0],
+      {
+        connectionId: "conn-1",
+        ownerId: "user-1",
+        workspaceId: null,
+        records,
+      },
+    );
 
     expect(result).toEqual({ created: 3, updated: 0, failed: 0 });
     // The N+1 that this fix targets: link lookups must be a single IN query, not
@@ -471,12 +474,15 @@ describe("3C integrations: deal import persistence batches its queries (N+1 guar
       ],
     });
 
-    const result = await importDealRecords(supabase, {
-      connectionId: "conn-1",
-      ownerId: "user-1",
-      workspaceId: null,
-      records: [deal("CRM-1", "New Name"), deal("CRM-2", "Fresh")],
-    });
+    const result = await importDealRecords(
+      supabase as unknown as Parameters<typeof importDealRecords>[0],
+      {
+        connectionId: "conn-1",
+        ownerId: "user-1",
+        workspaceId: null,
+        records: [deal("CRM-1", "New Name"), deal("CRM-2", "Fresh")],
+      },
+    );
 
     expect(result).toEqual({ created: 1, updated: 1, failed: 0 });
     expect(supabase.db.projects.find((p) => p.id === "p1")?.name).toBe("New Name");
@@ -492,12 +498,15 @@ describe("3C integrations: deal import persistence batches its queries (N+1 guar
   test("one unparseable row falls back to per-row inserts without poisoning the batch", async () => {
     const supabase = fakeSupabase({}, { failProjectName: "Bad Deal" });
 
-    const result = await importDealRecords(supabase, {
-      connectionId: "conn-1",
-      ownerId: "user-1",
-      workspaceId: null,
-      records: [deal("CRM-1", "Good A"), deal("CRM-2", "Bad Deal"), deal("CRM-3", "Good B")],
-    });
+    const result = await importDealRecords(
+      supabase as unknown as Parameters<typeof importDealRecords>[0],
+      {
+        connectionId: "conn-1",
+        ownerId: "user-1",
+        workspaceId: null,
+        records: [deal("CRM-1", "Good A"), deal("CRM-2", "Bad Deal"), deal("CRM-3", "Good B")],
+      },
+    );
 
     expect(result).toEqual({ created: 2, updated: 0, failed: 1 });
     // The good rows still land despite the poison row.
@@ -507,12 +516,15 @@ describe("3C integrations: deal import persistence batches its queries (N+1 guar
 
   test("an empty record set performs no writes at all", async () => {
     const supabase = fakeSupabase();
-    const result = await importDealRecords(supabase, {
-      connectionId: "conn-1",
-      ownerId: "user-1",
-      workspaceId: null,
-      records: [],
-    });
+    const result = await importDealRecords(
+      supabase as unknown as Parameters<typeof importDealRecords>[0],
+      {
+        connectionId: "conn-1",
+        ownerId: "user-1",
+        workspaceId: null,
+        records: [],
+      },
+    );
     expect(result).toEqual({ created: 0, updated: 0, failed: 0 });
     expect(supabase.calls).toHaveLength(0);
   });

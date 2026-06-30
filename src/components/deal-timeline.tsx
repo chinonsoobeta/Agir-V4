@@ -11,13 +11,14 @@ import {
   History,
   Loader2,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { usePreferences } from "@/lib/preferences";
 import { getDealTimeline } from "@/lib/timeline.functions";
 import type { TimelineCategory } from "@/lib/timeline";
 
-const CATEGORY: Record<TimelineCategory, { icon: any; cls: string }> = {
+const CATEGORY: Record<TimelineCategory, { icon: LucideIcon; cls: string }> = {
   deal: { icon: Briefcase, cls: "bg-primary/12 text-primary" },
   document: { icon: FileText, cls: "bg-chart-2/12 text-chart-2" },
   assumption: { icon: ClipboardCheck, cls: "bg-warning/12 text-warning" },
@@ -79,7 +80,7 @@ export function DealTimeline({ projectId }: { projectId: string }) {
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
                   <span className="text-sm font-medium">{e.title}</span>
                   <span className="num text-[11px] text-muted-foreground whitespace-nowrap">
-                    {fmt.date(e.at, { dateStyle: "medium", timeStyle: "short" } as any)}
+                    {fmt.date(e.at, { dateStyle: "medium", timeStyle: "short" })}
                   </span>
                 </div>
                 {e.detail && (

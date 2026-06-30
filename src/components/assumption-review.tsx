@@ -63,7 +63,7 @@ const BAND_STYLES: Record<string, string> = {
 };
 
 function fmt(a: any) {
-  if (a.value_numeric == null && !a.value_text) return "Not available";
+  if (a.value_numeric == null && !a.value_text) return "–";
   if (a.value_text) return a.value_text;
   const n = Number(a.value_numeric);
   if (a.unit === "$")

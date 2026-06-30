@@ -19,8 +19,16 @@ import {
 } from "@/lib/operating-depth.functions";
 import { MessageSquare, Send, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
+import type { Tables } from "@/integrations/supabase/types";
 
-function displayName(profile: any) {
+type CollaborationProfile = Pick<Tables<"profiles">, "full_name" | "email"> | null;
+type CommentRow = Tables<"deal_comments"> & { profile: CollaborationProfile };
+type AssignmentRow = Tables<"deal_assignments"> & { profile: CollaborationProfile };
+type MemberRow = Pick<Tables<"workspace_members">, "id" | "user_id" | "role"> & {
+  profile: CollaborationProfile;
+};
+
+function displayName(profile: CollaborationProfile) {
   return profile?.full_name || profile?.email || "Team member";
 }
 
@@ -84,7 +92,7 @@ export function DealCollaboration({ projectId }: { projectId: string }) {
         </div>
         <div className="mt-5 space-y-3">
           {data.comments.length ? (
-            data.comments.map((item: any) => (
+            data.comments.map((item: CommentRow) => (
               <div key={item.id} className="rounded-lg border border-border p-3">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-xs font-semibold">{displayName(item.profile)}</span>
@@ -110,7 +118,7 @@ export function DealCollaboration({ projectId }: { projectId: string }) {
             <h2 className="font-semibold">Deal team</h2>
           </div>
           <div className="mt-4 space-y-2">
-            {data.assignments.map((assignment: any) => (
+            {data.assignments.map((assignment: AssignmentRow) => (
               <div key={assignment.id} className="rounded-md border border-border p-2.5">
                 <div className="text-sm font-medium">{displayName(assignment.profile)}</div>
                 <div className="text-xs text-muted-foreground capitalize">
@@ -137,7 +145,7 @@ export function DealCollaboration({ projectId }: { projectId: string }) {
                     <SelectValue placeholder="Select member" />
                   </SelectTrigger>
                   <SelectContent>
-                    {data.members.map((member: any) => (
+                    {data.members.map((member: MemberRow) => (
                       <SelectItem key={member.user_id} value={member.user_id}>
                         {displayName(member.profile)}
                       </SelectItem>

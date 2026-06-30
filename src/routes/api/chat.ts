@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { convertToModelMessages, streamText, type UIMessage } from "ai";
 import { createClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
+import type { OutputRow, AssumptionRow } from "@/lib/decision";
 
 export const Route = createFileRoute("/api/chat")({
   server: {
@@ -21,7 +23,7 @@ export const Route = createFileRoute("/api/chat")({
           return new Response("Missing or malformed ANTHROPIC_API_KEY", { status: 500 });
         if (!SUPABASE_ANON_KEY) return new Response("Missing SUPABASE_ANON_KEY", { status: 500 });
 
-        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
           global: { headers: { Authorization: `Bearer ${token}` } },
           auth: { persistSession: false, autoRefreshToken: false },
         });
@@ -52,10 +54,10 @@ export const Route = createFileRoute("/api/chat")({
         if (focusId) {
           try {
             const { buildDecision } = await import("@/lib/decision");
-            const proj = (projects ?? []).find((p: any) => p.id === focusId);
-            const o = (outputs ?? []).filter((r: any) => r.project_id === focusId);
-            const a = (assumptions ?? []).filter((r: any) => r.project_id === focusId);
-            const dec = buildDecision(o as any, a as any);
+            const proj = (projects ?? []).find((p) => p.id === focusId);
+            const o = (outputs ?? []).filter((r) => r.project_id === focusId);
+            const a = (assumptions ?? []).filter((r) => r.project_id === focusId);
+            const dec = buildDecision(o as unknown as OutputRow[], a as unknown as AssumptionRow[]);
             focus = `\n\n===== FOCUSED DEAL: ${proj?.name ?? focusId} =====\nRecommendation: ${dec.recommendationLabel}\nInvestment Score: ${dec.investmentScore ?? "n/a"}/100 · Confidence: ${dec.confidenceScore}/100 · Risk: ${dec.riskRating}\nStrengths: ${(dec.findings?.strengths ?? []).map((x) => x.title).join("; ") || "none"}\nRisks: ${(dec.findings?.risks ?? []).map((x) => x.title).join("; ") || "none"}\nOpportunities: ${(dec.findings?.opportunities ?? []).map((x) => x.title).join("; ") || "none"}\nApproval conditions: ${(dec.findings?.approvalConditions ?? []).map((x) => x.title).join("; ") || "none"}\nValue drivers: ${(dec.findings?.primaryDrivers ?? []).map((d) => d.name).join("; ") || "none"}\nRisk drivers: ${(dec.findings?.downsideDrivers ?? []).map((d) => d.name).join("; ") || "none"}\nWhen the user asks why a deal passed/failed or how it could pass, answer from these findings and drivers.`;
           } catch {
             /* fall back to portfolio-wide context */

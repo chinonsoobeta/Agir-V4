@@ -1,7 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database, Json } from "@/integrations/supabase/types";
 import { z } from "zod";
 import { isMissingRelation } from "./db-compat";
+
+type Supabase = SupabaseClient<Database>;
 
 // ---------------------------------------------------------------------------
 // Onboarding: a guided first-run checklist whose completion is DERIVED from
@@ -89,7 +93,14 @@ export function computeOnboardingProgress(counts: Partial<OnboardingCounts>): On
 
 const REVIEWED_ASSUMPTION_STATUSES = ["approved", "modified", "default_accepted", "calculated"];
 
-async function headCount(supabase: any, table: string, build?: (q: any) => any): Promise<number> {
+type TableName = keyof Database["public"]["Tables"];
+type CountQuery = ReturnType<ReturnType<Supabase["from"]>["select"]>;
+
+async function headCount(
+  supabase: Supabase,
+  table: TableName,
+  build?: (q: CountQuery) => CountQuery,
+): Promise<number> {
   let q = supabase.from(table).select("id", { count: "exact", head: true });
   if (build) q = build(q);
   const { count, error } = await q;
@@ -101,7 +112,7 @@ async function headCount(supabase: any, table: string, build?: (q: any) => any):
 export const getOnboardingState = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const supabase = context.supabase as any;
+    const supabase = context.supabase;
 
     const [
       createDeal,
@@ -148,7 +159,7 @@ export const setOnboardingDismissed = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((v: unknown) => z.object({ dismissed: z.boolean() }).parse(v))
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as any;
+    const supabase = context.supabase;
     const { error } = await supabase.from("user_preferences").upsert(
       {
         user_id: context.userId,
@@ -170,28 +181,31 @@ export const setOnboardingDismissed = createServerFn({ method: "POST" })
 
 export const getPreferenceData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const supabase = context.supabase as any;
+  .handler(async ({ context }): Promise<Record<string, Json>> => {
+    const supabase = context.supabase;
     const { data, error } = await supabase
       .from("user_preferences")
       .select("data")
       .eq("user_id", context.userId)
       .maybeSingle();
-    if (isMissingRelation(error) || error || !data) return {} as Record<string, any>;
-    return (data.data ?? {}) as Record<string, any>;
+    if (isMissingRelation(error) || error || !data) return {};
+    return (data.data ?? {}) as Record<string, Json>;
   });
 
 export const savePreferenceData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((v: unknown) => z.object({ key: z.string().min(1).max(80), value: z.any() }).parse(v))
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as any;
+    const supabase = context.supabase;
     const { data: existing } = await supabase
       .from("user_preferences")
       .select("data")
       .eq("user_id", context.userId)
       .maybeSingle();
-    const merged = { ...((existing?.data as Record<string, any>) ?? {}), [data.key]: data.value };
+    const merged = {
+      ...((existing?.data as Record<string, Json> | null) ?? {}),
+      [data.key]: data.value,
+    };
     const { error } = await supabase
       .from("user_preferences")
       .upsert({ user_id: context.userId, data: merged }, { onConflict: "user_id" });

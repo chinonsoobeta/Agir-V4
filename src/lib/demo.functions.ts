@@ -11,7 +11,9 @@
 // no longer references source files that are not distributed with the repo.
 
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { DEMO_PACKAGE_BY_SLUG, categoryForFixture } from "./demo/registry";
 import {
   HARBOUR_BUDGET_LINES,
   HARBOUR_EXIT_CAP_CONFLICT,
@@ -394,6 +396,90 @@ export const seedHarbourCentre = createServerFn({ method: "POST" })
       user_id: context.userId,
       activity_type: "project_created",
       description: `Seeded Harbour Centre demo with 6 source documents; exit cap conflict ${HARBOUR_EXIT_CAP_CONFLICT.values.map((v) => v.value).join("% vs ")}% pending resolution`,
+    });
+
+    return { project_id: project.id };
+  });
+
+// Generic in-app seeder for "workflow"-mode demo packages (Rivergate, Summit
+// Point): create the project, upload the bundled source documents to Storage,
+// and link them as document rows. The analyst then runs the real extraction
+// pipeline against them - the golden numbers live inside the document bytes,
+// so nothing is pre-fabricated here.
+export const seedDemoPackage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { slug: string }) => z.object({ slug: z.string().min(1) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const pkg = DEMO_PACKAGE_BY_SLUG[data.slug];
+    if (!pkg) throw new Error(`Unknown demo package: ${data.slug}`);
+    if (pkg.mode !== "workflow" || !pkg.project) {
+      throw new Error(`Demo package "${data.slug}" is not a workflow package.`);
+    }
+
+    // Fresh project each run, so repeated demos don't pile up duplicates.
+    await context.supabase
+      .from("projects")
+      .delete()
+      .eq("owner_id", context.userId)
+      .eq("name", pkg.project.name);
+
+    // ===== Upload the bundled source documents =====
+    const uploaded: { name: string; path: string; size: number; type: string }[] = [];
+    for (const f of pkg.files) {
+      const bytes = Uint8Array.from(Buffer.from(f.base64, "base64"));
+      const path = `${context.userId}/${pkg.storagePrefix}/${f.name}`;
+      const { error: upErr } = await context.supabase.storage
+        .from("documents")
+        .upload(path, bytes, { upsert: true, contentType: f.fileType });
+      if (upErr) throw new Error(`Failed to upload demo file ${f.name}: ${upErr.message}`);
+      uploaded.push({ name: f.name, path, size: bytes.byteLength, type: f.fileType });
+    }
+
+    // Verify presence before wiring document rows to the paths.
+    const missing: string[] = [];
+    for (const u of uploaded) {
+      const probe = await context.supabase.storage.from("documents").download(u.path);
+      if (probe.error || !probe.data) missing.push(u.name);
+    }
+    if (missing.length) {
+      throw new Error(`Demo files failed to persist to storage (${missing.join(", ")}).`);
+    }
+
+    // ===== Create the project =====
+    const { data: project, error } = await context.supabase
+      .from("projects")
+      .insert({
+        owner_id: context.userId,
+        name: pkg.project.name,
+        location: pkg.project.location,
+        type: pkg.project.type,
+        status: pkg.project.status,
+        deal_type: pkg.project.deal_type ?? "development",
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+
+    // ===== Link uploaded files as documents =====
+    const { error: docErr } = await context.supabase.from("documents").insert(
+      uploaded.map((u) => ({
+        owner_id: context.userId,
+        project_id: project.id,
+        name: u.name,
+        category: categoryForFixture(u.name),
+        storage_path: u.path,
+        file_type: u.type,
+        size_bytes: u.size,
+        status: "uploaded",
+      })),
+    );
+    if (docErr) throw new Error(docErr.message);
+
+    await context.supabase.from("activities").insert({
+      project_id: project.id,
+      user_id: context.userId,
+      activity_type: "project_created",
+      description: `Seeded ${pkg.label} demo with ${uploaded.length} source documents; run extraction to populate assumptions.`,
     });
 
     return { project_id: project.id };

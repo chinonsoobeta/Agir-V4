@@ -17,9 +17,16 @@
 //
 // Exit non-zero on any failure so the drill is CI-runnable.
 
-import { readdir } from "node:fs/promises";
+import { readdir, writeFile, mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import pg from "pg";
+
+// Optional real-restore metrics the operator measures out-of-band and passes
+// in, so the evidence artifact records the actual RTO/RPO achieved, not just
+// the verification duration. Backup identity is recorded for the audit trail.
+const RESTORE_RTO_SECONDS = process.env.RESTORE_RTO_SECONDS;
+const RESTORE_RPO_SECONDS = process.env.RESTORE_RPO_SECONDS;
+const BACKUP_LABEL = process.env.BACKUP_LABEL ?? null;
 
 const url = process.env.STAGING_DATABASE_URL?.trim();
 if (!url) {
@@ -62,15 +69,40 @@ async function localVersions() {
     .sort();
 }
 
+async function writeEvidence(evidence) {
+  const dir = resolve(process.cwd(), "docs/ops/dr-drills");
+  await mkdir(dir, { recursive: true });
+  const stamp = evidence.startedAt.replace(/[:.]/g, "-");
+  const path = resolve(dir, `restore-drill-${stamp}.json`);
+  await writeFile(path, `${JSON.stringify(evidence, null, 2)}\n`);
+  console.log(`[restore-drill] evidence written: ${path}`);
+}
+
 async function main() {
+  const started = new Date();
   const client = new pg.Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
+  // Auditable evidence record for the DR runbook (docs/ops/disaster-recovery.md).
+  const evidence = {
+    drill: "restore-from-backup",
+    startedAt: started.toISOString(),
+    database: dbName,
+    backupLabel: BACKUP_LABEL,
+    rtoSeconds: RESTORE_RTO_SECONDS ? Number(RESTORE_RTO_SECONDS) : null,
+    rpoSeconds: RESTORE_RPO_SECONDS ? Number(RESTORE_RPO_SECONDS) : null,
+    checks: {},
+    failures: [],
+    result: "pass",
+  };
   const fail = (msg) => {
     console.error(`[restore-drill] FAIL: ${msg}`);
     process.exitCode = 1;
+    evidence.failures.push(msg);
+    evidence.result = "fail";
   };
   try {
     await client.connect();
     console.log(`[restore-drill] Connected to staging DB "${dbName}".`);
+    evidence.checks.connectivity = true;
 
     // 2/3. Migration ledger + drift.
     const expected = await localVersions();
@@ -85,6 +117,12 @@ async function main() {
     console.log(
       `[restore-drill] migrations: ${applied.length} applied, ${expected.length} in repo.`,
     );
+    evidence.checks.migrations = {
+      applied: applied.length,
+      expected: expected.length,
+      pending,
+      extra,
+    };
     if (pending.length) fail(`pending migrations on restored DB: ${pending.join(", ")}`);
     if (extra.length) fail(`extra migrations on restored DB: ${extra.join(", ")}`);
 
@@ -94,6 +132,7 @@ async function main() {
     );
     const present = new Set(tbls.map((r) => r.table_name));
     const missing = EXPECTED_TABLES.filter((t) => !present.has(t));
+    evidence.checks.keyTables = { expected: EXPECTED_TABLES.length, missing };
     if (missing.length) fail(`expected tables missing after restore: ${missing.join(", ")}`);
     else console.log(`[restore-drill] smoke: all ${EXPECTED_TABLES.length} key tables present.`);
 
@@ -106,6 +145,11 @@ async function main() {
     fail(err?.message ?? String(err));
   } finally {
     await client.end().catch(() => {});
+    evidence.finishedAt = new Date().toISOString();
+    evidence.verificationDurationMs = Date.now() - started.getTime();
+    await writeEvidence(evidence).catch((e) =>
+      console.error(`[restore-drill] could not write evidence: ${e?.message ?? e}`),
+    );
   }
 }
 

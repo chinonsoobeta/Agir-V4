@@ -17,6 +17,7 @@ export default tseslint.config(
       "node_modules",
       "outputs",
       "supabase/.temp",
+      "src/lib/demo/fixtures/*.generated.ts",
     ],
   },
   {

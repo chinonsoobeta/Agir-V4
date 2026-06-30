@@ -8,14 +8,21 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
-import { computeCriticalPath, type ExecMilestone } from "./execution/critical-path";
+import {
+  computeCriticalPath,
+  type ExecMilestone,
+  type MilestoneStatus,
+} from "./execution/critical-path";
 import {
   tallyVotes,
   transitionCondition,
   conditionsCleared,
   openConditionCount,
   type IcVote,
+  type VoteValue,
   type ConditionStatus,
   type ConditionAction,
 } from "./committee/voting";
@@ -57,12 +64,12 @@ export const getCriticalPath = createServerFn({ method: "GET" })
     // Degrade to an empty critical path on an unmigrated schema instead of
     // crashing the Execution page (the deal_milestones table may not exist yet).
     if (mErr && !isMissingRelation(mErr)) throw new Error(mErr.message);
-    const execMilestones: ExecMilestone[] = (milestones ?? []).map((m: any) => ({
+    const execMilestones: ExecMilestone[] = (milestones ?? []).map((m) => ({
       id: m.id,
       title: m.title,
       dueDate: m.due_date ?? null,
-      status: m.status,
-      dependsOn: Array.isArray(m.depends_on) ? m.depends_on : [],
+      status: m.status as MilestoneStatus,
+      dependsOn: Array.isArray(m.depends_on) ? (m.depends_on as string[]) : [],
       priority: m.priority,
     }));
     const result = computeCriticalPath(execMilestones, project?.target_close_date ?? null, today());
@@ -123,7 +130,10 @@ export const listIcVotes = createServerFn({ method: "GET" })
       .eq("project_id", data.project_id);
     if (isMissingRelation(error)) return { votes: [], tally: tallyVotes([]) };
     if (error) throw new Error(error.message);
-    const votes: IcVote[] = (rows ?? []).map((r: any) => ({ memberId: r.owner_id, vote: r.vote }));
+    const votes: IcVote[] = (rows ?? []).map((r) => ({
+      memberId: r.owner_id,
+      vote: r.vote as VoteValue,
+    }));
     return { votes: rows ?? [], tally: tallyVotes(votes) };
   });
 
@@ -193,8 +203,10 @@ export const listConditions = createServerFn({ method: "GET" })
     const conditions = rows ?? [];
     return {
       conditions,
-      cleared: conditionsCleared(conditions.map((c: any) => ({ status: c.status }))),
-      openCount: openConditionCount(conditions.map((c: any) => ({ status: c.status }))),
+      cleared: conditionsCleared(conditions.map((c) => ({ status: c.status as ConditionStatus }))),
+      openCount: openConditionCount(
+        conditions.map((c) => ({ status: c.status as ConditionStatus })),
+      ),
     };
   });
 
@@ -222,7 +234,7 @@ export const exportDealsCsv = createServerFn({ method: "POST" })
       .select("id,name,location,type,source,probability,target_close_date");
     if (pErr) throw new Error(pErr.message);
 
-    const records: DealRecord[] = (projects ?? []).map((p: any) => ({
+    const records: DealRecord[] = (projects ?? []).map((p) => ({
       external_id: p.id,
       name: p.name,
       location: p.location ?? null,
@@ -263,7 +275,7 @@ export type ImportDealsOutcome = { created: number; updated: number; failed: num
 //     last_synced_at touch collapses into ONE batched update.
 // Per-row failure isolation (the old try/catch-per-record contract) is preserved.
 export async function importDealRecords(
-  supabase: any,
+  supabase: SupabaseClient<Database>,
   opts: {
     connectionId: string;
     ownerId: string;
@@ -279,22 +291,28 @@ export async function importDealRecords(
   // Updates omit an absent probability (undefined) so they never wipe an existing
   // value; inserts use a stable key set (null for absent) because PostgREST keys
   // a bulk insert off the column set and it must be uniform across rows.
-  const updatePatch = (rec: DealRecord) => ({
+  type ProjectInsert = Database["public"]["Tables"]["projects"]["Insert"];
+  type ProjectUpdate = Database["public"]["Tables"]["projects"]["Update"];
+  const updatePatch = (rec: DealRecord): ProjectUpdate => ({
     name: rec.name,
     location: rec.location,
     source: rec.source,
     probability: rec.probability ?? undefined,
     target_close_date: rec.target_close_date,
   });
-  const insertRow = (rec: DealRecord) => ({
-    owner_id: opts.ownerId,
-    workspace_id: opts.workspaceId,
-    name: rec.name,
-    location: rec.location,
-    source: rec.source,
-    probability: rec.probability ?? null,
-    target_close_date: rec.target_close_date,
-  });
+  // probability is written as null when absent (a uniform key set keeps the
+  // PostgREST bulk insert valid); the generated Insert type narrows it to number,
+  // so the row is asserted against the table's Insert shape.
+  const insertRow = (rec: DealRecord): ProjectInsert =>
+    ({
+      owner_id: opts.ownerId,
+      workspace_id: opts.workspaceId,
+      name: rec.name,
+      location: rec.location,
+      source: rec.source,
+      probability: rec.probability ?? null,
+      target_close_date: rec.target_close_date,
+    }) as ProjectInsert;
   const linkRow = (rec: DealRecord, projectId: string) => ({
     connection_id: opts.connectionId,
     owner_id: opts.ownerId,
@@ -334,7 +352,7 @@ export async function importDealRecords(
         .from("projects")
         .update(updatePatch(rec))
         .eq("id", projectId)
-        .then((res: any) => {
+        .then((res) => {
           if (res?.error) throw new Error(res.error.message);
           return linkId;
         }),
@@ -394,7 +412,7 @@ export async function importDealRecords(
             supabase
               .from("external_record_links")
               .insert(linkRow(rec, inserted[i].id))
-              .then((res: any) => {
+              .then((res) => {
                 if (res?.error) throw new Error(res.error.message);
               }),
           ),

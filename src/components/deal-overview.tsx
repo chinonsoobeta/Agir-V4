@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { SectionLabel, Eyebrow, TONE_CHIP, TONE_TEXT } from "@/components/decision-ui";
 import type { DecisionSummary } from "@/lib/decision";
 import type { Finding } from "@/lib/findings";
+import type { Interpretation } from "@/lib/context/types";
 import { fmtCompact } from "@/lib/finance";
 import {
   TrendingUp,
@@ -16,6 +17,7 @@ import {
   ArrowDownRight,
   Quote,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 const SEV_TONE: Record<string, keyof typeof TONE_CHIP> = {
   critical: "reject",
@@ -25,7 +27,7 @@ const SEV_TONE: Record<string, keyof typeof TONE_CHIP> = {
 };
 
 function metricFmt(v: number | undefined, unit: string): string {
-  if (v == null || !Number.isFinite(v)) return "Not available";
+  if (v == null || !Number.isFinite(v)) return "–";
   if (unit === "$") return fmtCompact(v);
   if (unit === "%") return `${v.toFixed(1)}%`;
   if (unit === "x") return `${v.toFixed(2)}x`;
@@ -44,9 +46,9 @@ export function DealOverview({ decision }: { decision: DecisionSummary }) {
         <h3 className="display text-xl mt-4">No decision yet</h3>
         <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
           This deal has not been underwritten. Approve the required assumptions in the{" "}
-          <strong>Assumptions</strong> tab, then run the deterministic engine in{" "}
-          <strong>Analysis</strong>. The Investment Score, findings and recommendation will appear
-          here.
+          <span className="text-foreground">Assumptions</span> tab, then run the deterministic
+          engine in <span className="text-foreground">Analysis</span>. The Investment Score,
+          findings and recommendation will appear here.
         </p>
       </Card>
     );
@@ -91,9 +93,9 @@ export function DealOverview({ decision }: { decision: DecisionSummary }) {
             {decision.insight.interpretations?.length > 0 && (
               <ul className="mt-3 space-y-1">
                 {decision.insight.interpretations
-                  .filter((i: any) => i.band !== "neutral")
+                  .filter((i: Interpretation) => i.band !== "neutral")
                   .slice(0, 4)
-                  .map((i: any) => (
+                  .map((i: Interpretation) => (
                     <li key={i.metricKey} className="text-xs text-muted-foreground">
                       <span className="font-medium text-foreground/80">{i.label}</span>:{" "}
                       {i.comparativePhrase}.
@@ -206,9 +208,7 @@ export function DealOverview({ decision }: { decision: DecisionSummary }) {
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-x-6 gap-y-4">
             <MetricItem
               label="Investment Score"
-              value={
-                decision.investmentScore != null ? `${decision.investmentScore}` : "Not available"
-              }
+              value={decision.investmentScore != null ? `${decision.investmentScore}` : "–"}
             />
             <MetricItem label="Equity Multiple" value={metricFmt(b.equity_multiple, "x")} />
             <MetricItem label="Levered IRR" value={metricFmt(b.irr_estimate, "%")} />
@@ -239,7 +239,7 @@ function SummaryBox({
   title,
   body,
 }: {
-  icon: any;
+  icon: LucideIcon;
   tone: keyof typeof TONE_CHIP;
   label: string;
   title: string;
@@ -269,7 +269,7 @@ function FindingsColumn({
   empty,
 }: {
   title: string;
-  icon: any;
+  icon: LucideIcon;
   tone: keyof typeof TONE_CHIP;
   findings: Finding[];
   empty: string;
@@ -319,7 +319,7 @@ function DriverList({
   drivers,
 }: {
   title: string;
-  icon: any;
+  icon: LucideIcon;
   tone: keyof typeof TONE_CHIP;
   drivers: { rank: number; name: string; rationale: string }[];
 }) {

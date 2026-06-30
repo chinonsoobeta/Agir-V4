@@ -25,7 +25,8 @@ const SCEN_LABELS: Record<string, string> = {
   revenue_down: "Revenue Downside",
   combined: "Combined Stress",
 };
-const fmtDate = (s: any) => (s ? new Date(String(s)).toISOString().slice(0, 10) : "Not available");
+const fmtDate = (s: unknown) =>
+  s ? new Date(String(s)).toISOString().slice(0, 10) : "Not available";
 
 export function buildInternalTeamReport(
   data: ReportData,
@@ -35,7 +36,7 @@ export function buildInternalTeamReport(
   const core = deriveCore(data);
   const verdict = reportVerdict(data);
   const derived: number[] = [];
-  const trackAll = (ns: any[]) =>
+  const trackAll = (ns: unknown[]) =>
     ns.forEach((n) => {
       const v = Number(n);
       if (Number.isFinite(v)) derived.push(v);

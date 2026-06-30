@@ -32,6 +32,8 @@ import {
   type ReportDefinition,
   type ReportFormat,
 } from "@/lib/reports/report-definitions";
+import type { MemoReport } from "@/lib/memo-report";
+import type { Tables } from "@/integrations/supabase/types";
 import {
   FileText,
   Shield,
@@ -41,12 +43,18 @@ import {
   Eye,
   AlertTriangle,
   Loader2,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PortfolioReports } from "@/components/portfolio-reports";
 import { usePreferences } from "@/lib/preferences";
 
 const projectsQ = queryOptions({ queryKey: ["projects"], queryFn: () => listProjects() });
+
+type ProjectRow = Tables<"projects">;
+type Readiness = Awaited<ReturnType<typeof getReportReadiness>>;
+type ReportResult = Awaited<ReturnType<typeof generateReport>>;
+type VerificationReport = ReportResult["verification_report"];
 
 export const Route = createFileRoute("/_authenticated/reports")({
   head: () => ({ meta: [{ title: "Reports | Agir" }] }),
@@ -57,7 +65,7 @@ export const Route = createFileRoute("/_authenticated/reports")({
   component: ReportsPage,
 });
 
-const ICONS: Record<string, any> = {
+const ICONS: Record<string, LucideIcon> = {
   investor_report: FileText,
   lender_package: Shield,
   executive_summary: BarChart3,
@@ -91,8 +99,7 @@ function ReportsPage() {
 
   useEffect(() => {
     if (projectId) return;
-    if (queryProject && projects.some((p: any) => p.id === queryProject))
-      setProjectId(queryProject);
+    if (queryProject && projects.some((p) => p.id === queryProject)) setProjectId(queryProject);
     else if (projects.length) setProjectId(projects[0].id);
   }, [queryProject, projects, projectId]);
 
@@ -143,7 +150,7 @@ function ProjectSelector({
   projectId,
   onChange,
 }: {
-  projects: any[];
+  projects: ProjectRow[];
   projectId: string | null;
   onChange: (id: string) => void;
 }) {
@@ -182,7 +189,9 @@ function ProjectStatusLine({ projectId }: { projectId: string }) {
   const memo = c.memos > 0 ? "Memo generated" : "No memo";
   return (
     <div className="text-xs text-muted-foreground ml-auto">
-      <span className="font-medium text-foreground">{(data as any).project_name ?? "Project"}</span>
+      <span className="font-medium text-foreground">
+        {"project_name" in data ? (data.project_name ?? "Project") : "Project"}
+      </span>
       {" · "}
       {uw}
       {" · "}
@@ -208,8 +217,8 @@ function ReportGrid({ projectId }: { projectId: string }) {
     })),
   });
   const [preview, setPreview] = useState<{
-    report: any;
-    verification: any;
+    report: MemoReport;
+    verification: VerificationReport;
     def: ReportDefinition;
   } | null>(null);
 
@@ -241,9 +250,9 @@ function ReportCard({
 }: {
   def: ReportDefinition;
   projectId: string;
-  readiness: any;
+  readiness: Readiness | undefined;
   loading: boolean;
-  onPreview: (report: any, verification: any) => void;
+  onPreview: (report: MemoReport, verification: VerificationReport) => void;
 }) {
   const Icon = ICONS[def.type] ?? FileText;
   const qc = useQueryClient();
@@ -261,7 +270,7 @@ function ReportCard({
     setError(null);
     setBusy(action);
     try {
-      const res: any = await generateFn({ data: { project_id: projectId, report_type: def.type } });
+      const res = await generateFn({ data: { project_id: projectId, report_type: def.type } });
       qc.invalidateQueries({ queryKey: ["report-readiness", projectId, def.type] });
       if (res.needs_review)
         toast.warning(`${def.title} generated but flagged needs review (provenance).`);
@@ -378,7 +387,7 @@ function ReportPreview({
   preview,
   onClose,
 }: {
-  preview: { report: any; verification: any; def: ReportDefinition };
+  preview: { report: MemoReport; verification: VerificationReport; def: ReportDefinition };
   onClose: () => void;
 }) {
   const { report, verification } = preview;
@@ -409,7 +418,7 @@ function ReportPreview({
           )}
           {report.summary_stats?.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {report.summary_stats.map((s: any) => (
+              {report.summary_stats.map((s) => (
                 <div key={s.label} className="rounded border border-border p-2">
                   <div className="text-[9px] uppercase tracking-widest text-muted-foreground">
                     {s.label}
@@ -421,7 +430,7 @@ function ReportPreview({
           )}
           {report.metric_cards?.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {report.metric_cards.map((c: any) => (
+              {report.metric_cards.map((c) => (
                 <div key={c.label} className="rounded border border-border p-2">
                   <div className="text-[9px] uppercase tracking-widest text-muted-foreground">
                     {c.label}
@@ -431,7 +440,7 @@ function ReportPreview({
               ))}
             </div>
           )}
-          {report.sections?.map((sec: any, i: number) => (
+          {report.sections?.map((sec, i) => (
             <div key={`${sec.heading}-${i}`}>
               <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
                 {sec.heading}

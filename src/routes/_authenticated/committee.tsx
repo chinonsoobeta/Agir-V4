@@ -26,7 +26,7 @@ function CommitteePage() {
   const [dealId, setDealId] = useState<string | null>(null);
   useEffect(() => {
     if (dealId) return;
-    if (deal && projects.some((p: any) => p.id === deal)) setDealId(deal);
+    if (deal && projects.some((p) => p.id === deal)) setDealId(deal);
     else if (projects.length) setDealId(projects[0].id);
   }, [deal, projects, dealId]);
 

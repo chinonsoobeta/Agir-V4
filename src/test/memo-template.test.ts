@@ -146,7 +146,7 @@ describe("Deterministic memo template", () => {
       risks: [],
       errorFlags,
       verdict,
-    });
+    } as unknown as Parameters<typeof buildDeterministicMemo>[0]);
     for (const key of [
       "executive_summary",
       "project_description",
@@ -183,7 +183,7 @@ describe("Deterministic memo template", () => {
       risks: [],
       errorFlags,
       verdict,
-    });
+    } as unknown as Parameters<typeof buildDeterministicMemo>[0]);
 
     // Allowed set mirrors generateMemo (including flag-derived pure functions).
     const flagDerived: number[] = [];

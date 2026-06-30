@@ -25,6 +25,18 @@ backups/
 outputs/
 sample-scenario.json
 
+# Playwright E2E
+e2e/.auth/
+e2e/.artifacts/
+playwright-report/
+test-results/
+/blob-report/
+.playwright/
+
+# DR drill + SLA evidence (runtime artifacts, not source)
+docs/ops/dr-drills/*.json
+docs/ops/sla/*.json
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars

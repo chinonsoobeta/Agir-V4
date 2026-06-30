@@ -405,11 +405,43 @@ export const createDataGovernanceRequest = createServerFn({ method: "POST" })
     return row;
   });
 
+// data_governance_requests is provisioned by a pending migration and is not yet
+// in the generated Database types, so the query is issued against a structurally
+// typed client and the rows are asserted to this shape.
+export type DataGovernanceRequest = {
+  id: string;
+  workspace_id: string;
+  request_type: string;
+  subject: string;
+  status: string;
+  created_at: string;
+};
+
 export const listDataGovernanceRequests = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((value: unknown) => z.object({ workspace_id: z.string().uuid() }).parse(value))
-  .handler(async ({ data, context }) => {
-    const { data: rows, error } = await (context.supabase as any)
+  .handler(async ({ data, context }): Promise<DataGovernanceRequest[]> => {
+    const db = context.supabase as unknown as {
+      from: (table: string) => {
+        select: (cols: string) => {
+          eq: (
+            col: string,
+            val: string,
+          ) => {
+            order: (
+              col: string,
+              opts: { ascending: boolean },
+            ) => {
+              limit: (n: number) => Promise<{
+                data: DataGovernanceRequest[] | null;
+                error: { message: string; code?: string } | null;
+              }>;
+            };
+          };
+        };
+      };
+    };
+    const { data: rows, error } = await db
       .from("data_governance_requests")
       .select("*")
       .eq("workspace_id", data.workspace_id)

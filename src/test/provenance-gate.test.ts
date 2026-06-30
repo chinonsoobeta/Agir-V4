@@ -176,7 +176,9 @@ function harbourReportData(): ReportData {
     auditLogs: [],
     scenarios: [],
     unitContractIssues: [],
-  };
+    // Test fixture carries only the fields the builders read; assert to the
+    // full ReportData row shapes.
+  } as unknown as ReportData;
 }
 
 function memoArtifact(data: ReportData): MemoReport {

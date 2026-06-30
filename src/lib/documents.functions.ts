@@ -215,7 +215,7 @@ export const analyzeDocument = createServerFn({ method: "POST" })
 
     // Idempotent + observable: one job per (owner, document content). A retry or
     // double-click re-attaches to the existing job instead of re-running OCR/AI.
-    const idempotencyKey = (doc as any).content_hash || `doc:${doc.id}`;
+    const idempotencyKey = doc.content_hash || `doc:${doc.id}`;
     const { job, existed } = await claimJob(context, {
       kind: "document_analysis",
       idempotencyKey,
@@ -233,7 +233,7 @@ export const analyzeDocument = createServerFn({ method: "POST" })
       );
     }
 
-    const failExtraction = async (message: string) => {
+    const failExtraction = async (message: string): Promise<never> => {
       await context.supabase
         .from("documents")
         .update({
@@ -253,9 +253,12 @@ export const analyzeDocument = createServerFn({ method: "POST" })
 
     const { downloadDocumentBlob } = await import("./storage-download.server");
     const dl = await downloadDocumentBlob(context.supabase, doc.storage_path);
-    if (dl.error || !dl.data)
+    if (dl.error || !dl.data) {
+      // failExtraction always throws (Promise<never>), so the code below is
+      // unreachable when the download failed; narrow dl.data for the compiler.
       await failExtraction(dl.error?.message ?? "Unable to download document for extraction.");
-    const buffer = await dl.data.arrayBuffer();
+    }
+    const buffer = await dl.data!.arrayBuffer();
 
     // Safety scan BEFORE any parsing: structural checks always, plus an external
     // AV/content scan when DOCUMENT_SCAN_URL is configured (fails closed).
@@ -307,10 +310,12 @@ ${text.slice(0, 30000)}
 
 Respond as compact JSON only with keys: summary, key_assumptions, risks, important_dates, financial_highlights. If a value is absent, write "Not found in document."`,
       });
-    } catch (e: any) {
+    } catch (e) {
       // AI gateway / key failures must persist a clear, retryable failed status.
       await failExtraction(
-        e?.message ?? "AI extraction is unavailable. Check the model configuration.",
+        e instanceof Error
+          ? e.message
+          : "AI extraction is unavailable. Check the model configuration.",
       );
       return { summary: "", assumptions: "", risks: "" }; // unreachable: failExtraction throws
     }

@@ -24,7 +24,7 @@ export const DEAL_COLUMNS: { key: DealColumnKey; label: string; align: "left" | 
   { key: "source", label: "Source", align: "left" },
   { key: "capital", label: "Capital", align: "right" },
   { key: "probability", label: "Probability", align: "right" },
-  { key: "investment", label: "Investment", align: "right" },
+  { key: "investment", label: "Inv. score", align: "right" },
   { key: "confidence", label: "Confidence", align: "right" },
   { key: "close", label: "Target close", align: "left" },
 ];

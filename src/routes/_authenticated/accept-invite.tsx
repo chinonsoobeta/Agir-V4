@@ -36,9 +36,9 @@ function AcceptInvitePage() {
       setStatus("done");
       setMessage("You've joined the workspace.");
       setTimeout(() => navigate({ to: "/dashboard" }), 1200);
-    } catch (e: any) {
+    } catch (e) {
       setStatus("error");
-      setMessage(e?.message ?? "Could not accept this invitation.");
+      setMessage(e instanceof Error ? e.message : "Could not accept this invitation.");
     }
   }
 

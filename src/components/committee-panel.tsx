@@ -57,6 +57,43 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import type { VoteTally } from "@/lib/committee/voting";
+import type { Tables } from "@/integrations/supabase/types";
+
+type MemoSnapshotRow = Pick<
+  Tables<"memo_snapshots">,
+  | "id"
+  | "version"
+  | "verdict_code"
+  | "content_hash"
+  | "decision_id"
+  | "created_at"
+  | "created_by_name"
+>;
+type SnapshotAssumptionChange = {
+  field_key: string;
+  field_label: string;
+  was: string | number | null;
+  now: string | number | null;
+  kind: "added" | "removed" | "changed";
+};
+type SnapshotOutputChange = {
+  scenario_key: string;
+  metric_key: string;
+  metric_label: string | null;
+  unit: string | null;
+  was: number | null;
+  now: number | null;
+};
+type SnapshotDiff = {
+  snapshot_id: string;
+  version: number;
+  locked_at: string;
+  content_hash: string;
+  current_hash: string;
+  drifted: boolean;
+  assumption_changes: SnapshotAssumptionChange[];
+  output_changes: SnapshotOutputChange[];
+};
 
 const outputsQ = (pid: string) =>
   queryOptions({
@@ -217,8 +254,9 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
         <h3 className="display text-xl mt-4">Underwriting not run</h3>
         <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
           No investment recommendation available yet. Resolve the required assumptions and run
-          deterministic underwriting in <strong>Analysis</strong>. The recommendation, Investment
-          Score, conditions and findings will appear here once outputs exist.
+          deterministic underwriting in <span className="text-foreground">Analysis</span>. The
+          recommendation, Investment Score, conditions and findings will appear here once outputs
+          exist.
         </p>
       </Card>
     );
@@ -482,8 +520,8 @@ function AuditIntegrity({ projectId }: { projectId: string }) {
       setResult(r);
       if (r.valid) toast.success(`Audit chain intact (${r.total} entries verified)`);
       else toast.error(`Audit chain BROKEN at #${r.broken_seq} (${r.reason})`);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Verification failed");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Verification failed");
     } finally {
       setBusy(false);
     }
@@ -522,15 +560,17 @@ function MemoSnapshots({ projectId }: { projectId: string }) {
     }),
   );
   const diffFn = useServerFn(diffMemoSnapshot);
-  const [diff, setDiff] = useState<any | null>(null);
+  const [diff, setDiff] = useState<SnapshotDiff | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   if (!snapshots.length) return null;
   async function showDiff(id: string) {
     setBusyId(id);
     try {
-      setDiff(await diffFn({ data: { snapshot_id: id } }));
-    } catch (e: any) {
-      toast.error(e?.message ?? "Diff failed");
+      // The server returns the same diff shape with Json-typed change fields;
+      // SnapshotDiff narrows them for display.
+      setDiff((await diffFn({ data: { snapshot_id: id } })) as unknown as SnapshotDiff);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Diff failed");
     } finally {
       setBusyId(null);
     }
@@ -542,7 +582,7 @@ function MemoSnapshots({ projectId }: { projectId: string }) {
         <SectionLabel>Locked at IC Submission</SectionLabel>
       </div>
       <ul className="divide-y divide-border">
-        {snapshots.map((s: any) => (
+        {snapshots.map((s: MemoSnapshotRow) => (
           <li key={s.id} className="p-4 flex items-center gap-3 text-sm">
             <Badge variant="outline" className="text-[10px] uppercase">
               v{s.version}
@@ -588,7 +628,7 @@ function MemoSnapshots({ projectId }: { projectId: string }) {
                 Assumption changes ({diff.assumption_changes.length})
               </div>
               <ul className="space-y-0.5 font-mono text-xs">
-                {diff.assumption_changes.slice(0, 12).map((c: any) => (
+                {diff.assumption_changes.slice(0, 12).map((c: SnapshotAssumptionChange) => (
                   <li key={c.field_key}>
                     {c.field_label}: {String(c.was)} → {String(c.now)}
                   </li>
@@ -602,7 +642,7 @@ function MemoSnapshots({ projectId }: { projectId: string }) {
                 Output changes ({diff.output_changes.length})
               </div>
               <ul className="space-y-0.5 font-mono text-xs">
-                {diff.output_changes.slice(0, 12).map((c: any) => (
+                {diff.output_changes.slice(0, 12).map((c: SnapshotOutputChange) => (
                   <li key={`${c.scenario_key}:${c.metric_key}`}>
                     {c.metric_label} [{c.scenario_key}]: {String(c.was)} → {String(c.now)}
                   </li>

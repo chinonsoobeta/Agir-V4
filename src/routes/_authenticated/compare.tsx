@@ -157,7 +157,7 @@ function ComparisonGrid({ deals }: { deals: ComparisonDeal[] }) {
                   {deals.map((d) => {
                     const raw = d[metric.key];
                     const isWinner = winner === d.id;
-                    let display: React.ReactNode = formatReportCell(raw as any, metric.type, fmt);
+                    let display: React.ReactNode = formatReportCell(raw, metric.type, fmt);
                     if (metric.key === "recommendation") {
                       const tone =
                         RECOMMENDATION_TONE[d.recommendation as keyof typeof RECOMMENDATION_TONE] ??

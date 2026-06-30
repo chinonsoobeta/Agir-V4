@@ -1,4 +1,5 @@
-import { defineConfig, loadEnv } from "vite";
+import { loadEnv } from "vite";
+import { defineConfig, configDefaults } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tsconfigPaths from "vite-tsconfig-paths";
 import tailwindcss from "@tailwindcss/vite";
@@ -62,6 +63,11 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       target: "ES2020",
+    },
+    // Playwright specs live in e2e/ and also match the *.spec.ts glob; keep them
+    // out of the Vitest run (they are driven by `npm run test:e2e`).
+    test: {
+      exclude: [...configDefaults.exclude, "e2e/**"],
     },
   };
 });

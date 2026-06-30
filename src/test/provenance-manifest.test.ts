@@ -18,7 +18,7 @@ function report(): MemoReport {
     verdict: { code: "APPROVE", gates: [] },
     generationMode: "deterministic",
     generatedLabel: "June 2026",
-  });
+  } as unknown as Parameters<typeof buildMemoReport>[0]);
 }
 
 describe("signed provenance manifests", () => {

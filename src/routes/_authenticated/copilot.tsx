@@ -17,7 +17,10 @@ import {
 import { Send, Bot, User as UserIcon, Sparkles } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import ReactMarkdown from "react-markdown";
+
+type ProjectRow = Tables<"projects">;
 
 const projectsQ = queryOptions({ queryKey: ["projects"], queryFn: () => listProjects() });
 
@@ -53,7 +56,7 @@ function CopilotPage() {
   }, []);
 
   if (!token) return <div className="p-8 text-muted-foreground text-sm">Loading…</div>;
-  const focused = projects.find((p: any) => p.id === dealId) ?? null;
+  const focused = projects.find((p) => p.id === dealId) ?? null;
   return <ChatUI token={token} projects={projects} focused={focused} setDealId={setDealId} />;
 }
 
@@ -64,8 +67,8 @@ function ChatUI({
   setDealId,
 }: {
   token: string;
-  projects: any[];
-  focused: any | null;
+  projects: ProjectRow[];
+  focused: ProjectRow | null;
   setDealId: (id: string | null) => void;
 }) {
   const [input, setInput] = useState("");
@@ -117,9 +120,12 @@ function ChatUI({
         }
       />
       <div className="px-5 sm:px-8 py-6 flex flex-col h-[calc(100dvh-5.5rem)]">
-        <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 pr-2">
+        <div
+          ref={scrollRef}
+          className={`flex-1 overflow-y-auto pr-2 ${messages.length === 0 ? "flex flex-col items-center justify-center" : "space-y-4"}`}
+        >
           {messages.length === 0 && (
-            <Card className="p-8 text-center elevated">
+            <Card className="p-8 text-center elevated max-w-xl w-full">
               <Bot className="size-10 mx-auto text-primary" />
               <h3 className="mt-3 display text-xl">
                 {focused

@@ -50,7 +50,7 @@ function triggerTextDownload(text: string, filename: string, mime: string) {
 }
 
 export function PortfolioReports() {
-  const { fmt, locale } = usePreferences();
+  const { fmt } = usePreferences();
   const [reportId, setReportId] = useState<PortfolioReportId>("pipeline_conversion");
   const [assetType, setAssetType] = useState("all");
   const [stage, setStage] = useState("all");
@@ -78,7 +78,7 @@ export function PortfolioReports() {
   );
 
   const asOfDate = portfolioQ.dataUpdatedAt ? new Date(portfolioQ.dataUpdatedAt) : new Date();
-  const asOf = fmt.date(asOfDate, { dateStyle: "medium", timeStyle: "short" } as any);
+  const asOf = fmt.date(asOfDate, { dateStyle: "medium", timeStyle: "short" });
 
   const report = useMemo(() => {
     if (reportId === "decision_history") {
@@ -111,8 +111,8 @@ export function PortfolioReports() {
       } else {
         await downloadReportPdf(report, title, asOf, `${fileBase}.pdf`);
       }
-    } catch (e: any) {
-      toast.error(e?.message ?? "Export failed");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Export failed");
     } finally {
       setBusy(null);
     }
@@ -294,8 +294,7 @@ export function PortfolioReports() {
         <Info className="size-3.5 mt-0.5 shrink-0" />
         <div>
           <span className="text-foreground/70">Deterministic.</span> {report.formula}{" "}
-          <span className="whitespace-nowrap">Data as of {asOf}.</span>{" "}
-          <span className="opacity-60">({locale})</span>
+          <span className="whitespace-nowrap">Data as of {asOf}</span>
         </div>
       </div>
     </div>

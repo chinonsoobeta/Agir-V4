@@ -5,17 +5,25 @@
 // computes or invents a number of its own, so the output passes the same
 // numeric-provenance verifier the AI path uses.
 
-type Row = Record<string, any>;
+import type {
+  ProjectRow,
+  AssumptionRow,
+  EngineInputRow,
+  OutputRow,
+  CashFlowRow,
+  FlagRow,
+  RiskRow,
+} from "./reports/report-data.server";
 
 export type DeterministicMemoContext = {
-  project: Row;
-  assumptions: Row[];
-  engineInputs: Row[];
-  outputs: Row[];
-  cashFlows: Row[];
-  flags: Row[];
-  risks: Row[];
-  errorFlags: Row[];
+  project: ProjectRow;
+  assumptions: AssumptionRow[];
+  engineInputs: EngineInputRow[];
+  outputs: OutputRow[];
+  cashFlows: CashFlowRow[];
+  flags: FlagRow[];
+  risks: RiskRow[];
+  errorFlags: FlagRow[];
   verdict: {
     code: string;
     hardFail?: boolean;
@@ -61,10 +69,10 @@ export function buildDeterministicMemo(ctx: DeterministicMemoContext): Record<st
   // intermediates (e.g. component GPRs) that are not standalone allowed values,
   // which would (correctly) trip the provenance verifier. Final values always
   // trace cleanly.
-  const metricLine = (o: Row | undefined) =>
+  const metricLine = (o: OutputRow | undefined) =>
     o ? `• ${o.metric_label}: ${fmtByUnit(o.value_numeric, o.unit)}` : "";
   const assumptionByKey = (key: string) => assumptions.find((a) => a.field_key === key);
-  const assumptionLine = (a: Row | undefined) =>
+  const assumptionLine = (a: AssumptionRow | undefined) =>
     a ? `• ${a.field_label}: ${fmtByUnit(a.value_numeric, a.unit)}` : "";
 
   // ---- Executive Summary ----
@@ -77,7 +85,7 @@ export function buildDeterministicMemo(ctx: DeterministicMemoContext): Record<st
     "equity_multiple",
     "dscr",
   ];
-  const headline = headlineKeys.map(baseMetric).filter(Boolean) as Row[];
+  const headline = headlineKeys.map(baseMetric).filter(Boolean) as OutputRow[];
   const executive_summary = bullet([
     `${project.name} is a ${project.type ?? "development"} project${project.location ? ` in ${project.location}` : ""}.`,
     `Deterministic underwriting verdict: ${verdict.code}.`,
@@ -161,7 +169,7 @@ export function buildDeterministicMemo(ctx: DeterministicMemoContext): Record<st
           const parts = stressKeys
             .map((mk) => outputs.find((o) => o.scenario_key === sk && o.metric_key === mk))
             .filter(Boolean)
-            .map((o: any) => `${o.metric_label} ${fmtByUnit(o.value_numeric, o.unit)}`);
+            .map((o) => `${o!.metric_label} ${fmtByUnit(o!.value_numeric, o!.unit)}`);
           return `• ${SCEN_LABELS[sk] ?? sk}: ${parts.join(" · ")}`;
         }),
     ) || "No scenario outputs.";
