@@ -8,6 +8,7 @@
 // durable record).
 
 type ErrorContext = Record<string, unknown>;
+type MetricContext = Record<string, unknown>;
 
 export type CapturedEvent = {
   level: "error";
@@ -15,6 +16,14 @@ export type CapturedEvent = {
   timestamp: string;
   error: { name?: string; message: string; stack?: string };
 } & ErrorContext;
+
+export type OperationalMetric = {
+  level: "metric";
+  service: "agir";
+  timestamp: string;
+  name: string;
+  value: number;
+} & MetricContext;
 
 function serializeError(error: unknown): CapturedEvent["error"] {
   if (error instanceof Error) {
@@ -73,4 +82,47 @@ export function captureServerError(error: unknown, context: ErrorContext = {}): 
   }
   const sink = errorSinkUrl();
   if (sink) void forwardToSink(sink, event);
+}
+
+function metricSinkUrl(): string | null {
+  const url = process.env.METRICS_WEBHOOK_URL?.trim() || process.env.ERROR_WEBHOOK_URL?.trim();
+  return url ? url : null;
+}
+
+async function forwardMetricToSink(url: string, metric: OperationalMetric): Promise<void> {
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(metric),
+    });
+  } catch {
+    // Metrics must never break request or worker paths.
+  }
+}
+
+export function buildMetricEvent(
+  name: string,
+  value = 1,
+  context: MetricContext = {},
+): OperationalMetric {
+  return {
+    level: "metric",
+    service: "agir",
+    timestamp: new Date().toISOString(),
+    name,
+    value,
+    ...context,
+  };
+}
+
+export function emitOperationalMetric(name: string, value = 1, context: MetricContext = {}): void {
+  const metric = buildMetricEvent(name, value, context);
+  try {
+    console.info(`[agir-metric] ${JSON.stringify(metric)}`);
+  } catch {
+    console.info("[agir-metric] (unserializable metric)", name, value);
+  }
+  const sink = metricSinkUrl();
+  if (sink) void forwardMetricToSink(sink, metric);
 }

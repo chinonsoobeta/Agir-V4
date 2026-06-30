@@ -12,6 +12,10 @@ const databaseUrl =
   process.env.DATABASE_URL;
 const handlerUrl = process.env.EXTRACTION_WORKER_HANDLER_URL;
 const pollMs = Number(process.env.EXTRACTION_WORKER_POLL_MS ?? 5000);
+const workerId =
+  process.env.EXTRACTION_WORKER_ID ??
+  `worker-${Math.random().toString(16).slice(2)}-${Date.now().toString(36)}`;
+const leaseSeconds = Number(process.env.EXTRACTION_WORKER_LEASE_SECONDS ?? 300);
 
 if (!databaseUrl && !dryRun) {
   throw new Error("Set WORKER_DATABASE_URL, SUPABASE_SERVICE_DATABASE_URL, or DATABASE_URL.");
@@ -28,20 +32,27 @@ async function withClient(fn) {
 }
 
 async function claimQueuedJob(client) {
-  const result = await client.query(`
-    UPDATE public.extraction_jobs
-    SET status = 'running', started_at = now(), message = 'Claimed by extraction worker'
-    WHERE id = (
-      SELECT id
-      FROM public.extraction_jobs
-      WHERE status = 'queued'
-      ORDER BY created_at ASC
-      FOR UPDATE SKIP LOCKED
-      LIMIT 1
-    )
-    RETURNING *
-  `);
+  const result = await client.query("select * from public.claim_next_extraction_job($1, $2)", [
+    workerId,
+    leaseSeconds,
+  ]);
   return result.rows[0] ?? null;
+}
+
+async function heartbeatJob(client, job) {
+  await client.query("select public.heartbeat_extraction_job($1, $2, $3)", [
+    job.id,
+    workerId,
+    leaseSeconds,
+  ]);
+}
+
+async function shouldCancel(client, job) {
+  const result = await client.query(
+    "select cancellation_requested from public.extraction_jobs where id = $1",
+    [job.id],
+  );
+  return Boolean(result.rows[0]?.cancellation_requested);
 }
 
 async function finishJob(client, job, payload) {
@@ -103,6 +114,16 @@ async function tick() {
       return false;
     }
     console.log(`[extraction-worker] claimed ${job.id} (${job.kind})`);
+    await heartbeatJob(client, job);
+    if (await shouldCancel(client, job)) {
+      await finishJob(client, job, {
+        status: "canceled",
+        error: null,
+        message: "Job canceled before handler execution.",
+      });
+      console.log(`[extraction-worker] ${job.id} -> canceled`);
+      return true;
+    }
     const result = await handleJob(job);
     await finishJob(client, job, result);
     console.log(`[extraction-worker] ${job.id} -> ${result.status}`);
@@ -112,9 +133,8 @@ async function tick() {
 
 if (dryRun) {
   console.log("[extraction-worker] dry run: SQL worker contract loaded.");
-  console.log(
-    "[extraction-worker] set WORKER_DATABASE_URL and EXTRACTION_WORKER_HANDLER_URL to execute.",
-  );
+  console.log("[extraction-worker] queue contract: claim_next_extraction_job + heartbeat.");
+  console.log("[extraction-worker] set WORKER_DATABASE_URL and EXTRACTION_WORKER_HANDLER_URL.");
   process.exit(0);
 }
 

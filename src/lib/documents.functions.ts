@@ -43,11 +43,8 @@ export const cancelExtractionJob = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
     if (job.status === "completed") throw new Error("A completed job cannot be cancelled.");
-    const { error: updErr } = await context.supabase
-      .from("extraction_jobs")
-      .update({ status: "canceled", finished_at: new Date().toISOString() })
-      .eq("id", data.id);
-    if (updErr) throw new Error(updErr.message);
+    const { requestJobCancellation } = await import("./extraction-jobs.server");
+    await requestJobCancellation(context, data.id);
     return { ok: true };
   });
 
@@ -101,6 +98,10 @@ export const createDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => CreateDocSchema.parse(d))
   .handler(async ({ data, context }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit(context, "document_upload", {
+      metadata: { file_type: data.file_type ?? null, size_bytes: data.size_bytes ?? 0 },
+    });
     const { UPLOAD_LIMITS, enforceUploadQuota } = await import("./upload-guards.server");
     const size = data.size_bytes ?? 0;
     if (size > UPLOAD_LIMITS.maxFileBytes) {
@@ -157,17 +158,34 @@ export const getDocumentUrl = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit(context, "signed_document_url", { metadata: { document_id: data.id } });
     const { data: doc, error } = await context.supabase
       .from("documents")
-      .select("storage_path")
+      .select("storage_path,project_id")
       .eq("id", data.id)
       .single();
     if (error) throw new Error(error.message);
+    if (
+      doc.storage_path.startsWith("/") ||
+      doc.storage_path.includes("..") ||
+      doc.storage_path.includes("\\")
+    ) {
+      throw new Error("Document storage path is invalid.");
+    }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: signed, error: signedError } = await supabaseAdmin.storage
       .from("documents")
-      .createSignedUrl(doc.storage_path, 3600);
+      .createSignedUrl(doc.storage_path, 300);
     if (signedError) throw new Error(signedError.message);
+    const { writeAuditEvent } = await import("./audit.server");
+    await writeAuditEvent(context, {
+      projectId: doc.project_id,
+      entityType: "documents",
+      entityId: data.id,
+      action: "signed_url_created",
+      payload: { ttl_seconds: 300 },
+    });
     return { url: signed?.signedUrl ?? null };
   });
 
@@ -183,6 +201,8 @@ export const analyzeDocument = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit(context, "document_analysis", { metadata: { document_id: data.id } });
     const { data: doc, error: docErr } = await context.supabase
       .from("documents")
       .select("*")

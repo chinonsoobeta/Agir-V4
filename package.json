@@ -24,6 +24,11 @@
     "smoke:ephemeral-db": "node scripts/ephemeral-supabase-smoke.mjs",
     "smoke:fresh-env": "node scripts/fresh-environment-smoke.mjs",
     "drift:check": "node scripts/check-schema-drift.mjs",
+    "deploy:gate": "node scripts/deploy-gate.mjs",
+    "schema:refresh-cache": "node scripts/refresh-schema-cache.mjs",
+    "audit:verify-chains": "node scripts/verify-audit-chains.mjs",
+    "governance:enforce": "node scripts/enforce-data-governance.mjs",
+    "governance:dry-run": "node scripts/enforce-data-governance.mjs --dry-run",
     "restore:drill": "node scripts/restore-staging-from-backup.mjs",
     "pilot:audit": "node scripts/audit-pilot-readiness.mjs",
     "worker:extraction": "node scripts/extraction-worker.mjs"

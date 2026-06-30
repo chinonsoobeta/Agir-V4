@@ -3,6 +3,10 @@ import { existsSync, readFileSync } from "node:fs";
 const requiredFiles = [
   "scripts/fresh-environment-smoke.mjs",
   "scripts/extraction-worker.mjs",
+  "scripts/deploy-gate.mjs",
+  "scripts/refresh-schema-cache.mjs",
+  "scripts/verify-audit-chains.mjs",
+  "scripts/enforce-data-governance.mjs",
   "docs/pilot/unsupervised-pilot-script.md",
   "docs/pilot/pilot-deal-packages.md",
   "docs/pilot/pilot-observation-scorecard.md",
@@ -12,9 +16,13 @@ const requiredFiles = [
   "docs/ops/disaster-recovery.md",
   "docs/ops/incident-response.md",
   "docs/ops/on-call-sla.md",
+  "docs/ops/backend-operational-hardening.md",
   "src/lib/pilot-readiness.ts",
   "src/lib/customer-audit-package.ts",
   "src/lib/pilot-demo-packages.ts",
+  "src/lib/rate-limit.server.ts",
+  "src/lib/audit-chain-verifier.server.ts",
+  "src/lib/compliance-enforcement.server.ts",
 ];
 
 const requiredPhrases = {
@@ -31,6 +39,12 @@ const requiredPhrases = {
   ],
   "docs/security/penetration-test-readiness.md": ["RLS", "signed document URL", "Retest letter"],
   "docs/ops/disaster-recovery.md": ["RTO", "RPO", "npm run smoke:ephemeral-db"],
+  "docs/ops/backend-operational-hardening.md": [
+    "npm run deploy:gate",
+    "npm run worker:extraction",
+    "npm run audit:verify-chains",
+    "npm run governance:enforce",
+  ],
 };
 
 const failures = [];

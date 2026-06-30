@@ -155,6 +155,10 @@ export const generateReport = createServerFn({ method: "POST" })
     z.object({ project_id: z.string().uuid(), report_type: ReportTypeSchema }).parse(d),
   )
   .handler(async ({ data, context }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit(context, "report_generation", {
+      metadata: { project_id: data.project_id, report_type: data.report_type },
+    });
     const def = REPORT_BY_TYPE[data.report_type];
 
     const { loadReportData } = await import("./reports/report-data.server");

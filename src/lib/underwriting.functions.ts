@@ -129,44 +129,12 @@ export async function assertApprovedAssumptionsSynced(supabase: any, projectId: 
 
 // The single loader. Everything the engine sees flows through here.
 async function loadProjectRows(supabase: any, projectId: string): Promise<ProjectInputRows> {
-  const [{ data: scalars }, { data: budget }, { data: revenue }, { data: conflictingAssumptions }] =
-    await Promise.all([
-      supabase.from("underwriting_inputs").select("*").eq("project_id", projectId),
-      supabase.from("development_budget").select("*").eq("project_id", projectId),
-      supabase.from("revenue_program").select("*").eq("project_id", projectId),
-      supabase
-        .from("assumptions")
-        .select("field_key,conflict_values,status")
-        .eq("project_id", projectId)
-        .eq("status", "conflicting"),
-    ]);
-
-  const rows: ProjectInputRows = {
-    scalars: (scalars ?? []).map((r: any) => ({
-      key: r.key,
-      value_numeric: r.value_numeric == null ? null : Number(r.value_numeric),
-      status: r.status,
-      source: r.source,
-      source_text: r.source_text ?? null,
-      source_location: r.source_location ?? null,
-      conflict_values: r.conflict_values ?? null,
-    })),
-    budget: (budget ?? []).map((r: any) => ({
-      category: r.category,
-      label: r.label,
-      amount: Number(r.amount ?? 0),
-      status: r.status,
-    })),
-    revenue: (revenue ?? []).map((r: any) => ({
-      unit_type: r.unit_type,
-      unit_count: Number(r.unit_count ?? 0),
-      avg_sf: r.avg_sf == null ? null : Number(r.avg_sf),
-      rent: Number(r.market_rent_monthly ?? 0),
-      rent_basis: r.rent_basis === "per_sf" ? ("per_sf" as const) : ("per_unit" as const),
-      occupancy_pct: r.occupancy_pct == null ? null : Number(r.occupancy_pct),
-      status: r.status,
-    })),
-  };
+  const { loadProjectInputRepositoryRows } =
+    await import("./repositories/project-inputs.repository");
+  const { conflictingAssumptions, ...rows } = await loadProjectInputRepositoryRows(
+    supabase,
+    projectId,
+  );
 
   // Unresolved review-queue conflicts block readiness for their engine target.
   // scalar, budget category, OR revenue component. Previously only scalar
@@ -590,6 +558,10 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit(context, "underwriting_run", {
+      metadata: { project_id: data.project_id, mode: data.mode ?? "ai" },
+    });
     const { hasAnthropicKey } = await import("./ai-gateway.server");
     const aiAvailable = hasAnthropicKey();
     const wantsAI = data.mode === "ai";
@@ -888,12 +860,11 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
         );
     }
 
-    await context.supabase.from("audit_logs").insert({
-      project_id: data.project_id,
-      owner_id: context.userId,
-      user_id: context.userId,
-      entity_type: "project",
-      entity_id: data.project_id,
+    const { writeAuditEvent } = await import("./audit.server");
+    await writeAuditEvent(context, {
+      projectId: data.project_id,
+      entityType: "project",
+      entityId: data.project_id,
       action: "run_full_underwriting",
       payload: {
         scenarios: scenarioOutputs.map((s) => s.key),
