@@ -11,6 +11,7 @@ const databaseUrl =
   process.env.SUPABASE_SERVICE_DATABASE_URL ??
   process.env.DATABASE_URL;
 const handlerUrl = process.env.EXTRACTION_WORKER_HANDLER_URL;
+const handlerMode = process.env.EXTRACTION_WORKER_HANDLER_MODE ?? (handlerUrl ? "http" : "local");
 const pollMs = Number(process.env.EXTRACTION_WORKER_POLL_MS ?? 5000);
 const workerId =
   process.env.EXTRACTION_WORKER_ID ??
@@ -78,6 +79,10 @@ async function finishJob(client, job, payload) {
 }
 
 async function handleJob(job) {
+  if (handlerMode === "local") {
+    const { handleLocalJob } = await import("./extraction-worker-local-handler.mjs");
+    return handleLocalJob(job);
+  }
   if (!handlerUrl) {
     return {
       status: "failed",
@@ -134,7 +139,10 @@ async function tick() {
 if (dryRun) {
   console.log("[extraction-worker] dry run: SQL worker contract loaded.");
   console.log("[extraction-worker] queue contract: claim_next_extraction_job + heartbeat.");
-  console.log("[extraction-worker] set WORKER_DATABASE_URL and EXTRACTION_WORKER_HANDLER_URL.");
+  console.log("[extraction-worker] handler modes: local or http.");
+  console.log(
+    "[extraction-worker] set WORKER_DATABASE_URL and optionally EXTRACTION_WORKER_HANDLER_URL.",
+  );
   process.exit(0);
 }
 

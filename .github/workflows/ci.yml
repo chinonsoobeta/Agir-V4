@@ -28,6 +28,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run pilot:audit
+      - run: npm run backend:audit
       - run: npm run typecheck
       # lint enforces a --max-warnings ratchet (see package.json); lower the cap
       # as the no-explicit-any backlog is paid down so it can only shrink.
@@ -52,16 +53,7 @@ jobs:
           version: latest
       # Boots the local stack and applies every migration in supabase/migrations.
       - run: supabase start
-      - name: Regenerate types from the migrated schema
-        run: supabase gen types typescript --local --schema public > src/integrations/supabase/types.ts
-      - name: Match repository formatting
-        run: npx prettier --write src/integrations/supabase/types.ts
-      - name: Fail if committed types are stale
-        run: |
-          if ! git diff --exit-code -- src/integrations/supabase/types.ts; then
-            echo "::error::src/integrations/supabase/types.ts is out of date. Regenerate it with: supabase gen types typescript --local --schema public > src/integrations/supabase/types.ts"
-            exit 1
-          fi
+      - run: npm run types:check
 
   e2e:
     name: Playwright browser E2E

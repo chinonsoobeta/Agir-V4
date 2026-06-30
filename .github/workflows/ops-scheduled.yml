@@ -1,0 +1,85 @@
+name: Scheduled Operations Checks
+
+on:
+  schedule:
+    - cron: "23 9 * * *"
+    - cron: "17 10 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ops-scheduled-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  backend-controls:
+    name: Backend control audit
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run backend:audit
+      - name: Validate deployment env when Supabase secrets are configured
+        if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' }}
+        run: npm run env:validate
+      - name: Report missing env validation secrets
+        if: ${{ env.SUPABASE_URL == '' || env.SUPABASE_ANON_KEY == '' }}
+        run: echo "::notice::SUPABASE_URL/SUPABASE_ANON_KEY are not configured; env validation skipped."
+
+  restore-drill:
+    name: Backup restore drill
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '17 10 * * 1' }}
+    env:
+      STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run restore drill when staging DB is configured
+        if: ${{ env.STAGING_DATABASE_URL != '' }}
+        run: npm run restore:drill
+        env:
+          BACKUP_LABEL: scheduled-restore-drill
+      - name: Report missing restore secret
+        if: ${{ env.STAGING_DATABASE_URL == '' }}
+        run: echo "::notice::STAGING_DATABASE_URL is not configured; restore drill skipped."
+
+  service-probes:
+    name: SLA and governance probes
+    runs-on: ubuntu-latest
+    env:
+      SLA_PROBE_URL: ${{ secrets.SLA_PROBE_URL }}
+      SCHEMA_DRIFT_DATABASE_URL: ${{ secrets.SCHEMA_DRIFT_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run SLA probe when target URL is configured
+        if: ${{ env.SLA_PROBE_URL != '' }}
+        run: npm run sla:probe
+      - name: Report missing SLA target
+        if: ${{ env.SLA_PROBE_URL == '' }}
+        run: echo "::notice::SLA_PROBE_URL is not configured; SLA probe skipped."
+      - name: Verify audit chains when database is configured
+        if: ${{ env.SCHEMA_DRIFT_DATABASE_URL != '' }}
+        run: npm run audit:verify-chains
+        env:
+          DATABASE_URL: ${{ secrets.SCHEMA_DRIFT_DATABASE_URL }}
+      - name: Dry-run governance when database is configured
+        if: ${{ env.SCHEMA_DRIFT_DATABASE_URL != '' }}
+        run: npm run governance:dry-run
+        env:
+          DATABASE_URL: ${{ secrets.SCHEMA_DRIFT_DATABASE_URL }}

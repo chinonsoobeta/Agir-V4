@@ -1,0 +1,10 @@
+DROP INDEX IF EXISTS public.idx_risk_register_project_severity;
+DROP INDEX IF EXISTS public.idx_reconciliation_flags_project_severity;
+DROP INDEX IF EXISTS public.idx_audit_logs_project_created_desc;
+DROP INDEX IF EXISTS public.idx_generated_reports_project_type_generated;
+DROP INDEX IF EXISTS public.idx_cash_flows_project_scenario_period;
+DROP INDEX IF EXISTS public.idx_financial_outputs_project_scenario_metric;
+DROP INDEX IF EXISTS public.idx_assumptions_project_status_key;
+DROP INDEX IF EXISTS public.idx_documents_project_upload;
+DROP INDEX IF EXISTS public.idx_projects_workspace_status_updated;
+DROP INDEX IF EXISTS public.idx_projects_owner_status_updated;
