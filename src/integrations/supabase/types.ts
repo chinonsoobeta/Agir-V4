@@ -293,6 +293,57 @@ export type Database = {
           },
         ];
       };
+      audit_chain_verifications: {
+        Row: {
+          checked_at: string;
+          checked_by: string;
+          head_hash: string | null;
+          id: string;
+          project_id: string | null;
+          reason: string | null;
+          total: number;
+          valid: boolean;
+          workspace_id: string | null;
+        };
+        Insert: {
+          checked_at?: string;
+          checked_by?: string;
+          head_hash?: string | null;
+          id?: string;
+          project_id?: string | null;
+          reason?: string | null;
+          total?: number;
+          valid: boolean;
+          workspace_id?: string | null;
+        };
+        Update: {
+          checked_at?: string;
+          checked_by?: string;
+          head_hash?: string | null;
+          id?: string;
+          project_id?: string | null;
+          reason?: string | null;
+          total?: number;
+          valid?: boolean;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "audit_chain_verifications_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "audit_chain_verifications_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       audit_logs: {
         Row: {
           action: string;
@@ -396,6 +447,50 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      compliance_enforcement_runs: {
+        Row: {
+          evidence: Json;
+          finished_at: string;
+          id: string;
+          run_by: string;
+          run_type: string;
+          started_at: string;
+          status: string;
+          summary: string;
+          workspace_id: string | null;
+        };
+        Insert: {
+          evidence?: Json;
+          finished_at?: string;
+          id?: string;
+          run_by?: string;
+          run_type: string;
+          started_at?: string;
+          status: string;
+          summary: string;
+          workspace_id?: string | null;
+        };
+        Update: {
+          evidence?: Json;
+          finished_at?: string;
+          id?: string;
+          run_by?: string;
+          run_type?: string;
+          started_at?: string;
+          status?: string;
+          summary?: string;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "compliance_enforcement_runs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },
         ];
@@ -952,54 +1047,81 @@ export type Database = {
       };
       extraction_jobs: {
         Row: {
+          attempts: number;
+          cancellation_requested: boolean;
           created_at: string;
+          dead_lettered_at: string | null;
           document_id: string | null;
           error: string | null;
           finished_at: string | null;
+          heartbeat_at: string | null;
           id: string;
           idempotency_key: string;
           kind: string;
+          lease_expires_at: string | null;
+          lease_owner: string | null;
+          max_attempts: number;
           message: string | null;
           owner_id: string;
+          priority: number;
           progress: number;
           project_id: string | null;
           result_json: Json | null;
+          scheduled_at: string;
           started_at: string | null;
           status: string;
           total: number | null;
           updated_at: string;
         };
         Insert: {
+          attempts?: number;
+          cancellation_requested?: boolean;
           created_at?: string;
+          dead_lettered_at?: string | null;
           document_id?: string | null;
           error?: string | null;
           finished_at?: string | null;
+          heartbeat_at?: string | null;
           id?: string;
           idempotency_key: string;
           kind: string;
+          lease_expires_at?: string | null;
+          lease_owner?: string | null;
+          max_attempts?: number;
           message?: string | null;
           owner_id: string;
+          priority?: number;
           progress?: number;
           project_id?: string | null;
           result_json?: Json | null;
+          scheduled_at?: string;
           started_at?: string | null;
           status?: string;
           total?: number | null;
           updated_at?: string;
         };
         Update: {
+          attempts?: number;
+          cancellation_requested?: boolean;
           created_at?: string;
+          dead_lettered_at?: string | null;
           document_id?: string | null;
           error?: string | null;
           finished_at?: string | null;
+          heartbeat_at?: string | null;
           id?: string;
           idempotency_key?: string;
           kind?: string;
+          lease_expires_at?: string | null;
+          lease_owner?: string | null;
+          max_attempts?: number;
           message?: string | null;
           owner_id?: string;
+          priority?: number;
           progress?: number;
           project_id?: string | null;
           result_json?: Json | null;
+          scheduled_at?: string;
           started_at?: string | null;
           status?: string;
           total?: number | null;
@@ -1655,6 +1777,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "projects_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      rate_limit_events: {
+        Row: {
+          bucket: string;
+          cost: number;
+          created_at: string;
+          id: string;
+          metadata: Json;
+          owner_id: string;
+          workspace_id: string | null;
+        };
+        Insert: {
+          bucket: string;
+          cost?: number;
+          created_at?: string;
+          id?: string;
+          metadata?: Json;
+          owner_id: string;
+          workspace_id?: string | null;
+        };
+        Update: {
+          bucket?: string;
+          cost?: number;
+          created_at?: string;
+          id?: string;
+          metadata?: Json;
+          owner_id?: string;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "rate_limit_events_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -2366,6 +2526,42 @@ export type Database = {
         Args: { p_canonical: string; p_prev_hash: string };
         Returns: string;
       };
+      claim_next_extraction_job: {
+        Args: { p_lease_seconds?: number; p_worker_id: string };
+        Returns: {
+          attempts: number;
+          cancellation_requested: boolean;
+          created_at: string;
+          dead_lettered_at: string | null;
+          document_id: string | null;
+          error: string | null;
+          finished_at: string | null;
+          heartbeat_at: string | null;
+          id: string;
+          idempotency_key: string;
+          kind: string;
+          lease_expires_at: string | null;
+          lease_owner: string | null;
+          max_attempts: number;
+          message: string | null;
+          owner_id: string;
+          priority: number;
+          progress: number;
+          project_id: string | null;
+          result_json: Json | null;
+          scheduled_at: string;
+          started_at: string | null;
+          status: string;
+          total: number | null;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "extraction_jobs";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       create_workspace: {
         Args: { p_name: string };
         Returns: {
@@ -2389,7 +2585,19 @@ export type Database = {
         };
         Returns: boolean;
       };
+      heartbeat_extraction_job: {
+        Args: {
+          p_job_id: string;
+          p_lease_seconds?: number;
+          p_worker_id: string;
+        };
+        Returns: boolean;
+      };
       is_workspace_member: { Args: { ws: string }; Returns: boolean };
+      request_extraction_job_cancellation: {
+        Args: { p_job_id: string };
+        Returns: boolean;
+      };
       verify_audit_chain: { Args: { p_project: string }; Returns: Json };
       workspace_role: { Args: { ws: string }; Returns: string };
     };
