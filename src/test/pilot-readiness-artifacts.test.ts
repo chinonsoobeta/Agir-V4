@@ -19,11 +19,14 @@ describe("pilot readiness artifacts", () => {
     const checklist = read("docs/pilot/readiness-checklist.md");
 
     for (const phrase of [
-      "Create workspace",
+      "Dashboard",
+      "Seed demo deal",
+      "Harbour Centre",
       "Upload source documents",
       "Generate IC memo",
       "No investment decision",
       "Export the customer audit package",
+      "What confused you?",
     ]) {
       expect(script).toContain(phrase);
     }
@@ -38,12 +41,18 @@ describe("pilot readiness artifacts", () => {
     for (const command of [
       "npm run smoke:fresh-env",
       "npm run pilot:audit",
+      "npm run backend:audit",
+      "npm run types:check",
       "npm run typecheck",
       "npm run test",
       "npm run lint",
       "npm run build",
+      "npm run test:e2e",
+      "npm run test:rls",
     ]) {
       expect(checklist).toContain(command);
     }
+    expect(checklist).toContain("Demo user sign-in tested");
+    expect(checklist).toContain("Unsupervised demo guide");
   });
 });

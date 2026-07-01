@@ -15,6 +15,7 @@ import {
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { usePreferences } from "@/lib/preferences";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
+import { DemoGuide } from "@/components/demo-guide";
 import {
   ArrowRight,
   BriefcaseBusiness,
@@ -78,6 +79,7 @@ function ExecutiveOverview() {
         }
       />
       <PageBody>
+        <DemoGuide />
         <OnboardingChecklist />
         <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-success">
           <Radio className="size-3" />

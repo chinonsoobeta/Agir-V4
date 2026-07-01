@@ -6,15 +6,21 @@ Run before granting a sandbox workspace to an external evaluator.
 
 - `npm run smoke:fresh-env`
 - `npm run pilot:audit`
+- `npm run backend:audit`
+- `npm run types:check`
 - `npm run typecheck`
 - `npm run test`
 - `npm run lint`
 - `npm run build`
+- `npm run test:e2e`
+- `npm run test:rls`
 
 ## Product Gates
 
 - Pilot package selected.
 - Demo workspace created.
+- Demo user sign-in tested with the exact sandbox credentials.
+- Dashboard "Unsupervised demo guide" visible.
 - Workspace roles reviewed.
 - Enterprise trust controls reviewed.
 - Document upload and extraction path smoke-tested.

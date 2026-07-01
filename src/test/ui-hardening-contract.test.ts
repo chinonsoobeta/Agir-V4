@@ -29,11 +29,13 @@ describe("UI hardening contract", () => {
   test("authenticated menu routes have a crash fallback and memo snapshots are migration-safe", () => {
     const route = read("src/routes/_authenticated/route.tsx");
     const snapshots = read("src/lib/memo-snapshot.functions.ts");
+    const snapshotServer = read("src/lib/memo-snapshot.server.ts");
 
     expect(route).toContain("errorComponent");
     expect(route).toContain("This section did not load");
     expect(snapshots).toContain("isMissingRelation(error)) return []");
-    expect(snapshots).toContain("Memo snapshots need the latest database migration.");
+    expect(snapshots).toContain("memo-snapshot.server");
+    expect(snapshotServer).toContain("Memo snapshots need the latest database migration.");
   });
 
   test("CI enforces the pilot readiness audit", () => {
@@ -68,10 +70,16 @@ describe("UI hardening contract", () => {
 
   test("guided demo and portfolio deletion affordances are visible in source", () => {
     const onboarding = read("src/components/onboarding-checklist.tsx");
+    const dashboard = read("src/routes/_authenticated/dashboard.tsx");
+    const guide = read("src/components/demo-guide.tsx");
     const deals = read("src/routes/_authenticated/deals.tsx");
     const picker = read("src/components/demo-package-picker.tsx");
     const portfolio = read("src/routes/_authenticated/portfolio.tsx");
 
+    expect(dashboard).toContain("DemoGuide");
+    expect(guide).toContain("Unsupervised demo guide");
+    expect(guide).toContain("decision-support");
+    expect(guide).toContain("Seed demo deal");
     expect(onboarding).toContain("DemoPackagePicker");
     expect(deals).toContain("DemoPackagePicker");
     expect(picker).toContain("Demo packages");

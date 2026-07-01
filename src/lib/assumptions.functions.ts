@@ -1341,7 +1341,7 @@ export const recordDecision = createServerFn({ method: "POST" })
     // this decision. A later input edit can be diffed but never rewrites it.
     let snapshot: { id: string; version: number } | null = null;
     try {
-      const { createMemoSnapshotInternal } = await import("./memo-snapshot.functions");
+      const { createMemoSnapshotInternal } = await import("./memo-snapshot.server");
       const snap = await createMemoSnapshotInternal(context, data.project_id, row.id);
       snapshot = { id: snap.id, version: snap.version };
       await auditLog(context, data.project_id, "decision", row.id, "memo_snapshot_locked", {

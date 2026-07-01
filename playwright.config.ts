@@ -8,6 +8,7 @@ import { defineConfig, devices } from "@playwright/test";
 //   npm run test:e2e -- --ui    interactive runner
 //
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:8081";
+const WORKERS = process.env.E2E_WORKERS ? Number(process.env.E2E_WORKERS) : 1;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -15,7 +16,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: WORKERS,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   timeout: 60_000,
   expect: { timeout: 10_000 },
