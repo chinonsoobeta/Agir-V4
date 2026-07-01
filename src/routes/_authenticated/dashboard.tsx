@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import { listPortfolio, type DealSummary } from "@/lib/portfolio.functions";
+import { getMyProfile } from "@/lib/account.functions";
 import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +33,7 @@ import { RECOMMENDATION_TONE } from "@/lib/decision";
 import { TONE_TEXT } from "@/components/decision-ui";
 
 const portfolioQ = queryOptions({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
+const profileQ = queryOptions({ queryKey: ["my-profile"], queryFn: () => getMyProfile() });
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard | Agir" }] }),
@@ -40,8 +43,17 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 
 function ExecutiveOverview() {
   const { data: deals } = useSuspenseQuery(portfolioQ);
+  const { data: profile } = useQuery(profileQ);
   const { t } = usePreferences();
+  const [now, setNow] = useState(() => new Date());
   useRealtimeRefresh();
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const greeting = useMemo(() => buildGreeting(now, profile), [now, profile]);
 
   // One shared, deterministic rollup: no per-component ad-hoc reductions.
   const summary = summarizePortfolio(deals);
@@ -67,7 +79,8 @@ function ExecutiveOverview() {
   return (
     <>
       <PageHeader
-        title={t("dash.title")}
+        eyebrow={t("dash.title")}
+        title={greeting}
         subtitle={t("dash.subtitle")}
         actions={
           <Link to="/deals">
@@ -315,4 +328,26 @@ function average(values: number[]) {
   return values.length
     ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
     : 0;
+}
+
+function buildGreeting(
+  date: Date,
+  profile?: { full_name: string | null; email: string | null } | null,
+) {
+  const hour = date.getHours();
+  const period = hour >= 17 ? "evening" : hour >= 12 ? "afternoon" : "morning";
+  const name = preferredName(profile);
+  return name ? `Good ${period}, ${name}` : `Good ${period}`;
+}
+
+function preferredName(profile?: { full_name: string | null; email: string | null } | null) {
+  const fullName = profile?.full_name?.trim();
+  if (fullName) return fullName.split(/\s+/)[0];
+  const emailName = profile?.email?.split("@")[0]?.trim();
+  if (!emailName) return null;
+  return emailName
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
 }

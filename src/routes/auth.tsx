@@ -191,7 +191,7 @@ function AuthPage() {
           Back to Agir
         </Link>
         <div className="flex flex-1 items-center justify-center py-8">
-          <Card className="w-full max-w-md border-[#183046]/10 bg-white p-7 shadow-[0_25px_70px_-44px_rgba(16,36,30,0.55)] sm:p-9">
+          <Card className="w-full max-w-md border-[#183046]/10 bg-white p-7 text-[#0d2436] shadow-[0_25px_70px_-44px_rgba(16,36,30,0.55)] sm:p-9">
             <div className="mb-6">
               <div className="lg:hidden flex items-center gap-2 mb-7">
                 <div className="size-8 rounded-lg bg-[#00628e] text-white flex items-center justify-center font-semibold">
@@ -199,7 +199,7 @@ function AuthPage() {
                 </div>
                 <div className="text-lg font-semibold">Agir</div>
               </div>
-              <h1 className="text-2xl font-semibold">{TAB_COPY[tab].heading}</h1>
+              <h1 className="text-2xl font-semibold text-[#0d2436]">{TAB_COPY[tab].heading}</h1>
               <p className="text-sm text-[#6b7785] mt-2">{TAB_COPY[tab].subcopy}</p>
             </div>
 
@@ -241,10 +241,25 @@ function AuthPage() {
             </div>
 
             <Tabs value={tab} onValueChange={(v) => switchTab(v as typeof tab)}>
-              <TabsList className="grid grid-cols-3 w-full">
-                <TabsTrigger value="signin">Sign In</TabsTrigger>
-                <TabsTrigger value="signup">Sign Up</TabsTrigger>
-                <TabsTrigger value="reset">Reset</TabsTrigger>
+              <TabsList className="grid grid-cols-3 w-full bg-[#edf2f6] text-[#5b6b7a]">
+                <TabsTrigger
+                  value="signin"
+                  className="data-[state=active]:bg-white data-[state=active]:text-[#0d2436]"
+                >
+                  Sign In
+                </TabsTrigger>
+                <TabsTrigger
+                  value="signup"
+                  className="data-[state=active]:bg-white data-[state=active]:text-[#0d2436]"
+                >
+                  Sign Up
+                </TabsTrigger>
+                <TabsTrigger
+                  value="reset"
+                  className="data-[state=active]:bg-white data-[state=active]:text-[#0d2436]"
+                >
+                  Reset
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="signin">
