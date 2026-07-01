@@ -262,7 +262,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Building2 className="size-4 text-primary" />
             </div>
             <div>
-              <div className="display text-lg font-semibold tracking-tight text-sidebar-foreground leading-none">
+              <div className="display text-lg font-semibold text-sidebar-foreground leading-none">
                 Agir
               </div>
               <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground mt-1">
@@ -346,7 +346,7 @@ export function PageHeader({
               {eyebrow}
             </div>
           )}
-          <h1 className="display text-2xl font-semibold tracking-tight">{title}</h1>
+          <h1 className="display text-2xl font-semibold">{title}</h1>
           {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
         </div>
         {actions && (

@@ -105,7 +105,7 @@ function LandingPage() {
         <div className="mx-auto flex h-20 max-w-[1440px] items-center justify-between px-5 sm:px-8 lg:px-12">
           <Link to="/" className="flex items-center gap-3" aria-label="Agir home">
             <BrandMark />
-            <span className="text-xl font-semibold tracking-[-0.03em]">Agir</span>
+            <span className="text-xl font-semibold">Agir</span>
           </Link>
 
           <nav className="hidden items-center gap-8 text-sm font-medium text-[#3b456e] lg:flex">
@@ -197,7 +197,7 @@ function LandingPage() {
               <Sparkles className="size-3.5" />
               Built for real estate investment teams
             </div>
-            <h1 className="mt-7 text-balance text-[3.4rem] font-semibold leading-[0.98] tracking-[-0.065em] sm:text-[4.6rem] lg:text-[5.2rem]">
+            <h1 className="mt-7 text-balance text-[3.4rem] font-semibold leading-[0.98] sm:text-[4.6rem] lg:text-[5.2rem]">
               Make the call with better evidence.
             </h1>
             <p className="mt-7 max-w-xl text-lg leading-8 text-[#505c80] sm:text-xl">
@@ -268,7 +268,7 @@ function LandingPage() {
                 </div>
                 <span className="font-mono text-xs text-[#8a93b4]">0{index + 1}</span>
               </div>
-              <h3 className="mt-8 text-xl font-semibold tracking-[-0.025em]">{title}</h3>
+              <h3 className="mt-8 text-xl font-semibold">{title}</h3>
               <p className="mt-3 leading-7 text-[#646d92]">{body}</p>
             </Card>
           ))}
@@ -286,7 +286,7 @@ function LandingPage() {
             {lifecycle.map(([number, title, body]) => (
               <div key={number} className="bg-[#f6f7fc] p-6 lg:min-h-64">
                 <div className="font-mono text-xs text-[#00628e]">{number}</div>
-                <h3 className="mt-8 text-2xl font-semibold tracking-[-0.035em]">{title}</h3>
+                <h3 className="mt-8 text-2xl font-semibold">{title}</h3>
                 <p className="mt-4 text-sm leading-6 text-[#646d92]">{body}</p>
               </div>
             ))}
@@ -302,7 +302,7 @@ function LandingPage() {
           <div className="inline-flex size-12 items-center justify-center rounded-xl bg-[#0d2436] text-white">
             <Gauge className="size-6" />
           </div>
-          <h2 className="mt-7 max-w-xl text-4xl font-semibold leading-tight tracking-[-0.05em] sm:text-5xl">
+          <h2 className="mt-7 max-w-xl text-4xl font-semibold leading-tight sm:text-5xl">
             Strong controls should make work easier, not heavier.
           </h2>
           <p className="mt-6 max-w-xl text-lg leading-8 text-[#646d92]">
@@ -351,7 +351,7 @@ function LandingPage() {
             <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#9db8e8]">
               Deterministic by design
             </div>
-            <h2 className="mt-5 max-w-xl text-4xl font-semibold leading-tight tracking-[-0.045em] sm:text-5xl">
+            <h2 className="mt-5 max-w-xl text-4xl font-semibold leading-tight sm:text-5xl">
               The explanation can be intelligent. The numbers must be exact.
             </h2>
             <p className="mt-6 max-w-xl text-lg leading-8 text-[#c6cdea]">
@@ -415,9 +415,7 @@ function SectionIntro({ eyebrow, title, body }: { eyebrow: string; title: string
       <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#00628e]">
         {eyebrow}
       </div>
-      <h2 className="mt-5 text-4xl font-semibold leading-tight tracking-[-0.05em] sm:text-5xl">
-        {title}
-      </h2>
+      <h2 className="mt-5 text-4xl font-semibold leading-tight sm:text-5xl">{title}</h2>
       <p className="mt-5 max-w-2xl text-lg leading-8 text-[#646d92]">{body}</p>
     </div>
   );
@@ -426,7 +424,7 @@ function SectionIntro({ eyebrow, title, body }: { eyebrow: string; title: string
 function ProofPoint({ value, label }: { value: string; label: string }) {
   return (
     <div className="border-white/10 sm:border-r sm:pr-8 last:border-r-0">
-      <div className="text-xl font-semibold tracking-[-0.025em]">{value}</div>
+      <div className="text-xl font-semibold">{value}</div>
       <div className="mt-1 text-sm leading-6 text-[#b6bedf]">{label}</div>
     </div>
   );
@@ -441,7 +439,6 @@ function ProductPreview() {
 
   return (
     <div className="relative mx-auto w-full max-w-3xl lg:ml-auto">
-      <div className="absolute -inset-5 rounded-[2rem] bg-gradient-to-br from-[#7fb3d4]/30 to-[#9db8e8]/30 blur-2xl" />
       <div className="relative overflow-hidden rounded-2xl border border-[#183046]/15 bg-[#fbfcff] shadow-[0_35px_80px_-32px_rgba(16,36,30,0.55)]">
         <div className="flex h-12 items-center justify-between border-b border-[#183046]/10 bg-white px-4">
           <div className="flex items-center gap-2">
@@ -449,10 +446,10 @@ function ProductPreview() {
             <span className="size-2.5 rounded-full bg-[#c7d0d8]" />
             <span className="size-2.5 rounded-full bg-[#bcc7cf]" />
           </div>
-          <div className="rounded-full bg-[#e4f0fa] px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-[#646d92]">
+          <div className="rounded-full bg-[#e4f0fa] px-3 py-1 font-mono text-[11px] uppercase tracking-widest text-[#646d92]">
             Live investment overview
           </div>
-          <div className="size-6 rounded-full bg-[#183046] text-center text-[9px] leading-6 text-white">
+          <div className="size-7 rounded-full bg-[#183046] text-center text-[11px] leading-7 text-white">
             MH
           </div>
         </div>
@@ -466,7 +463,7 @@ function ProductPreview() {
             {["Dashboard", "Portfolio", "Deal flow", "Execution", "Reports"].map((item, index) => (
               <div
                 key={item}
-                className={`mb-1 rounded-md px-2.5 py-2 text-[10px] ${index === 0 ? "bg-white font-semibold text-[#00628e] shadow-sm" : "text-[#6e7799]"}`}
+                className={`mb-1 rounded-md px-2.5 py-2 text-[11px] ${index === 0 ? "bg-white font-semibold text-[#00628e] shadow-sm" : "text-[#6e7799]"}`}
               >
                 {item}
               </div>
@@ -476,12 +473,12 @@ function ProductPreview() {
           <div className="min-w-0 p-4 sm:p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[#8a93b4]">
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-[#8a93b4]">
                   Dashboard
                 </div>
-                <div className="mt-1 text-xl font-semibold tracking-[-0.04em]">Good morning</div>
+                <div className="mt-1 text-xl font-semibold">Good morning</div>
               </div>
-              <div className="flex items-center gap-1.5 rounded-full bg-[#daebf7] px-2 py-1 text-[9px] font-semibold text-[#00628e]">
+              <div className="flex items-center gap-1.5 rounded-full bg-[#daebf7] px-2 py-1 text-[11px] font-semibold text-[#00628e]">
                 <span className="size-1.5 rounded-full bg-[#2b79a8]" />
                 Live
               </div>
@@ -496,13 +493,13 @@ function ProductPreview() {
             <div className="mt-3 grid gap-3 lg:grid-cols-[1.15fr_0.85fr]">
               <div className="rounded-xl border border-[#183046]/10 bg-white p-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-semibold">Pipeline flow</span>
-                  <span className="text-[9px] text-[#8a93b4]">Manage</span>
+                  <span className="text-xs font-semibold">Pipeline flow</span>
+                  <span className="text-[11px] text-[#8a93b4]">Manage</span>
                 </div>
                 <div className="mt-4 space-y-4">
                   {stages.map(([stage, count, capital], index) => (
                     <div key={stage}>
-                      <div className="flex items-center justify-between text-[9px]">
+                      <div className="flex items-center justify-between text-[11px]">
                         <span className="font-medium">
                           {stage} <span className="text-[#9199b8]">{count}</span>
                         </span>
@@ -520,20 +517,20 @@ function ProductPreview() {
               </div>
 
               <div className="rounded-xl border border-[#183046]/10 bg-[#183046] p-3 text-white">
-                <div className="text-[9px] uppercase tracking-widest text-[#b6bedf]">
+                <div className="text-[11px] uppercase tracking-widest text-[#b6bedf]">
                   Decision ready
                 </div>
                 <div className="mt-3 text-sm font-semibold">Harbour Centre</div>
                 <div className="mt-3 flex items-end justify-between">
                   <div>
                     <div className="font-mono text-3xl">82</div>
-                    <div className="text-[8px] text-[#b6bedf]">Investment score</div>
+                    <div className="text-[11px] text-[#b6bedf]">Investment score</div>
                   </div>
-                  <div className="rounded-full bg-[#1f9d6b] px-2 py-1 text-[8px] font-semibold text-white">
+                  <div className="rounded-full bg-[#1f9d6b] px-2 py-1 text-[11px] font-semibold text-white">
                     PROCEED
                   </div>
                 </div>
-                <div className="mt-4 border-t border-white/10 pt-3 text-[9px] leading-4 text-[#ccd2ee]">
+                <div className="mt-4 border-t border-white/10 pt-3 text-[11px] leading-5 text-[#ccd2ee]">
                   Returns clear the base hurdles. Resolve two closing conditions before funding.
                 </div>
               </div>
@@ -541,8 +538,8 @@ function ProductPreview() {
 
             <div className="mt-3 rounded-xl border border-[#183046]/10 bg-white p-3">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-semibold">Priority deals</span>
-                <span className="text-[9px] text-[#8a93b4]">Confidence</span>
+                <span className="text-xs font-semibold">Priority deals</span>
+                <span className="text-[11px] text-[#8a93b4]">Confidence</span>
               </div>
               <div className="mt-2 divide-y divide-[#183046]/8">
                 {[
@@ -552,8 +549,8 @@ function ProductPreview() {
                 ].map(([name, detail, score]) => (
                   <div key={name} className="grid grid-cols-[1fr_auto] items-center gap-3 py-2">
                     <div>
-                      <div className="text-[9px] font-semibold">{name}</div>
-                      <div className="text-[8px] text-[#8a93b4]">{detail}</div>
+                      <div className="text-[11px] font-semibold">{name}</div>
+                      <div className="text-[11px] text-[#8a93b4]">{detail}</div>
                     </div>
                     <div className="font-mono text-xs text-[#00628e]">{score}</div>
                   </div>
@@ -570,7 +567,7 @@ function ProductPreview() {
 function PreviewMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-[#183046]/10 bg-white p-3">
-      <div className="text-[8px] uppercase tracking-wider text-[#8a93b4]">{label}</div>
+      <div className="text-[11px] uppercase tracking-wider text-[#8a93b4]">{label}</div>
       <div className="mt-1 font-mono text-sm font-semibold">{value}</div>
     </div>
   );
@@ -609,7 +606,7 @@ function IntegrityStack() {
           </div>
           <div>
             <div className="text-sm font-semibold">{title}</div>
-            <div className="mt-1 font-mono text-[10px] text-[#c2c9e8]">{detail}</div>
+            <div className="mt-1 font-mono text-[11px] text-[#c2c9e8]">{detail}</div>
           </div>
         </div>
       ))}

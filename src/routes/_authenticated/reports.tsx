@@ -155,12 +155,12 @@ function ProjectSelector({
   onChange: (id: string) => void;
 }) {
   return (
-    <Card className="p-4 flex flex-wrap items-center gap-3">
-      <label className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
+    <Card className="p-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center elevated">
+      <label className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
         Project
       </label>
       <Select value={projectId ?? undefined} onValueChange={onChange}>
-        <SelectTrigger className="min-w-[220px]">
+        <SelectTrigger className="w-full sm:w-[260px]">
           <SelectValue placeholder="Select a project" />
         </SelectTrigger>
         <SelectContent>
@@ -188,7 +188,7 @@ function ProjectStatusLine({ projectId }: { projectId: string }) {
   const uw = c.base_outputs > 0 ? "Underwriting generated" : "Underwriting not run";
   const memo = c.memos > 0 ? "Memo generated" : "No memo";
   return (
-    <div className="text-xs text-muted-foreground ml-auto">
+    <div className="text-xs text-muted-foreground sm:ml-auto">
       <span className="font-medium text-foreground">
         {"project_name" in data ? (data.project_name ?? "Project") : "Project"}
       </span>
@@ -301,7 +301,7 @@ function ReportCard({
   };
 
   return (
-    <Card className="p-5 flex flex-col gap-3">
+    <Card className="p-5 flex flex-col gap-3 elevated">
       <div className="flex items-start gap-3">
         <div className="size-10 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
           <Icon className="size-5 text-primary" />
@@ -310,21 +310,19 @@ function ReportCard({
           <h3 className="font-semibold">{def.title}</h3>
           <p className="text-xs text-muted-foreground mt-1">{def.description}</p>
           <div className="flex flex-wrap items-center gap-2 mt-2">
-            <Badge variant="outline" className={`text-[11px] ${STATUS_STYLE[status] ?? ""}`}>
+            <Badge variant="outline" className={`text-xs ${STATUS_STYLE[status] ?? ""}`}>
               {loading ? "Checking…" : (STATUS_LABEL[status] ?? status)}
             </Badge>
             {readiness &&
               (readiness.counts.reconciliation_errors > 0 ||
                 readiness.counts.reconciliation_warnings > 0) && (
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   {readiness.counts.reconciliation_errors} errors /{" "}
                   {readiness.counts.reconciliation_warnings} warnings
                 </span>
               )}
             {lastGenerated && (
-              <span className="text-[11px] text-muted-foreground">
-                Last generated: {lastGenerated}
-              </span>
+              <span className="text-xs text-muted-foreground">Last generated: {lastGenerated}</span>
             )}
           </div>
         </div>
@@ -420,7 +418,7 @@ function ReportPreview({
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {report.summary_stats.map((s) => (
                 <div key={s.label} className="rounded border border-border p-2">
-                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                  <div className="text-xs uppercase tracking-widest text-muted-foreground">
                     {s.label}
                   </div>
                   <div className="num text-sm">{s.value}</div>
@@ -432,7 +430,7 @@ function ReportPreview({
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {report.metric_cards.map((c) => (
                 <div key={c.label} className="rounded border border-border p-2">
-                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                  <div className="text-xs uppercase tracking-widest text-muted-foreground">
                     {c.label}
                   </div>
                   <div className="num text-base">{c.value}</div>
@@ -442,7 +440,7 @@ function ReportPreview({
           )}
           {report.sections?.map((sec, i) => (
             <div key={`${sec.heading}-${i}`}>
-              <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
+              <div className="text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-1">
                 {sec.heading}
               </div>
               {sec.table && (
@@ -473,16 +471,14 @@ function ReportPreview({
               )}
               {sec.body && <p className="whitespace-pre-wrap">{sec.body}</p>}
               {sec.table?.note && (
-                <p className="text-[11px] italic text-muted-foreground mt-1">
-                  Note: {sec.table.note}
-                </p>
+                <p className="text-xs italic text-muted-foreground mt-1">Note: {sec.table.note}</p>
               )}
             </div>
           ))}
           {report.footnotes?.length > 0 && (
             <div className="border-t border-border pt-2 space-y-1">
               {report.footnotes.map((f: string, i: number) => (
-                <p key={i} className="text-[11px] text-muted-foreground">
+                <p key={i} className="text-xs text-muted-foreground">
                   {f}
                 </p>
               ))}

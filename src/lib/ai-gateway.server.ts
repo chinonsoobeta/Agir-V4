@@ -11,14 +11,16 @@ export const DEFAULT_AI_MODEL = "claude-sonnet-4-6";
 // "no key" → clean deterministic fallback instead of a runtime error.
 export function getValidatedAnthropicKey(): string | null {
   // Try API_KEY first (user-provided), then fall back to ANTHROPIC_API_KEY (integration).
-  const raw = process.env.API_KEY || process.env.ANTHROPIC_API_KEY;
-  if (!raw) return null;
-  const key = raw.trim();
-  if (!key) return null;
-  // Must be header-safe (no code point > 255) and look like an Anthropic key.
-  if (!/^[\x21-\x7E]+$/.test(key)) return null; // printable ASCII, no spaces
-  if (!key.startsWith("sk-")) return null; // sk-ant-..., sk-abcdef1..., etc.
-  return key;
+  for (const raw of [process.env.API_KEY, process.env.ANTHROPIC_API_KEY]) {
+    if (!raw) continue;
+    const key = raw.trim();
+    if (!key) continue;
+    // Must be header-safe (no code point > 255) and look like an Anthropic key.
+    if (!/^[\x21-\x7E]+$/.test(key)) continue; // printable ASCII, no spaces
+    if (!key.startsWith("sk-")) continue; // sk-ant-..., sk-abcdef1..., etc.
+    return key;
+  }
+  return null;
 }
 
 // Single source of truth for "can we use AI right now?". Every AI-by-default

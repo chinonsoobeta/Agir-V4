@@ -116,7 +116,7 @@ function DealDetail() {
           </div>
           <div className="mt-3 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             <div className="min-w-0">
-              <h1 className="display text-3xl font-semibold tracking-tight">{project.name}</h1>
+              <h1 className="display text-3xl font-semibold">{project.name}</h1>
               <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
                 <MapPin className="size-3.5" />
                 {project.location || "–"}

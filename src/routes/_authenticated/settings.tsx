@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { PageHeader, PageBody } from "@/components/app-shell";
@@ -67,6 +67,7 @@ import {
   Users,
   ShieldCheck,
   Info,
+  Bot,
   Moon,
   Sun,
   Monitor,
@@ -81,17 +82,21 @@ import {
   UserPlus,
   Building2,
   Landmark,
+  Sparkles,
   KeyRound,
   ServerCog,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { getAiReadiness } from "@/lib/ai-readiness.functions";
 
 const SECTIONS = [
   { id: "profile", label: "Profile", icon: User },
   { id: "account", label: "Account & security", icon: Lock },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "notifications", label: "Notifications", icon: Bell },
+  { id: "ai", label: "AI workflows", icon: Bot },
   { id: "team", label: "Team & members", icon: Users },
   { id: "governance", label: "Governance", icon: Landmark },
   { id: "data", label: "Data & privacy", icon: ShieldCheck },
@@ -147,6 +152,7 @@ function SettingsPage() {
           {active === "account" && <AccountSection />}
           {active === "appearance" && <AppearanceSection />}
           {active === "notifications" && <NotificationsSection />}
+          {active === "ai" && <AiSection />}
           {active === "team" && <TeamSection />}
           {active === "governance" && <GovernanceSection />}
           {active === "data" && <DataSection />}
@@ -653,6 +659,164 @@ function NotificationsSection() {
         reuse these preferences.
       </p>
     </SectionCard>
+  );
+}
+
+// ---- AI workflows ----
+const AI_PREF_DEFAULTS = { assistedWorkflows: true };
+
+function AiSection() {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { data: readiness } = useQuery({
+    queryKey: ["ai-readiness"],
+    queryFn: () => getAiReadiness(),
+  });
+  const { data } = useQuery({ queryKey: ["pref-data"], queryFn: () => getPreferenceData() });
+  const saveFn = useServerFn(savePreferenceData);
+  const prefs = {
+    ...AI_PREF_DEFAULTS,
+    ...((data?.ai as Partial<typeof AI_PREF_DEFAULTS>) ?? {}),
+  };
+
+  const save = useMutation({
+    mutationFn: (next: typeof AI_PREF_DEFAULTS) => saveFn({ data: { key: "ai", value: next } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pref-data"] });
+      toast.success("AI workflow preference saved");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const configured = Boolean(readiness?.configured);
+  const featureRows = [
+    {
+      label: "Extraction",
+      detail: "Classifies unresolved document candidates after deterministic mapping.",
+      ready: readiness?.features.extraction,
+    },
+    {
+      label: "Underwriting",
+      detail: "May accept consensual static defaults; the engine still computes every value.",
+      ready: readiness?.features.underwriting,
+    },
+    {
+      label: "Memo generation",
+      detail: "Adds governed narrative over deterministic outputs with provenance checks.",
+      ready: readiness?.features.memoGeneration,
+    },
+    {
+      label: "Copilot",
+      detail: "Answers from approved assumptions, financial outputs, and deal findings.",
+      ready: readiness?.features.copilot,
+    },
+  ];
+
+  return (
+    <>
+      <SectionCard
+        title="AI workflows"
+        description="Keep AI-assisted underwriting and memo surfaces visible. They safely fall back until a server key is configured."
+      >
+        <div className="space-y-5">
+          <Field
+            label="AI-assisted workflows"
+            description="Show AI controls across extraction, underwriting, memo generation, and Copilot. Calculations remain deterministic."
+            orientation="horizontal"
+            className="rounded-lg border p-3"
+          >
+            {(f) => (
+              <Switch
+                id={f.id}
+                checked={prefs.assistedWorkflows}
+                onCheckedChange={(assistedWorkflows) =>
+                  save.mutate({ ...prefs, assistedWorkflows })
+                }
+                aria-describedby={f["aria-describedby"]}
+              />
+            )}
+          </Field>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <StatusTile
+              icon={configured ? Sparkles : KeyRound}
+              title={configured ? "Model key configured" : "Model key pending"}
+              detail={
+                configured
+                  ? `Using ${readiness?.model ?? "configured model"}.`
+                  : `Set ${readiness?.keyEnv ?? "API_KEY or ANTHROPIC_API_KEY"} on the server when ready.`
+              }
+              ok={configured}
+            />
+            <StatusTile
+              icon={ServerCog}
+              title="Deterministic fallback"
+              detail="If the key is missing or a model call fails, Agir keeps running through the engine/template path."
+              ok
+            />
+          </div>
+
+          <div className="space-y-2">
+            {featureRows.map((row) => (
+              <div
+                key={row.label}
+                className="flex items-start gap-3 rounded-lg border border-border p-3"
+              >
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "mt-0.5 shrink-0",
+                    row.ready ? "text-primary border-primary/40" : "text-muted-foreground",
+                  )}
+                >
+                  {row.ready ? "Ready" : "Pending"}
+                </Badge>
+                <div className="min-w-0">
+                  <div className="text-sm font-medium">{row.label}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{row.detail}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => navigate({ to: "/copilot", search: { deal: undefined } })}>
+              <Bot className="size-4 mr-1.5" />
+              Open Copilot
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => qc.invalidateQueries({ queryKey: ["ai-readiness"] })}
+            >
+              <RefreshCw className="size-4 mr-1.5" />
+              Refresh status
+            </Button>
+          </div>
+        </div>
+      </SectionCard>
+    </>
+  );
+}
+
+function StatusTile({
+  icon: Icon,
+  title,
+  detail,
+  ok,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  detail: string;
+  ok: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-border p-3">
+      <div className="flex items-center gap-2">
+        <Icon className={cn("size-4", ok ? "text-primary" : "text-warning")} />
+        <div className="text-sm font-medium">{title}</div>
+      </div>
+      <p className="text-xs text-muted-foreground mt-1">{detail}</p>
+    </div>
   );
 }
 

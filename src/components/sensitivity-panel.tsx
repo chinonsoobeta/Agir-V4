@@ -135,19 +135,19 @@ export function SensitivityPanel({ input }: { input: UnderwritingInput }) {
   };
 
   const selectCls = "rounded border border-border bg-background px-2 py-1 text-xs";
-  const triggerCls = "h-8 w-auto gap-1 text-xs";
+  const triggerCls = "h-8 min-w-32 gap-1 text-xs";
 
   return (
     <section className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Activity className="size-4 text-primary" />
           <Eyebrow>Flexible sensitivity · every cell is a live engine re-run</Eyebrow>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Field
             label="Metric"
-            className="space-y-0 flex items-center gap-2 [&>label]:text-[11px] [&>label]:text-muted-foreground"
+            className="space-y-0 flex items-center gap-2 [&>label]:text-xs [&>label]:text-muted-foreground"
           >
             {(f) => (
               <Select value={metricKey} onValueChange={onMetric}>
@@ -164,7 +164,7 @@ export function SensitivityPanel({ input }: { input: UnderwritingInput }) {
               </Select>
             )}
           </Field>
-          <span className="text-[11px] text-muted-foreground">base</span>
+          <span className="text-xs text-muted-foreground">base</span>
           <span className="num text-sm">{fmtMetric(baseMetric, metric.unit)}</span>
         </div>
       </div>
@@ -177,10 +177,10 @@ export function SensitivityPanel({ input }: { input: UnderwritingInput }) {
 
       {/* Tornado */}
       <Card className="p-5 elevated">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <SectionLabel>Tornado · {metric.label} sensitivity</SectionLabel>
           <div className="flex items-center gap-2">
-            <label className="text-[11px] text-muted-foreground">Flex</label>
+            <label className="text-xs text-muted-foreground">Flex</label>
             <Select value={String(delta)} onValueChange={(v) => setDelta(Number(v))}>
               <SelectTrigger className={triggerCls}>
                 <SelectValue />
@@ -202,8 +202,11 @@ export function SensitivityPanel({ input }: { input: UnderwritingInput }) {
             const left = Math.min(pct(a), pct(c));
             const width = Math.abs(pct(c) - pct(a));
             return (
-              <div key={b.key} className="flex items-center gap-3">
-                <div className="w-40 shrink-0 text-xs truncate" title={b.label}>
+              <div
+                key={b.key}
+                className="grid grid-cols-[minmax(7rem,10rem)_1fr] gap-x-3 gap-y-1 sm:grid-cols-[10rem_1fr_7rem] sm:items-center"
+              >
+                <div className="text-xs truncate" title={b.label}>
                   {b.label}
                 </div>
                 <div className="flex-1 relative h-6 rounded bg-muted/30">
@@ -217,14 +220,14 @@ export function SensitivityPanel({ input }: { input: UnderwritingInput }) {
                     style={{ left: `${left}%`, width: `${Math.max(width, 0.5)}%` }}
                   />
                 </div>
-                <div className="w-28 shrink-0 text-right num text-[11px] text-muted-foreground">
+                <div className="col-span-2 text-left num text-xs text-muted-foreground sm:col-span-1 sm:text-right">
                   {fmtMetric(b.lowValue, metric.unit)} / {fmtMetric(b.highValue, metric.unit)}
                 </div>
               </div>
             );
           })}
         </div>
-        <p className="text-[11px] text-muted-foreground mt-3">
+        <p className="text-xs text-muted-foreground mt-3">
           Each bar flexes one driver +/- {delta}% and re-runs the engine; the vertical line is the
           base case.
         </p>
@@ -277,9 +280,9 @@ export function SensitivityPanel({ input }: { input: UnderwritingInput }) {
 
         {/* 2-variable grid */}
         <Card className="p-5 elevated">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <SectionLabel>Scenario grid</SectionLabel>
-            <div className="flex items-center gap-1.5 text-[11px]">
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
               <Select value={xVar} onValueChange={setXVar}>
                 <SelectTrigger className={triggerCls}>
                   <SelectValue />
@@ -308,7 +311,7 @@ export function SensitivityPanel({ input }: { input: UnderwritingInput }) {
             </div>
           </div>
           <div className="mt-3 overflow-x-auto">
-            <table className="data-grid w-full text-[11px]">
+            <table className="data-grid w-full text-xs">
               <caption className="sr-only">
                 {metric.label} across {VAR_BY_KEY[yVar].label} (rows) and {VAR_BY_KEY[xVar].label}{" "}
                 (columns). Base case is {fmtMetric(baseMetric, metric.unit)}; each cell marks
@@ -363,7 +366,7 @@ export function SensitivityPanel({ input }: { input: UnderwritingInput }) {
               </tbody>
             </table>
           </div>
-          <p className="text-[11px] text-muted-foreground mt-2">
+          <p className="text-xs text-muted-foreground mt-2">
             ▲ at or above base ({fmtMetric(baseMetric, metric.unit)}); ▼ below base. Each cell is a
             real re-run.
           </p>

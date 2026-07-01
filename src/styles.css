@@ -58,7 +58,8 @@
 }
 
 @theme inline {
-  --font-sans: "BC Sans", "Noto Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans:
+    "BC Sans", "Noto Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --font-display: ui-serif, "Iowan Old Style", "Palatino Linotype", "Georgia", serif;
 
@@ -217,13 +218,13 @@
     font-family: var(--font-sans);
     font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
-    letter-spacing: -0.006em;
+    letter-spacing: 0;
   }
 
   h1,
   h2,
   h3 {
-    letter-spacing: -0.02em;
+    letter-spacing: 0;
   }
 
   /* numeric tabular */
@@ -236,7 +237,7 @@
   /* serif display for institutional deal headers */
   .display {
     font-family: var(--font-display);
-    letter-spacing: -0.01em;
+    letter-spacing: 0;
   }
 
   ::-webkit-scrollbar {

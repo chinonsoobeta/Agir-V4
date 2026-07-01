@@ -144,7 +144,7 @@ function DocumentsPage() {
           <Cov label="Contributing Data" value={`${contributing} / ${docs.length}`} />
           <Cov label="Assumptions Extracted" value={String(totalContribued)} />
         </div>
-        <Card className="p-5 space-y-4">
+        <Card className="p-5 space-y-4 elevated">
           <div className="grid sm:grid-cols-2 gap-3">
             <Field label="Assign to deal">
               {(f) => (
@@ -198,7 +198,7 @@ function DocumentsPage() {
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
             {docs.map((d) => (
-              <Card key={d.id} className="p-4">
+              <Card key={d.id} className="p-4 elevated">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-start gap-3 min-w-0">
                     <FileText className="size-5 text-primary shrink-0 mt-0.5" />
@@ -206,22 +206,19 @@ function DocumentsPage() {
                       <div className="font-medium text-sm truncate" title={d.name}>
                         {friendlyDocName(d.name)}
                       </div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5">
+                      <div className="text-xs text-muted-foreground mt-0.5">
                         {d.category || "–"} · {new Date(d.upload_date).toLocaleDateString()}
                       </div>
                       {contributions.has(d.id) ? (
                         <Badge
                           variant="outline"
-                          className="mt-1.5 text-[11px] bg-success/10 text-success border-success/30"
+                          className="mt-1.5 text-xs bg-success/10 text-success border-success/30"
                         >
                           <Link2 className="size-3 mr-1" />
                           {contributions.get(d.id)!.length} assumptions
                         </Badge>
                       ) : (
-                        <Badge
-                          variant="outline"
-                          className="mt-1.5 text-[11px] text-muted-foreground"
-                        >
+                        <Badge variant="outline" className="mt-1.5 text-xs text-muted-foreground">
                           No data extracted
                         </Badge>
                       )}

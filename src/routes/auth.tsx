@@ -148,13 +148,13 @@ function AuthPage() {
           <div className="size-9 rounded-lg bg-[#00628e] text-white flex items-center justify-center font-semibold">
             <Building2 className="size-[18px]" />
           </div>
-          <div className="text-xl font-semibold tracking-[-0.03em]">Agir</div>
+          <div className="text-xl font-semibold">Agir</div>
         </Link>
         <div className="max-w-xl">
           <div className="text-xs uppercase tracking-[0.2em] text-[#8ec5e0] font-semibold">
             One record from source to close
           </div>
-          <h2 className="mt-5 text-4xl xl:text-5xl font-semibold leading-tight tracking-[-0.05em]">
+          <h2 className="mt-5 text-4xl xl:text-5xl font-semibold leading-tight">
             Your team should know what to do next.
           </h2>
           <p className="mt-6 text-lg leading-8 text-[#b6c6d6] max-w-lg">
@@ -199,7 +199,7 @@ function AuthPage() {
                 </div>
                 <div className="text-lg font-semibold">Agir</div>
               </div>
-              <h1 className="text-2xl font-semibold tracking-[-0.03em]">{TAB_COPY[tab].heading}</h1>
+              <h1 className="text-2xl font-semibold">{TAB_COPY[tab].heading}</h1>
               <p className="text-sm text-[#6b7785] mt-2">{TAB_COPY[tab].subcopy}</p>
             </div>
 

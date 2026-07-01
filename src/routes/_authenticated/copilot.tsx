@@ -1,12 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
+import { useSuspenseQuery, useQuery, queryOptions } from "@tanstack/react-query";
 import { listProjects } from "@/lib/projects.functions";
+import { getAiReadiness, type AiReadiness } from "@/lib/ai-readiness.functions";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -32,6 +34,10 @@ import ReactMarkdown from "react-markdown";
 type ProjectRow = Tables<"projects">;
 
 const projectsQ = queryOptions({ queryKey: ["projects"], queryFn: () => listProjects() });
+const aiReadinessQ = queryOptions({
+  queryKey: ["ai-readiness"],
+  queryFn: () => getAiReadiness(),
+});
 
 export const Route = createFileRoute("/_authenticated/copilot")({
   head: () => ({ meta: [{ title: "Copilot | Agir" }] }),
@@ -58,6 +64,7 @@ const DEAL_SUGGESTIONS = (name: string) => [
 function CopilotPage() {
   const { deal } = Route.useSearch();
   const { data: projects } = useSuspenseQuery(projectsQ);
+  const { data: aiReadiness } = useQuery(aiReadinessQ);
   const [token, setToken] = useState<string | null>(null);
   const [dealId, setDealId] = useState<string | null>(deal ?? null);
   useEffect(() => {
@@ -106,19 +113,22 @@ function CopilotPage() {
       </>
     );
   }
-  return <ChatUI token={token} focused={focused} header={header} />;
+  return <ChatUI token={token} focused={focused} header={header} aiReadiness={aiReadiness} />;
 }
 
 function ChatUI({
   token,
   focused,
   header,
+  aiReadiness,
 }: {
   token: string;
   focused: ProjectRow | null;
   header: React.ReactNode;
+  aiReadiness?: AiReadiness;
 }) {
   const [input, setInput] = useState("");
+  const [keyNotice, setKeyNotice] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
   if (focused) headers["X-Agir-Deal"] = focused.id;
@@ -134,6 +144,11 @@ function ChatUI({
 
   function send(text: string) {
     if (!text.trim() || loading) return;
+    if (!aiReadiness?.configured) {
+      setKeyNotice(true);
+      return;
+    }
+    setKeyNotice(false);
     sendMessage({ text: text.trim() });
     setInput("");
   }
@@ -151,20 +166,42 @@ function ChatUI({
           {messages.length === 0 && (
             <Card className="p-8 text-center elevated max-w-xl w-full">
               <Bot className="size-10 mx-auto text-primary" />
+              <div className="mt-3 flex justify-center">
+                <Badge
+                  variant="outline"
+                  className={
+                    aiReadiness?.configured
+                      ? "border-primary/40 text-primary"
+                      : "border-warning/40 text-warning"
+                  }
+                >
+                  {aiReadiness?.configured ? "AI key configured" : "AI ready · key pending"}
+                </Badge>
+              </div>
               <h3 className="mt-3 display text-xl">
-                {focused
-                  ? `What should we do about ${focused.name}?`
-                  : "What decision should we make?"}
+                {!aiReadiness?.configured
+                  ? "AI workflows are ready"
+                  : focused
+                    ? `What should we do about ${focused.name}?`
+                    : "What decision should we make?"}
               </h3>
               <p className="text-sm text-muted-foreground mt-1">
-                {focused
-                  ? "Grounded in this deal's findings, scores and recommendation."
-                  : "Grounded in approved assumptions and deterministic outputs."}
+                {!aiReadiness?.configured
+                  ? `Set ${aiReadiness?.keyEnv ?? "API_KEY or ANTHROPIC_API_KEY"} on the server to activate chat. Extraction, underwriting and memo controls remain visible and fall back safely.`
+                  : focused
+                    ? "Grounded in this deal's findings, scores and recommendation."
+                    : "Grounded in approved assumptions and deterministic outputs."}
               </p>
+              {!aiReadiness?.configured && (
+                <Button asChild variant="outline" size="sm" className="mt-4">
+                  <a href="/settings?section=ai">View AI settings</a>
+                </Button>
+              )}
               <div className="grid sm:grid-cols-2 gap-2 mt-5 max-w-xl mx-auto">
                 {SUGGESTIONS.map((s) => (
                   <button
                     key={s}
+                    type="button"
                     onClick={() => send(s)}
                     className="text-left text-xs border border-border rounded-md p-3 hover:border-primary hover:bg-accent/30 transition-colors"
                   >
@@ -219,6 +256,21 @@ function ChatUI({
                   <RefreshCw className="size-3.5 mr-1.5" />
                   Retry
                 </Button>
+              </Card>
+            </div>
+          )}
+          {keyNotice && (
+            <div className="flex gap-3" role="status">
+              <div className="size-8 rounded-md bg-warning/15 flex items-center justify-center shrink-0">
+                <AlertCircle className="size-4 text-warning" />
+              </div>
+              <Card className="p-4 max-w-3xl border-warning/40">
+                <p className="text-sm font-medium">AI key pending</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Copilot is wired, but chat needs a server-side{" "}
+                  {aiReadiness?.keyEnv ?? "API_KEY or ANTHROPIC_API_KEY"}. Add the key later and
+                  this control will run without code changes.
+                </p>
               </Card>
             </div>
           )}
