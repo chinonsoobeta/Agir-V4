@@ -67,7 +67,7 @@ export function DealOverview({ decision }: { decision: DecisionSummary }) {
       <Card className="p-6 elevated">
         <div className="flex items-center justify-between">
           <Eyebrow>Executive Summary</Eyebrow>
-          <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+          <span className="text-[11px] uppercase tracking-widest text-muted-foreground">
             Findings Engine
           </span>
         </div>
@@ -75,16 +75,16 @@ export function DealOverview({ decision }: { decision: DecisionSummary }) {
         {decision.insight && (
           <div className="mt-4 rounded-md border border-primary/20 bg-primary/5 p-4 max-w-3xl">
             <div className="flex flex-wrap items-center gap-1.5 mb-2">
-              <span className="text-[10px] uppercase tracking-widest text-primary font-semibold">
+              <span className="text-[11px] uppercase tracking-widest text-primary font-semibold">
                 Deterministic Read · Contextual
               </span>
               {decision.insight.context?.marketLabel && (
-                <span className="text-[10px] capitalize border border-border rounded px-1.5 py-0.5 text-muted-foreground">
+                <span className="text-[11px] capitalize border border-border rounded px-1.5 py-0.5 text-muted-foreground">
                   {decision.insight.context.marketLabel}
                 </span>
               )}
               {decision.insight.context?.loanStructure && (
-                <span className="text-[10px] capitalize border border-border rounded px-1.5 py-0.5 text-muted-foreground">
+                <span className="text-[11px] capitalize border border-border rounded px-1.5 py-0.5 text-muted-foreground">
                   {String(decision.insight.context.loanStructure).replace(/_/g, " ")}
                 </span>
               )}
@@ -251,7 +251,7 @@ function SummaryBox({
     >
       <div className="flex items-center gap-2">
         <Icon className={`size-4 ${TONE_TEXT[tone]}`} />
-        <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+        <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
           {label}
         </span>
       </div>
@@ -298,7 +298,7 @@ function FindingsColumn({
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">{x.title}</span>
                 <span
-                  className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border ${TONE_CHIP[SEV_TONE[x.severity] ?? "neutral"]}`}
+                  className={`text-[11px] uppercase tracking-wider px-1.5 py-0.5 rounded border ${TONE_CHIP[SEV_TONE[x.severity] ?? "neutral"]}`}
                 >
                   {x.severity}
                 </span>
@@ -327,7 +327,7 @@ function DriverList({
     <div>
       <div className="flex items-center gap-1.5">
         <Icon className={`size-3.5 ${TONE_TEXT[tone]}`} />
-        <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+        <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
           {title}
         </span>
       </div>
@@ -349,7 +349,7 @@ function DriverList({
 function MetricItem({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground leading-tight">
+      <div className="text-[11px] uppercase tracking-widest text-muted-foreground leading-tight">
         {label}
       </div>
       <div className="num text-base mt-1">{value}</div>

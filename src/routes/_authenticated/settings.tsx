@@ -1371,7 +1371,7 @@ function DataSection() {
                       {item.evidence ?? item.action}
                     </div>
                     {item.expiresAt && (
-                      <div className="mt-2 text-[10px] uppercase tracking-widest text-muted-foreground">
+                      <div className="mt-2 text-[11px] uppercase tracking-widest text-muted-foreground">
                         Expires {new Date(item.expiresAt).toLocaleDateString()} ·{" "}
                         {item.daysUntilExpiry} days
                       </div>

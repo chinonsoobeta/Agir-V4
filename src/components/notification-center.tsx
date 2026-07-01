@@ -49,7 +49,7 @@ export function NotificationCenter() {
           {unread > 0 && (
             <span
               aria-hidden="true"
-              className="absolute -right-0.5 -top-0.5 min-w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] tabular-nums flex items-center justify-center px-1"
+              className="absolute -right-0.5 -top-0.5 min-w-4 h-4 rounded-full bg-primary text-primary-foreground text-[11px] tabular-nums flex items-center justify-center px-1"
             >
               {unread > 9 ? "9+" : unread}
             </span>
@@ -59,7 +59,7 @@ export function NotificationCenter() {
       <DropdownMenuContent align="end" className="w-80">
         <DropdownMenuLabel className="flex items-center justify-between">
           {t("notifications.title")}
-          <span className="text-[10px] text-muted-foreground font-normal">
+          <span className="text-[11px] text-muted-foreground font-normal">
             {tx("notifications.unread", { count: unread })}
           </span>
         </DropdownMenuLabel>
@@ -88,7 +88,7 @@ export function NotificationCenter() {
                         {item.body}
                       </div>
                     )}
-                    <div className="text-[10px] text-muted-foreground mt-1">
+                    <div className="text-[11px] text-muted-foreground mt-1">
                       {fmt.date(item.created_at, { dateStyle: "medium", timeStyle: "short" })}
                     </div>
                   </div>

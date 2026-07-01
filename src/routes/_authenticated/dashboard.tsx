@@ -81,7 +81,7 @@ function ExecutiveOverview() {
       <PageBody>
         <DemoGuide />
         <OnboardingChecklist />
-        <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-success">
+        <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-success">
           <Radio className="size-3" />
           {t("dash.liveData")}
         </div>
@@ -206,7 +206,7 @@ function ExecutiveOverview() {
           <section>
             <SectionTitle title={t("dash.topOpportunities")} />
             <Card className="overflow-hidden elevated">
-              <div className="grid grid-cols-[1fr_auto_auto] gap-3 px-4 py-2.5 bg-muted/35 text-[10px] uppercase tracking-widest text-muted-foreground">
+              <div className="grid grid-cols-[1fr_auto_auto] gap-3 px-4 py-2.5 bg-muted/35 text-[11px] uppercase tracking-widest text-muted-foreground">
                 <span>{t("common.deal")}</span>
                 <span>{t("dash.confidence")}</span>
                 <span>{t("dash.score")}</span>
@@ -224,7 +224,7 @@ function ExecutiveOverview() {
                   >
                     <div className="min-w-0">
                       <div className="text-sm font-medium truncate">{deal.name}</div>
-                      <div className={`text-[10px] uppercase tracking-wider ${TONE_TEXT[tone]}`}>
+                      <div className={`text-[11px] uppercase tracking-wider ${TONE_TEXT[tone]}`}>
                         {deal.recommendationLabel}
                       </div>
                     </div>
@@ -289,11 +289,11 @@ function Metric({
   return (
     <Card className="p-4 elevated">
       <div className="flex items-center justify-between">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+        <div className="text-[11px] uppercase tracking-widest text-muted-foreground">{label}</div>
         <Icon className="size-4 text-primary" />
       </div>
       <div className="num text-2xl mt-3">{value}</div>
-      <div className="text-[10px] text-muted-foreground mt-1">{detail}</div>
+      <div className="text-[11px] text-muted-foreground mt-1">{detail}</div>
     </Card>
   );
 }

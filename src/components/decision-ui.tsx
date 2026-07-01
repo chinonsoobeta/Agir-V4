@@ -155,9 +155,9 @@ export function ScoreDial({
             )}
           </div>
           {value != null ? (
-            <div className="text-[10px] text-muted-foreground mt-0.5">/ 100</div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">/ 100</div>
           ) : (
-            <div className="text-[10px] text-muted-foreground mt-0.5">Not run yet</div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">Not run yet</div>
           )}
         </div>
       </div>
@@ -197,7 +197,7 @@ export function ScoreBreakdown({ components }: { components: ScoreComponent[] })
               }}
             />
           </div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">{c.detail}</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">{c.detail}</div>
         </div>
       ))}
     </div>
@@ -214,7 +214,7 @@ export function SectionLabel({
   return (
     <div
       className={cn(
-        "text-[10px] uppercase tracking-widest text-muted-foreground font-semibold",
+        "text-[11px] uppercase tracking-widest text-muted-foreground font-semibold",
         className,
       )}
     >
@@ -225,7 +225,7 @@ export function SectionLabel({
 
 export function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-semibold">
+    <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-semibold">
       {children}
     </div>
   );

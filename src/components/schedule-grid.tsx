@@ -175,7 +175,7 @@ export function ScheduleGrid({ input }: { input: UnderwritingInput }) {
         <Card className="mt-3 p-4 border-primary/40">
           <div className="flex items-start justify-between">
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
                 Cell provenance
               </div>
               <div className="text-sm font-medium mt-1">

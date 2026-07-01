@@ -164,7 +164,7 @@ function Stat({
   return (
     <Card className="p-4 elevated">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</span>
+        <span className="text-[11px] uppercase tracking-widest text-muted-foreground">{label}</span>
         <Icon className={`size-4 ${warning ? "text-warning" : "text-primary"}`} />
       </div>
       <div className={`num text-2xl mt-2 ${warning ? "text-warning" : ""}`}>{value}</div>

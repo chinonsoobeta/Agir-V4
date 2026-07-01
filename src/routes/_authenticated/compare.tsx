@@ -76,7 +76,7 @@ function ComparePage() {
       <PageBody>
         {/* Deal picker */}
         <Card className="p-4">
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2">
+          <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-2">
             Select deals to compare ({selectedIds.length}/6)
           </div>
           <div className="flex flex-wrap gap-2">
@@ -129,7 +129,7 @@ function ComparisonGrid({ deals }: { deals: ComparisonDeal[] }) {
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-muted/35">
-              <th className="px-4 py-3 text-left text-[10px] uppercase tracking-widest text-muted-foreground font-medium sticky left-0 bg-muted/35 min-w-[10rem]">
+              <th className="px-4 py-3 text-left text-[11px] uppercase tracking-widest text-muted-foreground font-medium sticky left-0 bg-muted/35 min-w-[10rem]">
                 Metric
               </th>
               {deals.map((d) => (
@@ -203,7 +203,7 @@ function FindingsGrid({ deals }: { deals: ComparisonDeal[] }) {
       {deals.map((d) => (
         <Card key={d.id} className="p-4">
           <div className="text-sm font-semibold truncate">{d.name}</div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mt-2 mb-1.5">
+          <div className="text-[11px] uppercase tracking-widest text-muted-foreground mt-2 mb-1.5">
             Key findings
           </div>
           {d.keyFindings.length ? (

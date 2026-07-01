@@ -102,7 +102,7 @@ function WorkspaceSwitcher() {
               <div className="text-xs font-medium truncate text-sidebar-foreground">
                 {activeWorkspace?.name ?? "Personal workspace"}
               </div>
-              <div className="text-[9px] uppercase tracking-widest text-muted-foreground">
+              <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
                 {activeWorkspace?.role ?? "owner"}
               </div>
             </div>
@@ -265,13 +265,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="display text-lg font-semibold tracking-tight text-sidebar-foreground leading-none">
                 Agir
               </div>
-              <div className="text-[9px] uppercase tracking-[0.22em] text-muted-foreground mt-1">
+              <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground mt-1">
                 {t("shell.workspace")}
               </div>
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between">
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-success/25 bg-success/10 px-2 py-1 text-[9px] uppercase tracking-widest text-success">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-success/25 bg-success/10 px-2 py-1 text-[11px] uppercase tracking-widest text-success">
               <Radio className="size-2.5" />
               {t("shell.live")}
             </div>
@@ -309,7 +309,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <div className="display text-xl font-semibold text-sidebar-foreground">
                       Agir
                     </div>
-                    <div className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground mt-1">
+                    <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground mt-1">
                       {t("shell.workspace")}
                     </div>
                   </div>
@@ -342,7 +342,7 @@ export function PageHeader({
       <div className="px-5 sm:px-8 py-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="min-w-0">
           {eyebrow && (
-            <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-semibold mb-1.5">
+            <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-semibold mb-1.5">
               {eyebrow}
             </div>
           )}

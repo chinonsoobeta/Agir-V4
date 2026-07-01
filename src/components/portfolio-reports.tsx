@@ -214,7 +214,7 @@ export function PortfolioReports() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
           {report.summary.map((s) => (
             <Card key={s.label} className="p-3">
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
                 {s.label}
               </div>
               <div className="num text-lg mt-1">{formatReportCell(s.value, s.type, fmt)}</div>
@@ -239,7 +239,7 @@ export function PortfolioReports() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-muted/35 text-[10px] uppercase tracking-widest text-muted-foreground">
+                <tr className="bg-muted/35 text-[11px] uppercase tracking-widest text-muted-foreground">
                   {report.columns.map((c) => (
                     <th
                       key={c.key}

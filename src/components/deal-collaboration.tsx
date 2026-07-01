@@ -96,7 +96,7 @@ export function DealCollaboration({ projectId }: { projectId: string }) {
               <div key={item.id} className="rounded-lg border border-border p-3">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-xs font-semibold">{displayName(item.profile)}</span>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-[11px] text-muted-foreground">
                     {new Date(item.created_at).toLocaleString()}
                   </span>
                 </div>

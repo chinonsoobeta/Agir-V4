@@ -202,7 +202,7 @@ function PortfolioPage() {
                           "–"
                         )}
                       </div>
-                      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                      <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
                         Score
                       </div>
                     </div>
@@ -271,7 +271,7 @@ function PortfolioPage() {
                   />
                   <div>
                     <div className="num text-lg leading-none">{r.count}</div>
-                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
+                    <div className="text-[11px] uppercase tracking-widest text-muted-foreground mt-1">
                       {r.rating} Risk
                     </div>
                   </div>
@@ -311,7 +311,7 @@ function Kpi({
           : "";
   return (
     <Card className="p-4">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground leading-tight">
+      <div className="text-[11px] uppercase tracking-widest text-muted-foreground leading-tight">
         {label}
       </div>
       <div className={`num text-2xl mt-2 ${color}`}>
@@ -332,7 +332,7 @@ function PipelineColumn({ stage, deals }: { stage: PipelineStage; deals: DealSum
   return (
     <div className="flex flex-col">
       <div className="flex items-center justify-between px-1 mb-2">
-        <span className={`text-[10px] uppercase tracking-widest font-semibold ${accent}`}>
+        <span className={`text-[11px] uppercase tracking-widest font-semibold ${accent}`}>
           {stage}
         </span>
         <span className="num text-xs text-muted-foreground">{deals.length}</span>
@@ -368,7 +368,7 @@ function PipelineColumn({ stage, deals }: { stage: PipelineStage; deals: DealSum
                   {d.investmentScore}
                 </span>
               ) : (
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                <span className="text-[11px] text-muted-foreground uppercase tracking-wider">
                   No UW
                 </span>
               )}

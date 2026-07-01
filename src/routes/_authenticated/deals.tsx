@@ -508,7 +508,7 @@ function DealCard({ d }: { d: DealSummary }) {
     <Card className="p-5 flex flex-col gap-4 elevated hover:border-primary/40 transition-colors group">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+          <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
             {d.stage}
           </div>
           <Link
@@ -557,7 +557,7 @@ function DealCard({ d }: { d: DealSummary }) {
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
+          <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">
             Pipeline status
           </div>
           <Select value={d.status} onValueChange={(value) => update.mutate(value)}>
@@ -574,7 +574,7 @@ function DealCard({ d }: { d: DealSummary }) {
           </Select>
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
+          <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">
             Target close
           </div>
           <div className="h-8 flex items-center gap-1.5 text-xs">
@@ -744,7 +744,7 @@ function Stat({
 }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="text-[11px] uppercase tracking-widest text-muted-foreground">{label}</div>
       <div className={`num text-lg mt-0.5 ${accent ? TONE_TEXT[accent] : ""}`}>{value}</div>
     </div>
   );

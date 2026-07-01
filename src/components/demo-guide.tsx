@@ -39,7 +39,7 @@ export function DemoGuide() {
     <section className="rounded-lg border border-primary/25 bg-primary/5 p-5 md:p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-3xl">
-          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
             <ClipboardCheck className="size-3.5" />
             Unsupervised demo guide
           </div>

@@ -284,7 +284,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
               </p>
               {readiness.missing.length > 0 && (
                 <div className="mt-4">
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
                     Missing inputs
                   </div>
                   <ul className="mt-1 space-y-1">
@@ -293,7 +293,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                         <span className="size-1.5 rounded-full bg-destructive inline-block" />
                         {inputLabel(k)}
                         {readiness.defaults.some((d: ReadinessDefault) => d.key === k) && (
-                          <Badge variant="outline" className="text-[10px]">
+                          <Badge variant="outline" className="text-[11px]">
                             default available
                           </Badge>
                         )}
@@ -304,7 +304,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
               )}
               {readiness.conflicts.length > 0 && (
                 <div className="mt-4">
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
                     Conflicting inputs: resolve explicitly
                   </div>
                   {readiness.conflicts.map((c: ReadinessConflict) => (
@@ -320,7 +320,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                               <div className="num text-lg">
                                 {conflictValueLabel(c.key, v.value)}
                               </div>
-                              <div className="text-[10px] text-muted-foreground truncate">
+                              <div className="text-[11px] text-muted-foreground truncate">
                                 {v.source ?? "unknown source"}
                               </div>
                               <Button
@@ -351,7 +351,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                         <Scale className="size-3.5 mr-1" />
                         Use conservative
                       </Button>
-                      <p className="text-[10px] text-muted-foreground mt-1">
+                      <p className="text-[11px] text-muted-foreground mt-1">
                         Conservative picks the documented value with the lower valuation/return.
                         Values are never averaged.
                       </p>
@@ -361,7 +361,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
               )}
               {readiness.defaults.length > 0 && (
                 <div className="mt-4 p-3 rounded border border-border bg-muted/10">
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
                     Static defaults available
                   </div>
                   <ul className="mt-1 text-sm text-muted-foreground">
@@ -387,7 +387,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                       Let AI accept defaults & run
                     </Button>
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">
+                  <p className="text-[11px] text-muted-foreground mt-1">
                     Writes source=default, status=default_accepted rows. Defaults are never applied
                     silently: AI only selects from these fixed values; it never invents a number,
                     and the engine does all math.
@@ -488,17 +488,17 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
             Refresh Stress Runs
           </Button>
           {lastMode && <ModeBadge mode={lastMode} />}
-          <span className="text-[10px] text-muted-foreground font-mono ml-auto">
+          <span className="text-[11px] text-muted-foreground font-mono ml-auto">
             engine computes every number · AI only selects inputs
           </span>
         </div>
         {defaultedKeys.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="uppercase tracking-widest text-[10px] font-semibold">
+            <span className="uppercase tracking-widest text-[11px] font-semibold">
               Defaults in effect:
             </span>
             {defaultedKeys.map((k) => (
-              <Badge key={k} variant="outline" className="text-[10px]">
+              <Badge key={k} variant="outline" className="text-[11px]">
                 {inputLabel(k)} · default
               </Badge>
             ))}
@@ -520,7 +520,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                 <AlertTriangle className="size-4 mt-0.5 shrink-0" />
               )}
               <div>
-                <span className="font-semibold uppercase text-[10px] tracking-widest mr-2">
+                <span className="font-semibold uppercase text-[11px] tracking-widest mr-2">
                   {f.severity}
                 </span>
                 {f.message}
@@ -585,7 +585,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
         <Card className="p-5 space-y-3">
           <div className="flex items-center gap-2">
             <Scale className="size-3.5 text-muted-foreground" />
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
               Capital Structure &amp; LP / GP Returns
             </div>
           </div>
@@ -636,7 +636,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
       {/* Full metric table with the five stress scenarios */}
       {outputs.length > 0 && (
         <Card className="overflow-hidden">
-          <div className="px-4 py-2 border-b border-border bg-muted/20 text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+          <div className="px-4 py-2 border-b border-border bg-muted/20 text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
             Pro Forma: Base & Stress (every cell is an engine re-run)
           </div>
           <div className="overflow-x-auto">
@@ -685,7 +685,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                                 : "–"}
                             </div>
                             {r?.formula_text && (
-                              <div className="mt-1 text-[10px] leading-snug text-muted-foreground font-mono max-w-56 ml-auto">
+                              <div className="mt-1 text-[11px] leading-snug text-muted-foreground font-mono max-w-56 ml-auto">
                                 {r.formula_text}
                               </div>
                             )}
@@ -709,7 +709,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
         <Card className="p-5">
           <div className="flex items-center gap-2">
             <FileText className="size-3.5 text-muted-foreground" />
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
               Evidence: source documents behind these numbers
             </div>
           </div>
@@ -725,7 +725,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                   <span className="truncate" title={source}>
                     {source}
                   </span>
-                  <Badge variant="outline" className="ml-auto text-[10px]">
+                  <Badge variant="outline" className="ml-auto text-[11px]">
                     {fields.length}
                   </Badge>
                 </div>
@@ -733,7 +733,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                   {fields.map((f, i) => (
                     <span
                       key={i}
-                      className="text-[10px] rounded bg-secondary px-1.5 py-0.5 text-secondary-foreground"
+                      className="text-[11px] rounded bg-secondary px-1.5 py-0.5 text-secondary-foreground"
                     >
                       {f}
                     </span>
@@ -747,7 +747,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
 
       {/* Risk register: fixed thresholds over engine outputs + flags */}
       <Card className="p-5">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-3">
+        <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-3">
           Risk Register
         </div>
         {risks.length === 0 ? (
@@ -774,7 +774,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                       <span className="text-sm font-medium">{r.title}</span>
                       <Badge
                         variant="outline"
-                        className={`${SEV_STYLES[r.severity]} text-[10px] uppercase`}
+                        className={`${SEV_STYLES[r.severity]} text-[11px] uppercase`}
                       >
                         {r.severity}
                       </Badge>
@@ -815,7 +815,7 @@ function UnderwritingMetric({
       : "–");
   return (
     <Card className="p-4">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="text-[11px] uppercase tracking-widest text-muted-foreground">{label}</div>
       <div className={`num text-2xl mt-1 ${highlight ?? "text-primary"}`}>
         {row && text == null ? (
           <ExplainableNumber row={row as ExplainableRow} label={label}>
@@ -825,7 +825,7 @@ function UnderwritingMetric({
           display
         )}
       </div>
-      <div className="text-[10px] text-muted-foreground mt-1 font-mono line-clamp-2">
+      <div className="text-[11px] text-muted-foreground mt-1 font-mono line-clamp-2">
         {sub ?? row?.formula_text ?? "Pending underwriting run"}
       </div>
     </Card>
@@ -862,18 +862,18 @@ function DeterministicRead({ row }: { row?: OutputRow }) {
     <Card className="p-5 space-y-4">
       <div className="flex items-center gap-2">
         <Info className="size-4 text-primary" />
-        <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+        <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
           Deterministic Read · Contextual Analysis
         </span>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {chips.map((c, i) => (
-          <Badge key={i} variant="outline" className="text-[10px] capitalize">
+          <Badge key={i} variant="outline" className="text-[11px] capitalize">
             {c}
           </Badge>
         ))}
         {sample > 0 && (
-          <Badge variant="outline" className="text-[10px]">
+          <Badge variant="outline" className="text-[11px]">
             benchmarked vs {sample} portfolio deal{sample === 1 ? "" : "s"}
           </Badge>
         )}
@@ -881,7 +881,7 @@ function DeterministicRead({ row }: { row?: OutputRow }) {
       {row.formula_text && <p className="text-sm leading-relaxed">{row.formula_text}</p>}
       {interps.length > 0 && (
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2">
+          <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-2">
             How it reads in context
           </div>
           <ul className="space-y-1.5">
@@ -892,7 +892,7 @@ function DeterministicRead({ row }: { row?: OutputRow }) {
                 <li key={i.metricKey} className="text-xs flex items-start gap-2">
                   <Badge
                     variant="outline"
-                    className={`text-[9px] uppercase shrink-0 ${bandClass(i.band)}`}
+                    className={`text-[11px] uppercase shrink-0 ${bandClass(i.band)}`}
                   >
                     {String(i.band).replace(/_/g, " ")}
                   </Badge>
@@ -909,7 +909,7 @@ function DeterministicRead({ row }: { row?: OutputRow }) {
       )}
       {failing.length > 0 && (
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2">
+          <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-2">
             What would move the needle
           </div>
           <ul className="space-y-1 list-disc pl-4">
@@ -961,7 +961,7 @@ function ModeBadge({ mode }: { mode: "ai" | "deterministic" }) {
   return (
     <Badge
       variant="outline"
-      className={`text-[9px] uppercase tracking-wider ${isAI ? "bg-primary/15 text-primary border-primary/30" : "bg-muted text-muted-foreground border-border"}`}
+      className={`text-[11px] uppercase tracking-wider ${isAI ? "bg-primary/15 text-primary border-primary/30" : "bg-muted text-muted-foreground border-border"}`}
     >
       {isAI ? <Sparkles className="size-2.5 mr-1" /> : <Calculator className="size-2.5 mr-1" />}
       {isAI ? "AI ran" : "Deterministic"}
@@ -1010,7 +1010,7 @@ export function ICPanel({ projectId }: { projectId: string }) {
               >
                 <ShieldAlert className="size-4 mt-0.5 shrink-0" />
                 <div>
-                  <span className="font-semibold uppercase text-[10px] tracking-widest mr-2">
+                  <span className="font-semibold uppercase text-[11px] tracking-widest mr-2">
                     reconciliation error
                   </span>
                   {f.message}
@@ -1021,7 +1021,7 @@ export function ICPanel({ projectId }: { projectId: string }) {
       )}
 
       <Card className="p-5 space-y-3">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+        <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
           New IC decision
         </div>
         <div className="flex flex-wrap gap-2">
@@ -1065,7 +1065,7 @@ export function ICPanel({ projectId }: { projectId: string }) {
       </Card>
 
       <Card className="overflow-hidden">
-        <div className="px-4 py-2 border-b border-border bg-muted/20 text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+        <div className="px-4 py-2 border-b border-border bg-muted/20 text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
           Decision History
         </div>
         {decisions.length === 0 ? (
@@ -1075,7 +1075,7 @@ export function ICPanel({ projectId }: { projectId: string }) {
             {decisions.map((d: DecisionLogRow) => (
               <li key={d.id} className="p-4 text-sm">
                 <div className="flex items-center gap-3">
-                  <Badge variant="outline" className="text-[10px] uppercase">
+                  <Badge variant="outline" className="text-[11px] uppercase">
                     {d.decision.replace(/_/g, " ")}
                   </Badge>
                   <span className="text-xs text-muted-foreground">
@@ -1169,7 +1169,7 @@ export function MemoSection({ projectId }: { projectId: string }) {
   return (
     <Card className="p-5 space-y-3 border-primary/30">
       <div className="flex items-center justify-between gap-3">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+        <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
           Investment Memo
         </div>
         <Button
@@ -1266,20 +1266,20 @@ export function MemoSection({ projectId }: { projectId: string }) {
               return (
                 <Badge
                   variant="outline"
-                  className={`text-[10px] ${mode === "deterministic" ? "text-chart-2 border-chart-2/40" : "text-primary border-primary/40"}`}
+                  className={`text-[11px] ${mode === "deterministic" ? "text-chart-2 border-chart-2/40" : "text-primary border-primary/40"}`}
                 >
                   {mode === "deterministic" ? "Deterministic template" : "AI-assisted"}
                 </Badge>
               );
             })()}
-            <Badge variant="outline" className="text-[10px] uppercase">
+            <Badge variant="outline" className="text-[11px] uppercase">
               {latest.status ?? "generated"}
             </Badge>
             <span>{new Date(latest.created_at).toLocaleString()}</span>
             {content.deterministic_verdict?.code && (
               <Badge
                 variant="outline"
-                className={`text-[10px] ${content.deterministic_verdict.code === "REJECT" ? "text-destructive border-destructive/40" : "text-primary border-primary/40"}`}
+                className={`text-[11px] ${content.deterministic_verdict.code === "REJECT" ? "text-destructive border-destructive/40" : "text-primary border-primary/40"}`}
               >
                 {content.deterministic_verdict.code}
               </Badge>
@@ -1312,7 +1312,7 @@ export function MemoSection({ projectId }: { projectId: string }) {
             MEMO_SECTIONS.filter((s) => typeof content[s.key] === "string" && content[s.key]).map(
               (s) => (
                 <div key={s.key}>
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
                     {s.label}
                   </div>
                   <p className="text-sm mt-1 whitespace-pre-wrap">{content[s.key]}</p>
@@ -1329,7 +1329,7 @@ export function MemoSection({ projectId }: { projectId: string }) {
 
       {/* Dev-only readiness debug */}
       {import.meta.env.DEV && (
-        <details className="text-[10px]">
+        <details className="text-[11px]">
           <summary className="cursor-pointer text-muted-foreground uppercase tracking-widest">
             Memo readiness debug
           </summary>
@@ -1387,7 +1387,7 @@ function MemoReportView({ report }: { report: any }) {
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           {report.summary_stats.map((s: any) => (
             <div key={s.label} className="rounded border border-border p-2">
-              <div className="text-[9px] uppercase tracking-widest text-muted-foreground">
+              <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
                 {s.label}
               </div>
               <div className="num text-sm">{s.value}</div>
@@ -1409,7 +1409,7 @@ function MemoReportView({ report }: { report: any }) {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {report.metric_cards.map((c: any) => (
             <div key={c.label} className="rounded border border-border p-2">
-              <div className="text-[9px] uppercase tracking-widest text-muted-foreground">
+              <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
                 {c.label}
               </div>
               <div className="num text-base">{c.value}</div>
@@ -1420,7 +1420,7 @@ function MemoReportView({ report }: { report: any }) {
 
       {report.sections?.map((sec: any, i: number) => (
         <div key={sec.heading}>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
+          <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
             {i + 1}. {sec.heading}
           </div>
           {sec.table && (
@@ -1451,7 +1451,7 @@ function MemoReportView({ report }: { report: any }) {
           )}
           {sec.body && <p className="text-sm whitespace-pre-wrap">{sec.body}</p>}
           {sec.table?.note && (
-            <p className="text-[10px] italic text-muted-foreground mt-1">Note: {sec.table.note}</p>
+            <p className="text-[11px] italic text-muted-foreground mt-1">Note: {sec.table.note}</p>
           )}
         </div>
       ))}
@@ -1459,7 +1459,7 @@ function MemoReportView({ report }: { report: any }) {
       {report.footnotes?.length > 0 && (
         <div className="border-t border-border pt-2 space-y-1">
           {report.footnotes.map((f: string, i: number) => (
-            <p key={i} className="text-[10px] text-muted-foreground">
+            <p key={i} className="text-[11px] text-muted-foreground">
               {f}
             </p>
           ))}
@@ -1499,7 +1499,7 @@ export function AuditPanel({ projectId }: { projectId: string }) {
     <div className="space-y-4">
       {groups.map((group) => (
         <Card key={group.label} className="overflow-hidden">
-          <div className="px-4 py-2 border-b border-border bg-muted/20 text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+          <div className="px-4 py-2 border-b border-border bg-muted/20 text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
             {group.label}
           </div>
           {group.rows.length === 0 ? (
@@ -1522,7 +1522,7 @@ export function AuditPanel({ projectId }: { projectId: string }) {
                     </td>
                     <td className="font-medium">{a.action}</td>
                     <td className="text-xs text-muted-foreground">{a.entity_type}</td>
-                    <td className="text-[10px] font-mono text-muted-foreground max-w-md truncate">
+                    <td className="text-[11px] font-mono text-muted-foreground max-w-md truncate">
                       {JSON.stringify(a.payload)}
                     </td>
                   </tr>

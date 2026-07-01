@@ -121,7 +121,7 @@ function AssumptionsReviewCenter() {
                     <td className="text-center">
                       <Badge
                         variant="outline"
-                        className={`${STATUS_STYLES[a.status]} text-[10px] capitalize`}
+                        className={`${STATUS_STYLES[a.status]} text-[11px] capitalize`}
                       >
                         {a.status.replace("_", " ")}
                       </Badge>

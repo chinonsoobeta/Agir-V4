@@ -61,7 +61,7 @@ export function ExplainableNumber({
         </div>
         <div className="mt-2 space-y-3">
           <div>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
               How it is computed
             </div>
             <div className="font-mono text-xs bg-muted/50 rounded p-2 leading-snug break-words">
@@ -76,7 +76,7 @@ export function ExplainableNumber({
           </div>
           {inputKeys.length > 0 && (
             <div>
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
                 Approved inputs in this calculation ({inputKeys.length})
               </div>
               <div className="flex flex-wrap gap-1">
@@ -91,7 +91,7 @@ export function ExplainableNumber({
               </div>
             </div>
           )}
-          <div className="text-[10px] text-muted-foreground border-t border-border pt-2">
+          <div className="text-[11px] text-muted-foreground border-t border-border pt-2">
             Every figure is derived only from approved/accepted inputs by the deterministic engine
             -- no value is invented.
           </div>

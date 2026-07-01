@@ -114,7 +114,7 @@ export function DemoPackagePicker({ trigger }: DemoPackagePickerProps) {
                 {pkg.documents.map((doc) => (
                   <span
                     key={doc}
-                    className="rounded border border-border bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground"
+                    className="rounded border border-border bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground"
                   >
                     {doc}
                   </span>
@@ -139,7 +139,7 @@ function PackageList({
 }) {
   return (
     <div>
-      <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+      <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
         {title}
       </div>
       <div className="mt-2 space-y-1.5">

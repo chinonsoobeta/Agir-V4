@@ -70,7 +70,7 @@ function MarketsPage() {
       />
       <PageBody>
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-success">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-success">
             <Radar className="size-3" />
             Live market watchlist
           </div>
@@ -115,7 +115,7 @@ function SignalCard({ signal }: { signal: MarketSignal }) {
     <Card className="p-5 elevated">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+          <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
             {signal.market}
           </div>
           <div className="font-semibold mt-1">{signal.metric}</div>

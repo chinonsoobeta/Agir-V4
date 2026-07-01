@@ -183,7 +183,7 @@ export function OnboardingChecklist() {
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="num text-[10px] text-muted-foreground">{i + 1}</span>
+                      <span className="num text-[11px] text-muted-foreground">{i + 1}</span>
                       <span
                         className={cn(
                           "text-sm font-medium truncate",

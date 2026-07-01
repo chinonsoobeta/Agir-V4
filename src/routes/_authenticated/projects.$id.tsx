@@ -110,7 +110,7 @@ function DealDetail() {
                 All deals
               </Button>
             </Link>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-semibold">
+            <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-semibold">
               {stage}
             </div>
           </div>
@@ -271,7 +271,7 @@ function DocumentsTab({
     <div className="space-y-5">
       <Card className="p-5 space-y-4">
         <div className="max-w-xs">
-          <label className="text-[10px] uppercase tracking-widest text-muted-foreground">
+          <label className="text-[11px] uppercase tracking-widest text-muted-foreground">
             Category
           </label>
           <Select value={category} onValueChange={setCategory}>
@@ -300,7 +300,7 @@ function DocumentsTab({
       </Card>
 
       <Card className="p-6 elevated">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+        <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
           Deal Documents
         </div>
         {docs.length === 0 ? (
@@ -322,7 +322,7 @@ function DocumentsTab({
                     <span className="truncate">{d.name}</span>
                   </span>
                   <span className="flex items-center gap-2 shrink-0">
-                    <span className={cn("text-[10px] rounded-full border px-2 py-0.5", badge.cls)}>
+                    <span className={cn("text-[11px] rounded-full border px-2 py-0.5", badge.cls)}>
                       {badge.label}
                     </span>
                     <span className="text-xs text-muted-foreground hidden sm:inline">

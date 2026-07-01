@@ -309,13 +309,22 @@ export function SensitivityPanel({ input }: { input: UnderwritingInput }) {
           </div>
           <div className="mt-3 overflow-x-auto">
             <table className="data-grid w-full text-[11px]">
+              <caption className="sr-only">
+                {metric.label} across {VAR_BY_KEY[yVar].label} (rows) and {VAR_BY_KEY[xVar].label}{" "}
+                (columns). Base case is {fmtMetric(baseMetric, metric.unit)}; each cell marks
+                whether it is at/above (▲) or below (▼) base.
+              </caption>
               <thead>
                 <tr className="bg-muted/20">
-                  <th className="text-left">
-                    {VAR_BY_KEY[yVar].label} \ {VAR_BY_KEY[xVar].label}
+                  <th
+                    className="text-left"
+                    scope="col"
+                    aria-label={`${VAR_BY_KEY[yVar].label} (rows) by ${VAR_BY_KEY[xVar].label} (columns)`}
+                  >
+                    {VAR_BY_KEY[yVar].label} · {VAR_BY_KEY[xVar].label}
                   </th>
                   {grid.xs.map((x, i) => (
-                    <th key={i} className="text-right num">
+                    <th key={i} className="text-right num" scope="col">
                       {fmtVar(x, VAR_BY_KEY[xVar].unit)}
                     </th>
                   ))}
@@ -324,14 +333,27 @@ export function SensitivityPanel({ input }: { input: UnderwritingInput }) {
               <tbody>
                 {grid.ys.map((y, yi) => (
                   <tr key={yi}>
-                    <td className="font-medium num">{fmtVar(y, VAR_BY_KEY[yVar].unit)}</td>
+                    <th scope="row" className="num text-left">
+                      {fmtVar(y, VAR_BY_KEY[yVar].unit)}
+                    </th>
                     {grid.cells[yi].map((v, xi) => {
-                      const ok = Number.isFinite(v) && v >= baseMetric;
+                      const finite = Number.isFinite(v);
+                      const ok = finite && v >= baseMetric;
                       return (
                         <td
                           key={xi}
-                          className={`text-right num ${!Number.isFinite(v) ? "text-muted-foreground" : ok ? "text-success" : "text-destructive"}`}
+                          aria-label={
+                            finite
+                              ? `${fmtMetric(v, metric.unit)}, ${ok ? "at or above base" : "below base"}`
+                              : "not meaningful"
+                          }
+                          className={`text-right num ${!finite ? "text-muted-foreground" : ok ? "text-success" : "text-destructive"}`}
                         >
+                          {finite && (
+                            <span aria-hidden="true" className="mr-0.5">
+                              {ok ? "▲" : "▼"}
+                            </span>
+                          )}
                           {fmtMetric(v, metric.unit)}
                         </td>
                       );
@@ -342,8 +364,8 @@ export function SensitivityPanel({ input }: { input: UnderwritingInput }) {
             </table>
           </div>
           <p className="text-[11px] text-muted-foreground mt-2">
-            Green at or above base ({fmtMetric(baseMetric, metric.unit)}); each cell is a real
-            re-run.
+            ▲ at or above base ({fmtMetric(baseMetric, metric.unit)}); ▼ below base. Each cell is a
+            real re-run.
           </p>
         </Card>
       </div>

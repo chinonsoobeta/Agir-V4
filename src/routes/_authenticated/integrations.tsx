@@ -273,7 +273,7 @@ function IntegrationsPage() {
         <Card className="p-5 elevated">
           <div className="flex items-center gap-2">
             <Plug className="size-4 text-muted-foreground" />
-            <h2 className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+            <h2 className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
               Connector status
             </h2>
           </div>
@@ -290,7 +290,7 @@ function IntegrationsPage() {
                 <span className="text-sm">{c.label}</span>
                 <Badge
                   variant="outline"
-                  className={`text-[9px] uppercase ${c.status === "live" ? "text-success border-success/40" : "text-muted-foreground"}`}
+                  className={`text-[11px] uppercase ${c.status === "live" ? "text-success border-success/40" : "text-muted-foreground"}`}
                 >
                   {c.status}
                 </Badge>
@@ -366,12 +366,12 @@ function IntegrationsPage() {
                   </Badge>
                 </div>
                 <h2 className="font-semibold mt-4">{app.name}</h2>
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
+                <div className="text-[11px] uppercase tracking-widest text-muted-foreground mt-1">
                   {app.category}
                 </div>
                 <p className="text-sm text-muted-foreground mt-3 flex-1">{app.description}</p>
                 {connected && connection?.last_synced_at && (
-                  <div className="text-[10px] text-muted-foreground mt-4">
+                  <div className="text-[11px] text-muted-foreground mt-4">
                     Last sync {new Date(connection.last_synced_at).toLocaleString()}
                   </div>
                 )}
@@ -467,7 +467,7 @@ function IntegrationsPage() {
                     <div className="text-xs text-muted-foreground truncate mt-1">
                       {endpoint.endpoint_url}
                     </div>
-                    <div className="text-[10px] text-muted-foreground mt-2">
+                    <div className="text-[11px] text-muted-foreground mt-2">
                       Events: {endpoint.event_types.join(", ")}
                     </div>
                   </div>
@@ -718,7 +718,7 @@ function CsvConnectorPanel({
     <Card className="p-5 elevated">
       <div className="flex items-center gap-2">
         <FileSpreadsheet className="size-4 text-primary" />
-        <h2 className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+        <h2 className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
           CSV deal sync (live connector)
         </h2>
       </div>

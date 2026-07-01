@@ -420,7 +420,7 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
               <span className="text-sm font-medium">Decision recorded</span>
               <Badge
                 variant="outline"
-                className={`text-[10px] uppercase ${
+                className={`text-[11px] uppercase ${
                   TONE_CHIP[
                     (finalDecision.decision === "approve"
                       ? "approve"
@@ -576,7 +576,7 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
                   <div className="flex items-center gap-3">
                     <Badge
                       variant="outline"
-                      className={`text-[10px] uppercase ${TONE_CHIP[tone as keyof typeof TONE_CHIP]}`}
+                      className={`text-[11px] uppercase ${TONE_CHIP[tone as keyof typeof TONE_CHIP]}`}
                     >
                       {String(d.decision).replace(/_/g, " ")}
                     </Badge>
@@ -688,14 +688,14 @@ function MemoSnapshots({ projectId }: { projectId: string }) {
       <ul className="divide-y divide-border">
         {snapshots.map((s: MemoSnapshotRow) => (
           <li key={s.id} className="p-4 flex items-center gap-3 text-sm">
-            <Badge variant="outline" className="text-[10px] uppercase">
+            <Badge variant="outline" className="text-[11px] uppercase">
               v{s.version}
             </Badge>
             <span className="text-xs text-muted-foreground flex-1">
               {new Date(s.created_at).toLocaleString()} · {s.created_by_name}
               {s.verdict_code ? ` · ${s.verdict_code}` : ""}
             </span>
-            <span className="font-mono text-[10px] text-muted-foreground">
+            <span className="font-mono text-[11px] text-muted-foreground">
               {String(s.content_hash).slice(0, 12)}…
             </span>
             <Button
@@ -728,7 +728,7 @@ function MemoSnapshots({ projectId }: { projectId: string }) {
           )}
           {diff.assumption_changes?.length > 0 && (
             <div className="mb-2">
-              <div className="text-[10px] uppercase text-muted-foreground mb-1">
+              <div className="text-[11px] uppercase text-muted-foreground mb-1">
                 Assumption changes ({diff.assumption_changes.length})
               </div>
               <ul className="space-y-0.5 font-mono text-xs">
@@ -742,7 +742,7 @@ function MemoSnapshots({ projectId }: { projectId: string }) {
           )}
           {diff.output_changes?.length > 0 && (
             <div>
-              <div className="text-[10px] uppercase text-muted-foreground mb-1">
+              <div className="text-[11px] uppercase text-muted-foreground mb-1">
                 Output changes ({diff.output_changes.length})
               </div>
               <ul className="space-y-0.5 font-mono text-xs">
@@ -810,10 +810,10 @@ function CommitteeReadinessCard({
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Badge variant="outline" className="text-[10px] uppercase">
+          <Badge variant="outline" className="text-[11px] uppercase">
             {readiness.blockers} blocker{readiness.blockers === 1 ? "" : "s"}
           </Badge>
-          <Badge variant="outline" className="text-[10px] uppercase">
+          <Badge variant="outline" className="text-[11px] uppercase">
             {readiness.warnings} warning{readiness.warnings === 1 ? "" : "s"}
           </Badge>
         </div>
@@ -829,7 +829,7 @@ function CommitteeReadinessCard({
                   <span className="text-xs font-semibold truncate">{item.label}</span>
                 </span>
                 <span
-                  className={`rounded-full border px-1.5 py-0.5 text-[9px] uppercase shrink-0 ${meta.cls}`}
+                  className={`rounded-full border px-1.5 py-0.5 text-[11px] uppercase shrink-0 ${meta.cls}`}
                 >
                   {meta.label}
                 </span>
@@ -892,6 +892,9 @@ function CommitteeGovernance({
 
   const tally = voteData.tally;
   const conditions = condData.conditions;
+  // The vote feed is a tally only, so reflect the vote this member just cast
+  // (persisted server-side; highlighted here for the rest of the session).
+  const myVote = cast.variables ?? null;
 
   return (
     <div className="grid lg:grid-cols-2 gap-4">
@@ -900,19 +903,30 @@ function CommitteeGovernance({
           <Gavel className="size-4 text-primary" />
           <SectionLabel>Committee Votes</SectionLabel>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {VOTE_OPTIONS.map((v) => (
-            <Button
-              key={v.key}
-              size="sm"
-              variant="outline"
-              disabled={cast.isPending}
-              onClick={() => cast.mutate(v.key)}
-            >
-              {v.label}
-            </Button>
-          ))}
+        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Cast your vote">
+          {VOTE_OPTIONS.map((v) => {
+            const mine = myVote === v.key;
+            return (
+              <Button
+                key={v.key}
+                size="sm"
+                variant={mine ? "secondary" : "outline"}
+                aria-pressed={mine}
+                className={mine ? "ring-1 ring-primary" : ""}
+                disabled={cast.isPending}
+                onClick={() => cast.mutate(v.key)}
+              >
+                {mine && <CheckCircle2 className="size-3.5" />}
+                {v.label}
+              </Button>
+            );
+          })}
         </div>
+        {myVote && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Your vote: {VOTE_OPTIONS.find((o) => o.key === myVote)?.label}
+          </p>
+        )}
         <div className="mt-4 text-sm">
           <div className="flex flex-wrap gap-3 num text-xs text-muted-foreground">
             <span>Approve {tally.counts.approve}</span>
@@ -921,7 +935,7 @@ function CommitteeGovernance({
             <span>Abstain {tally.counts.abstain}</span>
           </div>
           <div className="mt-2 flex items-center gap-2">
-            <Badge variant="outline" className="text-[10px] uppercase">
+            <Badge variant="outline" className="text-[11px] uppercase">
               {tally.outcome.replace(/_/g, " ")}
             </Badge>
             <span className="text-xs text-muted-foreground">
@@ -930,7 +944,7 @@ function CommitteeGovernance({
                 : "quorum not met"}
             </span>
           </div>
-          <p className="text-[10px] text-muted-foreground mt-2">
+          <p className="text-[11px] text-muted-foreground mt-2">
             Votes are governance over the deterministic engine verdict; they never change a computed
             number.
           </p>
@@ -966,7 +980,7 @@ function CommitteeGovernance({
                   >
                     {c.label}
                   </span>
-                  <Badge variant="outline" className="text-[9px] uppercase shrink-0">
+                  <Badge variant="outline" className="text-[11px] uppercase shrink-0">
                     {c.status}
                   </Badge>
                 </span>

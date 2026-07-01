@@ -113,7 +113,7 @@ function ExecutionPage() {
           <Stat icon={CheckCircle2} label="Completed" value={String(completed)} tone="success" />
           <Stat icon={ShieldAlert} label="Blocked" value={String(blocked.length)} tone="danger" />
           <Card className="p-4 elevated">
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
               Execution progress
             </div>
             <div className="num text-2xl mt-2">{completion}%</div>
@@ -230,7 +230,7 @@ function CriticalPathPanel({ projects, milestones }: { projects: any[]; mileston
               {result.blocking.slice(0, 8).map((b) => (
                 <span
                   key={b.id}
-                  className={`text-[10px] rounded px-1.5 py-0.5 border ${
+                  className={`text-[11px] rounded px-1.5 py-0.5 border ${
                     b.reasons.includes("overdue")
                       ? "border-destructive/40 text-destructive"
                       : b.reasons.includes("on_critical_path")
@@ -245,7 +245,7 @@ function CriticalPathPanel({ projects, milestones }: { projects: any[]; mileston
               ))}
             </div>
             {result.criticalPath.length > 0 && (
-              <div className="mt-1.5 text-[10px] text-muted-foreground">
+              <div className="mt-1.5 text-[11px] text-muted-foreground">
                 Critical path: {result.criticalPath.map((id) => titleOf(id)).join(" -> ")}
               </div>
             )}
@@ -692,7 +692,7 @@ function Stat({
   return (
     <Card className="p-4 elevated">
       <div className="flex justify-between">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+        <div className="text-[11px] uppercase tracking-widest text-muted-foreground">{label}</div>
         <Icon
           className={`size-4 ${tone === "success" ? "text-success" : tone === "danger" ? "text-destructive" : "text-primary"}`}
         />

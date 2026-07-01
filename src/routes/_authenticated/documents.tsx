@@ -212,7 +212,7 @@ function DocumentsPage() {
                       {contributions.has(d.id) ? (
                         <Badge
                           variant="outline"
-                          className="mt-1.5 text-[10px] bg-success/10 text-success border-success/30"
+                          className="mt-1.5 text-[11px] bg-success/10 text-success border-success/30"
                         >
                           <Link2 className="size-3 mr-1" />
                           {contributions.get(d.id)!.length} assumptions
@@ -220,7 +220,7 @@ function DocumentsPage() {
                       ) : (
                         <Badge
                           variant="outline"
-                          className="mt-1.5 text-[10px] text-muted-foreground"
+                          className="mt-1.5 text-[11px] text-muted-foreground"
                         >
                           No data extracted
                         </Badge>
@@ -269,14 +269,14 @@ function DocumentsPage() {
                 {d.ai_summary ? (
                   <div className="mt-3 space-y-2 text-xs">
                     <div>
-                      <span className="text-primary font-semibold uppercase tracking-widest text-[10px]">
+                      <span className="text-primary font-semibold uppercase tracking-widest text-[11px]">
                         Summary
                       </span>
                       <p className="mt-1 text-muted-foreground">{d.ai_summary}</p>
                     </div>
                     {d.ai_risks && (
                       <div>
-                        <span className="text-destructive font-semibold uppercase tracking-widest text-[10px]">
+                        <span className="text-destructive font-semibold uppercase tracking-widest text-[11px]">
                           Risks
                         </span>
                         <p className="mt-1 text-muted-foreground">{d.ai_risks}</p>
@@ -285,7 +285,7 @@ function DocumentsPage() {
                   </div>
                 ) : d.status === "extraction_failed" && d.extraction_error ? (
                   <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 p-2.5">
-                    <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-destructive font-semibold">
+                    <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-destructive font-semibold">
                       <AlertTriangle className="size-3" /> Extraction failed
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">{d.extraction_error}</p>
@@ -363,7 +363,7 @@ function DocQuality({ d }: { d: DocumentRow }) {
   return (
     <div className="mt-1.5 flex flex-wrap gap-1">
       {chips.map((c) => (
-        <Badge key={c.label} variant="outline" className={`text-[10px] ${c.cls}`}>
+        <Badge key={c.label} variant="outline" className={`text-[11px] ${c.cls}`}>
           {c.label}
         </Badge>
       ))}
@@ -374,7 +374,7 @@ function DocQuality({ d }: { d: DocumentRow }) {
 function Cov({ label, value }: { label: string; value: string }) {
   return (
     <Card className="p-4">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="text-[11px] uppercase tracking-widest text-muted-foreground">{label}</div>
       <div className="num text-2xl mt-1.5">{value}</div>
     </Card>
   );

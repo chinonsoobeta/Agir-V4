@@ -235,7 +235,7 @@ function AuthPage() {
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-[#183046]/10" />
               </div>
-              <div className="relative flex justify-center text-[10px] uppercase tracking-widest">
+              <div className="relative flex justify-center text-[11px] uppercase tracking-widest">
                 <span className="bg-white px-2 text-[#7f8b97]">or</span>
               </div>
             </div>

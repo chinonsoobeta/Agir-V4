@@ -221,7 +221,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
       <Card className="p-5">
         <div className="grid md:grid-cols-5 gap-4 items-center">
           <div className="col-span-2">
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
               Deal Readiness Score
             </div>
             <div className="flex items-baseline gap-3 mt-1">
@@ -233,7 +233,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
             </div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
               Approved
             </div>
             <div className="num text-lg mt-1">
@@ -241,7 +241,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
             </div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
               Avg Confidence
             </div>
             <div className="num text-lg mt-1">{readiness.avg_confidence}%</div>
@@ -317,7 +317,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
         <Card className="p-5 border-destructive/40 bg-destructive/5">
           <div className="flex items-center gap-2 text-destructive">
             <AlertCircle className="size-4" />
-            <span className="text-[10px] uppercase tracking-widest font-semibold">
+            <span className="text-[11px] uppercase tracking-widest font-semibold">
               Conflict Resolution Center · {conflicts.length}
             </span>
           </div>
@@ -367,12 +367,12 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
                         >
                           <span className="num">{Number(cv.value).toLocaleString()}</span>
                           {cv.source && (
-                            <span className="text-[10px] text-muted-foreground ml-1.5 max-w-[110px] truncate">
+                            <span className="text-[11px] text-muted-foreground ml-1.5 max-w-[110px] truncate">
                               {cv.source}
                             </span>
                           )}
                           {supersede && (
-                            <span className="text-[9px] text-warning ml-1 uppercase tracking-wider">
+                            <span className="text-[11px] text-warning ml-1 uppercase tracking-wider">
                               supersedes
                             </span>
                           )}
@@ -401,7 +401,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
                   </div>
                   {isInterestKey(a.field_key) &&
                     values.some((cv: any) => supersedingSource(cv.source)) && (
-                      <p className="text-[10px] text-warning mt-2">
+                      <p className="text-[11px] text-warning mt-2">
                         A rate lock / addendum value is present and likely supersedes the earlier
                         term sheet rate. Confirm before resolving: not auto-applied.
                       </p>
@@ -416,7 +416,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
       {/* Critical Assumptions: required fields driving the recommendation */}
       {critical.length > 0 && (
         <Card className="p-5 elevated">
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+          <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
             Critical Assumptions
           </div>
           <p className="text-xs text-muted-foreground mt-1">
@@ -429,7 +429,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
                   <span className="text-xs font-medium truncate">{a.field_label}</span>
                   <Badge
                     variant="outline"
-                    className={`${STATUS_STYLES[a.status]} text-[9px] capitalize shrink-0`}
+                    className={`${STATUS_STYLES[a.status]} text-[11px] capitalize shrink-0`}
                   >
                     {a.status.replace("_", " ")}
                   </Badge>
@@ -450,7 +450,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
         Object.entries(grouped).map(([cat, rows]) => (
           <div key={cat}>
             <div className="flex items-baseline justify-between mb-2 px-1">
-              <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+              <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
                 {cat}
               </span>
               <span className="num text-xs text-muted-foreground">{rows.length}</span>
@@ -649,7 +649,7 @@ function VersionsList({ assumptionId }: { assumptionId: string }) {
             <span className="font-mono text-primary">v{v.version_number}</span>
             <Badge
               variant="outline"
-              className={`${STATUS_STYLES[v.status]} text-[10px] capitalize`}
+              className={`${STATUS_STYLES[v.status]} text-[11px] capitalize`}
             >
               {v.status.replace("_", " ")}
             </Badge>
@@ -673,7 +673,7 @@ function ExtractionReportCard({ report, onClose }: { report: any; onClose: () =>
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
               Extraction Audit Report · 3-stage pipeline
             </div>
             <ModeBadge mode={report.analysis_mode} />
@@ -733,7 +733,7 @@ function ExtractionDebugCard({ debug }: { debug: any }) {
   const needsVerification = perDoc.filter((d) => d.needs_verification);
   return (
     <Card className="p-5 border-chart-2/40">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+      <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
         Extraction Debug Trace
       </div>
 
@@ -877,7 +877,7 @@ function AssumptionCard({
         </div>
       )}
       {!a.dual_control_pending && a.second_approval_by && (
-        <div className="text-[10px] text-success">
+        <div className="text-[11px] text-success">
           ✓ Dual-control satisfied{a.second_approver_name ? ` · ${a.second_approver_name}` : ""}
         </div>
       )}
@@ -888,7 +888,7 @@ function AssumptionCard({
         </div>
         <Badge
           variant="outline"
-          className={`${STATUS_STYLES[a.status]} text-[9px] capitalize shrink-0`}
+          className={`${STATUS_STYLES[a.status]} text-[11px] capitalize shrink-0`}
         >
           {a.status.replace("_", " ")}
         </Badge>
@@ -964,7 +964,7 @@ function AssumptionCard({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="text-[11px] uppercase tracking-widest text-muted-foreground">{label}</div>
       <div className="mt-1">{children}</div>
     </div>
   );
@@ -978,7 +978,7 @@ function ModeBadge({ mode }: { mode?: "ai" | "deterministic" }) {
   return (
     <Badge
       variant="outline"
-      className={`text-[9px] uppercase tracking-wider ${isAI ? "bg-primary/15 text-primary border-primary/30" : "bg-muted text-muted-foreground border-border"}`}
+      className={`text-[11px] uppercase tracking-wider ${isAI ? "bg-primary/15 text-primary border-primary/30" : "bg-muted text-muted-foreground border-border"}`}
     >
       {isAI ? <Sparkles className="size-2.5 mr-1" /> : <Calculator className="size-2.5 mr-1" />}
       {isAI ? "AI" : "Deterministic"}

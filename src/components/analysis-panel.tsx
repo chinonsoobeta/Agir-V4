@@ -99,7 +99,7 @@ export function AnalysisPanel({ projectId }: { projectId: string }) {
                 <tr key={g.key}>
                   <td className="font-medium">
                     {g.label}{" "}
-                    <span className="text-muted-foreground text-[10px]">≥ {g.fmt(g.min)}</span>
+                    <span className="text-muted-foreground text-[11px]">≥ {g.fmt(g.min)}</span>
                   </td>
                   {["base", ...presentStress].map((sk) => {
                     const v = scenarios[sk]?.[g.key];
@@ -245,7 +245,7 @@ function DriverBlock({
     <div>
       <div className="flex items-center gap-1.5">
         <Icon className={`size-3.5 ${TONE_TEXT[tone]}`} />
-        <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+        <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
           {title}
         </span>
       </div>

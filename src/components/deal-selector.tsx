@@ -19,7 +19,7 @@ export function DealSelector({
 }) {
   return (
     <Card className="p-3 flex flex-wrap items-center gap-3">
-      <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold pl-1">
+      <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold pl-1">
         Deal
       </span>
       <Select value={value ?? ""} onValueChange={onChange}>
