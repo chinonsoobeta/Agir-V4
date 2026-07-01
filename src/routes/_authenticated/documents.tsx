@@ -20,7 +20,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FileText, Trash2, Sparkles, Download, Link2, AlertTriangle } from "lucide-react";
+import { Field } from "@/components/ui/field";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { FileText, Trash2, Sparkles, Download, Link2, AlertTriangle, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { DocumentDropzone } from "@/components/document-dropzone";
@@ -102,6 +114,7 @@ function DocumentsPage() {
       qc.invalidateQueries({ queryKey: ["documents", "all"] });
       toast.success("Deleted");
     },
+    onError: (e: Error) => toast.error(e.message),
   });
   const analyze = useMutation({
     mutationFn: (d: DocumentRow) =>
@@ -133,41 +146,39 @@ function DocumentsPage() {
         </div>
         <Card className="p-5 space-y-4">
           <div className="grid sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                Assign to deal
-              </label>
-              <Select value={projectId} onValueChange={setProjectId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Unassigned" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={UNASSIGNED}>: Unassigned : </SelectItem>
-                  {validProjects.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                Category
-              </label>
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <Field label="Assign to deal">
+              {(f) => (
+                <Select value={projectId} onValueChange={setProjectId}>
+                  <SelectTrigger id={f.id} aria-describedby={f["aria-describedby"]}>
+                    <SelectValue placeholder="Unassigned" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+                    {validProjects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </Field>
+            <Field label="Category">
+              {(f) => (
+                <Select value={category} onValueChange={setCategory}>
+                  <SelectTrigger id={f.id} aria-describedby={f["aria-describedby"]}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </Field>
           </div>
           <DocumentDropzone
             projectId={projectId !== UNASSIGNED ? projectId : null}
@@ -222,18 +233,37 @@ function DocumentsPage() {
                       size="icon"
                       variant="ghost"
                       className="size-7"
+                      aria-label={`Download ${friendlyDocName(d.name)}`}
                       onClick={() => download(d.id)}
                     >
                       <Download className="size-3.5" />
                     </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="size-7"
-                      onClick={() => del.mutate(d.id)}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-7"
+                          aria-label={`Delete ${friendlyDocName(d.name)}`}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete {friendlyDocName(d.name)}?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This also removes its assumption provenance.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => del.mutate(d.id)}>
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </div>
                 {d.ai_summary ? (
@@ -264,9 +294,13 @@ function DocumentsPage() {
                       variant="outline"
                       className="w-full mt-2"
                       onClick={() => analyze.mutate(d)}
-                      disabled={analyze.isPending}
+                      disabled={analyze.isPending && analyze.variables?.id === d.id}
                     >
-                      <Sparkles className="size-3.5 mr-1" />
+                      {analyze.isPending && analyze.variables?.id === d.id ? (
+                        <Loader2 className="size-3.5 mr-1 animate-spin" />
+                      ) : (
+                        <Sparkles className="size-3.5 mr-1" />
+                      )}
                       Retry extraction
                     </Button>
                   </div>
@@ -276,9 +310,13 @@ function DocumentsPage() {
                     variant="outline"
                     className="w-full mt-3"
                     onClick={() => analyze.mutate(d)}
-                    disabled={analyze.isPending}
+                    disabled={analyze.isPending && analyze.variables?.id === d.id}
                   >
-                    <Sparkles className="size-3.5 mr-1" />
+                    {analyze.isPending && analyze.variables?.id === d.id ? (
+                      <Loader2 className="size-3.5 mr-1 animate-spin" />
+                    ) : (
+                      <Sparkles className="size-3.5 mr-1" />
+                    )}
                     Run AI analysis
                   </Button>
                 )}

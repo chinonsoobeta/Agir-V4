@@ -112,8 +112,20 @@ export function ScoreDial({
             : "var(--color-primary)";
   return (
     <div className="flex flex-col items-center">
-      <div className="relative" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="-rotate-90">
+      <div
+        className="relative"
+        style={{ width: size, height: size }}
+        {...(value == null
+          ? {}
+          : {
+              role: "meter",
+              "aria-valuenow": Math.round(pct),
+              "aria-valuemin": 0,
+              "aria-valuemax": 100,
+              "aria-label": label,
+            })}
+      >
+        <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
           <circle
             cx={size / 2}
             cy={size / 2}

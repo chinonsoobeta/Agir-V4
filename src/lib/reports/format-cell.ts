@@ -10,7 +10,9 @@ export function formatReportCell(
   type: ReportColumnType,
   fmt: Formatters,
 ): string {
-  if (value == null || value === "") return "Not available";
+  // En dash for absent values – matches the "–" convention used app-wide and
+  // keeps right-aligned numeric columns visually aligned.
+  if (value == null || value === "") return "–";
   if (typeof value !== "number") {
     if (type === "date") return fmt.date(value);
     return String(value);

@@ -6,7 +6,7 @@ import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field } from "@/components/ui/field";
 import {
   Select,
   SelectContent,
@@ -17,6 +17,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -74,7 +75,7 @@ function MarketsPage() {
             Live market watchlist
           </div>
           <Select value={market} onValueChange={setMarket}>
-            <SelectTrigger className="w-52">
+            <SelectTrigger className="w-52" aria-label="Filter by market">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -119,9 +120,10 @@ function SignalCard({ signal }: { signal: MarketSignal }) {
           </div>
           <div className="font-semibold mt-1">{signal.metric}</div>
         </div>
-        <Icon
-          className={`size-5 ${signal.trend === "up" ? "text-success" : signal.trend === "down" ? "text-destructive" : "text-muted-foreground"}`}
-        />
+        {/* Direction is shown by the arrow itself; colour is intentionally neutral –
+            for many CRE metrics (cap rate, vacancy, cost) "down" is favourable, so
+            asserting green=up / red=down would mislead. */}
+        <Icon className="size-5 text-muted-foreground" />
       </div>
       <div className="num text-3xl mt-5">
         {Number(signal.value_numeric).toLocaleString()}
@@ -162,76 +164,78 @@ function SignalDialog({ onClose }: { onClose: () => void }) {
     <DialogContent>
       <DialogHeader>
         <DialogTitle>Add market signal</DialogTitle>
+        <DialogDescription>
+          Record an external indicator (cap rate, rent, vacancy, cost or financing benchmark) that
+          can move valuation, financing or execution decisions.
+        </DialogDescription>
       </DialogHeader>
       <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Market</Label>
+        <Field label="Market">
           <Input
             value={form.market}
             onChange={(event) => setForm({ ...form, market: event.target.value })}
             placeholder="Vancouver Industrial"
           />
-        </div>
-        <div>
-          <Label>Metric</Label>
+        </Field>
+        <Field label="Metric">
           <Input
             value={form.metric}
             onChange={(event) => setForm({ ...form, metric: event.target.value })}
             placeholder="Market cap rate"
           />
-        </div>
-        <div>
-          <Label>Value</Label>
+        </Field>
+        <Field label="Value">
           <Input
             type="number"
             step="0.01"
-            value={form.value_numeric}
+            value={form.value_numeric === 0 ? "" : form.value_numeric}
+            placeholder="0.00"
             onChange={(event) => setForm({ ...form, value_numeric: Number(event.target.value) })}
           />
-        </div>
-        <div>
-          <Label>Unit</Label>
+        </Field>
+        <Field label="Unit">
           <Input
             value={form.unit}
             onChange={(event) => setForm({ ...form, unit: event.target.value })}
           />
-        </div>
-        <div>
-          <Label>Trend</Label>
-          <Select value={form.trend} onValueChange={(value) => setForm({ ...form, trend: value })}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="up">Up</SelectItem>
-              <SelectItem value="flat">Flat</SelectItem>
-              <SelectItem value="down">Down</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label>Observed</Label>
+        </Field>
+        <Field label="Trend">
+          {(f) => (
+            <Select
+              value={form.trend}
+              onValueChange={(value) => setForm({ ...form, trend: value })}
+            >
+              <SelectTrigger id={f.id} aria-describedby={f["aria-describedby"]}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="up">Up</SelectItem>
+                <SelectItem value="flat">Flat</SelectItem>
+                <SelectItem value="down">Down</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </Field>
+        <Field label="Observed">
           <Input
             type="date"
             value={form.observed_at}
             onChange={(event) => setForm({ ...form, observed_at: event.target.value })}
           />
-        </div>
-        <div>
-          <Label>Period</Label>
+        </Field>
+        <Field label="Period">
           <Input
             value={form.period}
             onChange={(event) => setForm({ ...form, period: event.target.value })}
             placeholder="Q2 2026"
           />
-        </div>
-        <div>
-          <Label>Source</Label>
+        </Field>
+        <Field label="Source">
           <Input
             value={form.source}
             onChange={(event) => setForm({ ...form, source: event.target.value })}
           />
-        </div>
+        </Field>
       </div>
       <DialogFooter>
         <Button variant="ghost" onClick={onClose}>

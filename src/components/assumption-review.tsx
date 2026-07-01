@@ -1,7 +1,7 @@
 // Assumption Review Center: project-scoped table with approve / modify /
 // reject / needs-review actions, source panel, and version history drawer.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSuspenseQuery, useMutation, useQueryClient, queryOptions } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -17,6 +17,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Field as FormField } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -533,6 +534,12 @@ function EditPanel({
 }) {
   const [val, setVal] = useState("");
   const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const isTextUnit = a?.unit === "text";
+  // Clear any stale validation error when a different assumption is opened.
+  useEffect(() => {
+    setError(null);
+  }, [a?.id]);
   return (
     <Dialog open={!!a} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
@@ -543,26 +550,52 @@ function EditPanel({
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              const num = Number(val);
+              const trimmed = val.trim();
+              if (isTextUnit) {
+                if (!trimmed) {
+                  setError("Enter a value.");
+                  return;
+                }
+                setError(null);
+                onSubmit({
+                  id: a.id,
+                  action: "modify",
+                  value_numeric: null,
+                  value_text: val,
+                  change_reason: reason || "Manual update",
+                });
+                return;
+              }
+              // Numeric field: Number("") === 0, so an empty/whitespace input
+              // must be rejected explicitly – only a real finite number writes.
+              const num = Number(trimmed);
+              if (trimmed === "" || !Number.isFinite(num)) {
+                setError("Enter a valid number.");
+                return;
+              }
+              setError(null);
               onSubmit({
                 id: a.id,
                 action: "modify",
-                value_numeric: isFinite(num) && a.unit !== "text" ? num : null,
-                value_text: a.unit === "text" ? val : null,
+                value_numeric: num,
+                value_text: null,
                 change_reason: reason || "Manual update",
               });
             }}
             className="space-y-3"
           >
-            <div>
-              <label className="text-xs text-muted-foreground">Current: {fmt(a)}</label>
+            <FormField label={`New value (${a.unit})`} error={error ?? undefined}>
               <Input
                 autoFocus
-                placeholder={`New value (${a.unit})`}
+                inputMode={isTextUnit ? undefined : "decimal"}
+                placeholder={`Current: ${fmt(a)}`}
                 value={val}
-                onChange={(e) => setVal(e.target.value)}
+                onChange={(e) => {
+                  setVal(e.target.value);
+                  if (error) setError(null);
+                }}
               />
-            </div>
+            </FormField>
             <div>
               <label className="text-xs text-muted-foreground">Change reason</label>
               <Textarea
@@ -874,11 +907,19 @@ function AssumptionCard({
           size="icon"
           className="size-7"
           title="View source"
+          aria-label={`View source for ${a.field_label}`}
           onClick={onSource}
         >
           <Eye className="size-3.5" />
         </Button>
-        <Button variant="ghost" size="icon" className="size-7" title="Modify" onClick={onEdit}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7"
+          title="Modify"
+          aria-label={`Modify ${a.field_label}`}
+          onClick={onEdit}
+        >
           <Edit3 className="size-3.5" />
         </Button>
         <Button
@@ -886,6 +927,7 @@ function AssumptionCard({
           size="icon"
           className="size-7"
           title="Version history"
+          aria-label={`Version history for ${a.field_label}`}
           onClick={onHistory}
         >
           <History className="size-3.5" />
@@ -896,6 +938,7 @@ function AssumptionCard({
             size="icon"
             className="size-7 text-success"
             title="Approve"
+            aria-label={`Approve ${a.field_label}`}
             disabled={a.status === "missing" || a.status === "conflicting" || pending}
             onClick={onApprove}
           >
@@ -906,6 +949,7 @@ function AssumptionCard({
             size="icon"
             className="size-7 text-destructive"
             title="Reject"
+            aria-label={`Reject ${a.field_label}`}
             disabled={pending}
             onClick={onReject}
           >

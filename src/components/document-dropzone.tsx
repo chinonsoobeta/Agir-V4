@@ -156,6 +156,7 @@ export function DocumentDropzone({
       <div
         role="button"
         tabIndex={0}
+        aria-label="Upload documents – drag files here or activate to browse"
         onClick={() => inputRef.current?.click()}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
@@ -190,6 +191,7 @@ export function DocumentDropzone({
           type="file"
           multiple
           accept={ACCEPT}
+          aria-label="Upload documents"
           className="hidden"
           onChange={(e) => {
             if (e.target.files) enqueue(e.target.files);
@@ -199,7 +201,7 @@ export function DocumentDropzone({
       </div>
 
       {queue.length > 0 && (
-        <ul className="mt-3 space-y-1.5">
+        <ul className="mt-3 space-y-1.5" aria-live="polite" aria-atomic="false">
           {queue.map((it) => {
             const meta = STATUS_META[it.status];
             const Icon = meta.icon;

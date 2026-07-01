@@ -13,7 +13,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field } from "@/components/ui/field";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +21,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { listIntegrations, setIntegration } from "@/lib/operations.functions";
 import {
   importDeals,
@@ -91,6 +101,16 @@ const CATALOG = [
   },
 ] as const;
 
+// Single source of connector truth: a catalog card may only reach a real
+// "connected" state when the registry marks the provider "live". Planned
+// providers can be flagged as setup-requested ("attention") but never render a
+// green Connected badge, a Last sync line, or a connectivity check. The webhooks
+// card is a developer utility (it opens the webhook dialog), not a synced
+// connector, so it is treated as non-live here.
+function isLiveProvider(provider: string): boolean {
+  return CONNECTOR_REGISTRY.some((c) => c.provider === provider && c.status === "live");
+}
+
 function setupRequirements(provider: string) {
   switch (provider) {
     case "salesforce":
@@ -140,6 +160,7 @@ function IntegrationsPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [webhookOpen, setWebhookOpen] = useState(false);
   const [setupApp, setSetupApp] = useState<(typeof CATALOG)[number] | null>(null);
+  const [disconnectApp, setDisconnectApp] = useState<(typeof CATALOG)[number] | null>(null);
   const [webhook, setWebhook] = useState({
     name: "",
     endpoint_url: "",
@@ -218,6 +239,14 @@ function IntegrationsPage() {
     connections.map((connection: any) => [connection.provider, connection]),
   );
 
+  // Client-side webhook URL validation: require an https:// endpoint before the
+  // submit button is enabled, surfaced inline via the Field error prop.
+  const webhookUrlError =
+    webhook.endpoint_url.trim().length > 0 && !/^https:\/\//i.test(webhook.endpoint_url.trim())
+      ? "Endpoint must start with https://"
+      : undefined;
+  const webhookUrlValid = /^https:\/\//i.test(webhook.endpoint_url.trim());
+
   return (
     <>
       <PageHeader
@@ -230,7 +259,7 @@ function IntegrationsPage() {
           <div className="flex items-start gap-3">
             <Plug className="size-5 text-primary mt-0.5" />
             <div>
-              <div className="font-semibold">Financial logic stays inside Agir</div>
+              <h2 className="font-semibold">Financial logic stays inside Agir</h2>
               <p className="text-sm text-muted-foreground mt-1">
                 Connected tools can supply records and documents. Agir still calculates every
                 financial result from approved assumptions.
@@ -244,9 +273,9 @@ function IntegrationsPage() {
         <Card className="p-5 elevated">
           <div className="flex items-center gap-2">
             <Plug className="size-4 text-muted-foreground" />
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+            <h2 className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
               Connector status
-            </div>
+            </h2>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             Only connectors marked Live perform a real import / export round-trip today. Planned
@@ -302,7 +331,10 @@ function IntegrationsPage() {
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
           {CATALOG.map((app) => {
             const connection: any = byProvider.get(app.provider);
-            const connected = connection?.status === "connected";
+            const live = isLiveProvider(app.provider);
+            // Planned providers can never be "connected", regardless of any
+            // stored status – they only ever surface as setup requested.
+            const connected = live && connection?.status === "connected";
             const pending = connection?.status === "attention";
             const Icon = app.icon;
             return (
@@ -322,15 +354,23 @@ function IntegrationsPage() {
                     }
                   >
                     {connected ? <Check className="size-3 mr-1" /> : null}
-                    {connected ? "Connected" : pending ? "Setup pending" : "Not connected"}
+                    {connected
+                      ? "Connected"
+                      : pending
+                        ? live
+                          ? "Setup pending"
+                          : "Setup requested"
+                        : live
+                          ? "Not connected"
+                          : "Planned"}
                   </Badge>
                 </div>
-                <div className="font-semibold mt-4">{app.name}</div>
+                <h2 className="font-semibold mt-4">{app.name}</h2>
                 <div className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
                   {app.category}
                 </div>
                 <p className="text-sm text-muted-foreground mt-3 flex-1">{app.description}</p>
-                {connection?.last_synced_at && (
+                {connected && connection?.last_synced_at && (
                   <div className="text-[10px] text-muted-foreground mt-4">
                     Last sync {new Date(connection.last_synced_at).toLocaleString()}
                   </div>
@@ -339,7 +379,7 @@ function IntegrationsPage() {
                   <Button
                     className="flex-1"
                     size="sm"
-                    variant={connected ? "outline" : "default"}
+                    variant={connected || pending ? "outline" : "default"}
                     disabled={mutation.isPending}
                     onClick={() => {
                       if (app.provider === "webhooks") {
@@ -347,12 +387,7 @@ function IntegrationsPage() {
                         return;
                       }
                       if (connected || pending) {
-                        mutation.mutate({
-                          provider: app.provider,
-                          category: app.category,
-                          display_name: app.name,
-                          status: "disconnected",
-                        });
+                        setDisconnectApp(app);
                         return;
                       }
                       setSetupApp(app);
@@ -370,6 +405,7 @@ function IntegrationsPage() {
                       size="icon"
                       variant="outline"
                       disabled={sync.isPending || !connection?.id?.match(/^[0-9a-f-]{36}$/i)}
+                      aria-label={`Run connectivity check for ${app.name}`}
                       title="Run connectivity check"
                       onClick={() => sync.mutate(connection.id)}
                     >
@@ -385,7 +421,7 @@ function IntegrationsPage() {
           <Card className="p-5 elevated">
             <div className="flex items-center gap-2">
               <History className="size-4 text-primary" />
-              <div className="font-semibold">Sync history</div>
+              <h2 className="font-semibold">Sync history</h2>
             </div>
             <div className="mt-4 space-y-2">
               {(runsQ.data ?? []).length ? (
@@ -418,14 +454,14 @@ function IntegrationsPage() {
           <Card className="p-5 elevated">
             <div className="flex items-center gap-2">
               <Webhook className="size-4 text-primary" />
-              <div className="font-semibold">Outbound webhooks</div>
+              <h2 className="font-semibold">Outbound webhooks</h2>
             </div>
             <div className="mt-4 space-y-2">
               {(webhooksQ.data ?? []).length ? (
                 (webhooksQ.data ?? []).map((endpoint: any) => (
                   <div key={endpoint.id} className="rounded-md border p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-medium">{endpoint.name}</div>
+                      <h3 className="text-sm font-medium">{endpoint.name}</h3>
                       <Badge variant="outline">{endpoint.active ? "Active" : "Paused"}</Badge>
                     </div>
                     <div className="text-xs text-muted-foreground truncate mt-1">
@@ -451,30 +487,31 @@ function IntegrationsPage() {
             <DialogTitle>Add webhook endpoint</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div>
-              <Label>Name</Label>
+            <Field label="Name">
               <Input
                 value={webhook.name}
                 onChange={(event) => setWebhook({ ...webhook, name: event.target.value })}
                 placeholder="Data warehouse updates"
               />
-            </div>
-            <div>
-              <Label>HTTPS endpoint</Label>
+            </Field>
+            <Field
+              label="HTTPS endpoint"
+              error={webhookUrlError}
+              description="Must be a secure https:// URL."
+            >
               <Input
                 value={webhook.endpoint_url}
                 onChange={(event) => setWebhook({ ...webhook, endpoint_url: event.target.value })}
                 placeholder="https://example.com/hooks/agir"
               />
-            </div>
-            <div>
-              <Label>Events, comma separated</Label>
+            </Field>
+            <Field label="Events, comma separated">
               <Input
                 value={webhook.event_types}
                 onChange={(event) => setWebhook({ ...webhook, event_types: event.target.value })}
                 placeholder="deal.updated, decision.recorded"
               />
-            </div>
+            </Field>
             <div className="flex gap-2 rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
               <AlertCircle className="size-4 shrink-0" />
               Delivery secrets are never displayed after creation. Rotate endpoints if a secret is
@@ -486,7 +523,7 @@ function IntegrationsPage() {
               Cancel
             </Button>
             <Button
-              disabled={!webhook.name || !webhook.endpoint_url || createWebhook.isPending}
+              disabled={!webhook.name || !webhookUrlValid || createWebhook.isPending}
               onClick={() => createWebhook.mutate()}
             >
               Create endpoint
@@ -526,6 +563,37 @@ function IntegrationsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AlertDialog
+        open={Boolean(disconnectApp)}
+        onOpenChange={(open) => !open && setDisconnectApp(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disconnect {disconnectApp?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Synced mappings will stop. You can set it up again at any time.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={mutation.isPending}
+              onClick={() => {
+                if (!disconnectApp) return;
+                mutation.mutate({
+                  provider: disconnectApp.provider,
+                  category: disconnectApp.category,
+                  display_name: disconnectApp.name,
+                  status: "disconnected",
+                });
+                setDisconnectApp(null);
+              }}
+            >
+              Disconnect
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
@@ -650,9 +718,9 @@ function CsvConnectorPanel({
     <Card className="p-5 elevated">
       <div className="flex items-center gap-2">
         <FileSpreadsheet className="size-4 text-primary" />
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+        <h2 className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
           CSV deal sync (live connector)
-        </div>
+        </h2>
       </div>
       <p className="text-xs text-muted-foreground mt-1">
         Explicit field mapping:{" "}
@@ -682,14 +750,20 @@ function CsvConnectorPanel({
             <RefreshCw className="size-4 mr-1.5" />
             Export deals to CSV
           </Button>
-          <textarea
-            className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs font-mono h-28"
-            placeholder={
-              "Paste CSV with a header row, e.g.\nDeal ID,Name,Market,Source,Win %,Target Close\nCRM-1,Harbour Centre,Vancouver,broker,60,2026-09-01"
-            }
-            value={csvText}
-            onChange={(e) => setCsvText(e.target.value)}
-          />
+          <Field label="Paste CSV to import">
+            {(f) => (
+              <textarea
+                id={f.id}
+                aria-describedby={f["aria-describedby"]}
+                className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs font-mono h-28"
+                placeholder={
+                  "Paste CSV with a header row, e.g.\nDeal ID,Name,Market,Source,Win %,Target Close\nCRM-1,Harbour Centre,Vancouver,broker,60,2026-09-01"
+                }
+                value={csvText}
+                onChange={(e) => setCsvText(e.target.value)}
+              />
+            )}
+          </Field>
           <Button
             size="sm"
             disabled={!csvText.trim() || doImport.isPending}

@@ -82,9 +82,9 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_STYLE: Record<string, string> = {
   ready: "bg-success/15 text-success border-success/30",
   has_unresolved_errors: "bg-warning/15 text-warning border-warning/30",
-  needs_underwriting: "bg-destructive/15 text-destructive border-destructive/30",
+  needs_underwriting: "bg-warning/15 text-warning border-warning/30",
   needs_memo: "bg-warning/15 text-warning border-warning/30",
-  missing_required_data: "bg-destructive/15 text-destructive border-destructive/30",
+  missing_required_data: "bg-warning/15 text-warning border-warning/30",
   missing_project: "bg-muted text-muted-foreground border-border",
 };
 

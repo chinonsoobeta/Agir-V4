@@ -2,13 +2,23 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
-  ({ className, ...props }, ref) => (
-    <div className="relative w-full overflow-auto">
-      <table ref={ref} className={cn("w-full caption-bottom text-sm", className)} {...props} />
-    </div>
-  ),
-);
+const Table = React.forwardRef<
+  HTMLTableElement,
+  React.HTMLAttributes<HTMLTableElement> & {
+    /** Accessible name for the scrollable region (announced to screen readers). */
+    scrollLabel?: string;
+  }
+>(({ className, scrollLabel, ...props }, ref) => (
+  // `tabIndex={0}` makes a wide/overflowing table keyboard-scrollable (WCAG 2.1.1).
+  <div
+    className="relative w-full overflow-auto"
+    tabIndex={0}
+    role={scrollLabel ? "region" : undefined}
+    aria-label={scrollLabel}
+  >
+    <table ref={ref} className={cn("w-full caption-bottom text-sm", className)} {...props} />
+  </div>
+));
 Table.displayName = "Table";
 
 const TableHeader = React.forwardRef<
@@ -56,9 +66,12 @@ TableRow.displayName = "TableRow";
 const TableHead = React.forwardRef<
   HTMLTableCellElement,
   React.ThHTMLAttributes<HTMLTableCellElement>
->(({ className, ...props }, ref) => (
+>(({ className, scope, ...props }, ref) => (
+  // Default to `scope="col"` so screen readers associate data cells with their
+  // column header; callers can pass `scope="row"` for a leading row header.
   <th
     ref={ref}
+    scope={scope ?? "col"}
     className={cn(
       "h-10 px-2 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className,

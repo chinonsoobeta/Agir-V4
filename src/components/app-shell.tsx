@@ -35,7 +35,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { usePreferences, type TranslationKey } from "@/lib/preferences";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -169,6 +169,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { t, theme, setTheme } = usePreferences();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   async function signOut() {
     await qc.cancelQueries();
@@ -182,9 +183,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return pathname.startsWith(to);
   };
 
-  const navigation = (
+  const navigation = (onNavigate?: () => void) => (
     <>
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
+      <nav aria-label="Primary" className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
         {nav.map((item) => {
           const active = isActive(item.to);
           const Icon = item.icon;
@@ -192,14 +193,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               key={item.to}
               to={item.to}
+              onClick={onNavigate}
+              aria-current={active ? "page" : undefined}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors",
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
                 active
                   ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                   : "text-sidebar-foreground/65 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
               )}
             >
-              <Icon className={cn("size-4 shrink-0", active ? "text-primary" : "")} />
+              <Icon className={cn("size-4 shrink-0", active ? "text-sidebar-primary" : "")} />
               {t(item.label as TranslationKey)}
             </Link>
           );
@@ -211,6 +214,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             variant="ghost"
             size="sm"
             className="w-full justify-start px-3 text-sidebar-foreground/65"
+            aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
           >
             {theme === "dark" ? <Sun className="size-4 mr-2" /> : <Moon className="size-4 mr-2" />}
@@ -220,15 +224,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Link
           to="/settings"
           search={{ section: undefined }}
+          onClick={onNavigate}
+          aria-current={pathname.startsWith("/settings") ? "page" : undefined}
           className={cn(
-            "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors",
+            "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
             pathname.startsWith("/settings")
               ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
               : "text-sidebar-foreground/65 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
           )}
         >
           <Settings
-            className={cn("size-4", pathname.startsWith("/settings") ? "text-primary" : "")}
+            className={cn("size-4", pathname.startsWith("/settings") ? "text-sidebar-primary" : "")}
           />{" "}
           {t("nav.settings")}
         </Link>
@@ -246,6 +252,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex bg-background text-foreground">
+      <a href="#main-content" className="skip-link">
+        {t("shell.skipToContent")}
+      </a>
       <aside className="sticky top-0 h-screen w-64 shrink-0 border-r border-sidebar-border bg-sidebar hidden lg:flex flex-col">
         <div className="px-6 py-6 border-b border-sidebar-border">
           <div className="flex items-center gap-2.5">
@@ -270,9 +279,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <WorkspaceSwitcher />
         </div>
-        {navigation}
+        {navigation()}
       </aside>
-      <main className="flex-1 min-w-0 overflow-x-hidden">
+      <main id="main-content" className="flex-1 min-w-0 overflow-x-hidden">
         <div className="lg:hidden sticky top-0 z-50 h-14 border-b border-border bg-background/95 backdrop-blur flex items-center justify-between px-4">
           <div className="flex items-center gap-2.5">
             <div className="size-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center">
@@ -283,13 +292,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="ml-auto mr-2">
             <NotificationCenter />
           </div>
-          <Sheet>
+          <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
             <SheetTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" aria-label="Open navigation menu">
                 <Menu className="size-4" />
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-72 p-0 bg-sidebar flex flex-col">
+              <SheetTitle className="sr-only">Navigation</SheetTitle>
               <div className="px-5 py-5 border-b border-sidebar-border">
                 <div className="flex items-center gap-2.5">
                   <div className="size-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center">
@@ -306,7 +316,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
                 <WorkspaceSwitcher />
               </div>
-              {navigation}
+              {navigation(() => setMobileNavOpen(false))}
             </SheetContent>
           </Sheet>
         </div>

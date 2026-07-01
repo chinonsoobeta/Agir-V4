@@ -174,10 +174,13 @@ function ComparisonGrid({ deals }: { deals: ComparisonDeal[] }) {
                         className={cn(
                           "px-4 py-2.5 text-right",
                           metric.type !== "text" && "num",
-                          isWinner && "bg-success/10 font-semibold",
+                          // Neutral emphasis for the strongest value in the row –
+                          // green stays reserved for the recommendation itself.
+                          isWinner && "bg-accent font-semibold",
                         )}
                       >
                         {display}
+                        {isWinner && <span className="sr-only"> (best in row)</span>}
                       </td>
                     );
                   })}

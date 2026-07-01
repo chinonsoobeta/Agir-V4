@@ -4,7 +4,7 @@
 // user formulas. The grid renders the in-memory schedule from a client-side engine
 // re-run; it computes nothing itself.
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   runUnderwriting,
   buildScheduleGrid,
@@ -32,6 +32,18 @@ export function ScheduleGrid({ input }: { input: UnderwritingInput }) {
   const out = useMemo(() => runUnderwriting({ ...input, monthlyModel: true }), [input]);
   const grid = useMemo(() => (out.schedule ? buildScheduleGrid(out.schedule) : null), [out]);
   const [selected, setSelected] = useState<Selected | null>(null);
+  // Roving tabindex: only one cell is tab-focusable; arrows move between cells so
+  // the grid is a single tab stop rather than hundreds of buttons.
+  const cellRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const firstKey = useMemo(() => {
+    if (!grid) return null;
+    for (let r = 0; r < grid.rows.length; r++) {
+      const c = grid.rows[r].cells.findIndex((x) => x);
+      if (c >= 0) return `${r}-${c}`;
+    }
+    return null;
+  }, [grid]);
 
   if (!grid) {
     return (
@@ -40,6 +52,39 @@ export function ScheduleGrid({ input }: { input: UnderwritingInput }) {
       </Card>
     );
   }
+
+  const rows = grid.rows;
+  const effectiveActive = activeKey ?? firstKey;
+  const focusCell = (r: number, c: number) => {
+    const el = cellRefs.current.get(`${r}-${c}`);
+    if (el) {
+      setActiveKey(`${r}-${c}`);
+      el.focus();
+      return true;
+    }
+    return false;
+  };
+  const onGridKey = (e: React.KeyboardEvent, r: number, c: number) => {
+    const go = (rr: number, cc: number) => {
+      e.preventDefault();
+      focusCell(rr, cc);
+    };
+    if (e.key === "ArrowRight") {
+      for (let cc = c + 1; cc < rows[r].cells.length; cc++) if (rows[r].cells[cc]) return go(r, cc);
+    } else if (e.key === "ArrowLeft") {
+      for (let cc = c - 1; cc >= 0; cc--) if (rows[r].cells[cc]) return go(r, cc);
+    } else if (e.key === "ArrowDown") {
+      for (let rr = r + 1; rr < rows.length; rr++) if (rows[rr].cells[c]) return go(rr, c);
+    } else if (e.key === "ArrowUp") {
+      for (let rr = r - 1; rr >= 0; rr--) if (rows[rr].cells[c]) return go(rr, c);
+    } else if (e.key === "Home") {
+      const cc = rows[r].cells.findIndex((x) => x);
+      if (cc >= 0) return go(r, cc);
+    } else if (e.key === "End") {
+      for (let cc = rows[r].cells.length - 1; cc >= 0; cc--)
+        if (rows[r].cells[cc]) return go(r, cc);
+    }
+  };
 
   const phaseOf = (period: number): string =>
     grid.phases.find((p) => period >= p.startMonth && period < p.endMonth)?.label ?? "";
@@ -52,26 +97,39 @@ export function ScheduleGrid({ input }: { input: UnderwritingInput }) {
       </div>
       <Card className="overflow-x-auto elevated">
         <table className="data-grid w-full text-xs">
+          <caption className="sr-only">
+            Monthly schedule of engine-computed line items across {grid.months} periods. Select any
+            cell to see the formula behind its value.
+          </caption>
           <thead>
             <tr className="bg-muted/30">
-              <th className="text-left sticky left-0 bg-muted/30 z-10">Phase</th>
+              <th className="text-left sticky left-0 bg-muted/30 z-10" scope="col">
+                Phase
+              </th>
               {grid.phases.map((p) => (
-                <th key={p.key} className="text-center" colSpan={p.endMonth - p.startMonth}>
+                <th
+                  key={p.key}
+                  className="text-center"
+                  scope="colgroup"
+                  colSpan={p.endMonth - p.startMonth}
+                >
                   {p.label}
                 </th>
               ))}
             </tr>
             <tr className="bg-muted/20">
-              <th className="text-left sticky left-0 bg-muted/20 z-10">Line item \ month</th>
+              <th className="text-left sticky left-0 bg-muted/20 z-10" scope="col">
+                Line item · month
+              </th>
               {Array.from({ length: grid.months }, (_, m) => (
-                <th key={m} className="text-right num text-muted-foreground">
+                <th key={m} className="text-right num text-muted-foreground" scope="col">
                   {m + 1}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {grid.rows.map((row) => (
+            {grid.rows.map((row, ri) => (
               <tr key={row.key}>
                 <td className="font-medium whitespace-nowrap sticky left-0 bg-background z-10">
                   {row.label}
@@ -81,7 +139,16 @@ export function ScheduleGrid({ input }: { input: UnderwritingInput }) {
                     {cell ? (
                       <button
                         type="button"
+                        ref={(el) => {
+                          const k = `${ri}-${period}`;
+                          if (el) cellRefs.current.set(k, el);
+                          else cellRefs.current.delete(k);
+                        }}
+                        tabIndex={`${ri}-${period}` === effectiveActive ? 0 : -1}
+                        onFocus={() => setActiveKey(`${ri}-${period}`)}
+                        onKeyDown={(e) => onGridKey(e, ri, period)}
                         title={cell.formula_text}
+                        aria-label={`${row.label}, month ${period + 1}${phaseOf(period) ? `, ${phaseOf(period)}` : ""}: ${money(cell.amount)}. Select for formula.`}
                         onClick={() =>
                           setSelected({ rowLabel: row.label, period, phase: phaseOf(period), cell })
                         }

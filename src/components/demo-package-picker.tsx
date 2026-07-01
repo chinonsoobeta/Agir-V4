@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -18,6 +19,13 @@ import { PILOT_DEAL_PACKAGES, type PilotDealPackage } from "@/lib/pilot-demo-pac
 
 type DemoPackagePickerProps = {
   trigger: ReactNode;
+};
+
+// Each seedable package must be wired to its own seeder here. A "seedable"
+// package with no entry cannot be seeded – this prevents the whole picker from
+// silently seeding the wrong deal (previously every button seeded Harbour Centre).
+const SEEDERS: Record<string, true> = {
+  "harbour-centre": true,
 };
 
 const AVAILABILITY_LABEL: Record<PilotDealPackage["availability"], string> = {
@@ -31,12 +39,16 @@ export function DemoPackagePicker({ trigger }: DemoPackagePickerProps) {
   const qc = useQueryClient();
   const seedFn = useServerFn(seedHarbourCentre);
   const seed = useMutation({
-    mutationFn: () => seedFn(),
-    onSuccess: ({ project_id }: { project_id?: string }) => {
+    mutationFn: (pkg: PilotDealPackage) => {
+      if (pkg.id === "harbour-centre") return seedFn();
+      // Guard: never fall back to seeding a different deal than the one clicked.
+      throw new Error(`No seeder is configured for "${pkg.name}" yet.`);
+    },
+    onSuccess: ({ project_id }: { project_id?: string }, pkg) => {
       qc.invalidateQueries({ queryKey: ["portfolio"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       qc.invalidateQueries({ queryKey: ["onboarding"] });
-      toast.success("Harbour Centre seeded", {
+      toast.success(`${pkg.name} seeded`, {
         action: project_id
           ? {
               label: "Open demo",
@@ -54,6 +66,10 @@ export function DemoPackagePicker({ trigger }: DemoPackagePickerProps) {
       <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle className="display text-xl">Demo packages</DialogTitle>
+          <DialogDescription>
+            Load a fully-underwritten sample deal into your workspace, or review a fixture package
+            to see the intended workflow and watchpoints.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-3">
@@ -62,7 +78,7 @@ export function DemoPackagePicker({ trigger }: DemoPackagePickerProps) {
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="font-semibold">{pkg.name}</div>
+                    <h3 className="font-semibold">{pkg.name}</h3>
                     <Badge variant={pkg.availability === "seedable" ? "default" : "outline"}>
                       {AVAILABILITY_LABEL[pkg.availability]}
                     </Badge>
@@ -72,15 +88,15 @@ export function DemoPackagePicker({ trigger }: DemoPackagePickerProps) {
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground">{pkg.intendedOutcome}</p>
                 </div>
-                {pkg.availability === "seedable" ? (
+                {pkg.availability === "seedable" && SEEDERS[pkg.id] ? (
                   <Button
                     size="sm"
                     className="shrink-0"
-                    onClick={() => seed.mutate()}
-                    disabled={seed.isPending}
+                    onClick={() => seed.mutate(pkg)}
+                    disabled={seed.isPending && seed.variables?.id === pkg.id}
                   >
                     <Rocket className="mr-1.5 size-4" />
-                    {seed.isPending ? "Seeding..." : "Seed package"}
+                    {seed.isPending && seed.variables?.id === pkg.id ? "Seeding…" : "Seed package"}
                   </Button>
                 ) : (
                   <Button size="sm" variant="outline" className="shrink-0" disabled>

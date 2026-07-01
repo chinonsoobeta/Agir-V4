@@ -75,11 +75,28 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
+      // BC Sans (body/UI) is self-hosted from /public/fonts; preload the two
+      // most-used weights so first paint doesn't fall back to Noto/system.
+      {
+        rel: "preload",
+        href: "/fonts/bc-sans/BCSans-Regular.woff2",
+        as: "font",
+        type: "font/woff2",
+        crossOrigin: "anonymous",
+      },
+      {
+        rel: "preload",
+        href: "/fonts/bc-sans/BCSans-Bold.woff2",
+        as: "font",
+        type: "font/woff2",
+        crossOrigin: "anonymous",
+      },
+      // JetBrains Mono (tabular numerics) stays on Google Fonts.
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap",
       },
     ],
   }),

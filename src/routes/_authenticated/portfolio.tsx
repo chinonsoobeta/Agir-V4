@@ -182,7 +182,7 @@ function PortfolioPage() {
                     className="flex items-center gap-4 px-5 py-4 hover:bg-accent/30 transition-colors group"
                   >
                     <div
-                      className={`w-1 self-stretch rounded-full ${tone === "approve" ? "bg-success" : tone === "condition" ? "bg-warning" : tone === "reject" ? "bg-destructive" : "bg-chart-2"}`}
+                      className={`w-1 self-stretch rounded-full ${tone === "approve" ? "bg-success" : tone === "condition" ? "bg-warning" : tone === "reject" ? "bg-destructive" : tone === "return" ? "bg-chart-2" : "bg-muted-foreground/40"}`}
                     />
                     <Link to="/projects/$id" params={{ id: d.id }} className="min-w-0 flex-1">
                       <div className="font-medium truncate hover:text-primary">{d.name}</div>
@@ -254,7 +254,7 @@ function PortfolioPage() {
                           : r.rating === "Moderate"
                             ? "bg-warning"
                             : r.rating === "High"
-                              ? "bg-chart-2"
+                              ? "bg-destructive/60"
                               : "bg-destructive"
                       }
                       style={{ width: `${(r.count / ratedTotal) * 100}%` }}
@@ -267,7 +267,7 @@ function PortfolioPage() {
               {riskCounts.map((r) => (
                 <div key={r.rating} className="flex items-center gap-2.5">
                   <span
-                    className={`size-2.5 rounded-sm ${r.rating === "Low" ? "bg-success" : r.rating === "Moderate" ? "bg-warning" : r.rating === "High" ? "bg-chart-2" : "bg-destructive"}`}
+                    className={`size-2.5 rounded-sm ${r.rating === "Low" ? "bg-success" : r.rating === "Moderate" ? "bg-warning" : r.rating === "High" ? "bg-destructive/60" : "bg-destructive"}`}
                   />
                   <div>
                     <div className="num text-lg leading-none">{r.count}</div>

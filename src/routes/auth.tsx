@@ -3,11 +3,21 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field } from "@/components/ui/field";
+import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeft, Building2, Check, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Building2, Check, Eye, EyeOff, ShieldCheck } from "lucide-react";
+
+const TAB_COPY: Record<"signin" | "signup" | "reset", { heading: string; subcopy: string }> = {
+  signin: { heading: "Welcome back", subcopy: "Sign in to open your investment workspace." },
+  signup: {
+    heading: "Create your account",
+    subcopy: "Get started with your investment workspace.",
+  },
+  reset: { heading: "Reset password", subcopy: "We'll email you a link to set a new password." },
+};
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Sign in | Agir" }] }),
@@ -17,6 +27,31 @@ export const Route = createFileRoute("/auth")({
 const authInputClass =
   "bg-white text-black caret-black placeholder:text-[#6b7785] selection:bg-[#00628e]/20";
 
+type PasswordInputProps = Omit<React.ComponentProps<typeof Input>, "type"> & {
+  show: boolean;
+  onToggle: () => void;
+};
+
+function PasswordInput({ show, onToggle, className, ...props }: PasswordInputProps) {
+  return (
+    <div className="relative">
+      <Input
+        type={show ? "text" : "password"}
+        className={cn(authInputClass, "pr-10", className)}
+        {...props}
+      />
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={show ? "Hide password" : "Show password"}
+        className="absolute inset-y-0 right-0 flex items-center px-3 text-[#6b7785] hover:text-[#00628e]"
+      >
+        {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+      </button>
+    </div>
+  );
+}
+
 function AuthPage() {
   const navigate = useNavigate();
   const router = useRouter();
@@ -25,6 +60,8 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,12 +73,22 @@ function AuthPage() {
     };
   }, [navigate]);
 
+  function switchTab(next: typeof tab) {
+    setTab(next);
+    setError(null);
+  }
+
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (error) return toast.error(error.message);
+    if (error) {
+      setError(error.message);
+      toast.error(error.message);
+      return;
+    }
     await router.invalidate();
     navigate({ to: "/dashboard" });
   }
@@ -49,16 +96,21 @@ function AuthPage() {
   async function handleSignUp(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { emailRedirectTo: window.location.origin, data: { full_name: fullName } },
     });
     setLoading(false);
-    if (error) return toast.error(error.message);
+    if (error) {
+      setError(error.message);
+      toast.error(error.message);
+      return;
+    }
     if (!data.session) {
       toast.success("Account created. Check your email to confirm, then sign in.");
-      setTab("signin");
+      switchTab("signin");
       return;
     }
     await router.invalidate();
@@ -68,11 +120,16 @@ function AuthPage() {
   async function handleReset(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     setLoading(false);
-    if (error) return toast.error(error.message);
+    if (error) {
+      setError(error.message);
+      toast.error(error.message);
+      return;
+    }
     toast.success("Password reset email sent.");
   }
 
@@ -142,10 +199,8 @@ function AuthPage() {
                 </div>
                 <div className="text-lg font-semibold">Agir</div>
               </div>
-              <h1 className="text-2xl font-semibold tracking-[-0.03em]">Welcome back</h1>
-              <p className="text-sm text-[#6b7785] mt-2">
-                Sign in to open your investment workspace.
-              </p>
+              <h1 className="text-2xl font-semibold tracking-[-0.03em]">{TAB_COPY[tab].heading}</h1>
+              <p className="text-sm text-[#6b7785] mt-2">{TAB_COPY[tab].subcopy}</p>
             </div>
 
             <Button
@@ -185,7 +240,7 @@ function AuthPage() {
               </div>
             </div>
 
-            <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
+            <Tabs value={tab} onValueChange={(v) => switchTab(v as typeof tab)}>
               <TabsList className="grid grid-cols-3 w-full">
                 <TabsTrigger value="signin">Sign In</TabsTrigger>
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
@@ -194,26 +249,27 @@ function AuthPage() {
 
               <TabsContent value="signin">
                 <form onSubmit={handleSignIn} className="space-y-3 mt-4">
-                  <div>
-                    <Label>Email</Label>
+                  <Field label="Email">
                     <Input
                       type="email"
+                      autoComplete="email"
+                      autoFocus
                       required
                       className={authInputClass}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                     />
-                  </div>
-                  <div>
-                    <Label>Password</Label>
-                    <Input
-                      type="password"
+                  </Field>
+                  <Field label="Password" error={error ?? undefined}>
+                    <PasswordInput
+                      autoComplete="current-password"
                       required
-                      className={authInputClass}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      show={showPassword}
+                      onToggle={() => setShowPassword((s) => !s)}
                     />
-                  </div>
+                  </Field>
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? "Signing in…" : "Sign in"}
                   </Button>
@@ -221,36 +277,40 @@ function AuthPage() {
               </TabsContent>
               <TabsContent value="signup">
                 <form onSubmit={handleSignUp} className="space-y-3 mt-4">
-                  <div>
-                    <Label>Full name</Label>
+                  <Field label="Full name">
                     <Input
+                      autoComplete="name"
                       required
                       className={authInputClass}
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                     />
-                  </div>
-                  <div>
-                    <Label>Email</Label>
+                  </Field>
+                  <Field label="Email">
                     <Input
                       type="email"
+                      autoComplete="email"
                       required
                       className={authInputClass}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                     />
-                  </div>
-                  <div>
-                    <Label>Password</Label>
-                    <Input
-                      type="password"
+                  </Field>
+                  <Field
+                    label="Password"
+                    description="At least 6 characters"
+                    error={error ?? undefined}
+                  >
+                    <PasswordInput
+                      autoComplete="new-password"
                       required
                       minLength={6}
-                      className={authInputClass}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      show={showPassword}
+                      onToggle={() => setShowPassword((s) => !s)}
                     />
-                  </div>
+                  </Field>
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? "Creating…" : "Create account"}
                   </Button>
@@ -258,16 +318,16 @@ function AuthPage() {
               </TabsContent>
               <TabsContent value="reset">
                 <form onSubmit={handleReset} className="space-y-3 mt-4">
-                  <div>
-                    <Label>Email</Label>
+                  <Field label="Email" error={error ?? undefined}>
                     <Input
                       type="email"
+                      autoComplete="email"
                       required
                       className={authInputClass}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                     />
-                  </div>
+                  </Field>
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? "Sending…" : "Send reset link"}
                   </Button>

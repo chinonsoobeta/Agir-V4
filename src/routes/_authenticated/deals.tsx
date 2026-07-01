@@ -336,11 +336,17 @@ function DealsPage() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <div className="flex rounded-md border border-border p-0.5">
+            <div
+              className="flex rounded-md border border-border p-0.5"
+              role="group"
+              aria-label="View"
+            >
               <Button
                 variant={view === "list" ? "secondary" : "ghost"}
                 size="icon"
                 className="size-8"
+                aria-label="List view"
+                aria-pressed={view === "list"}
                 onClick={() => setView("list")}
               >
                 <Rows3 className="size-4" />
@@ -349,6 +355,8 @@ function DealsPage() {
                 variant={view === "grid" ? "secondary" : "ghost"}
                 size="icon"
                 className="size-8"
+                aria-label="Grid view"
+                aria-pressed={view === "grid"}
                 onClick={() => setView("grid")}
               >
                 <LayoutGrid className="size-4" />
@@ -378,6 +386,10 @@ function DealsPage() {
             <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
               <X className="size-3.5 mr-1" /> {t("common.clear")}
             </Button>
+            <p className="w-full text-[11px] text-muted-foreground">
+              Pipeline status is set manually here. The Stage column is derived automatically from
+              underwriting and committee decisions, so the two can differ.
+            </p>
           </div>
         )}
 
@@ -457,6 +469,8 @@ function FilterChip({
 }) {
   return (
     <button
+      type="button"
+      aria-pressed={active}
       onClick={onClick}
       className={`text-[11px] uppercase tracking-widest px-3 py-1.5 rounded-full border transition-colors ${active ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"}`}
     >
@@ -466,6 +480,7 @@ function FilterChip({
 }
 
 function DealCard({ d }: { d: DealSummary }) {
+  const { fmt } = usePreferences();
   const qc = useQueryClient();
   const delFn = useServerFn(deleteProject);
   const updateFn = useServerFn(updateProject);
@@ -564,7 +579,7 @@ function DealCard({ d }: { d: DealSummary }) {
           </div>
           <div className="h-8 flex items-center gap-1.5 text-xs">
             <CalendarClock className="size-3.5 text-muted-foreground" />
-            {d.targetCloseDate ?? "–"}
+            {d.targetCloseDate ? fmt.date(d.targetCloseDate) : "–"}
           </div>
         </div>
       </div>
@@ -628,6 +643,7 @@ function DealTable({
   onToggle: (id: string) => void;
   onToggleAll: () => void;
 }) {
+  const { fmt } = usePreferences();
   const show = (k: DealColumnKey) => columns.includes(k);
   const allSelected = deals.length > 0 && deals.every((d) => selected.has(d.id));
   return (
@@ -682,11 +698,13 @@ function DealTable({
                     <span className="text-xs">{deal.stage}</span>
                   </td>
                 )}
-                {show("source") && (
-                  <td className="text-muted-foreground">{deal.source || "Direct"}</td>
-                )}
+                {show("source") && <td className="text-muted-foreground">{deal.source || "–"}</td>}
                 {show("capital") && <td className="num text-right">{fmtCompact(deal.capital)}</td>}
-                {show("probability") && <td className="num text-right">{deal.probability}%</td>}
+                {show("probability") && (
+                  <td className="num text-right">
+                    {deal.probability != null ? `${deal.probability}%` : "–"}
+                  </td>
+                )}
                 {show("investment") && (
                   <td className="num text-right">{deal.investmentScore ?? "–"}</td>
                 )}
@@ -694,7 +712,7 @@ function DealTable({
                 {show("close") && (
                   <td>
                     <span className={overdue ? "text-destructive font-medium" : ""}>
-                      {deal.targetCloseDate || "–"}
+                      {deal.targetCloseDate ? fmt.date(deal.targetCloseDate) : "–"}
                       {overdue && ` · ${Math.abs(days!)}d overdue`}
                     </span>
                   </td>

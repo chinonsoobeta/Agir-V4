@@ -189,6 +189,9 @@ function DealDetail() {
             ))}
           </TabsList>
 
+          {/* The active panel is force-mounted so keyboard focus always lands on
+              a real panel; heavy tabs stay lazy – their content mounts only once
+              visited so their queries don't fire until first opened. */}
           <TabsContent
             value="decision"
             forceMount
@@ -206,7 +209,15 @@ function DealDetail() {
             {visited.has("committee") && <CommitteePanel projectId={id} />}
           </TabsContent>
           <TabsContent value="documents" className="mt-6">
-            {visited.has("documents") && <DocumentsTab projectId={id} />}
+            {visited.has("documents") && (
+              <DocumentsTab
+                projectId={id}
+                onReviewAssumptions={() => {
+                  setTab("assumptions");
+                  setVisited((p) => new Set(p).add("assumptions"));
+                }}
+              />
+            )}
           </TabsContent>
           <TabsContent value="collaboration" className="mt-6">
             {visited.has("collaboration") && <DealCollaboration projectId={id} />}
@@ -234,7 +245,13 @@ const CATEGORIES = [
   "Other",
 ];
 
-function DocumentsTab({ projectId }: { projectId: string }) {
+function DocumentsTab({
+  projectId,
+  onReviewAssumptions,
+}: {
+  projectId: string;
+  onReviewAssumptions: () => void;
+}) {
   const { data: docs = [] } = useSuspenseQuery(docsQ(projectId));
   const qc = useQueryClient();
   const [category, setCategory] = useState<string>("Other");
@@ -318,18 +335,13 @@ function DocumentsTab({ projectId }: { projectId: string }) {
           </ul>
         )}
         {docs.some((d) => d.ai_summary) && (
-          <Link
-            to="/projects/$id"
-            params={{ id: projectId }}
+          <button
+            type="button"
             className="mt-4 inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
-            onClick={(e) => {
-              e.preventDefault();
-              const tab = document.querySelector<HTMLElement>('[role="tab"][id*="assumptions"]');
-              tab?.click();
-            }}
+            onClick={onReviewAssumptions}
           >
             Review extracted assumptions →
-          </Link>
+          </button>
         )}
       </Card>
     </div>

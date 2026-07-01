@@ -3,7 +3,7 @@
 // a 2-variable scenario grid. Every number shown is a real runUnderwriting output
 // (computed in useMemo over the base input) -- nothing is synthesized.
 
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import {
   runUnderwriting,
   tornado,
@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Field } from "@/components/ui/field";
 import { SectionLabel, Eyebrow } from "@/components/decision-ui";
 import { Activity } from "lucide-react";
 
@@ -81,25 +82,43 @@ export function SensitivityPanel({ input }: { input: UnderwritingInput }) {
   const [xVar, setXVar] = useState("exit_cap_rate");
   const [yVar, setYVar] = useState("cost_level");
 
-  const metric = METRIC_BY_KEY[metricKey];
-  const baseMetric = useMemo(() => metric.read(runUnderwriting(input)), [input, metricKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Defer the control inputs so the (synchronous) engine re-runs happen against
+  // the deferred snapshot. React keeps the last committed output on screen while
+  // the new one computes, letting us surface a subtle "Calculating…" indicator
+  // without changing any number that is ultimately shown.
+  const dMetricKey = useDeferredValue(metricKey);
+  const dDelta = useDeferredValue(delta);
+  const dBeVar = useDeferredValue(beVar);
+  const dTarget = useDeferredValue(target);
+  const dXVar = useDeferredValue(xVar);
+  const dYVar = useDeferredValue(yVar);
+  const isCalculating =
+    dMetricKey !== metricKey ||
+    dDelta !== delta ||
+    dBeVar !== beVar ||
+    dTarget !== target ||
+    dXVar !== xVar ||
+    dYVar !== yVar;
+
+  const metric = METRIC_BY_KEY[dMetricKey];
+  const baseMetric = useMemo(() => metric.read(runUnderwriting(input)), [input, dMetricKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const bars = useMemo(
     () =>
       tornado(
         input,
         SENSITIVITY_VARS.map((v) => v.key),
-        delta,
-        metricKey,
+        dDelta,
+        dMetricKey,
       ),
-    [input, delta, metricKey],
+    [input, dDelta, dMetricKey],
   );
   const be = useMemo(
-    () => breakeven(input, beVar, metricKey, target),
-    [input, beVar, metricKey, target],
+    () => breakeven(input, dBeVar, dMetricKey, dTarget),
+    [input, dBeVar, dMetricKey, dTarget],
   );
   const grid = useMemo(
-    () => grid2d(input, xVar, axisRange(input, xVar), yVar, axisRange(input, yVar), metricKey),
-    [input, xVar, yVar, metricKey],
+    () => grid2d(input, dXVar, axisRange(input, dXVar), dYVar, axisRange(input, dYVar), dMetricKey),
+    [input, dXVar, dYVar, dMetricKey],
   );
 
   // Tornado domain across all finite endpoints (+ base) for bar placement.
@@ -126,22 +145,34 @@ export function SensitivityPanel({ input }: { input: UnderwritingInput }) {
           <Eyebrow>Flexible sensitivity · every cell is a live engine re-run</Eyebrow>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-[11px] text-muted-foreground">Metric</label>
-          <Select value={metricKey} onValueChange={onMetric}>
-            <SelectTrigger className={triggerCls}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SENSITIVITY_METRICS.map((m) => (
-                <SelectItem key={m.key} value={m.key}>
-                  {m.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Field
+            label="Metric"
+            className="space-y-0 flex items-center gap-2 [&>label]:text-[11px] [&>label]:text-muted-foreground"
+          >
+            {(f) => (
+              <Select value={metricKey} onValueChange={onMetric}>
+                <SelectTrigger id={f.id} className={triggerCls}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SENSITIVITY_METRICS.map((m) => (
+                    <SelectItem key={m.key} value={m.key}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </Field>
           <span className="text-[11px] text-muted-foreground">base</span>
           <span className="num text-sm">{fmtMetric(baseMetric, metric.unit)}</span>
         </div>
+      </div>
+
+      {/* Announce recompletes to assistive tech; controls re-run the engine
+          synchronously with no other visible feedback. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {isCalculating ? "Calculating…" : `Recomputed ${metric.label} sensitivity.`}
       </div>
 
       {/* Tornado */}

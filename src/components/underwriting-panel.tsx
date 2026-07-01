@@ -530,39 +530,46 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {/* Headline metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <UnderwritingMetric
-          label="Recommendation"
-          text={recommendation}
-          sub={recRationale}
-          highlight={
-            recommendation === "REJECT" || recommendation === "RETURN_TO_UNDERWRITING"
-              ? "text-destructive"
-              : "text-primary"
-          }
-        />
-        <UnderwritingMetric label="Exit Value" row={metric("exit_value")} />
-        <UnderwritingMetric
-          label="IRR"
-          row={irrRow}
-          text={equityWipeout ? "not meaningful" : undefined}
-          sub={equityWipeout ? "Equity loss: IRR not meaningful" : undefined}
-          highlight={equityWipeout ? "text-destructive" : undefined}
-        />
-        <UnderwritingMetric label="DSCR (amortizing)" row={metric("dscr")} />
-        <UnderwritingMetric
-          label="Equity Multiple"
-          row={metric("equity_multiple")}
-          highlight={equityWipeout ? "text-destructive" : undefined}
-        />
-        <UnderwritingMetric label="Debt Yield" row={metric("debt_yield")} />
-        <UnderwritingMetric label="Break-even Occ." row={metric("break_even_occupancy")} />
-        <UnderwritingMetric
-          label="Risk Score"
-          text={riskScoreRow ? String(Math.round(Number(riskScoreRow.value_numeric))) : "–"}
-          sub={riskScoreRow?.formula_text}
-        />
+      {/* Headline metrics: announced to assistive tech when a run completes */}
+      <div role="status" aria-live="polite">
+        <span className="sr-only">
+          {run.isPending
+            ? "Running underwriting…"
+            : `Underwriting results updated. Recommendation ${recommendation}.`}
+        </span>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <UnderwritingMetric
+            label="Recommendation"
+            text={recommendation}
+            sub={recRationale}
+            highlight={
+              recommendation === "REJECT" || recommendation === "RETURN_TO_UNDERWRITING"
+                ? "text-destructive"
+                : "text-primary"
+            }
+          />
+          <UnderwritingMetric label="Exit Value" row={metric("exit_value")} />
+          <UnderwritingMetric
+            label="IRR"
+            row={irrRow}
+            text={equityWipeout ? "not meaningful" : undefined}
+            sub={equityWipeout ? "Equity loss: IRR not meaningful" : undefined}
+            highlight={equityWipeout ? "text-destructive" : undefined}
+          />
+          <UnderwritingMetric label="DSCR (amortizing)" row={metric("dscr")} />
+          <UnderwritingMetric
+            label="Equity Multiple"
+            row={metric("equity_multiple")}
+            highlight={equityWipeout ? "text-destructive" : undefined}
+          />
+          <UnderwritingMetric label="Debt Yield" row={metric("debt_yield")} />
+          <UnderwritingMetric label="Break-even Occ." row={metric("break_even_occupancy")} />
+          <UnderwritingMetric
+            label="Risk Score"
+            text={riskScoreRow ? String(Math.round(Number(riskScoreRow.value_numeric))) : "–"}
+            sub={riskScoreRow?.formula_text}
+          />
+        </div>
       </div>
 
       {equityWipeout && (

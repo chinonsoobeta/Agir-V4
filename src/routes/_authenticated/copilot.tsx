@@ -14,7 +14,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Send, Bot, User as UserIcon, Sparkles } from "lucide-react";
+import {
+  Send,
+  Bot,
+  User as UserIcon,
+  Sparkles,
+  Square,
+  RefreshCw,
+  AlertCircle,
+} from "lucide-react";
+import type React from "react";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -55,29 +64,68 @@ function CopilotPage() {
     supabase.auth.getSession().then(({ data }) => setToken(data.session?.access_token ?? null));
   }, []);
 
-  if (!token) return <div className="p-8 text-muted-foreground text-sm">Loading…</div>;
   const focused = projects.find((p) => p.id === dealId) ?? null;
-  return <ChatUI token={token} projects={projects} focused={focused} setDealId={setDealId} />;
+
+  const header = (
+    <PageHeader
+      eyebrow="Copilot"
+      title="Investment Copilot"
+      subtitle={
+        focused
+          ? `Focused on ${focused.name}: answers from its findings & drivers`
+          : "Decision-aware analyst across your portfolio"
+      }
+      actions={
+        <Select
+          value={focused?.id ?? "__all__"}
+          onValueChange={(v) => setDealId(v === "__all__" ? null : v)}
+        >
+          <SelectTrigger className="w-full sm:w-[220px]">
+            <SelectValue placeholder="Whole portfolio" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">Whole portfolio</SelectItem>
+            {projects.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      }
+    />
+  );
+
+  if (!token) {
+    return (
+      <>
+        {header}
+        <div className="px-5 sm:px-8 py-6 text-muted-foreground text-sm" role="status">
+          Loading…
+        </div>
+      </>
+    );
+  }
+  return <ChatUI token={token} focused={focused} header={header} />;
 }
 
 function ChatUI({
   token,
-  projects,
   focused,
-  setDealId,
+  header,
 }: {
   token: string;
-  projects: ProjectRow[];
   focused: ProjectRow | null;
-  setDealId: (id: string | null) => void;
+  header: React.ReactNode;
 }) {
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
   if (focused) headers["X-Agir-Deal"] = focused.id;
   const transport = new DefaultChatTransport({ api: "/api/chat", headers });
-  const { messages, sendMessage, status } = useChat({ transport });
+  const { messages, sendMessage, regenerate, stop, status, error } = useChat({ transport });
   const loading = status === "submitted" || status === "streaming";
+  const errored = status === "error";
   const SUGGESTIONS = focused ? DEAL_SUGGESTIONS(focused.name) : PORTFOLIO_SUGGESTIONS;
 
   useEffect(() => {
@@ -92,36 +140,12 @@ function ChatUI({
 
   return (
     <>
-      <PageHeader
-        eyebrow="Copilot"
-        title="Investment Copilot"
-        subtitle={
-          focused
-            ? `Focused on ${focused.name}: answers from its findings & drivers`
-            : "Decision-aware analyst across your portfolio"
-        }
-        actions={
-          <Select
-            value={focused?.id ?? "__all__"}
-            onValueChange={(v) => setDealId(v === "__all__" ? null : v)}
-          >
-            <SelectTrigger className="w-full sm:w-[220px]">
-              <SelectValue placeholder="Whole portfolio" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">Whole portfolio</SelectItem>
-              {projects.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        }
-      />
+      {header}
       <div className="px-5 sm:px-8 py-6 flex flex-col h-[calc(100dvh-5.5rem)]">
         <div
           ref={scrollRef}
+          aria-live="polite"
+          aria-atomic="false"
           className={`flex-1 overflow-y-auto pr-2 ${messages.length === 0 ? "flex flex-col items-center justify-center" : "space-y-4"}`}
         >
           {messages.length === 0 && (
@@ -166,7 +190,7 @@ function ChatUI({
                   )}
                 </div>
                 <Card className={`p-4 max-w-3xl ${isUser ? "bg-accent border-accent" : ""}`}>
-                  <div className="prose prose-sm prose-invert max-w-none text-sm">
+                  <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
                     <ReactMarkdown>{text}</ReactMarkdown>
                   </div>
                 </Card>
@@ -174,11 +198,28 @@ function ChatUI({
             );
           })}
           {loading && (
-            <div className="flex gap-3">
+            <div className="flex gap-3" role="status">
               <div className="size-8 rounded-md bg-primary flex items-center justify-center">
                 <Bot className="size-4 text-primary-foreground animate-pulse" />
               </div>
               <Card className="p-4 text-sm text-muted-foreground">Thinking…</Card>
+            </div>
+          )}
+          {errored && (
+            <div className="flex gap-3" role="alert">
+              <div className="size-8 rounded-md bg-destructive/15 flex items-center justify-center shrink-0">
+                <AlertCircle className="size-4 text-destructive" />
+              </div>
+              <Card className="p-4 max-w-3xl border-destructive/40">
+                <p className="text-sm font-medium text-destructive">Something went wrong</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {error?.message || "The copilot could not complete that response."}
+                </p>
+                <Button variant="outline" size="sm" className="mt-3" onClick={() => regenerate()}>
+                  <RefreshCw className="size-3.5 mr-1.5" />
+                  Retry
+                </Button>
+              </Card>
             </div>
           )}
         </div>
@@ -189,16 +230,32 @@ function ChatUI({
           }}
           className="mt-4 flex gap-2"
         >
+          <label htmlFor="copilot-input" className="sr-only">
+            Ask the copilot
+          </label>
           <Input
+            id="copilot-input"
+            aria-label="Ask the copilot"
             placeholder="Ask anything about your projects…"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={loading}
             className="flex-1"
           />
-          <Button type="submit" disabled={loading || !input.trim()}>
-            <Send className="size-4" />
-          </Button>
+          {loading ? (
+            <Button
+              type="button"
+              variant="outline"
+              aria-label="Stop generating"
+              onClick={() => stop()}
+            >
+              <Square className="size-4" />
+            </Button>
+          ) : (
+            <Button type="submit" aria-label="Send message" disabled={!input.trim()}>
+              <Send className="size-4" />
+            </Button>
+          )}
         </form>
       </div>
     </>

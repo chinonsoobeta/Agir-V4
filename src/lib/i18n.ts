@@ -35,6 +35,10 @@ export const en = {
   "shell.workspace": "Investment workspace",
   "shell.live": "Live",
   "shell.offline": "Offline",
+  "shell.skipToContent": "Skip to content",
+  "notifications.title": "Notifications",
+  "notifications.unread": "{count} unread",
+  "notifications.caughtUp": "You are all caught up.",
 
   // ---- Common actions ----
   "action.new": "New",
@@ -300,6 +304,10 @@ export const fr: Partial<Record<TranslationKey, string>> = {
   "shell.workspace": "Espace d’investissement",
   "shell.live": "En direct",
   "shell.offline": "Hors ligne",
+  "shell.skipToContent": "Passer au contenu",
+  "notifications.title": "Notifications",
+  "notifications.unread": "{count} non lues",
+  "notifications.caughtUp": "Vous êtes à jour.",
 
   "action.new": "Nouveau",
   "action.create": "Créer",

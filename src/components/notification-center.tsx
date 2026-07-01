@@ -11,12 +11,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { listNotifications, markNotificationRead } from "@/lib/operating-depth.functions";
+import { usePreferences } from "@/lib/preferences";
 import type { Tables } from "@/integrations/supabase/types";
 
 type NotificationRow = Tables<"notifications">;
 
 export function NotificationCenter() {
   const qc = useQueryClient();
+  const { t, tx, fmt } = usePreferences();
   const markFn = useServerFn(markNotificationRead);
   const query = useQuery({
     queryKey: ["notifications"],
@@ -33,19 +35,33 @@ export function NotificationCenter() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative size-8">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative size-8"
+          aria-label={
+            unread > 0
+              ? `${t("notifications.title")}, ${tx("notifications.unread", { count: unread })}`
+              : t("notifications.title")
+          }
+        >
           <Bell className="size-4" />
           {unread > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 min-w-4 h-4 rounded-full bg-primary text-primary-foreground text-[9px] flex items-center justify-center px-1">
-              {Math.min(unread, 9)}
+            <span
+              aria-hidden="true"
+              className="absolute -right-0.5 -top-0.5 min-w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] tabular-nums flex items-center justify-center px-1"
+            >
+              {unread > 9 ? "9+" : unread}
             </span>
           )}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80">
         <DropdownMenuLabel className="flex items-center justify-between">
-          Notifications
-          <span className="text-[10px] text-muted-foreground font-normal">{unread} unread</span>
+          {t("notifications.title")}
+          <span className="text-[10px] text-muted-foreground font-normal">
+            {tx("notifications.unread", { count: unread })}
+          </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <div className="max-h-96 overflow-y-auto">
@@ -72,8 +88,8 @@ export function NotificationCenter() {
                         {item.body}
                       </div>
                     )}
-                    <div className="text-[9px] text-muted-foreground mt-1">
-                      {new Date(item.created_at).toLocaleString()}
+                    <div className="text-[10px] text-muted-foreground mt-1">
+                      {fmt.date(item.created_at, { dateStyle: "medium", timeStyle: "short" })}
                     </div>
                   </div>
                 </div>
@@ -81,7 +97,7 @@ export function NotificationCenter() {
             ))
           ) : (
             <div className="p-8 text-center text-xs text-muted-foreground">
-              You are all caught up.
+              {t("notifications.caughtUp")}
             </div>
           )}
         </div>

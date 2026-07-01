@@ -231,7 +231,9 @@ function ExecutiveOverview() {
                     <div className="w-24 hidden sm:block">
                       <Progress value={deal.confidenceScore} className="h-1.5" />
                     </div>
-                    <div className={`num text-lg ${TONE_TEXT[tone]}`}>{deal.investmentScore}</div>
+                    <div className="num text-lg font-semibold text-foreground">
+                      {deal.investmentScore}
+                    </div>
                   </Link>
                 );
               })}

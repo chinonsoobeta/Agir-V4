@@ -4,10 +4,22 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { PageHeader, PageBody } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Field } from "@/components/ui/field";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
@@ -114,6 +126,7 @@ function SettingsPage() {
               <button
                 key={s.id}
                 onClick={() => navigate({ to: "/settings", search: { section: s.id } })}
+                aria-current={on ? "page" : undefined}
                 className={cn(
                   "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm whitespace-nowrap transition-colors min-h-[40px]",
                   on
@@ -158,15 +171,48 @@ function GovernanceSection() {
   const [twoPerson, setTwoPerson] = useState(false);
   const [domains, setDomains] = useState("");
   const [retention, setRetention] = useState("2555");
+  // Snapshot of the last hydrated (loaded/saved) values, so a background refetch
+  // never clobbers in-progress edits and so we can compute a dirty state.
+  const [loaded, setLoaded] = useState<{
+    threshold: string;
+    twoPerson: boolean;
+    domains: string;
+    retention: string;
+  } | null>(null);
   useEffect(() => {
     if (!query.data) return;
-    setThreshold(
-      query.data.approval_threshold == null ? "" : String(query.data.approval_threshold),
-    );
-    setTwoPerson(Boolean(query.data.require_two_person_approval));
-    setDomains((query.data.allowed_email_domains ?? []).join(", "));
-    setRetention(String(query.data.data_retention_days ?? 2555));
+    const next = {
+      threshold: query.data.approval_threshold == null ? "" : String(query.data.approval_threshold),
+      twoPerson: Boolean(query.data.require_two_person_approval),
+      domains: (query.data.allowed_email_domains ?? []).join(", "),
+      retention: String(query.data.data_retention_days ?? 2555),
+    };
+    // Only hydrate local form state on first load or when the form is pristine
+    // relative to the last loaded snapshot. Otherwise a refetch (e.g. window
+    // refocus) would overwrite what the user is typing.
+    setLoaded((prev) => {
+      const pristine =
+        prev == null ||
+        (threshold === prev.threshold &&
+          twoPerson === prev.twoPerson &&
+          domains === prev.domains &&
+          retention === prev.retention);
+      if (pristine) {
+        setThreshold(next.threshold);
+        setTwoPerson(next.twoPerson);
+        setDomains(next.domains);
+        setRetention(next.retention);
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query.data]);
+  const dirty =
+    loaded == null ||
+    threshold !== loaded.threshold ||
+    twoPerson !== loaded.twoPerson ||
+    domains !== loaded.domains ||
+    retention !== loaded.retention;
   const save = useMutation({
     mutationFn: () =>
       saveFn({
@@ -207,8 +253,10 @@ function GovernanceSection() {
       description="Set approval, access, and retention controls for this workspace."
     >
       <div className="space-y-5 max-w-xl">
-        <div>
-          <Label>Capital approval threshold</Label>
+        <Field
+          label="Capital approval threshold"
+          description="Deals at or above this amount should receive the workspace's formal approval process."
+        >
           <Input
             type="number"
             min="0"
@@ -217,33 +265,35 @@ function GovernanceSection() {
             onChange={(event) => setThreshold(event.target.value)}
             placeholder="Example: 10000000"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            Deals at or above this amount should receive the workspace's formal approval process.
-          </p>
-        </div>
-        <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
-          <div>
-            <div className="text-sm font-medium">Two-person approval</div>
-            <div className="text-xs text-muted-foreground">
-              Require independent review before high-value decisions are finalized.
-            </div>
-          </div>
-          <Switch checked={twoPerson} disabled={!canManage} onCheckedChange={setTwoPerson} />
-        </div>
-        <div>
-          <Label>Allowed email domains</Label>
+        </Field>
+        <Field
+          label="Two-person approval"
+          description="Require independent review before high-value decisions are finalized."
+          orientation="horizontal"
+          className="rounded-lg border p-3"
+        >
+          {(f) => (
+            <Switch
+              id={f.id}
+              checked={twoPerson}
+              disabled={!canManage}
+              onCheckedChange={setTwoPerson}
+              aria-describedby={f["aria-describedby"]}
+            />
+          )}
+        </Field>
+        <Field
+          label="Allowed email domains"
+          description="Comma-separated domains for invitation governance. Leave blank for no restriction."
+        >
           <Input
             value={domains}
             disabled={!canManage}
             onChange={(event) => setDomains(event.target.value)}
             placeholder="firm.com, advisor.com"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            Comma-separated domains for invitation governance. Leave blank for no restriction.
-          </p>
-        </div>
-        <div>
-          <Label>Data retention, days</Label>
+        </Field>
+        <Field label="Data retention, days">
           <Input
             type="number"
             min="30"
@@ -252,9 +302,12 @@ function GovernanceSection() {
             disabled={!canManage}
             onChange={(event) => setRetention(event.target.value)}
           />
-        </div>
+        </Field>
         {canManage ? (
-          <Button disabled={save.isPending || Number(retention) < 30} onClick={() => save.mutate()}>
+          <Button
+            disabled={save.isPending || !dirty || Number(retention) < 30}
+            onClick={() => save.mutate()}
+          >
             <Save className="size-4 mr-1.5" />
             Save governance
           </Button>
@@ -303,12 +356,23 @@ function ProfileSection() {
   const updateFn = useServerFn(updateMyProfile);
   const [fullName, setFullName] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
+  // Snapshot of last loaded/saved values, to avoid a background refetch
+  // clobbering in-progress edits and to drive the dirty state.
+  const [loaded, setLoaded] = useState<{ fullName: string; avatarUrl: string } | null>(null);
   useEffect(() => {
-    if (profile) {
-      setFullName(profile.full_name ?? "");
-      setAvatarUrl(profile.avatar_url ?? "");
-    }
+    if (!profile) return;
+    const next = { fullName: profile.full_name ?? "", avatarUrl: profile.avatar_url ?? "" };
+    setLoaded((prev) => {
+      const pristine = prev == null || (fullName === prev.fullName && avatarUrl === prev.avatarUrl);
+      if (pristine) {
+        setFullName(next.fullName);
+        setAvatarUrl(next.avatarUrl);
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile]);
+  const dirty = loaded == null || fullName !== loaded.fullName || avatarUrl !== loaded.avatarUrl;
 
   const save = useMutation({
     mutationFn: () => updateFn({ data: { full_name: fullName, avatar_url: avatarUrl } }),
@@ -334,26 +398,24 @@ function ProfileSection() {
         </div>
       </div>
       <div className="space-y-4 max-w-md">
-        <div>
-          <Label>Full name</Label>
+        <Field label="Full name">
           <Input
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             placeholder="Jane Analyst"
           />
-        </div>
-        <div>
-          <Label>Avatar URL</Label>
+        </Field>
+        <Field
+          label="Avatar URL"
+          description="Paste an image URL. Leave blank to use your initials."
+        >
           <Input
             value={avatarUrl}
             onChange={(e) => setAvatarUrl(e.target.value)}
             placeholder="https://…"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            Paste an image URL. Leave blank to use your initials.
-          </p>
-        </div>
-        <Button onClick={() => save.mutate()} disabled={save.isPending}>
+        </Field>
+        <Button onClick={() => save.mutate()} disabled={save.isPending || !dirty}>
           <Save className="size-4 mr-1.5" />
           {save.isPending ? "Saving…" : "Save profile"}
         </Button>
@@ -414,24 +476,22 @@ function AccountSection() {
 
       <SectionCard title="Change password" description="Use at least 8 characters.">
         <div className="space-y-3 max-w-md">
-          <div>
-            <Label>New password</Label>
+          <Field label="New password">
             <Input
               type="password"
               value={pw}
               onChange={(e) => setPw(e.target.value)}
               autoComplete="new-password"
             />
-          </div>
-          <div>
-            <Label>Confirm password</Label>
+          </Field>
+          <Field label="Confirm password">
             <Input
               type="password"
               value={pw2}
               onChange={(e) => setPw2(e.target.value)}
               autoComplete="new-password"
             />
-          </div>
+          </Field>
           <Button variant="outline" onClick={changePassword} disabled={busy || !pw}>
             <Lock className="size-4 mr-1.5" />
             {busy ? "Updating…" : "Update password"}
@@ -467,7 +527,7 @@ function AppearanceSection() {
       <div className="space-y-5">
         <div>
           <div className="text-xs text-muted-foreground mb-2">{t("settings.theme")}</div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t("settings.theme")}>
             {(
               [
                 ["light", t("settings.light"), Sun],
@@ -478,6 +538,8 @@ function AppearanceSection() {
               <Button
                 key={value}
                 size="sm"
+                role="radio"
+                aria-checked={theme === value}
                 variant={theme === value ? "default" : "outline"}
                 onClick={() => setTheme(value as AppTheme)}
               >
@@ -489,8 +551,12 @@ function AppearanceSection() {
         </div>
         <div>
           <div className="text-xs text-muted-foreground mb-2">{t("settings.language")}</div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Languages className="size-4 text-muted-foreground" />
+          <div
+            className="flex flex-wrap items-center gap-2"
+            role="radiogroup"
+            aria-label={t("settings.language")}
+          >
+            <Languages className="size-4 text-muted-foreground" aria-hidden="true" />
             {(
               [
                 ["en", t("settings.english")],
@@ -500,6 +566,8 @@ function AppearanceSection() {
               <Button
                 key={value}
                 size="sm"
+                role="radio"
+                aria-checked={language === value}
                 variant={language === value ? "default" : "outline"}
                 onClick={() => setLanguage(value as AppLanguage)}
               >
@@ -562,16 +630,22 @@ function NotificationsSection() {
     >
       <div className="space-y-1 divide-y divide-border">
         {NOTIFICATION_OPTIONS.map((opt) => (
-          <div key={opt.key} className="flex items-center justify-between gap-4 py-3 first:pt-0">
-            <div className="min-w-0">
-              <div className="text-sm font-medium">{opt.label}</div>
-              <div className="text-xs text-muted-foreground">{opt.help}</div>
-            </div>
-            <Switch
-              checked={prefs[opt.key]}
-              onCheckedChange={(v) => save.mutate({ ...prefs, [opt.key]: v })}
-            />
-          </div>
+          <Field
+            key={opt.key}
+            label={opt.label}
+            description={opt.help}
+            orientation="horizontal"
+            className="flex-row-reverse justify-between py-3 first:pt-0"
+          >
+            {(f) => (
+              <Switch
+                id={f.id}
+                checked={prefs[opt.key]}
+                onCheckedChange={(v) => save.mutate({ ...prefs, [opt.key]: v })}
+                aria-describedby={f["aria-describedby"]}
+              />
+            )}
+          </Field>
         ))}
       </div>
       <p className="text-xs text-muted-foreground mt-4">
@@ -657,14 +731,13 @@ function TeamSection() {
         description="You're in a personal workspace. Create a shared workspace to invite teammates, assign deals, and coordinate."
       >
         <div className="flex flex-wrap items-end gap-3 max-w-md">
-          <div className="flex-1 min-w-[12rem]">
-            <Label>Workspace name</Label>
+          <Field label="Workspace name" className="flex-1 min-w-[12rem]">
             <Input
               value={newWs}
               onChange={(e) => setNewWs(e.target.value)}
               placeholder="Acme Capital Partners"
             />
-          </div>
+          </Field>
           <Button onClick={() => create.mutate()} disabled={!newWs.trim() || create.isPending}>
             <Building2 className="size-4 mr-1.5" />
             {create.isPending ? "Creating…" : "Create"}
@@ -702,7 +775,10 @@ function TeamSection() {
                   value={m.role}
                   onValueChange={(r) => changeRole.mutate({ id: m.id, role: r as WorkspaceRole })}
                 >
-                  <SelectTrigger className="h-8 w-28 text-xs">
+                  <SelectTrigger
+                    className="h-8 w-28 text-xs"
+                    aria-label={`Role for ${m.full_name || m.email || "member"}`}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -719,14 +795,38 @@ function TeamSection() {
                 </Badge>
               )}
               {canManage && !m.isSelf && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8"
-                  onClick={() => remove.mutate(m.id)}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      aria-label={`Remove ${m.full_name || m.email || "member"}`}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        Remove {m.full_name || m.email || "member"}?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        They will lose access to this workspace's deals and data. You can invite
+                        them again later.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        className={cn(buttonVariants({ variant: "destructive" }), "mt-2 sm:mt-0")}
+                        onClick={() => remove.mutate(m.id)}
+                      >
+                        Remove
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               )}
             </div>
           ))}
@@ -739,17 +839,16 @@ function TeamSection() {
           description="They'll get a link to join this workspace."
         >
           <div className="flex flex-wrap items-end gap-2">
-            <div className="flex-1 min-w-[14rem]">
-              <Label>Email</Label>
+            <Field label="Email" className="flex-1 min-w-[14rem]">
               <Input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="teammate@firm.com"
               />
-            </div>
+            </Field>
             <Select value={inviteRole} onValueChange={(r) => setInviteRole(r as WorkspaceRole)}>
-              <SelectTrigger className="h-9 w-28 text-xs">
+              <SelectTrigger className="h-9 w-28 text-xs" aria-label="Invite role">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

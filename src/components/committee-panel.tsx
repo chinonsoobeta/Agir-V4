@@ -26,7 +26,19 @@ import { MemoSection } from "@/components/underwriting-panel";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { buildDecision, RECOMMENDATION_TONE } from "@/lib/decision";
 import type { AssumptionRow, OutputRow } from "@/lib/decision";
 import {
@@ -240,9 +252,20 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
       toast.success("IC decision recorded to the audit trail");
       setRationale("");
       setConditions("");
+      setSuperseding(false);
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  // A final disposition (approve / approve-with-conditions / reject) locks the
+  // recorder so a second, contradictory decision can't be written by accident.
+  // "return to underwriting" is not terminal – the deal is expected to come back.
+  const finalDecision =
+    [...decisionRows]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .find((d) => d.decision !== "return_to_underwriting") ?? null;
+  const [superseding, setSuperseding] = useState(false);
+  const locked = !!finalDecision && !superseding;
 
   // Do not present any recommendation, score, or condition before deterministic
   // underwriting and findings exist: that would be a recommendation-like output
@@ -390,51 +413,132 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
           <Gavel className="size-4 text-primary" />
           <SectionLabel>Record Committee Decision</SectionLabel>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-4">
-          {ACTIONS.map((a) => {
-            const active = action === a.key;
-            const Icon = a.icon;
-            return (
-              <button
-                key={a.key}
-                onClick={() => setAction(a.key)}
-                className={`rounded-lg border p-3 text-left transition-all ${active ? `${TONE_CHIP[a.tone]} ring-1 ring-current` : "border-border hover:border-foreground/30 text-muted-foreground"}`}
+        {locked && finalDecision ? (
+          <div className="mt-4 rounded-lg border border-border bg-muted/20 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Lock className="size-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Decision recorded</span>
+              <Badge
+                variant="outline"
+                className={`text-[10px] uppercase ${
+                  TONE_CHIP[
+                    (finalDecision.decision === "approve"
+                      ? "approve"
+                      : finalDecision.decision === "reject"
+                        ? "reject"
+                        : "condition") as keyof typeof TONE_CHIP
+                  ]
+                }`}
               >
-                <Icon className={`size-5 ${active ? TONE_TEXT[a.tone] : ""}`} />
-                <div className="text-xs font-semibold mt-2 leading-tight text-foreground">
-                  {a.label}
+                {String(finalDecision.decision).replace(/_/g, " ")}
+              </Badge>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {new Date(finalDecision.created_at).toLocaleString()} · {finalDecision.user_name}
+            </p>
+            {finalDecision.rationale && (
+              <p className="mt-2 text-sm whitespace-pre-wrap">{finalDecision.rationale}</p>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4 text-muted-foreground"
+              onClick={() => setSuperseding(true)}
+            >
+              Record a superseding decision
+            </Button>
+          </div>
+        ) : (
+          <>
+            {superseding && finalDecision && (
+              <div className="mt-4 flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
+                <AlertTriangle className="size-4 shrink-0" />
+                <span>
+                  This deal already has a recorded decision (
+                  {String(finalDecision.decision).replace(/_/g, " ")}). A new decision supersedes it
+                  in the audit trail; the original entry is retained.
+                </span>
+              </div>
+            )}
+            <div
+              className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-4"
+              role="radiogroup"
+              aria-label="Committee decision"
+            >
+              {ACTIONS.map((a) => {
+                const active = action === a.key;
+                const Icon = a.icon;
+                return (
+                  <button
+                    key={a.key}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    tabIndex={active ? 0 : -1}
+                    onClick={() => setAction(a.key)}
+                    className={`rounded-lg border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${active ? `${TONE_CHIP[a.tone]} ring-1 ring-current` : "border-border hover:border-foreground/30 text-muted-foreground"}`}
+                  >
+                    <Icon className={`size-5 ${active ? TONE_TEXT[a.tone] : ""}`} />
+                    <div className="text-xs font-semibold mt-2 leading-tight text-foreground">
+                      {a.label}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <Textarea
+              className="mt-4"
+              rows={3}
+              aria-label="Committee rationale"
+              placeholder="Committee rationale: cite approved assumptions, returns, DSCR, stress results, and market guidance."
+              value={rationale}
+              onChange={(e) => setRationale(e.target.value)}
+            />
+            {(action === "approve_with_conditions" || action === "return_to_underwriting") && (
+              <Textarea
+                className="mt-2"
+                rows={2}
+                aria-label={
+                  action === "approve_with_conditions" ? "Conditions" : "What to re-underwrite"
+                }
+                placeholder={
+                  action === "approve_with_conditions"
+                    ? "Conditions: e.g. cap hard-cost re-bid ≤ +5%, confirm rate ≤ 6.5%, OpEx ratio ≤ 38%."
+                    : "What must be re-underwritten before this returns to committee?"
+                }
+                value={conditions}
+                onChange={(e) => setConditions(e.target.value)}
+              />
+            )}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button className="mt-4" disabled={!rationale || submit.isPending}>
+                  {submit.isPending ? "Recording…" : "Record decision"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Record “{ACTIONS.find((a) => a.key === action)?.label}” to the audit trail?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This writes a permanent, hash-chained entry and snapshots the memo. It cannot be
+                    edited – only superseded by a later decision.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="rounded-md border border-border bg-muted/20 p-3 text-sm whitespace-pre-wrap">
+                  {rationale}
                 </div>
-              </button>
-            );
-          })}
-        </div>
-        <Textarea
-          className="mt-4"
-          rows={3}
-          placeholder="Committee rationale: cite approved assumptions, returns, DSCR, stress results, and market guidance."
-          value={rationale}
-          onChange={(e) => setRationale(e.target.value)}
-        />
-        {(action === "approve_with_conditions" || action === "return_to_underwriting") && (
-          <Textarea
-            className="mt-2"
-            rows={2}
-            placeholder={
-              action === "approve_with_conditions"
-                ? "Conditions: e.g. cap hard-cost re-bid ≤ +5%, confirm rate ≤ 6.5%, OpEx ratio ≤ 38%."
-                : "What must be re-underwritten before this returns to committee?"
-            }
-            value={conditions}
-            onChange={(e) => setConditions(e.target.value)}
-          />
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => submit.mutate()}>
+                    Record decision
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
         )}
-        <Button
-          className="mt-4"
-          onClick={() => submit.mutate()}
-          disabled={!rationale || submit.isPending}
-        >
-          {submit.isPending ? "Recording…" : "Record decision"}
-        </Button>
       </Card>
 
       {/* Investment Committee memo */}
@@ -902,11 +1006,15 @@ function CommitteeGovernance({
           )}
         </ul>
         <div className="mt-3 flex gap-2">
-          <input
-            className="flex-1 rounded border border-border bg-background px-2 py-1 text-sm"
-            placeholder="Add a tracked condition..."
+          <Input
+            className="flex-1"
+            aria-label="Add a tracked condition"
+            placeholder="Add a tracked condition…"
             value={newCondition}
             onChange={(e) => setNewCondition(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newCondition && !add.isPending) add.mutate();
+            }}
           />
           <Button size="sm" disabled={!newCondition || add.isPending} onClick={() => add.mutate()}>
             Add
