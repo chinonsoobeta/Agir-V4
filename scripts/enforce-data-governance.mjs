@@ -91,6 +91,63 @@ try {
     evidence: { overdueRequestIds: overdueDeletionRequests.map((r) => r.id) },
   });
 
+  const { rows: missingStorageRefs } = await client.query(`
+    select id
+    from public.documents
+    where storage_path is null
+       or length(trim(storage_path)) = 0
+    limit 50
+  `);
+  if (missingStorageRefs.length > 0) failures += 1;
+  await recordRun({
+    workspace_id: null,
+    run_type: "deletion",
+    status: missingStorageRefs.length > 0 ? "failed" : "passed",
+    summary:
+      missingStorageRefs.length > 0
+        ? `${missingStorageRefs.length} document row(s) have no storage reference.`
+        : "All sampled document rows have storage references.",
+    evidence: { missingStorageDocumentIds: missingStorageRefs.map((r) => r.id) },
+  });
+
+  const { rows: governedTables } = await client.query(`
+    select table_name
+    from information_schema.tables
+    where table_schema = 'public'
+      and table_name in (
+        'documents',
+        'assumptions',
+        'financial_outputs',
+        'investment_memos',
+        'generated_reports',
+        'memo_snapshots',
+        'data_governance_requests',
+        'compliance_enforcement_runs'
+      )
+  `);
+  const present = new Set(governedTables.map((row) => row.table_name));
+  const missingGovernedTables = [
+    "documents",
+    "assumptions",
+    "financial_outputs",
+    "investment_memos",
+    "generated_reports",
+    "memo_snapshots",
+    "data_governance_requests",
+    "compliance_enforcement_runs",
+  ].filter((table) => !present.has(table));
+  if (missingGovernedTables.length > 0) failures += 1;
+  await recordRun({
+    workspace_id: null,
+    run_type: "retention",
+    status: missingGovernedTables.length > 0 ? "failed" : "passed",
+    summary:
+      missingGovernedTables.length > 0
+        ? `Governance-critical tables missing: ${missingGovernedTables.join(", ")}.`
+        : "Governance-critical tables are present.",
+    evidence: { missingGovernedTables },
+  });
+
   if (failures && !dryRun) {
     console.error(`[data-governance] FAIL: ${failures} governance obligation(s) need review.`);
     process.exit(1);

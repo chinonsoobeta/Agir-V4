@@ -10,10 +10,14 @@
 type ErrorContext = Record<string, unknown>;
 type MetricContext = Record<string, unknown>;
 
+export type ErrorCategory = "auth" | "csrf" | "database" | "extraction" | "validation" | "unknown";
+
 export type CapturedEvent = {
   level: "error";
   service: "agir";
   timestamp: string;
+  requestId: string;
+  category: ErrorCategory;
   error: { name?: string; message: string; stack?: string };
 } & ErrorContext;
 
@@ -21,9 +25,30 @@ export type OperationalMetric = {
   level: "metric";
   service: "agir";
   timestamp: string;
+  requestId?: string;
   name: string;
   value: number;
 } & MetricContext;
+
+export function createRequestId(request?: Request | null): string {
+  return (
+    request?.headers.get("x-request-id") ??
+    request?.headers.get("x-vercel-id") ??
+    crypto.randomUUID()
+  );
+}
+
+export function classifyError(error: unknown): ErrorCategory {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/csrf|origin|forbidden/i.test(message)) return "csrf";
+  if (/unauthorized|forbidden|auth/i.test(message)) return "auth";
+  if (/invalid|validation|zod/i.test(message)) return "validation";
+  if (/database|postgres|supabase|relation|column|schema|rls|row-level/i.test(message)) {
+    return "database";
+  }
+  if (/extract|ocr|document/i.test(message)) return "extraction";
+  return "unknown";
+}
 
 function serializeError(error: unknown): CapturedEvent["error"] {
   if (error instanceof Error) {
@@ -64,6 +89,11 @@ export function buildErrorEvent(error: unknown, context: ErrorContext = {}): Cap
     level: "error",
     service: "agir",
     timestamp: new Date().toISOString(),
+    requestId: typeof context.requestId === "string" ? context.requestId : crypto.randomUUID(),
+    category:
+      typeof context.category === "string"
+        ? (context.category as ErrorCategory)
+        : classifyError(error),
     ...context,
     error: serializeError(error),
   };

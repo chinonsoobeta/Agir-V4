@@ -41,6 +41,7 @@ const env = {
 };
 
 console.log(`[ephemeral-db] Using ${resolved.key}; database name must satisfy the RLS test guard.`);
+run("ensure disposable database exists", "node", ["scripts/ensure-ephemeral-db.mjs"], env);
 run(
   "bootstrap Supabase-compatible auth/storage schemas",
   "node",

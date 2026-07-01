@@ -217,7 +217,7 @@ export async function requestJobCancellation(ctx: Ctx, jobId: string): Promise<b
 }
 
 export async function claimNextQueuedJob(
-  supabase: any,
+  supabase: SupabaseClient<Database>,
   workerId: string,
   leaseSeconds = 300,
 ): Promise<ExtractionJob | null> {
@@ -230,7 +230,7 @@ export async function claimNextQueuedJob(
 }
 
 export async function heartbeatJob(
-  supabase: any,
+  supabase: SupabaseClient<Database>,
   jobId: string,
   workerId: string,
   leaseSeconds = 300,

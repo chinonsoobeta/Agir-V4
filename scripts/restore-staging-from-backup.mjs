@@ -58,6 +58,8 @@ const EXPECTED_TABLES = [
   "audit_logs",
   "memo_snapshots",
   "extraction_jobs",
+  "audit_chain_verifications",
+  "compliance_enforcement_runs",
 ];
 
 async function localVersions() {
@@ -135,6 +137,30 @@ async function main() {
     evidence.checks.keyTables = { expected: EXPECTED_TABLES.length, missing };
     if (missing.length) fail(`expected tables missing after restore: ${missing.join(", ")}`);
     else console.log(`[restore-drill] smoke: all ${EXPECTED_TABLES.length} key tables present.`);
+
+    const { rows: storageRefs } = await client.query(`
+      select
+        count(*)::int as documents,
+        count(*) filter (where storage_path is null or length(trim(storage_path)) = 0)::int as missing_storage_refs
+      from public.documents
+    `);
+    const storageRefSummary = storageRefs[0] ?? { documents: 0, missing_storage_refs: 0 };
+    evidence.checks.storageReferences = storageRefSummary;
+    if (Number(storageRefSummary.missing_storage_refs) > 0) {
+      fail(`${storageRefSummary.missing_storage_refs} document row(s) missing storage_path`);
+    }
+
+    const { rows: auditRows } = await client.query(`
+      select
+        count(*)::int as audit_rows,
+        count(*) filter (where row_hash is null)::int as missing_hashes
+      from public.audit_logs
+    `);
+    const auditSummary = auditRows[0] ?? { audit_rows: 0, missing_hashes: 0 };
+    evidence.checks.auditHashCoverage = auditSummary;
+    if (Number(auditSummary.missing_hashes) > 0) {
+      fail(`${auditSummary.missing_hashes} audit row(s) missing hash-chain values`);
+    }
 
     if (process.exitCode) {
       console.error("[restore-drill] Restore drill FAILED -- see errors above.");

@@ -1,6 +1,23 @@
 // One-off helper: ensure the demo login user exists in Supabase Auth.
 // Run: node --env-file-if-exists=/vercel/share/.env.project scripts/ensure-demo-user.mjs
+import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
+
+function loadLocalEnv() {
+  if (!fs.existsSync(".env.local")) return;
+  const lines = fs.readFileSync(".env.local", "utf8").split(/\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const index = trimmed.indexOf("=");
+    if (index === -1) continue;
+    const key = trimmed.slice(0, index);
+    const value = trimmed.slice(index + 1).replace(/^['"]|['"]$/g, "");
+    process.env[key] ??= value;
+  }
+}
+
+loadLocalEnv();
 
 const url = process.env.SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

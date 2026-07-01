@@ -6,8 +6,8 @@ import { validateServerEnv } from "@/lib/env.server";
 import { buildHealthChecks } from "@/lib/health.server";
 
 describe("backend hardening controls", () => {
-  test("tracks all 15 backend hardening controls with existing artifacts", () => {
-    expect(BACKEND_HARDENING_CONTROLS).toHaveLength(15);
+  test("tracks all 17 backend hardening controls with existing artifacts", () => {
+    expect(BACKEND_HARDENING_CONTROLS).toHaveLength(17);
     const ids = BACKEND_HARDENING_CONTROLS.map((control) => control.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const control of BACKEND_HARDENING_CONTROLS) {
@@ -31,8 +31,10 @@ describe("backend hardening controls", () => {
       "audit:transactions": "audit-transaction-boundaries",
       "audit:events": "audit-event-coverage",
       "audit:indexes": "audit-db-indexes",
+      "audit:migrations": "audit-migration-safety",
       "env:validate": "validate-env",
       "load:tenant-scale": "tenant-scale-load",
+      "load:tenant-db": "tenant-db-concurrency-smoke",
     };
     for (const [name, command] of Object.entries(expectedScripts)) {
       expect(pkg.scripts[name], name).toBeTruthy();

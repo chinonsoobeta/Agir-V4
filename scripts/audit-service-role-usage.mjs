@@ -5,13 +5,19 @@ import { join, relative } from "node:path";
 const roots = ["src"];
 const allowed = new Set([
   "src/integrations/supabase/client.server.ts",
+  "src/integrations/supabase/service-role.server.ts",
   "src/lib/documents.functions.ts",
   "src/lib/env.server.ts",
   "src/lib/health.server.ts",
   "src/lib/scim/supabase-store.server.ts",
   "src/lib/storage-download.server.ts",
 ]);
-const patterns = [/supabaseAdmin\b/, /SUPABASE_SERVICE_ROLE_KEY\b/, /service_role\b/i];
+const patterns = [
+  /supabaseAdmin\b/,
+  /SUPABASE_SERVICE_ROLE_KEY\b/,
+  /service_role\b/i,
+  /getServiceRoleClient\b/,
+];
 
 async function files(dir) {
   const entries = await readdir(dir, { withFileTypes: true });

@@ -13,10 +13,14 @@ const hasDatabaseUrl = [
 
 const checks = [
   ["schema drift", "node", ["scripts/check-schema-drift.mjs"]],
+  ["migration safety", "node", ["scripts/audit-migration-safety.mjs"]],
+  ["generated Supabase types", "npm", ["run", "types:check"]],
   ...(hasDatabaseUrl ? [["migration dry-run", "npm", ["run", "migrate:dry-run"]]] : []),
   ...(hasDatabaseUrl ? [["schema cache refresh", "npm", ["run", "schema:refresh-cache"]]] : []),
+  ["backend audit", "npm", ["run", "backend:audit"]],
   ["typecheck", "npm", ["run", "typecheck"]],
   ["unit tests", "npm", ["run", "test"]],
+  ["lint", "npm", ["run", "lint"]],
   ["production build", "npm", ["run", "build"]],
 ];
 
@@ -30,6 +34,14 @@ if (process.env.AUDIT_CHAIN_DATABASE_URL) {
 
 if (process.env.DATA_GOVERNANCE_DATABASE_URL) {
   checks.push(["data-governance enforcement", "npm", ["run", "governance:enforce"]]);
+}
+
+if (process.env.TENANT_DB_LOAD_DATABASE_URL) {
+  checks.push(["database tenant concurrency smoke", "npm", ["run", "load:tenant-db"]]);
+}
+
+if (process.env.DEPLOY_GATE_E2E === "1" || process.env.E2E_BASE_URL) {
+  checks.push(["browser E2E", "npm", ["run", "test:e2e"]]);
 }
 
 for (const [label, command, args] of checks) {

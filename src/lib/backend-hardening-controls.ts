@@ -7,10 +7,26 @@ export type BackendHardeningControl = {
 
 export const BACKEND_HARDENING_CONTROLS = [
   {
+    id: "csrf-server-functions",
+    title: "CSRF protection for TanStack server functions",
+    status: "enforced",
+    artifacts: ["src/start.ts", "src/test/backend-operational-hardening.test.ts"],
+  },
+  {
     id: "ephemeral-supabase-ci",
     title: "Mandatory ephemeral Supabase/RLS CI",
     status: "enforced",
-    artifacts: [".github/workflows/ci.yml", "scripts/ephemeral-supabase-smoke.mjs"],
+    artifacts: [
+      ".github/workflows/ci.yml",
+      "scripts/ensure-ephemeral-db.mjs",
+      "scripts/ephemeral-supabase-smoke.mjs",
+    ],
+  },
+  {
+    id: "migration-safety",
+    title: "Forward-only migration destructive-operation audit",
+    status: "enforced",
+    artifacts: ["scripts/audit-migration-safety.mjs", "scripts/deploy-gate.mjs"],
   },
   {
     id: "generated-types-drift",
@@ -44,9 +60,12 @@ export const BACKEND_HARDENING_CONTROLS = [
   },
   {
     id: "service-role-inventory",
-    title: "Service-role usage inventory",
+    title: "Capability-scoped service-role usage inventory",
     status: "enforced",
-    artifacts: ["scripts/audit-service-role-usage.mjs"],
+    artifacts: [
+      "src/integrations/supabase/service-role.server.ts",
+      "scripts/audit-service-role-usage.mjs",
+    ],
   },
   {
     id: "server-function-permissions",
@@ -100,6 +119,6 @@ export const BACKEND_HARDENING_CONTROLS = [
     id: "tenant-scale-load",
     title: "Tenant-scale backend load harness",
     status: "enforced",
-    artifacts: ["scripts/tenant-scale-load.mjs"],
+    artifacts: ["scripts/tenant-scale-load.mjs", "scripts/tenant-db-concurrency-smoke.mjs"],
   },
 ] as const satisfies readonly BackendHardeningControl[];

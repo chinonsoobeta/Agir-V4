@@ -1,8 +1,9 @@
-import { createStart, createMiddleware } from "@tanstack/react-start";
+import { createStart, createMiddleware, createCsrfMiddleware } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 
 import { renderErrorPage } from "./lib/error-page";
 import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
+import { captureServerError, createRequestId } from "@/lib/observability.server";
 
 function wantsHtmlDocument(request?: Request | null) {
   const accept = request?.headers.get("accept") ?? "";
@@ -26,24 +27,33 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
     if (error != null && typeof error === "object" && "statusCode" in error) {
       throw error;
     }
-    console.error(error);
     const request = getRequest();
+    const requestId = createRequestId(request);
+    captureServerError(error, {
+      requestId,
+      path: request ? new URL(request.url).pathname : "unknown",
+      handler: "start.errorMiddleware",
+    });
     const message = errorMessage(error);
     const status = errorStatus(message);
     if (!wantsHtmlDocument(request)) {
       return new Response(JSON.stringify({ error: message }), {
         status,
-        headers: { "content-type": "application/json; charset=utf-8" },
+        headers: { "content-type": "application/json; charset=utf-8", "x-request-id": requestId },
       });
     }
     return new Response(renderErrorPage(), {
       status,
-      headers: { "content-type": "text/html; charset=utf-8" },
+      headers: { "content-type": "text/html; charset=utf-8", "x-request-id": requestId },
     });
   }
 });
 
+const csrfMiddleware = createCsrfMiddleware({
+  filter: (ctx) => ctx.handlerType === "serverFn",
+});
+
 export const startInstance = createStart(() => ({
   functionMiddleware: [attachSupabaseAuth],
-  requestMiddleware: [errorMiddleware],
+  requestMiddleware: [csrfMiddleware, errorMiddleware],
 }));

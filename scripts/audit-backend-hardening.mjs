@@ -5,8 +5,10 @@ const artifacts = [
   ".github/workflows/ci.yml",
   ".github/workflows/ops-scheduled.yml",
   "scripts/check-generated-types.mjs",
+  "scripts/ensure-ephemeral-db.mjs",
   "scripts/extraction-worker.mjs",
   "scripts/extraction-worker-local-handler.mjs",
+  "scripts/audit-migration-safety.mjs",
   "scripts/audit-service-role-usage.mjs",
   "scripts/audit-server-function-auth.mjs",
   "scripts/audit-idempotency.mjs",
@@ -15,6 +17,9 @@ const artifacts = [
   "scripts/audit-db-indexes.mjs",
   "scripts/validate-env.mjs",
   "scripts/tenant-scale-load.mjs",
+  "scripts/tenant-db-concurrency-smoke.mjs",
+  "src/start.ts",
+  "src/integrations/supabase/service-role.server.ts",
   "src/lib/backend-hardening-controls.ts",
   "src/lib/env.server.ts",
   "src/lib/health.server.ts",
@@ -32,8 +37,10 @@ const requiredScripts = [
   "audit:transactions",
   "audit:events",
   "audit:indexes",
+  "audit:migrations",
   "env:validate",
   "load:tenant-scale",
+  "load:tenant-db",
 ];
 
 const failures = [];
