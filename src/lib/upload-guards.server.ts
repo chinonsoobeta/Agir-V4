@@ -96,17 +96,68 @@ export function scanDocumentBuffer(name: string, buf: ArrayBuffer): ScanResult {
 export type FullScanResult = ScanResult & { engine: "structural" | "external" };
 
 /**
+ * Parse an external scanner's 200 body into a verdict. Recognizes, in order:
+ *   - { clean: boolean, detail? }                (this app's native contract)
+ *   - { Status/status: "OK" | "FOUND" | ... }    (ClamAV REST bridges, e.g.
+ *     ajilaag/clamav-rest report infections as 200 {"Status":"FOUND"})
+ *   - { infected/isInfected/is_infected: bool }  (clamscan-style JSON APIs,
+ *     often with a viruses: [] list)
+ *   - plain text containing the clamd "... FOUND" verdict line
+ * Anything unrecognized is treated as clean ONLY if it carries no infection
+ * marker -- every known "infected" spelling above hard-rejects. Returning
+ * `null` means "no verdict in the body" (clean by HTTP 200 semantics).
+ */
+export function parseExternalScanVerdict(
+  text: string,
+): { infected: boolean; detail: string } | null {
+  if (!text) return null;
+  let json: Record<string, unknown> | null = null;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (parsed && typeof parsed === "object") json = parsed as Record<string, unknown>;
+  } catch {
+    // clamd/clamdscan text output: "stream: Eicar-Test-Signature FOUND"
+    if (/\bFOUND\b/.test(text)) return { infected: true, detail: text.slice(0, 500) };
+    return null;
+  }
+  if (json == null) return null;
+  const detailOf = (fallback: string) => {
+    const d = json?.detail ?? json?.Description ?? json?.description ?? json?.viruses;
+    return (typeof d === "string" ? d : Array.isArray(d) ? d.join(", ") : "") || fallback;
+  };
+  if (typeof json.clean === "boolean") {
+    return { infected: !json.clean, detail: detailOf("Flagged by scanner") };
+  }
+  const status = json.Status ?? json.status;
+  if (typeof status === "string") {
+    return status.trim().toUpperCase() === "OK"
+      ? { infected: false, detail: "clean" }
+      : { infected: true, detail: detailOf(`scanner status ${status}`) };
+  }
+  const infected = json.infected ?? json.isInfected ?? json.is_infected;
+  if (typeof infected === "boolean") {
+    return { infected, detail: detailOf(infected ? "Flagged by scanner" : "clean") };
+  }
+  return null;
+}
+
+/**
  * Full pre-parse safety scan. Always runs the deterministic structural check
  * first (cheap, no network). When DOCUMENT_SCAN_URL is configured, the bytes are
  * additionally submitted to an external anti-virus / content-scanning service
- * (e.g. a ClamAV REST gateway or a cloud scan API) and a verdict of "infected"
+ * (a ClamAV REST bridge or a cloud scan API) and a verdict of "infected"
  * hard-rejects the file. This is the single seam to plug a real AV engine into:
  * the rest of the pipeline calls only this function.
  *
- * Contract for the external endpoint (POST raw bytes):
- *   - HTTP 200            -> clean
- *   - HTTP 422 / 4xx       -> infected/unsafe (body text becomes the detail)
- *   - JSON { clean: bool, detail?: string } in a 200 body is also honored
+ * Contract for the external endpoint:
+ *   - Request: POST raw bytes (content-type application/octet-stream,
+ *     x-file-name header). Set DOCUMENT_SCAN_FORMAT=multipart for bridges that
+ *     expect a multipart form upload (field name "file"), e.g. clamav-rest.
+ *   - HTTP 4xx/5xx            -> infected/unsafe (body text becomes the detail;
+ *     clamav-rest reports infections as HTTP 406)
+ *   - HTTP 200                -> clean, UNLESS the body carries an infection
+ *     verdict (see parseExternalScanVerdict: {clean:false}, {Status:"FOUND"},
+ *     {infected:true}, or a clamd "... FOUND" text line all hard-reject)
  * A network/timeout error fails CLOSED (rejects) so an unreachable scanner can
  * never silently wave a file through. Set DOCUMENT_SCAN_FAIL_OPEN=1 to override
  * (e.g. during a scanner outage) -- it is logged on the document's scan_detail.
@@ -119,32 +170,33 @@ export async function scanDocument(name: string, buf: ArrayBuffer): Promise<Full
   if (!url) return { ...structural, engine: "structural" };
 
   const failOpen = process.env.DOCUMENT_SCAN_FAIL_OPEN === "1";
+  const multipart = process.env.DOCUMENT_SCAN_FORMAT?.trim().toLowerCase() === "multipart";
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
     let res: Response;
     try {
-      res = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/octet-stream", "x-file-name": name },
-        body: buf,
-        signal: controller.signal,
-      });
+      let body: BodyInit;
+      let headers: Record<string, string>;
+      if (multipart) {
+        const form = new FormData();
+        form.append("file", new Blob([buf], { type: "application/octet-stream" }), name);
+        body = form; // fetch sets the multipart boundary header itself
+        headers = { "x-file-name": name };
+      } else {
+        body = buf;
+        headers = { "content-type": "application/octet-stream", "x-file-name": name };
+      }
+      res = await fetch(url, { method: "POST", headers, body, signal: controller.signal });
     } finally {
       clearTimeout(timeout);
     }
     if (res.ok) {
       // A 200 may still carry a structured verdict.
-      const text = await res.text();
-      if (text) {
-        try {
-          const json = JSON.parse(text) as { clean?: boolean; detail?: string };
-          if (json && json.clean === false) {
-            return { ok: false, detail: json.detail ?? "Flagged by scanner", engine: "external" };
-          }
-        } catch {
-          /* non-JSON 200 body means clean */
-        }
+      const text = await res.text().catch(() => "");
+      const verdict = parseExternalScanVerdict(text);
+      if (verdict?.infected) {
+        return { ok: false, detail: verdict.detail, engine: "external" };
       }
       return { ok: true, detail: "clean (external scan)", engine: "external" };
     }

@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { sha256Hex, stableJsonHash } from "@/lib/hash.server";
-import { scanDocument, scanDocumentBuffer, UPLOAD_LIMITS } from "@/lib/upload-guards.server";
+import {
+  parseExternalScanVerdict,
+  scanDocument,
+  scanDocumentBuffer,
+  UPLOAD_LIMITS,
+} from "@/lib/upload-guards.server";
 import { isMaterialOverrideField, MATERIAL_OVERRIDE_KEYS } from "@/lib/dual-control";
 
 function buf(bytes: number[]): ArrayBuffer {
@@ -72,6 +77,108 @@ describe("scanDocument (async, AV-capable)", () => {
     const bad = await scanDocument("evil.pdf", buf(PNG_HEADER));
     expect(bad.ok).toBe(false);
     expect(bad.engine).toBe("structural");
+  });
+});
+
+describe("parseExternalScanVerdict (scanner response shapes)", () => {
+  it("honors the native {clean} contract", () => {
+    expect(parseExternalScanVerdict('{"clean":false,"detail":"Eicar"}')).toEqual({
+      infected: true,
+      detail: "Eicar",
+    });
+    expect(parseExternalScanVerdict('{"clean":true}')!.infected).toBe(false);
+  });
+  it("treats ClamAV-REST Status FOUND as infected and Status OK as clean", () => {
+    const found = parseExternalScanVerdict(
+      '{"Status":"FOUND","Description":"Eicar-Test-Signature"}',
+    );
+    expect(found).toEqual({ infected: true, detail: "Eicar-Test-Signature" });
+    expect(parseExternalScanVerdict('{"Status":"OK"}')!.infected).toBe(false);
+  });
+  it("treats clamscan-style infected flags and virus lists as infected", () => {
+    const r = parseExternalScanVerdict('{"isInfected":true,"viruses":["Eicar-Test-Signature"]}');
+    expect(r).toEqual({ infected: true, detail: "Eicar-Test-Signature" });
+    expect(parseExternalScanVerdict('{"infected":false}')!.infected).toBe(false);
+  });
+  it("treats a clamd text FOUND line as infected and other text as no-verdict", () => {
+    expect(parseExternalScanVerdict("stream: Eicar-Test-Signature FOUND")!.infected).toBe(true);
+    expect(parseExternalScanVerdict("scan completed")).toBeNull();
+    expect(parseExternalScanVerdict("")).toBeNull();
+  });
+});
+
+describe("scanDocument external AV integration (mocked scanner)", () => {
+  afterEach(() => {
+    delete process.env.DOCUMENT_SCAN_URL;
+    delete process.env.DOCUMENT_SCAN_FORMAT;
+    delete process.env.DOCUMENT_SCAN_FAIL_OPEN;
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects when a 200 body carries a ClamAV-REST FOUND verdict", async () => {
+    process.env.DOCUMENT_SCAN_URL = "https://scanner.internal/scan";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response('{"Status":"FOUND","Description":"Eicar"}', { status: 200 })),
+    );
+    const r = await scanDocument("a.pdf", buf(PDF_HEADER));
+    expect(r.ok).toBe(false);
+    expect(r.engine).toBe("external");
+    expect(r.detail).toMatch(/eicar/i);
+  });
+
+  it("rejects on a 4xx scanner verdict (clamav-rest returns 406 on detection)", async () => {
+    process.env.DOCUMENT_SCAN_URL = "https://scanner.internal/scan";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response('{"Status":"FOUND"}', { status: 406 })),
+    );
+    const r = await scanDocument("a.pdf", buf(PDF_HEADER));
+    expect(r.ok).toBe(false);
+    expect(r.engine).toBe("external");
+  });
+
+  it("passes a clean 200 and records the external engine", async () => {
+    process.env.DOCUMENT_SCAN_URL = "https://scanner.internal/scan";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response('{"Status":"OK"}', { status: 200 })),
+    );
+    const r = await scanDocument("a.pdf", buf(PDF_HEADER));
+    expect(r.ok).toBe(true);
+    expect(r.engine).toBe("external");
+  });
+
+  it("sends multipart form data when DOCUMENT_SCAN_FORMAT=multipart", async () => {
+    process.env.DOCUMENT_SCAN_URL = "https://scanner.internal/scan";
+    process.env.DOCUMENT_SCAN_FORMAT = "multipart";
+    const fetchMock = vi.fn(
+      async (_url: string, _init?: RequestInit) => new Response('{"Status":"OK"}', { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await scanDocument("a.pdf", buf(PDF_HEADER));
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(init?.body).toBeInstanceOf(FormData);
+    const file = (init?.body as FormData).get("file");
+    expect(file).toBeInstanceOf(Blob);
+  });
+
+  it("fails CLOSED on a scanner outage, and open only with the explicit flag", async () => {
+    process.env.DOCUMENT_SCAN_URL = "https://scanner.internal/scan";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("connect ECONNREFUSED");
+      }),
+    );
+    const closed = await scanDocument("a.pdf", buf(PDF_HEADER));
+    expect(closed.ok).toBe(false);
+    expect(closed.detail).toMatch(/unavailable/i);
+
+    process.env.DOCUMENT_SCAN_FAIL_OPEN = "1";
+    const open = await scanDocument("a.pdf", buf(PDF_HEADER));
+    expect(open.ok).toBe(true);
+    expect(open.detail).toMatch(/allowed by DOCUMENT_SCAN_FAIL_OPEN/);
   });
 });
 
