@@ -70,7 +70,7 @@ export function runReconciliationChecks(ctx: ReconciliationContext): Reconciliat
       flags.push({
         check_key: "ltc_consistency",
         severity: "error",
-        message: `Stated LTC ${ctx.statedLtcPct.toFixed(1)}% differs from loan/TDC ${computedLtc.toFixed(1)}% by more than 1%.`,
+        message: `Stated LTC ${ctx.statedLtcPct.toFixed(1)}% differs from loan/TDC ${computedLtc.toFixed(1)}% by more than ${TOLERANCE_POLICY.ltcPctPoints} percentage point${TOLERANCE_POLICY.ltcPctPoints === 1 ? "" : "s"}.`,
         expected: ctx.statedLtcPct,
         actual: computedLtc,
       });

@@ -48,6 +48,7 @@ export function applyStress(input: UnderwritingInput, preset: StressPreset): Und
   const costMultiplier = 1 + (preset.costDeltaPct ?? 0) / 100;
   const occupancyDeltaPts = preset.occupancyDeltaPts ?? 0;
   const expenseRatioDeltaPts = preset.expenseRatioDeltaPts ?? 0;
+  const rateDeltaPts = (preset.rateDeltaBps ?? 0) / 100;
   return {
     ...input,
     budget: {
@@ -74,6 +75,17 @@ export function applyStress(input: UnderwritingInput, preset: StressPreset): Und
     stabilizedOccupancyPct: Math.max(0, input.stabilizedOccupancyPct + occupancyDeltaPts),
     expenseRatioPct: Math.max(0, input.expenseRatioPct + expenseRatioDeltaPts),
     exitCapRatePct: input.exitCapRatePct + (preset.capRateDeltaBps ?? 0) / 100,
-    interestRatePct: input.interestRatePct + (preset.rateDeltaBps ?? 0) / 100,
+    // A rate shock hits the whole debt stack, not just the senior: mezzanine
+    // and refinance coupons reprice too, otherwise stressed all-in DSCR (and
+    // the verdict's combined-stress gate) is understated on every mezz/refi deal.
+    interestRatePct: input.interestRatePct + rateDeltaPts,
+    mezzanine:
+      input.mezzanine == null
+        ? input.mezzanine
+        : { ...input.mezzanine, ratePct: input.mezzanine.ratePct + rateDeltaPts },
+    refinance:
+      input.refinance == null
+        ? input.refinance
+        : { ...input.refinance, ratePct: input.refinance.ratePct + rateDeltaPts },
   };
 }

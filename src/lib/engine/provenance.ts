@@ -32,8 +32,12 @@ export type ProvenanceReport = {
   pass: boolean;
 };
 
+// The %/×/x suffixes must be adjacent to the number: a spaced " x " is the
+// multiplication sign in formula text ("8,052,000 x 96%"), not a multiple
+// unit, and attaching it would mis-tag the dollar amount as an "x" token.
+// Word suffixes (bps, million, ...) may be separated by one space.
 const TOKEN_RE =
-  /(\$\s?)?(-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|-?\d+(?:\.\d+)?)\s?(%|bps|×|x\b|million\b|mm\b|bn\b|M\b|B\b|k\b|K\b)?/g;
+  /(\$\s?)?(-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|-?\d+(?:\.\d+)?)(?:(%|×|x\b)|\s?(bps\b|million\b|mm\b|bn\b|M\b|B\b|k\b|K\b))?/g;
 
 function suffixMultiplier(suffix: string | undefined, hasDollar: boolean): number {
   if (!suffix) return 1;
@@ -49,15 +53,19 @@ export function collectNumericTokens(text: string): NumericToken[] {
   for (const m of text.matchAll(TOKEN_RE)) {
     const hasDollar = Boolean(m[1]);
     const numeric = m[2];
-    const suffix = m[3];
+    const suffix = m[3] ?? m[4];
     const base = Number(numeric.replace(/,/g, ""));
     if (!Number.isFinite(base)) continue;
     const multiplier = suffixMultiplier(suffix, hasDollar);
     const value = base * multiplier;
-    // Implicitly allowed: small counts/ordinals (0..12) and calendar years.
-    const isInt = Number.isInteger(base) && !numeric.includes(".");
-    if (multiplier === 1 && isInt && Math.abs(base) <= 12) continue;
-    if (multiplier === 1 && isInt && base >= 1900 && base <= 2100) continue;
+    // Implicitly allowed: small counts/ordinals (0..12) and calendar years -
+    // but ONLY as bare unit-less integers. "$2,050", "7%", "5x", "10 bps" all
+    // carry a unit and must trace to an allowed value; without the unit check
+    // a fabricated rent or cap rate in these ranges sailed through the gate.
+    const isBareInt =
+      Number.isInteger(base) && !numeric.includes(".") && !hasDollar && suffix == null;
+    if (isBareInt && Math.abs(base) <= 12) continue;
+    if (isBareInt && base >= 1900 && base <= 2100) continue;
     const decimals = numeric.includes(".") ? numeric.split(".")[1].length : 0;
     const tolerance = 0.5 * Math.pow(10, -decimals) * multiplier;
     const unit: TokenUnit | undefined =

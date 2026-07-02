@@ -92,6 +92,11 @@ export const DEFAULTS: Record<string, { value: number; label: string }> = {
   expense_ratio_pct: { value: 35, label: "Operating expense ratio 35%" },
   selling_costs_pct: { value: 2, label: "Selling costs 2%" },
   hold_years: { value: 5, label: "Hold period 5 years" },
+  // NOTE: lease_up_months is an ABSENT_MEANS_ZERO key, so it never appears in
+  // readiness.missing and this entry is never offered by "Accept defaults" on
+  // the assembled path - an absent lease-up deliberately models 0 months (no
+  // silent 12-month assumption). The entry exists for the quick-start
+  // calculator (finance.ts), which seeds a sketch deal from these values.
   lease_up_months: { value: 12, label: "Lease-up 12 months" },
 };
 
@@ -118,6 +123,26 @@ function readableScalar(rows: ScalarInputRow[], key: string): ScalarInputRow | u
   return rows.find(
     (r) => r.key === key && ENGINE_READABLE_STATUSES.includes(r.status) && r.value_numeric != null,
   );
+}
+
+// Complete = every figure GPR needs is present: count and rent always, and the
+// square footage when the rent is quoted per SF.
+function isCompleteComponent(r: RevenueComponentRow): boolean {
+  return (
+    Number(r.unit_count) > 0 &&
+    Number(r.rent) > 0 &&
+    (r.rent_basis !== "per_sf" || Number(r.avg_sf) > 0)
+  );
+}
+
+// Effective project occupancy when only component-level occupancies were
+// approved: the GPR-weighted average (the same weights componentGpr uses).
+function weightedComponentOccupancy(program: RevenueUnitInput[]): number {
+  const gprOf = (r: RevenueUnitInput) =>
+    r.rentBasis === "per_sf" ? r.unitCount * (r.avgSf ?? 0) * r.rent : r.unitCount * r.rent * 12;
+  const totalGpr = program.reduce((sum, r) => sum + gprOf(r), 0);
+  if (totalGpr <= 0) return 0;
+  return program.reduce((sum, r) => sum + gprOf(r) * (r.occupancyPct ?? 0), 0) / totalGpr;
 }
 
 export function computeReadiness(rows: ProjectInputRows): Readiness {
@@ -161,11 +186,23 @@ export function computeReadiness(rows: ProjectInputRows): Readiness {
 
   // A component is usable only when it is engine-readable AND complete
   // (count/SF and rent both present): a partial row never silently feeds
-  // a zero into the engine.
-  const readableComponents = rows.revenue.filter(
-    (r) =>
-      ENGINE_READABLE_STATUSES.includes(r.status) && Number(r.unit_count) > 0 && Number(r.rent) > 0,
+  // a zero into the engine. For a per-SF rent that includes the square
+  // footage - GPR is count x SF x rent, so an approved $/SF rent with no SF
+  // would silently contribute $0.
+  const engineReadableComponents = rows.revenue.filter((r) =>
+    ENGINE_READABLE_STATUSES.includes(r.status),
   );
+  const readableComponents = engineReadableComponents.filter(isCompleteComponent);
+  for (const r of engineReadableComponents) {
+    if (
+      Number(r.unit_count) > 0 &&
+      Number(r.rent) > 0 &&
+      r.rent_basis === "per_sf" &&
+      !(Number(r.avg_sf) > 0)
+    ) {
+      pushMissing(`sf:${r.unit_type}`);
+    }
+  }
   if (rows.revenue.some((r) => r.status === "conflicting")) pushConflicting("revenue_program");
   else if (readableComponents.length === 0) pushMissing("revenue_program");
 
@@ -279,12 +316,7 @@ export function assembleEngineInput(rows: ProjectInputRows): BrandedUnderwriting
 
   const projectOcc = scalar("stabilized_occupancy_pct");
   const revenueProgram: RevenueUnitInput[] = rows.revenue
-    .filter(
-      (r) =>
-        ENGINE_READABLE_STATUSES.includes(r.status) &&
-        Number(r.unit_count) > 0 &&
-        Number(r.rent) > 0,
-    )
+    .filter((r) => ENGINE_READABLE_STATUSES.includes(r.status) && isCompleteComponent(r))
     .map((r) => ({
       unitType: r.unit_type,
       unitCount: Number(r.unit_count),
@@ -367,7 +399,13 @@ export function assembleEngineInput(rows: ProjectInputRows): BrandedUnderwriting
     revenueProgram,
     constructionMonths: optionalZero("construction_months"),
     leaseUpMonths: optionalZero("lease_up_months"),
-    stabilizedOccupancyPct: projectOcc ?? 0,
+    // When no project-level occupancy is approved (allowed: readiness then
+    // requires every component to carry its own), the scalar is derived as the
+    // GPR-weighted average of component occupancies. Fabricating 0% here would
+    // not change the annual engine (components win) but corrupts everything
+    // that reads the scalar - e.g. the stabilized_occupancy sensitivity driver
+    // reports a zero-swing tornado bar and a nonsense breakeven.
+    stabilizedOccupancyPct: projectOcc ?? weightedComponentOccupancy(revenueProgram),
     expenseRatioPct: required("expense_ratio_pct"),
     otherIncomeAnnual: optionalZero("other_income_annual"),
     exitCapRatePct: required("exit_cap_rate_pct"),

@@ -249,7 +249,19 @@ export function applyMonthlySchedule(
   }
 
   // ---- Refinance (1C) ------------------------------------------------------
-  const refi = input.refinance && input.refinance.month > 0 ? input.refinance : null;
+  // A refinance dated at/after the exit month never takes effect inside the
+  // horizon; modeling it anyway would swap the exit payoff to a loan that never
+  // existed and date the refi cash flows after the sale. Ignore it loudly.
+  const refiRaw = input.refinance && input.refinance.month > 0 ? input.refinance : null;
+  const refi = refiRaw && Math.round(refiRaw.month) < totalMonths ? refiRaw : null;
+  if (refiRaw && !refi) {
+    warnings.push({
+      key: "refinance_beyond_horizon",
+      message: `Refinance month ${Math.round(refiRaw.month)} falls at or after the exit (month ${totalMonths}); the refinance was ignored.`,
+      expected: totalMonths,
+      actual: Math.round(refiRaw.month),
+    });
+  }
   const refiMonth = refi ? Math.round(refi.month) : 0;
   const monthsSeniorStartAtRefi = Math.max(0, refiMonth - stabilizationStart);
   const seniorBalanceAtRefi = refi
@@ -295,11 +307,14 @@ export function applyMonthlySchedule(
     refi && refiNewAnnualDebtService > 0 ? ctx.noi / refiNewAnnualDebtService : 0;
 
   if (refi && newSenior) {
-    if (refiMonth <= C) {
+    // Lease-up months are pre-stabilization too: a refi before C+L retires the
+    // senior early while the carry stays modeled on the original stack, so the
+    // approximation deserves the same flag as a mid-construction refi.
+    if (refiMonth < stabilizationStart) {
       warnings.push({
-        key: "refinance_during_construction",
+        key: "refinance_before_stabilization",
         message:
-          "Refinance month falls during construction; modeled at the senior balance then outstanding.",
+          "Refinance month falls before stabilization (construction or lease-up); modeled at the senior balance then outstanding, with construction/lease-up carry still on the original stack.",
       });
     }
     nodes.push({
@@ -467,7 +482,12 @@ export function applyMonthlySchedule(
           newSenior.ratePct,
           newSenior.amortYears,
           newSenior.ioMonths,
-          holdMonths - monthsSeniorStartAtRefi,
+          // Months the new loan is outstanding = refi month to exit. (For a
+          // refi at/after stabilization this equals holdMonths - monthsSince-
+          // Stabilization; for an earlier refi it keeps the payoff clock on
+          // the same origin as the debt-service clock instead of crediting
+          // the loan with zero elapsed time.)
+          totalMonths - refiMonth,
         )
       : loanBalanceAfterMonths(
           senior.amount,
@@ -480,7 +500,24 @@ export function applyMonthlySchedule(
     ? loanBalanceAfterMonths(mezz.amount, mezz.ratePct, mezz.amortYears, mezz.ioMonths, holdMonths)
     : 0;
   const payoffAtExit = refi ? seniorPayoffAtExit + mezzPayoffAtExit : ctx.loanPayoffAtExit;
-  if (!ctx.equityWipeout) {
+  // Non-recourse floor on the refi path too: the annual model decided
+  // equityWipeout against the ORIGINAL loan payoff, but a cash-out refinance
+  // can push the refi-aware payoff above the sale proceeds. Mirror the annual
+  // convention (proforma.ts): floor the exit flow at zero, suppress the
+  // sale/payoff nodes, and mark the IRR not meaningful - never model equity
+  // writing a cheque at the sale.
+  const scheduleEquityWipeout =
+    ctx.equityWipeout || (refi != null && ctx.netSaleBeforeDebt < payoffAtExit);
+  if (scheduleEquityWipeout && !ctx.equityWipeout) {
+    warnings.push({
+      key: "refi_exit_shortfall",
+      message:
+        "Sale proceeds do not cover the refinanced debt payoff at exit; equity recovers nothing at sale (non-recourse floor) and the monthly-model IRR is not meaningful.",
+      expected: payoffAtExit,
+      actual: ctx.netSaleBeforeDebt,
+    });
+  }
+  if (!scheduleEquityWipeout) {
     nodes.push({
       period: exitMonth,
       lineKey: "sale",
@@ -533,8 +570,10 @@ export function applyMonthlySchedule(
       });
       continue;
     }
-    const from =
-      line.fromMonth != null ? Math.max(0, Math.round(line.fromMonth)) : stabilizationStart;
+    // "Absent => every operating period" (types.ts): lease-up months ARE
+    // operating periods (they carry egi/opex/noi/levered_cf nodes), so the
+    // default window starts at the first operating month, not stabilization.
+    const from = line.fromMonth != null ? Math.max(0, Math.round(line.fromMonth)) : C;
     const to =
       line.toMonth != null ? Math.min(totalMonths - 1, Math.round(line.toMonth)) : totalMonths - 1;
     let total = 0;
@@ -604,14 +643,16 @@ export function applyMonthlySchedule(
     irrFlows.push({ t: ctx.developmentYears + y, amount: holdForIrr[y - 1] ?? 0 });
   }
   const exitOperating = holdForIrr[H - 1] ?? 0;
-  const finalFlow = ctx.equityWipeout ? 0 : ctx.netSaleBeforeDebt - payoffAtExit + exitOperating;
+  const finalFlow = scheduleEquityWipeout
+    ? 0
+    : ctx.netSaleBeforeDebt - payoffAtExit + exitOperating;
   irrFlows.push({ t: ctx.developmentYears + H, amount: finalFlow });
   if (refi) irrFlows.push({ t: refiMonth / 12, amount: refiCashOut });
 
   const hasNeg = irrFlows.some((f) => f.amount < 0);
   const hasPos = irrFlows.some((f) => f.amount > 0);
   const scheduleLeveredIrrPct =
-    ctx.equityWipeout || !hasNeg || !hasPos ? Number.NaN : xirr(irrFlows);
+    scheduleEquityWipeout || !hasNeg || !hasPos ? Number.NaN : xirr(irrFlows);
 
   // ---- Roll-up reconciliation ----------------------------------------------
   const sumNodes = (predicate: (n: PeriodNode) => boolean) =>
@@ -667,7 +708,13 @@ export function applyMonthlySchedule(
     recon(
       "construction_interest",
       "Construction interest",
-      -scheduleConstructionInterest,
+      // Straight-line mirrors the annual interest reserve, so reconcile the
+      // nodes against the true backbone figure - comparing against the spine's
+      // own accumulator would tie out by construction and could never catch
+      // drift. The S-curve basis intentionally diverges from the reserve
+      // (interest on the actual monthly balance), so there the identity is
+      // nodes-vs-accumulator and the divergence is surfaced as its own metric.
+      sCurveActive ? -scheduleConstructionInterest : -ctx.interestReserve,
       sumNodes((n) => n.lineKey === "construction_interest"),
     ),
     recon(

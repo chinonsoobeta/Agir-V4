@@ -3,7 +3,11 @@ export type Cents = number & { readonly __brand: "Cents" };
 export function toCents(value: number): Cents {
   const n = Number(value);
   if (!Number.isFinite(n)) return 0 as Cents;
-  return Math.round(n * 100) as Cents;
+  // Correct binary-float representation error before rounding (1.005 * 100 is
+  // 100.4999...), and round half-away-from-zero on the magnitude so that
+  // roundMoney(-x) === -roundMoney(x).
+  const cents = Math.round(Number((Math.abs(n) * 100).toFixed(6)));
+  return (n < 0 ? -cents : cents) as Cents;
 }
 
 export function fromCents(cents: number): number {

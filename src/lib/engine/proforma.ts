@@ -182,7 +182,12 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   // 1A. Equity draw timing: the single t=0 outflow becomes a timed contribution
   // vector. With no draw schedule this is exactly [{ t: 0, -equity }], so the
   // IRR vector is unchanged. A straight-line draw defers part of the outflow.
-  const equityContributions = buildEquityContributions(equity, input.equityDrawMonths ?? 0);
+  // A draw schedule longer than the deal horizon would date contributions after
+  // the exit (off the schedule grid, still inside the IRR vector) - clamp it.
+  const horizonMonths = Math.round(input.constructionMonths + input.leaseUpMonths) + exitYear * 12;
+  const requestedEquityDrawMonths = input.equityDrawMonths ?? 0;
+  const equityDrawMonths = Math.min(requestedEquityDrawMonths, horizonMonths);
+  const equityContributions = buildEquityContributions(equity, equityDrawMonths);
   const distributionFlows = [
     ...interimLevered.map((cf, i) => ({ t: developmentYears + i + 1, amount: cf })),
     { t: developmentYears + exitYear, amount: finalEquityFlow },
@@ -275,13 +280,33 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
       actual: input.equityAmount,
     });
   }
+  // Monthly-model features silently do nothing when the spine is off: an
+  // approved refinance or S-curve that doesn't move a single number is a trust
+  // failure, so say it out loud instead.
+  const inactiveMonthlyFeatures = [
+    input.refinance && input.refinance.month > 0 ? "refinance" : null,
+    input.constructionDrawCurve === "s_curve" ? "S-curve construction draw" : null,
+    (input.customLines?.length ?? 0) > 0 ? "custom line items" : null,
+  ].filter((f): f is string => f != null);
+  if (!input.monthlyModel && inactiveMonthlyFeatures.length > 0) {
+    warnings.push({
+      key: "monthly_features_inactive",
+      message: `Approved monthly-model feature(s) - ${inactiveMonthlyFeatures.join(", ")} - have no effect because the monthly model is off for this deal; enable monthly_model to apply them.`,
+    });
+  }
+  if (requestedEquityDrawMonths > horizonMonths) {
+    warnings.push({
+      key: "equity_draw_beyond_horizon",
+      message: `Equity draw schedule of ${requestedEquityDrawMonths} months extends past the ${horizonMonths}-month deal horizon; clamped to the horizon.`,
+      expected: horizonMonths,
+      actual: requestedEquityDrawMonths,
+    });
+  }
 
   const drawNote =
-    (input.equityDrawMonths ?? 0) > 1
-      ? ` Equity draw: ${equityDrawConventionText(input.equityDrawMonths ?? 0)}.`
-      : "";
+    equityDrawMonths > 1 ? ` Equity draw: ${equityDrawConventionText(equityDrawMonths)}.` : "";
   const irrFormula = equityWipeout
-    ? `Equity loss: IRR not meaningful: sale proceeds ${money(netSaleBeforeDebt)} < loan payoff ${money(loanPayoffAtExit)}; EM ≈ 0.0x`
+    ? `Equity loss: IRR not meaningful: sale proceeds ${money(netSaleBeforeDebt)} < loan payoff ${money(loanPayoffAtExit)}; EM ${equityMultiple.toFixed(1)}x`
     : Number.isFinite(irrPct)
       ? `IRR from equity cash flows [${irrFlows.map((v) => money(v)).join(", ")}], with operating cash flow and sale phased ${input.constructionMonths} months construction + ${input.leaseUpMonths} months lease-up after equity is committed = ${irrPct.toFixed(2)}%.${drawNote}`
       : "IRR not meaningful: equity cash flows do not include both negative and positive values.";

@@ -220,8 +220,12 @@ export function tornado(
   const bars = varKeys.map((k) => {
     const v = getVar(k);
     const base = v.read(input);
-    const low = base * (1 - f);
-    const high = base * (1 + f);
+    // Additive spread on |base| (with a 1-unit floor) rather than base*(1±f):
+    // a zero base (e.g. 0% rent growth) would otherwise produce a degenerate
+    // zero-swing bar, and a negative base would swap the low/high ends.
+    const spread = Math.abs(base) * f || 1;
+    const low = base - spread;
+    const high = base + spread;
     const lowValue = m.read(runUnderwriting(v.set(input, low)));
     const highValue = m.read(runUnderwriting(v.set(input, high)));
     const lo = Number.isFinite(lowValue) ? lowValue : baseMetric;

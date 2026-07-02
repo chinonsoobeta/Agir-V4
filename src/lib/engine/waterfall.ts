@@ -10,12 +10,19 @@
 //   3. Residual carry split across one or two return hurdles, with a promote
 //
 // The math is pure and hand-computable. Each return hurdle is represented as an
-// accreting balance: a party's contributed capital grown at the hurdle rate. A
-// distribution retires the lowest outstanding balance first (return of capital +
-// preferred), then flows into the carry tiers. Because every distribution and
-// contribution moves all balances by the same dollar amount and only the
-// accretion rate differs, the balances stay ordered (pref <= tier1 <= tier2),
-// which makes the band a distribution falls into unambiguous.
+// accreting balance: TOTAL contributed capital grown at the hurdle rate, retired
+// by TOTAL distributions -- i.e. hurdles are whole-equity (deal-level) IRR
+// hurdles, not LP-side hurdles. A distribution retires the lowest outstanding
+// balance first (return of capital + preferred), then flows into the carry
+// tiers. Because every distribution and contribution moves all balances by the
+// same dollar amount and only the accretion rate differs, the balances stay
+// ordered (pref <= tier1 <= tier2), which makes the band a distribution falls
+// into unambiguous.
+//
+// The partial catch-up convention (gpCatchUpPct < 100) fixes the GP's target at
+// the first carry tier's share of the LP preferred (the same dollars a 100%
+// catch-up would target) and stretches the band: LP receipts inside the band do
+// not enlarge the target. Both conventions are documented in the tests.
 //
 // GUARANTEES
 //  - With no promote configured the waterfall is inactive: the LP holds the
@@ -30,8 +37,13 @@ import { compoundMoney, roundMoney, splitMoney } from "./decimal-money";
 
 export type PromoteTier = {
   // Upper return/IRR hurdle (annual %, compounded) bounding this carry tier. The
-  // open (top) tier omits it. A finite hurdle means "split this way until the LP
-  // has achieved hurdlePct, then move to the next tier".
+  // open (top) tier omits it. A finite hurdle is a WHOLE-EQUITY (deal-level)
+  // hurdle: split this way until total distributions have retired all
+  // contributed capital accreted at hurdlePct, then move to the next tier.
+  // (This is the deal-IRR convention, not an LP-side hurdle: because the GP
+  // takes carry inside the band, the LP's own IRR at the boundary is below
+  // hurdlePct. Agreements that hurdle on the LP's achieved return need the
+  // LP-side convention, which this engine does not model.)
   hurdlePct?: number | null;
   // GP's share of distributions inside this tier (the carried interest), 0..100.
   gpPct: number;
@@ -240,7 +252,7 @@ export function runWaterfall(events: WaterfallEvent[], cfg: WaterfallConfig): Wa
   const formulaText =
     `European waterfall over levered equity (${(sLP * 100).toFixed(0)}/${(sGP * 100).toFixed(0)} LP/GP capital): ` +
     `return of capital + ${(prefRate * 100).toFixed(1)}% preferred${cpct > 0 ? `, ${(cpct * 100).toFixed(0)}% GP catch-up` : ""}, ` +
-    `then carry ${tierText}. GP promote = GP distributions less a pari-passu split.`;
+    `then carry ${tierText}. Hurdles are whole-equity (deal-level) IRR hurdles. GP promote = GP distributions less a pari-passu split.`;
 
   return {
     active: true,

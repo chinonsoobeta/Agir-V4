@@ -59,11 +59,54 @@ export function validateEngineInput(input: UnderwritingInput): InputViolation[] 
   );
   flag(input.loanAmount < 0, "loanAmount", input.loanAmount, "Senior loan amount is negative.");
   flag(input.holdYears <= 0, "holdYears", input.holdYears, "Hold period must be positive.");
+  // amortYears = 0 is the supported interest-only convention (tranches.ts);
+  // only a negative value is impossible.
+  flag(input.amortYears < 0, "amortYears", input.amortYears, "Amortization period is negative.");
   flag(
-    input.amortYears <= 0,
-    "amortYears",
-    input.amortYears,
-    "Amortization period must be positive.",
+    input.constructionMonths < 0,
+    "constructionMonths",
+    input.constructionMonths,
+    "Construction months is negative.",
+  );
+  flag(
+    input.leaseUpMonths < 0,
+    "leaseUpMonths",
+    input.leaseUpMonths,
+    "Lease-up months is negative.",
+  );
+  flag(input.ioMonths < 0, "ioMonths", input.ioMonths, "Interest-only months is negative.");
+  flag(
+    (input.equityAmount ?? 0) < 0,
+    "equityAmount",
+    input.equityAmount ?? 0,
+    "Equity amount is negative.",
+  );
+  flag(
+    (input.equityDrawMonths ?? 0) < 0,
+    "equityDrawMonths",
+    input.equityDrawMonths ?? 0,
+    "Equity draw months is negative.",
+  );
+  // The only fraction-typed input (0.55 = 55% average outstanding): a
+  // percent-style 55 would inflate the computed interest carry ~100x.
+  flag(
+    input.avgOutstandingFactor != null &&
+      (input.avgOutstandingFactor < 0 || input.avgOutstandingFactor > 1),
+    "avgOutstandingFactor",
+    input.avgOutstandingFactor ?? 0,
+    "Average outstanding factor is a FRACTION (0-1), not a percent.",
+  );
+  flag(
+    input.rentGrowthPct < -20 || input.rentGrowthPct > 20,
+    "rentGrowthPct",
+    input.rentGrowthPct,
+    "Rent growth outside -20% to 20%: check for a units/scale slip.",
+  );
+  flag(
+    input.expenseGrowthPct < -20 || input.expenseGrowthPct > 20,
+    "expenseGrowthPct",
+    input.expenseGrowthPct,
+    "Expense growth outside -20% to 20%: check for a units/scale slip.",
   );
   flag(
     input.sellingCostsPct < 0 || input.sellingCostsPct > 100,
@@ -114,6 +157,94 @@ export function validateEngineInput(input: UnderwritingInput): InputViolation[] 
       input.mezzanine.ratePct,
       "Mezzanine rate outside 0-40%: check for a units/scale slip.",
     );
+    flag(
+      input.mezzanine.amortYears < 0,
+      "mezzanine.amortYears",
+      input.mezzanine.amortYears,
+      "Mezzanine amortization period is negative.",
+    );
+    flag(
+      input.mezzanine.ioMonths < 0,
+      "mezzanine.ioMonths",
+      input.mezzanine.ioMonths,
+      "Mezzanine interest-only months is negative.",
+    );
+  }
+
+  if (input.refinance) {
+    flag(
+      input.refinance.ratePct < 0 || input.refinance.ratePct > 40,
+      "refinance.ratePct",
+      input.refinance.ratePct,
+      "Refinance rate outside 0-40%: check for a units/scale slip.",
+    );
+    flag(
+      input.refinance.ltvPct != null &&
+        (input.refinance.ltvPct <= 0 || input.refinance.ltvPct > 100),
+      "refinance.ltvPct",
+      input.refinance.ltvPct ?? 0,
+      "Refinance LTV outside 0-100%.",
+    );
+    flag(
+      input.refinance.amortYears < 0,
+      "refinance.amortYears",
+      input.refinance.amortYears,
+      "Refinance amortization period is negative.",
+    );
+    flag(
+      input.refinance.ioMonths < 0,
+      "refinance.ioMonths",
+      input.refinance.ioMonths,
+      "Refinance interest-only months is negative.",
+    );
+  }
+
+  if (input.waterfall) {
+    const wf = input.waterfall;
+    flag(
+      wf.lpEquityPct < 0 || wf.lpEquityPct > 100,
+      "waterfall.lpEquityPct",
+      wf.lpEquityPct,
+      "LP equity share outside 0-100%.",
+    );
+    flag(
+      wf.gpEquityPct < 0 || wf.gpEquityPct > 100,
+      "waterfall.gpEquityPct",
+      wf.gpEquityPct,
+      "GP equity share outside 0-100%.",
+    );
+    flag(
+      Math.abs(wf.lpEquityPct + wf.gpEquityPct - 100) > 0.01,
+      "waterfall.equitySplit",
+      wf.lpEquityPct + wf.gpEquityPct,
+      "LP + GP equity shares do not sum to 100%.",
+    );
+    flag(
+      wf.preferredReturnPct < 0 || wf.preferredReturnPct > 50,
+      "waterfall.preferredReturnPct",
+      wf.preferredReturnPct,
+      "Preferred return outside 0-50%: check for a units/scale slip.",
+    );
+    flag(
+      wf.gpCatchUpPct < 0 || wf.gpCatchUpPct > 100,
+      "waterfall.gpCatchUpPct",
+      wf.gpCatchUpPct,
+      "GP catch-up outside 0-100%.",
+    );
+    wf.tiers.forEach((tier, i) => {
+      flag(
+        tier.gpPct < 0 || tier.gpPct > 100,
+        `waterfall.tiers[${i}].gpPct`,
+        tier.gpPct,
+        `Promote tier ${i + 1} GP share outside 0-100%.`,
+      );
+      flag(
+        tier.hurdlePct != null && tier.hurdlePct < 0,
+        `waterfall.tiers[${i}].hurdlePct`,
+        tier.hurdlePct ?? 0,
+        `Promote tier ${i + 1} hurdle is negative.`,
+      );
+    });
   }
 
   return out;
