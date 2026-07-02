@@ -48,7 +48,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v2
         with:
           # Pinned: "latest" made this job's behavior change under our feet
           # (generated-types format and local-stack behavior can shift between
@@ -68,7 +68,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v2
         with:
           # Pinned: "latest" made this job's behavior change under our feet
           # (generated-types format and local-stack behavior can shift between
