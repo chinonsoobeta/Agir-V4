@@ -5,7 +5,8 @@ import { test, expect, type Page } from "@playwright/test";
 // redirect back to /auth), shows a real heading, doesn't trip the error
 // boundary, and logs no uncaught page errors.
 const SIDEBAR_ROUTES: { path: string; heading: RegExp }[] = [
-  { path: "/dashboard", heading: /overview|dashboard|home/i },
+  // The dashboard greets the user by name ("Good morning, Maple").
+  { path: "/dashboard", heading: /overview|dashboard|home|good (morning|afternoon|evening)/i },
   { path: "/portfolio", heading: /portfolio/i },
   { path: "/deals", heading: /deals/i },
   { path: "/relationships", heading: /relationship/i },

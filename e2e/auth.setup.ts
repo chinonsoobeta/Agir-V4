@@ -12,9 +12,23 @@ setup("authenticate", async ({ page }) => {
   const password = page.locator('input[type="password"]');
   await expect(email).toBeVisible();
 
-  // Fill in a retry loop and assert the controlled inputs actually hold the
-  // values before submitting. This absorbs the SSR-hydration race where an
-  // early fill is discarded when React re-renders the controlled inputs.
+  // Wait for React hydration before touching the form. Filled values "holding"
+  // does not prove hydration (pre-hydration DOM keeps them too), and clicking
+  // the submit button before handlers attach fires a NATIVE form submit that
+  // reloads /auth? and dumps the session. The password-visibility toggle is a
+  // reliable probe: it is type="button" (inert pre-hydration) and only flips
+  // the input type once React's onClick is wired.
+  const toggle = page.getByRole("button", { name: "Show password" });
+  await expect(async () => {
+    await toggle.click();
+    await expect(page.locator('input[type="text"][autocomplete="current-password"]')).toBeVisible({
+      timeout: 1_000,
+    });
+  }).toPass({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Hide password" }).click();
+
+  // Hydrated now: controlled inputs keep their values and submit runs the JS
+  // handler. The retry loop stays as belt-and-braces against re-render races.
   await expect(async () => {
     await email.fill(EMAIL);
     await password.fill(PASSWORD);

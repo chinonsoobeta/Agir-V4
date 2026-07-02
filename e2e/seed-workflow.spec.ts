@@ -7,18 +7,30 @@ import { test, expect } from "@playwright/test";
 test("seed Harbour Centre demo and review its underwriting surfaces", async ({ page }) => {
   await page.goto("/deals");
 
-  // Open the demo-package picker. Retry the trigger click until the menu
-  // actually opens, which absorbs SSR-hydration timing (the click handler may
-  // not be attached the instant the route renders).
+  // Open the demo-package picker dialog. Retry the trigger click until the
+  // dialog actually opens, which absorbs SSR-hydration timing (the click
+  // handler may not be attached the instant the route renders).
   const trigger = page.getByRole("button", { name: /seed demo deal/i });
   await expect(trigger).toBeVisible();
   await expect(async () => {
     await trigger.click();
-    await expect(page.getByRole("menu")).toBeVisible({ timeout: 1_000 });
+    await expect(page.getByRole("dialog")).toBeVisible({ timeout: 1_000 });
   }).toPass({ timeout: 20_000 });
-  await page.getByRole("menuitem").filter({ hasText: "Harbour Centre" }).click();
 
-  // The seed creates the project and opens it.
+  // Seed the Harbour Centre package from its card.
+  await page
+    .getByRole("dialog")
+    .locator("div", { has: page.getByRole("heading", { name: "Harbour Centre", exact: false }) })
+    .getByRole("button", { name: /seed package/i })
+    .first()
+    .click();
+
+  // Seeding surfaces a success toast whose action opens the new project. The
+  // toast animates and auto-dismisses, so Playwright's stability check can
+  // never settle on it - dispatch the click directly once it is visible.
+  const openDemo = page.getByRole("button", { name: /open demo/i });
+  await expect(openDemo).toBeVisible({ timeout: 60_000 });
+  await openDemo.dispatchEvent("click");
   await page.waitForURL("**/projects/**", { timeout: 60_000 });
   await expect(page.getByRole("heading", { name: "Harbour Centre" })).toBeVisible();
 
