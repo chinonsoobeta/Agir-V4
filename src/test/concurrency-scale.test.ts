@@ -9,6 +9,7 @@ import {
   persistAcceptedDefaults,
 } from "@/lib/underwriting.functions";
 import { loadReportData } from "@/lib/reports/report-data.server";
+import { claimJob, completeJob } from "@/lib/extraction-jobs.server";
 
 type QueryRecord = {
   table: string;
@@ -187,13 +188,13 @@ describe("concurrency and scale guards", () => {
             return this;
           },
           async maybeSingle() {
-            if ("dual_control_pending" in this.patch) {
+            if ("dual_control_pending" in this.patch || "override_reason" in this.patch) {
               return {
                 data: null,
                 error: {
                   code: "PGRST204",
                   message:
-                    "Could not find the 'dual_control_pending' column of 'assumptions' in the schema cache",
+                    "Could not find the 'override_reason' column of 'assumptions' in the schema cache",
                 },
               };
             }
@@ -208,6 +209,7 @@ describe("concurrency and scale guards", () => {
     const result = await updateAssumptionWithExpectedVersion(supabase, "a1", 1, {
       current_version: 2,
       status: "modified",
+      override_reason: "Broker OM conflict resolved to conservative cap rate",
       requires_dual_control: true,
       dual_control_pending: true,
       second_approval_by: null,
@@ -217,10 +219,60 @@ describe("concurrency and scale guards", () => {
 
     expect(result.status).toBe("modified");
     expect(updates).toHaveLength(2);
+    expect(updates[0]).toHaveProperty(
+      "override_reason",
+      "Broker OM conflict resolved to conservative cap rate",
+    );
     expect(updates[0]).toHaveProperty("dual_control_pending", true);
+    expect(updates[1]).not.toHaveProperty("override_reason");
     expect(updates[1]).not.toHaveProperty("requires_dual_control");
     expect(updates[1]).not.toHaveProperty("dual_control_pending");
     expect(updates[1]).not.toHaveProperty("second_approval_by");
+  });
+
+  test("extraction jobs fall back to inline execution when the job table is missing", async () => {
+    const supabase = {
+      from(table: string) {
+        expect(table).toBe("extraction_jobs");
+        return {
+          select() {
+            return this;
+          },
+          eq() {
+            return this;
+          },
+          async maybeSingle() {
+            return {
+              data: null,
+              error: {
+                code: "PGRST205",
+                message: "Could not find the table 'public.extraction_jobs' in the schema cache",
+              },
+            };
+          },
+          insert() {
+            throw new Error("claimJob should not write when the table is missing");
+          },
+          update() {
+            throw new Error("inline jobs should not update a missing table");
+          },
+        };
+      },
+    };
+
+    const ctx = { supabase: supabase as never, userId: "user-1" };
+    const { job, existed } = await claimJob(ctx, {
+      kind: "assumption_extraction",
+      idempotencyKey: "demo-hash",
+      projectId: "project-1",
+      total: 3,
+      message: "Extracting assumptions from 3 document(s)",
+    });
+
+    expect(existed).toBe(false);
+    expect(job.id).toContain("inline-job:assumption_extraction:demo-hash");
+    expect(job.total).toBe(3);
+    await expect(completeJob(ctx, job.id, {})).resolves.toBe(undefined);
   });
 
   test("underwriting refuses to run while approved assumptions are not synced to engine rows", async () => {

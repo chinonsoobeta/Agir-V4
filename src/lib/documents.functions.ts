@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { isMissingRelation } from "./db-compat";
 
 export const listDocuments = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -27,6 +28,7 @@ export const listExtractionJobs = createServerFn({ method: "GET" })
       .limit(100);
     if (data?.project_id) q = q.eq("project_id", data.project_id);
     const { data: rows, error } = await q;
+    if (isMissingRelation(error)) return [];
     if (error) throw new Error(error.message);
     return rows ?? [];
   });
@@ -41,6 +43,7 @@ export const cancelExtractionJob = createServerFn({ method: "POST" })
       .select("status")
       .eq("id", data.id)
       .single();
+    if (isMissingRelation(error)) return { ok: true };
     if (error) throw new Error(error.message);
     if (job.status === "completed") throw new Error("A completed job cannot be cancelled.");
     const { requestJobCancellation } = await import("./extraction-jobs.server");
@@ -59,6 +62,7 @@ export const retryExtractionJob = createServerFn({ method: "POST" })
       .select("status, document_id")
       .eq("id", data.id)
       .single();
+    if (isMissingRelation(error)) return { ok: true, document_id: null };
     if (error) throw new Error(error.message);
     if (job.status === "running") throw new Error("This job is still running.");
     if (job.status === "completed") throw new Error("This job already completed.");

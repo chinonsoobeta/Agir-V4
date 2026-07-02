@@ -15,6 +15,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/integrations/supabase/types";
+import { isMissingColumn, isMissingRelation } from "./db-compat";
 
 export type JobKind = "document_analysis" | "assumption_extraction" | "underwriting";
 export type JobStatus =
@@ -51,6 +52,29 @@ const QUEUE_LEASE_COLUMNS = [
   "heartbeat_at",
 ] as const;
 
+const INLINE_JOB_PREFIX = "inline-job:";
+
+function isInlineJobId(jobId: string) {
+  return jobId.startsWith(INLINE_JOB_PREFIX);
+}
+
+function inlineJob(args: {
+  kind: JobKind;
+  idempotencyKey: string;
+  total?: number | null;
+  message?: string | null;
+}): ExtractionJob {
+  return {
+    id: `${INLINE_JOB_PREFIX}${args.kind}:${args.idempotencyKey}`,
+    status: "running",
+    progress: 0,
+    total: args.total ?? null,
+    message: args.message ?? null,
+    result_json: null,
+    error: null,
+  };
+}
+
 function stripQueueLeaseColumns<T extends Record<string, unknown>>(patch: T): Partial<T> {
   const copy: Record<string, unknown> = { ...patch };
   for (const column of QUEUE_LEASE_COLUMNS) delete copy[column];
@@ -72,13 +96,15 @@ export async function claimJob(
     message?: string | null;
   },
 ): Promise<{ job: ExtractionJob; existed: boolean }> {
-  const { data: existing } = await ctx.supabase
+  const { data: existing, error: existingError } = await ctx.supabase
     .from("extraction_jobs")
     .select("*")
     .eq("owner_id", ctx.userId)
     .eq("kind", args.kind)
     .eq("idempotency_key", args.idempotencyKey)
     .maybeSingle();
+  if (isMissingRelation(existingError)) return { job: inlineJob(args), existed: false };
+  if (existingError) throw new Error(existingError.message);
   if (existing) return { job: existing as ExtractionJob, existed: true };
 
   const insertPayload = {
@@ -100,7 +126,6 @@ export async function claimJob(
     .select()
     .single();
   if (error) {
-    const { isMissingColumn } = await import("./db-compat");
     if (isMissingColumn(error)) {
       const retry = await ctx.supabase
         .from("extraction_jobs")
@@ -111,15 +136,17 @@ export async function claimJob(
       error = retry.error;
     }
   }
+  if (isMissingRelation(error)) return { job: inlineJob(args), existed: false };
   // A concurrent request may have inserted the same key first; re-read it.
   if (error) {
-    const { data: raced } = await ctx.supabase
+    const { data: raced, error: racedError } = await ctx.supabase
       .from("extraction_jobs")
       .select("*")
       .eq("owner_id", ctx.userId)
       .eq("kind", args.kind)
       .eq("idempotency_key", args.idempotencyKey)
       .maybeSingle();
+    if (isMissingRelation(racedError)) return { job: inlineJob(args), existed: false };
     if (raced) return { job: raced as ExtractionJob, existed: true };
     throw new Error(error.message);
   }
@@ -131,11 +158,14 @@ export async function updateJobProgress(
   jobId: string,
   patch: { progress?: number; total?: number | null; message?: string | null },
 ): Promise<void> {
+  if (isInlineJobId(jobId)) return;
   const { error } = await ctx.supabase.from("extraction_jobs").update(patch).eq("id", jobId);
+  if (isMissingRelation(error)) return;
   if (error) throw new Error(error.message);
 }
 
 export async function completeJob(ctx: Ctx, jobId: string, result: unknown): Promise<void> {
+  if (isInlineJobId(jobId)) return;
   const patch = {
     status: "completed",
     progress: 100,
@@ -147,7 +177,6 @@ export async function completeJob(ctx: Ctx, jobId: string, result: unknown): Pro
   };
   let { error } = await ctx.supabase.from("extraction_jobs").update(patch).eq("id", jobId);
   if (error) {
-    const { isMissingColumn } = await import("./db-compat");
     if (isMissingColumn(error)) {
       const retry = await ctx.supabase
         .from("extraction_jobs")
@@ -156,6 +185,7 @@ export async function completeJob(ctx: Ctx, jobId: string, result: unknown): Pro
       error = retry.error;
     }
   }
+  if (isMissingRelation(error)) return;
   if (error) throw new Error(error.message);
   try {
     const { emitOperationalMetric } = await import("./observability.server");
@@ -166,6 +196,7 @@ export async function completeJob(ctx: Ctx, jobId: string, result: unknown): Pro
 }
 
 export async function failJob(ctx: Ctx, jobId: string, message: string): Promise<void> {
+  if (isInlineJobId(jobId)) return;
   const patch = {
     status: "failed",
     error: message,
@@ -175,7 +206,6 @@ export async function failJob(ctx: Ctx, jobId: string, message: string): Promise
   };
   let { error } = await ctx.supabase.from("extraction_jobs").update(patch).eq("id", jobId);
   if (error) {
-    const { isMissingColumn } = await import("./db-compat");
     if (isMissingColumn(error)) {
       const retry = await ctx.supabase
         .from("extraction_jobs")
@@ -184,6 +214,7 @@ export async function failJob(ctx: Ctx, jobId: string, message: string): Promise
       error = retry.error;
     }
   }
+  if (isMissingRelation(error)) return;
   if (error) throw new Error(error.message);
   // Surface job failures to the error sink (structured stderr + optional
   // webhook) so a spike in failed extractions is observable/alertable.
@@ -196,6 +227,7 @@ export async function failJob(ctx: Ctx, jobId: string, message: string): Promise
 }
 
 export async function requestJobCancellation(ctx: Ctx, jobId: string): Promise<boolean> {
+  if (isInlineJobId(jobId)) return true;
   const { data, error } = await ctx.supabase.rpc("request_extraction_job_cancellation", {
     p_job_id: jobId,
   });
@@ -210,6 +242,7 @@ export async function requestJobCancellation(ctx: Ctx, jobId: string): Promise<b
       })
       .eq("id", jobId)
       .neq("status", "completed");
+    if (isMissingRelation(fallbackError)) return true;
     if (fallbackError) throw new Error(fallbackError.message);
     return true;
   }
@@ -225,6 +258,7 @@ export async function claimNextQueuedJob(
     p_worker_id: workerId,
     p_lease_seconds: leaseSeconds,
   });
+  if (isMissingRelation(error)) return null;
   if (error) throw new Error(error.message);
   return (data as ExtractionJob | null) ?? null;
 }
@@ -240,6 +274,7 @@ export async function heartbeatJob(
     p_worker_id: workerId,
     p_lease_seconds: leaseSeconds,
   });
+  if (isMissingRelation(error)) return false;
   if (error) throw new Error(error.message);
   return Boolean(data);
 }

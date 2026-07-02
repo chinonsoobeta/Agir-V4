@@ -210,8 +210,11 @@ export const STALE_ASSUMPTION_REVIEW_MESSAGE =
   "Assumption changed while you were reviewing it. Refresh and retry.";
 
 const DUAL_CONTROL_COLUMNS = [
+  "override_reason",
   "requires_dual_control",
   "dual_control_pending",
+  "override_requested_by",
+  "override_requested_at",
   "second_approval_by",
   "second_approval_at",
   "second_approver_name",
