@@ -8,6 +8,9 @@
 import { describe, expect, test } from "vitest";
 import { applyAiClassifications, type AiClassification } from "@/lib/assumptions.functions";
 import type { Candidate } from "@/lib/assumption-candidates.server";
+import { AI_ASSISTED_ALIAS, aiClassificationReasoning } from "@/lib/ai-authority";
+import { assumptionApprovedForUnderwriting, assumptionProvenance } from "@/lib/status-taxonomy";
+import { mapleHeightsInput, runUnderwriting } from "@/lib/engine";
 
 function cand(overrides: Partial<Candidate> = {}): Candidate {
   return {
@@ -36,7 +39,7 @@ describe("AI classification boundary", () => {
     // The value is the candidate's regex token, never anything the model supplies.
     expect(out[0].value_numeric).toBe(34_500_000);
     expect(out[0].field_key).toBe("land_cost");
-    expect(out[0].matched_alias).toBe("(ai)");
+    expect(out[0].matched_alias).toBe(AI_ASSISTED_ALIAS);
     expect(out[0].confidence).toBe(80);
   });
 
@@ -111,5 +114,35 @@ describe("AI classification boundary", () => {
     expect(out.map((m) => m.value_numeric).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([
       34_500_000, 162_000_000,
     ]);
+  });
+
+  test("AI-classified suggestions remain review-only until analyst approval", () => {
+    const reasoning = aiClassificationReasoning({
+      candidateLabel: "om.pdf char 12",
+      modelReasoning: "land cost label",
+    });
+    const row = {
+      status: "extracted",
+      ai_reasoning: reasoning,
+      source_location: "om.pdf char 12",
+      confidence_score: 80,
+    };
+
+    expect(assumptionProvenance(row).sourceType).toBe("ai_assisted");
+    expect(assumptionApprovedForUnderwriting(row)).toBe(false);
+    expect(assumptionProvenance({ ...row, status: "approved" }).approvedForUnderwriting).toBe(true);
+  });
+
+  test("deterministic engine outputs do not depend on AI summary text", () => {
+    const input = mapleHeightsInput();
+    const baseline = runUnderwriting(input);
+    const withDifferentSummary = runUnderwriting({
+      ...input,
+      notes: "AI summary claims a larger profit, but notes are not an engine input.",
+    } as typeof input);
+
+    expect(withDifferentSummary.values.tdc).toBe(baseline.values.tdc);
+    expect(withDifferentSummary.values.developmentProfit).toBe(baseline.values.developmentProfit);
+    expect(withDifferentSummary.values.dscr).toBe(baseline.values.dscr);
   });
 });

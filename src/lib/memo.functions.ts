@@ -5,6 +5,7 @@ import { computeInvestmentVerdict } from "./verdict";
 import { buildAllowedValues, verifyNumericProvenance, type AllowedValue } from "./engine";
 import { DEFAULT_AI_MODEL } from "./ai-gateway.server";
 import type { MemoReportContext } from "./memo-report";
+import { AI_AUTHORITY_NOTE } from "./ai-authority";
 
 // The LLM's only job here is PROSE around values injected from engine output.
 // It runs at temperature 0, and every generated memo is post-verified: each
@@ -151,13 +152,16 @@ export const generateMemo = createServerFn({ method: "POST" })
     // fall back to a deterministic template. Never throw for a missing key. ----
     const { hasAnthropicKey } = await import("./ai-gateway.server");
     const aiAvailable = hasAnthropicKey();
-    const generation_mode: "ai" | "deterministic" = aiAvailable ? "ai" : "deterministic";
+    let generation_mode: "ai" | "deterministic" = aiAvailable ? "ai" : "deterministic";
+    let ai_note: string | null = aiAvailable
+      ? null
+      : "AI memo generation unavailable: deterministic template used.";
 
     // Structured IC-memorandum report: deterministic in BOTH modes (the AI only
     // affects prose, never the tables/figures). Drives the formatted on-screen
     // view and the PDF/DOCX downloads.
     const { buildMemoReport, memoReportText } = await import("./memo-report");
-    const report = buildMemoReport({
+    let report = buildMemoReport({
       project,
       // These are column-subset selects; the memo builder reads only the
       // selected fields, so assert them to the full row shapes it expects.
@@ -262,14 +266,26 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
         });
         rawText = result.text;
       } catch (error) {
-        throw new Error(
-          `Memo generation model call failed: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        generation_mode = "deterministic";
+        ai_note = `AI memo generation failed: deterministic template used (${error instanceof Error ? error.message : String(error)}).`;
+        await context.supabase.from("audit_logs").insert({
+          project_id: data.project_id,
+          owner_id: context.userId,
+          user_id: context.userId,
+          entity_type: "project",
+          entity_id: data.project_id,
+          action: "ai_fallback",
+          payload: { feature: "memo_generation", reason: ai_note },
+        });
       }
-      const parsed = parseMemoJson(rawText);
-      memo = parsed.memo;
-      parse_warning = parsed.parse_warning;
-    } else {
+      if (generation_mode === "ai") {
+        const parsed = parseMemoJson(rawText);
+        memo = parsed.memo;
+        parse_warning = parsed.parse_warning;
+      }
+    }
+
+    if (generation_mode === "deterministic") {
       const { buildDeterministicMemo } = await import("./memo-template");
       type DetCtx = Parameters<typeof buildDeterministicMemo>[0];
       memo = buildDeterministicMemo({
@@ -282,6 +298,18 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
         risks: risks as unknown as DetCtx["risks"],
         errorFlags: errorFlags as unknown as DetCtx["errorFlags"],
         verdict,
+      });
+      report = buildMemoReport({
+        project,
+        assumptions: assumptions as unknown as MemoReportContext["assumptions"],
+        engineInputs: engineInputs as unknown as MemoReportContext["engineInputs"],
+        outputs: outputs as unknown as MemoReportContext["outputs"],
+        flags: flags as unknown as MemoReportContext["flags"],
+        risks: risks as unknown as MemoReportContext["risks"],
+        documents: documents as unknown as MemoReportContext["documents"],
+        verdict,
+        generationMode: generation_mode,
+        generatedLabel: new Date().toLocaleString("en-US", { month: "long", year: "numeric" }),
       });
     }
 
@@ -299,6 +327,8 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
       token_count: provenance.tokenCount,
       orphans: provenance.orphans,
       parse_warning,
+      ai_note,
+      authority_note: AI_AUTHORITY_NOTE,
       verified_at: new Date().toISOString(),
     };
 
@@ -325,6 +355,8 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
           unresolved_error_flags: errorFlags,
           needs_review: !provenance.pass,
           parse_warning,
+          ai_note,
+          authority_note: AI_AUTHORITY_NOTE,
         },
         verification_report: verificationReport,
       })

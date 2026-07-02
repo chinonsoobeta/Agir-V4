@@ -90,6 +90,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getAiReadiness } from "@/lib/ai-readiness.functions";
+import { getOperationalQualityMetrics } from "@/lib/operations.functions";
 
 const SECTIONS = [
   { id: "profile", label: "Profile", icon: User },
@@ -668,9 +669,14 @@ const AI_PREF_DEFAULTS = { assistedWorkflows: true };
 function AiSection() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const [opsWindow, setOpsWindow] = useState<"24h" | "7d" | "30d">("24h");
   const { data: readiness } = useQuery({
     queryKey: ["ai-readiness"],
     queryFn: () => getAiReadiness(),
+  });
+  const { data: ops } = useQuery({
+    queryKey: ["operational-quality", opsWindow],
+    queryFn: () => getOperationalQualityMetrics({ data: { window: opsWindow } }),
   });
   const { data } = useQuery({ queryKey: ["pref-data"], queryFn: () => getPreferenceData() });
   const saveFn = useServerFn(savePreferenceData);
@@ -794,8 +800,123 @@ function AiSection() {
           </div>
         </div>
       </SectionCard>
+
+      <SectionCard
+        title="Product quality"
+        description="Read-only operational health for extraction, AI fallback, document quality, and underwriting blockers."
+      >
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {(["24h", "7d", "30d"] as const).map((w) => (
+              <Button
+                key={w}
+                size="sm"
+                variant={opsWindow === w ? "default" : "outline"}
+                onClick={() => setOpsWindow(w)}
+              >
+                {w}
+              </Button>
+            ))}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => qc.invalidateQueries({ queryKey: ["operational-quality", opsWindow] })}
+            >
+              <RefreshCw className="size-4 mr-1.5" />
+              Refresh
+            </Button>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <MetricTile
+              label="Job success"
+              value={
+                ops?.jobs.successRate == null ? "n/a" : `${Math.round(ops.jobs.successRate * 100)}%`
+              }
+              detail={`${ops?.jobs.total ?? 0} jobs`}
+            />
+            <MetricTile
+              label="Avg duration"
+              value={formatDuration(ops?.jobs.averageDurationMs)}
+              detail={`${ops?.jobs.running ?? 0} running · ${ops?.jobs.stuck ?? 0} stuck`}
+            />
+            <MetricTile
+              label="AI fallback"
+              value={String(ops?.aiFallbacks.total ?? 0)}
+              detail={firstReason(ops?.aiFallbacks.byReason)}
+            />
+            <MetricTile
+              label="Blocked runs"
+              value={String(ops?.underwritingBlocked.total ?? 0)}
+              detail={firstReason(ops?.underwritingBlocked.byReason)}
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-border p-3">
+              <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                Documents
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
+                <div>
+                  <div className="num text-lg">{ops?.documents.total ?? 0}</div>
+                  <div className="text-[11px] text-muted-foreground">seen</div>
+                </div>
+                <div>
+                  <div className="num text-lg">{ops?.documents.scanRejections ?? 0}</div>
+                  <div className="text-[11px] text-muted-foreground">scan rejected</div>
+                </div>
+                <div>
+                  <div className="num text-lg">{ops?.documents.pageLimitRejections ?? 0}</div>
+                  <div className="text-[11px] text-muted-foreground">page limited</div>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-lg border border-border p-3">
+              <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                Fallback signals
+              </div>
+              <div className="mt-2 text-sm">
+                <div>
+                  Schema compatibility:{" "}
+                  <span className="font-mono">
+                    {ops?.schemaCompatibilityFallbacks.event ?? "schema_compatibility_fallback"}
+                  </span>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {(ops?.notes ?? []).join(" ")}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </SectionCard>
     </>
   );
+}
+
+function MetricTile({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="rounded-lg border border-border p-3">
+      <div className="text-[11px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="num text-xl mt-1">{value}</div>
+      <div className="text-xs text-muted-foreground mt-0.5 truncate" title={detail}>
+        {detail || "No events"}
+      </div>
+    </div>
+  );
+}
+
+function formatDuration(ms?: number | null) {
+  if (ms == null) return "n/a";
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
+  return `${Math.round(ms / 60_000)}m`;
+}
+
+function firstReason(reasons?: Record<string, number>) {
+  const top = Object.entries(reasons ?? {}).sort((a, b) => b[1] - a[1])[0];
+  return top ? `${top[0]} (${top[1]})` : "No events";
 }
 
 function StatusTile({

@@ -43,6 +43,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import type { DealContext, Interpretation } from "@/lib/context/types";
 import type { WhatIfLever } from "@/lib/context/attribution";
 import type { MemoReport } from "@/lib/memo-report";
+import { statusClassName, statusConfig } from "@/lib/status-taxonomy";
 
 // The structured payload runFullUnderwriting writes into financial_outputs.inputs.
 // It is stored as Json in the row; every field is optional because different
@@ -239,6 +240,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
           `AI accepted ${r.ai_accepted_defaults.length} static default(s) to unblock the run.`,
         );
       }
+      if (r.authority_note) toast.message(r.authority_note);
       if (r.blocked) toast.error("Underwriting is blocked: resolve the listed inputs first.");
       else
         toast.success(
@@ -269,18 +271,27 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
 
   // ---- BLOCKED STATE: no metrics, no charts, no partial numbers. ----
   if (blocked) {
+    const blockedStatus = statusConfig("underwriting", "blocked");
     return (
       <div className="space-y-4">
         <Card className="p-6 border-destructive/40">
           <div className="flex items-start gap-3">
             <Lock className="size-5 text-destructive shrink-0 mt-0.5" />
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold uppercase tracking-widest text-destructive">
-                Underwriting blocked
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className={`${statusClassName(blockedStatus.severity)} text-[11px]`}
+                >
+                  {blockedStatus.label}
+                </Badge>
+                <div className="text-sm font-semibold uppercase tracking-widest text-destructive">
+                  Underwriting blocked
+                </div>
               </div>
               <p className="text-sm text-muted-foreground mt-1">
-                The engine runs only on approved or default-accepted inputs. It never fills gaps on
-                its own. Resolve the items below, then run underwriting.
+                {blockedStatus.message} The engine runs only on approved or default-accepted inputs.
+                It never fills gaps on its own. Resolve the items below, then run underwriting.
               </p>
               {readiness.missing.length > 0 && (
                 <div className="mt-4">

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { DEMO_PACKAGES, DEMO_PACKAGE_BY_SLUG, categoryForFixture } from "@/lib/demo/registry";
 
 // File-type magic bytes, so we know the embedded base64 is the real binary and
@@ -46,5 +47,17 @@ describe("demo package registry", () => {
     expect(categoryForFixture("Rivergate_Lender_Term_Sheet.pdf")).toBe("Loan Package");
     expect(categoryForFixture("Summit_Point_Tenant_Lease_Abstracts.pdf")).toBe("Legal");
     expect(categoryForFixture("Summit_Point_Sponsor_Investment_Summary.pdf")).toBe("Other");
+  });
+
+  it("documents a deterministic Harbour demo with conflict and provenance moments", () => {
+    const harbour = DEMO_PACKAGE_BY_SLUG["harbour-centre"];
+    expect(harbour.mode).toBe("preseeded");
+    expect(harbour.blurb).toMatch(/conflict/i);
+    expect(harbour.blurb).toMatch(/verified/i);
+
+    const runbook = readFileSync("docs/pilot/harbour-centre-demo-runbook.md", "utf8");
+    expect(runbook).toContain("AGIR_SCHEMA_COMPAT_MODE=demo npm run dev");
+    expect(runbook).toMatch(/conflict\/provenance/i);
+    expect(runbook).toMatch(/deterministic engine/i);
   });
 });

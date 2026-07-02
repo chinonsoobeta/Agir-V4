@@ -37,6 +37,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { DocumentDropzone } from "@/components/document-dropzone";
 import type { Tables } from "@/integrations/supabase/types";
+import { statusClassName, statusConfig } from "@/lib/status-taxonomy";
 
 type DocumentRow = Tables<"documents">;
 
@@ -230,6 +231,7 @@ function DocumentsPage() {
                           No data extracted
                         </Badge>
                       )}
+                      <DocumentStatusBadge d={d} />
                       <DocQuality d={d} />
                     </div>
                   </div>
@@ -291,7 +293,8 @@ function DocumentsPage() {
                 ) : d.status === "extraction_failed" && d.extraction_error ? (
                   <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 p-2.5">
                     <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-destructive font-semibold">
-                      <AlertTriangle className="size-3" /> Extraction failed
+                      <AlertTriangle className="size-3" />{" "}
+                      {statusConfig("document", "extraction_failed").label}
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">{d.extraction_error}</p>
                     <Button
@@ -354,17 +357,20 @@ function DocQuality({ d }: { d: DocumentRow }) {
     chips.push({ label: `${d.page_count} pp`, cls: "text-muted-foreground" });
   }
   if (d.scan_status === "rejected") {
+    const cfg = statusConfig("document", "rejected");
     chips.push({
-      label: "scan: rejected",
-      cls: "bg-destructive/10 text-destructive border-destructive/30",
+      label: `scan: ${cfg.label.toLowerCase()}`,
+      cls: statusClassName(cfg.severity),
     });
   } else if (d.scan_status === "clean") {
     chips.push({ label: "scan: clean", cls: "text-muted-foreground" });
   }
   if (d.extraction_status === "running") {
-    chips.push({ label: "extracting…", cls: "bg-primary/10 text-primary border-primary/30" });
+    const cfg = statusConfig("extractionJob", "running");
+    chips.push({ label: cfg.label.toLowerCase(), cls: statusClassName(cfg.severity) });
   } else if (d.extraction_status === "queued") {
-    chips.push({ label: "queued", cls: "bg-primary/10 text-primary border-primary/30" });
+    const cfg = statusConfig("extractionJob", "queued");
+    chips.push({ label: cfg.label.toLowerCase(), cls: statusClassName(cfg.severity) });
   }
   if (!chips.length) return null;
   return (
@@ -375,6 +381,21 @@ function DocQuality({ d }: { d: DocumentRow }) {
         </Badge>
       ))}
     </div>
+  );
+}
+
+function DocumentStatusBadge({ d }: { d: DocumentRow }) {
+  const key =
+    d.extraction_status === "failed" || d.status === "extraction_failed"
+      ? "extraction_failed"
+      : d.ai_summary
+        ? "analyzed"
+        : d.status || "uploaded";
+  const cfg = statusConfig("document", key);
+  return (
+    <Badge variant="outline" className={`mt-1.5 text-xs ${statusClassName(cfg.severity)}`}>
+      {cfg.label}
+    </Badge>
   );
 }
 

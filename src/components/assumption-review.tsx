@@ -33,6 +33,12 @@ import {
   Calculator,
 } from "lucide-react";
 import { REQUIRED_KEYS } from "@/lib/assumption-taxonomy";
+import {
+  assumptionProvenance,
+  confidenceLabel,
+  statusClassName,
+  statusConfig,
+} from "@/lib/status-taxonomy";
 import { toast } from "sonner";
 
 const assumptionsQ = (pid: string) =>
@@ -46,16 +52,6 @@ const readinessQ = (pid: string) =>
     queryFn: () => getReadiness({ data: { project_id: pid } }),
   });
 
-const STATUS_STYLES: Record<string, string> = {
-  approved: "bg-success/15 text-success border-success/30",
-  modified: "bg-primary/15 text-primary border-primary/30",
-  pending: "bg-warning/15 text-warning border-warning/30",
-  needs_review: "bg-chart-2/15 text-chart-2 border-chart-2/30",
-  rejected: "bg-destructive/15 text-destructive border-destructive/30",
-  missing: "bg-muted text-muted-foreground border-border",
-  extracted: "bg-chart-1/15 text-chart-1 border-chart-1/30",
-  conflicting: "bg-destructive/15 text-destructive border-destructive/30",
-};
 const BAND_STYLES: Record<string, string> = {
   high: "text-success",
   medium: "text-warning",
@@ -427,14 +423,12 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
               <div key={a.id} className="rounded-lg border border-border p-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium truncate">{a.field_label}</span>
-                  <Badge
-                    variant="outline"
-                    className={`${STATUS_STYLES[a.status]} text-[11px] capitalize shrink-0`}
-                  >
-                    {a.status.replace("_", " ")}
-                  </Badge>
+                  <StatusBadge domain="assumption" status={a.status} />
                 </div>
                 <div className="num text-lg mt-1">{fmt(a)}</div>
+                <div className="text-[11px] text-muted-foreground mt-1">
+                  {assumptionProvenance(a).approvalLabel}
+                </div>
               </div>
             ))}
           </div>
@@ -497,6 +491,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
 }
 
 function SourcePanel({ a, onClose }: { a: any | null; onClose: () => void }) {
+  const provenance = a ? assumptionProvenance(a) : null;
   return (
     <Sheet open={!!a} onOpenChange={(o) => !o && onClose()}>
       <SheetContent>
@@ -505,17 +500,38 @@ function SourcePanel({ a, onClose }: { a: any | null; onClose: () => void }) {
         </SheetHeader>
         {a && (
           <div className="mt-4 space-y-4 text-sm">
-            <Field label="Extracted value">{fmt(a)}</Field>
-            <Field label="Source document">{a.source_location || "Not available"}</Field>
+            <Field label="Value">{fmt(a)}</Field>
+            <Field label="Status">
+              <div className="flex flex-wrap gap-1.5">
+                <StatusBadge domain="assumption" status={a.status} />
+                <Badge variant="outline" className="text-[11px]">
+                  {provenance?.label}
+                </Badge>
+                <Badge variant="outline" className="text-[11px]">
+                  {provenance?.approvalLabel}
+                </Badge>
+              </div>
+            </Field>
+            <Field label="Source document">
+              {a.documents?.name || a.source_location || provenance?.detail || "Not available"}
+            </Field>
             <Field label="Confidence">
-              {a.confidence_score}%: {a.confidence_band}
+              {confidenceLabel(a.confidence_score, a.confidence_band)}
             </Field>
             <Field label="Source text">
               <blockquote className="text-xs italic text-muted-foreground border-l-2 border-primary pl-3 mt-1 whitespace-pre-wrap">
                 {a.source_text || "Not available"}
               </blockquote>
             </Field>
-            <Field label="AI reasoning">{a.ai_reasoning || "Not available"}</Field>
+            <Field label="Approval">
+              {a.dual_control_pending
+                ? "Dual control pending"
+                : a.approved_by
+                  ? `Approved by ${a.approved_by}${a.approved_at ? ` · ${new Date(a.approved_at).toLocaleString()}` : ""}`
+                  : "Not approved"}
+            </Field>
+            <Field label="Override reason">{a.override_reason || "Not available"}</Field>
+            <Field label="AI / mapping note">{a.ai_reasoning || "Not available"}</Field>
           </div>
         )}
       </SheetContent>
@@ -647,12 +663,7 @@ function VersionsList({ assumptionId }: { assumptionId: string }) {
         <li key={v.id} className="border-l-2 border-primary/40 pl-3 text-xs">
           <div className="flex items-center gap-2">
             <span className="font-mono text-primary">v{v.version_number}</span>
-            <Badge
-              variant="outline"
-              className={`${STATUS_STYLES[v.status]} text-[11px] capitalize`}
-            >
-              {v.status.replace("_", " ")}
-            </Badge>
+            <StatusBadge domain="assumption" status={v.status} />
             <span className="text-muted-foreground">{new Date(v.created_at).toLocaleString()}</span>
           </div>
           <div className="num text-sm mt-1">
@@ -685,6 +696,9 @@ function ExtractionReportCard({ report, onClose }: { report: any; onClose: () =>
             <strong className="font-mono">{report.stage3_inferred_via_alias}</strong> via alias
           </div>
           {report.ai_note && <div className="text-[11px] text-warning mt-1">{report.ai_note}</div>}
+          {report.authority_note && (
+            <div className="text-[11px] text-muted-foreground mt-1">{report.authority_note}</div>
+          )}
         </div>
         <Button variant="ghost" size="sm" onClick={onClose}>
           Dismiss
@@ -694,6 +708,7 @@ function ExtractionReportCard({ report, onClose }: { report: any; onClose: () =>
         <Field label="Found">{report.found}</Field>
         <Field label="Conflicting">{report.conflicting}</Field>
         <Field label="Missing">{report.missing}</Field>
+        <Field label="AI-classified">{report.ai_classified ?? 0}</Field>
         <Field label="Underwriting ready">
           {report.can_underwrite ? "Yes: all required present" : "No: required fields missing"}
         </Field>
@@ -856,6 +871,8 @@ function AssumptionCard({
   pending: boolean;
 }) {
   const band = a.confidence_band as keyof typeof BAND_STYLES;
+  const status = statusConfig("assumption", a.status);
+  const provenance = assumptionProvenance(a);
   return (
     <Card className="p-4 flex flex-col gap-3">
       {a.dual_control_pending && (
@@ -886,21 +903,33 @@ function AssumptionCard({
           <div className="text-sm font-medium leading-tight">{a.field_label}</div>
           <div className="num text-xl mt-1">{fmt(a)}</div>
         </div>
+        <StatusBadge domain="assumption" status={a.status} />
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        <Badge variant="outline" className="text-[11px]">
+          {provenance.label}
+        </Badge>
         <Badge
           variant="outline"
-          className={`${STATUS_STYLES[a.status]} text-[11px] capitalize shrink-0`}
+          className={`text-[11px] ${provenance.approvedForUnderwriting ? "text-success border-success/30" : "text-muted-foreground"}`}
         >
-          {a.status.replace("_", " ")}
+          {provenance.approvalLabel}
         </Badge>
+        {a.status === "conflicting" && (
+          <Badge variant="outline" className="text-[11px] text-destructive border-destructive/30">
+            Blocks run
+          </Badge>
+        )}
       </div>
       <div className="flex items-center justify-between text-[11px] text-muted-foreground">
         <span className={`font-mono ${BAND_STYLES[band] ?? ""}`}>
-          {a.confidence_score}% · {a.confidence_band}
+          {confidenceLabel(a.confidence_score, a.confidence_band)}
         </span>
-        <span className="truncate max-w-[130px]" title={a.source_location || ""}>
-          {a.source_location || "no source"}
+        <span className="truncate max-w-[130px]" title={provenance.detail || ""}>
+          {provenance.detail || "no source"}
         </span>
       </div>
+      <div className="text-[11px] text-muted-foreground -mt-1">{status.message}</div>
       <div className="flex items-center gap-0.5 border-t border-border pt-2 -mb-1">
         <Button
           variant="ghost"
@@ -967,6 +996,21 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <div className="text-[11px] uppercase tracking-widest text-muted-foreground">{label}</div>
       <div className="mt-1">{children}</div>
     </div>
+  );
+}
+
+function StatusBadge({
+  domain,
+  status,
+}: {
+  domain: Parameters<typeof statusConfig>[0];
+  status?: string | null;
+}) {
+  const cfg = statusConfig(domain, status);
+  return (
+    <Badge variant="outline" className={`${statusClassName(cfg.severity)} text-[11px] shrink-0`}>
+      {cfg.label}
+    </Badge>
   );
 }
 

@@ -39,6 +39,7 @@ import {
 } from "./context";
 import { generateFindings } from "./findings";
 import { reconcileRecommendation } from "./decision";
+import { AI_AUTHORITY_NOTE } from "./ai-authority";
 
 // Taxonomy (review queue) → engine key mapping. Conflicting review-queue rows
 // are surfaced to readiness through this mapping so a conflicted key blocks
@@ -53,6 +54,23 @@ import {
 const ProjectIdSchema = z.object({ project_id: z.string().uuid() });
 export const APPROVED_ASSUMPTION_SYNC_MESSAGE =
   "Approved assumptions are still syncing to engine inputs. Retry underwriting in a moment.";
+
+async function auditWorkflowEvent(
+  ctx: any,
+  projectId: string,
+  action: string,
+  payload: Record<string, unknown>,
+) {
+  await ctx.supabase.from("audit_logs").insert({
+    project_id: projectId,
+    owner_id: ctx.userId,
+    user_id: ctx.userId,
+    entity_type: "project",
+    entity_id: projectId,
+    action,
+    payload,
+  });
+}
 
 function valuesMatch(actual: unknown, expected: unknown) {
   if (actual == null || expected == null) return false;
@@ -570,6 +588,12 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
       wantsAI && !aiAvailable
         ? "AI unavailable (ANTHROPIC_API_KEY missing or malformed): used the deterministic engine."
         : null;
+    if (aiFailureReason) {
+      await auditWorkflowEvent(context, data.project_id, "ai_fallback", {
+        feature: "underwriting",
+        reason: aiFailureReason,
+      });
+    }
     const aiAcceptedDefaults: string[] = [];
 
     let rows = await loadProjectRows(context.supabase, data.project_id);
@@ -589,6 +613,10 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
         }
       } catch (error) {
         aiFailureReason = `AI input selection failed; fell back to the deterministic engine (${error instanceof Error ? error.message : "unavailable"}).`;
+        await auditWorkflowEvent(context, data.project_id, "ai_fallback", {
+          feature: "underwriting",
+          reason: aiFailureReason,
+        });
       }
     }
     const analysisMode: "ai" | "deterministic" = useAI && !aiFailureReason ? "ai" : "deterministic";
@@ -597,10 +625,16 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
       ai_used: analysisMode === "ai",
       ai_note: aiFailureReason,
       ai_accepted_defaults: aiAcceptedDefaults,
+      authority_note: AI_AUTHORITY_NOTE,
     };
 
     if (readiness.status === "blocked") {
       // Fail closed: zero metrics, zero charts, no partial numbers.
+      await auditWorkflowEvent(context, data.project_id, "underwriting_blocked", {
+        readiness,
+        analysis_mode: analysisMode,
+        ai_note: aiFailureReason,
+      });
       return { blocked: true as const, readiness, ...aiMeta };
     }
     await assertApprovedAssumptionsSynced(context.supabase, data.project_id);

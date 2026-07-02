@@ -21,6 +21,7 @@ import {
   mapCandidateToKey,
   type MappedCandidate,
 } from "./assumption-mapping";
+import { AI_ASSISTED_ALIAS, AI_AUTHORITY_NOTE, aiClassificationReasoning } from "./ai-authority";
 
 // ---------- Read APIs ----------
 
@@ -161,6 +162,15 @@ async function auditLog(
     action,
     payload: payload as object,
   });
+}
+
+async function recordAiFallback(
+  ctx: any,
+  projectId: string | null,
+  feature: string,
+  reason: string,
+) {
+  await auditLog(ctx, projectId, "ai_workflow", projectId, "ai_fallback", { feature, reason });
 }
 
 async function userName(ctx: any) {
@@ -352,7 +362,7 @@ export function applyAiClassifications(
       source_doc_name: cand.doc_name,
       source_text: cand.context,
       source_location: cand.source_location,
-      matched_alias: "(ai)",
+      matched_alias: AI_ASSISTED_ALIAS,
       via: "alias",
     });
   }
@@ -386,6 +396,9 @@ export const extractAssumptions = createServerFn({ method: "POST" })
       wantsAI && !aiAvailable
         ? "AI unavailable (ANTHROPIC_API_KEY missing or malformed): used the deterministic engine."
         : null;
+    if (aiFailureReason) {
+      await recordAiFallback(context, data.project_id, "assumption_extraction", aiFailureReason);
+    }
 
     const { data: docs, error: dErr } = await context.supabase
       .from("documents")
@@ -652,8 +665,8 @@ export const extractAssumptions = createServerFn({ method: "POST" })
         const { text } = await generateText({
           model: getAgirModel(),
           temperature: 0,
-          system: `You are an institutional real estate underwriter. Classify pre-extracted numeric candidates into canonical assumption keys. Use ONLY the candidate context; never invent values. If a candidate does not match, use field_key="ignore".`,
-          prompt: `Canonical taxonomy:\n${taxonomyText}\n\nCandidates:\n${candidateList}\n\nReturn a JSON array (no prose). Schema: {"candidate_index":<int>,"field_key":"<key or ignore>","confidence_score":<0-100>,"reasoning":"<short>"}.`,
+          system: `You classify pre-extracted document candidates into canonical assumption keys. You may ONLY choose from the supplied candidate indices and taxonomy keys. Do not infer missing values, do not use outside knowledge, do not alter values, and do not create new candidates. If a candidate does not directly match, use field_key="ignore".`,
+          prompt: `Canonical taxonomy:\n${taxonomyText}\n\nCandidates:\n${candidateList}\n\nReturn a JSON array (no prose). Schema: {"candidate_index":<int from the supplied candidate list>,"field_key":"<key or ignore>","confidence_score":<0-100>,"reasoning":"<short classification rationale only>"}.`,
         });
         const m = text.match(/\[[\s\S]*\]/);
         const parsed = m ? JSON.parse(m[0]) : [];
@@ -674,6 +687,7 @@ export const extractAssumptions = createServerFn({ method: "POST" })
         // failure degrades gracefully to it instead of failing the run.
         aiFailureReason = `AI classification failed; fell back to the deterministic engine (${error instanceof Error ? error.message : "unavailable"}).`;
         warnings.push(aiFailureReason);
+        await recordAiFallback(context, data.project_id, "assumption_extraction", aiFailureReason);
       }
     }
     // The mode actually used: "ai" only when AI ran without fault and produced a
@@ -774,7 +788,11 @@ export const extractAssumptions = createServerFn({ method: "POST" })
         source_text: winner.source_text,
         ai_reasoning: isConflict
           ? `Conflicting values across documents: ${res.distinct.join(" vs ")}. Resolve by picking one or "use conservative": values are never averaged or blended.`
-          : `Deterministically mapped via alias "${winner.matched_alias}" from ${winner.source_doc_name}.`,
+          : winner.matched_alias === AI_ASSISTED_ALIAS
+            ? aiClassificationReasoning({
+                candidateLabel: `${winner.source_doc_name} ${winner.source_location ?? ""}`.trim(),
+              })
+            : `Deterministically mapped via alias "${winner.matched_alias}" from ${winner.source_doc_name}.`,
       };
 
       if (prev) {
@@ -938,6 +956,9 @@ export const extractAssumptions = createServerFn({ method: "POST" })
       analysis_mode: analysisMode,
       ai_used: analysisMode === "ai",
       ai_note: aiFailureReason,
+      authority_note: AI_AUTHORITY_NOTE,
+      ai_classified_count: classifiedCount,
+      ai_fallback: Boolean(aiFailureReason),
       documents_seen: docs.length,
       documents_attempted: perDocument.length,
       documents_downloaded: documentsDownloaded,
@@ -960,6 +981,9 @@ export const extractAssumptions = createServerFn({ method: "POST" })
       analysis_mode: analysisMode,
       ai_used: analysisMode === "ai",
       ai_note: aiFailureReason,
+      authority_note: AI_AUTHORITY_NOTE,
+      ai_classified: classifiedCount,
+      ai_fallback: Boolean(aiFailureReason),
       stage1_candidates: allCandidates.length,
       stage2_classified: deterministic.length + classifiedCount,
       stage3_inferred_via_alias: deterministic.length,
