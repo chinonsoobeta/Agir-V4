@@ -15,7 +15,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/integrations/supabase/types";
-import { isMissingColumn, isMissingRelation } from "./db-compat";
+import { handleSchemaCompatibilityFallback, isMissingColumn, isMissingRelation } from "./db-compat";
 
 export type JobKind = "document_analysis" | "assumption_extraction" | "underwriting";
 export type JobStatus =
@@ -53,6 +53,7 @@ const QUEUE_LEASE_COLUMNS = [
 ] as const;
 
 const INLINE_JOB_PREFIX = "inline-job:";
+const EXTRACTION_JOBS_FEATURE = "extraction_jobs queue";
 
 function isInlineJobId(jobId: string) {
   return jobId.startsWith(INLINE_JOB_PREFIX);
@@ -82,6 +83,31 @@ function inlineJob(args: {
     result_json: null,
     error: null,
   };
+}
+
+function fallbackInlineJob(
+  error: { code?: string; message?: string } | null | undefined,
+  operation: string,
+  args: Parameters<typeof inlineJob>[0],
+) {
+  return handleSchemaCompatibilityFallback(error, {
+    featureName: EXTRACTION_JOBS_FEATURE,
+    table: "extraction_jobs",
+    operation,
+    fallback: { job: inlineJob(args), existed: false },
+  });
+}
+
+function fallbackVoid(
+  error: { code?: string; message?: string } | null | undefined,
+  operation: string,
+) {
+  return handleSchemaCompatibilityFallback(error, {
+    featureName: EXTRACTION_JOBS_FEATURE,
+    table: "extraction_jobs",
+    operation,
+    fallback: undefined,
+  });
 }
 
 function stripQueueLeaseColumns<T extends Record<string, unknown>>(patch: T): Partial<T> {
@@ -116,7 +142,8 @@ export async function claimJob(
     .eq("kind", args.kind)
     .eq("idempotency_key", args.idempotencyKey)
     .maybeSingle();
-  if (isMissingRelation(existingError)) return { job: inlineJob(args), existed: false };
+  if (isMissingRelation(existingError))
+    return fallbackInlineJob(existingError, "claim existing job", args);
   if (existingError) throw new Error(existingError.message);
   if (existing) return { job: existing as ExtractionJob, existed: true };
 
@@ -149,7 +176,7 @@ export async function claimJob(
       error = retry.error;
     }
   }
-  if (isMissingRelation(error)) return { job: inlineJob(args), existed: false };
+  if (isMissingRelation(error)) return fallbackInlineJob(error, "insert extraction job", args);
   // A concurrent request may have inserted the same key first; re-read it.
   if (error) {
     const { data: raced, error: racedError } = await ctx.supabase
@@ -159,7 +186,8 @@ export async function claimJob(
       .eq("kind", args.kind)
       .eq("idempotency_key", args.idempotencyKey)
       .maybeSingle();
-    if (isMissingRelation(racedError)) return { job: inlineJob(args), existed: false };
+    if (isMissingRelation(racedError))
+      return fallbackInlineJob(racedError, "re-read raced extraction job", args);
     if (raced) return { job: raced as ExtractionJob, existed: true };
     throw new Error(error.message);
   }
@@ -173,7 +201,7 @@ export async function updateJobProgress(
 ): Promise<void> {
   if (isInlineJobId(jobId)) return;
   const { error } = await ctx.supabase.from("extraction_jobs").update(patch).eq("id", jobId);
-  if (isMissingRelation(error)) return;
+  if (isMissingRelation(error)) return fallbackVoid(error, "update job progress");
   if (error) throw new Error(error.message);
 }
 
@@ -198,7 +226,7 @@ export async function completeJob(ctx: Ctx, jobId: string, result: unknown): Pro
       error = retry.error;
     }
   }
-  if (isMissingRelation(error)) return;
+  if (isMissingRelation(error)) return fallbackVoid(error, "complete extraction job");
   if (error) throw new Error(error.message);
   try {
     const { emitOperationalMetric } = await import("./observability.server");
@@ -227,7 +255,7 @@ export async function failJob(ctx: Ctx, jobId: string, message: string): Promise
       error = retry.error;
     }
   }
-  if (isMissingRelation(error)) return;
+  if (isMissingRelation(error)) return fallbackVoid(error, "fail extraction job");
   if (error) throw new Error(error.message);
   // Surface job failures to the error sink (structured stderr + optional
   // webhook) so a spike in failed extractions is observable/alertable.
@@ -255,7 +283,13 @@ export async function requestJobCancellation(ctx: Ctx, jobId: string): Promise<b
       })
       .eq("id", jobId)
       .neq("status", "completed");
-    if (isMissingRelation(fallbackError)) return true;
+    if (isMissingRelation(fallbackError))
+      return handleSchemaCompatibilityFallback(fallbackError, {
+        featureName: EXTRACTION_JOBS_FEATURE,
+        table: "extraction_jobs",
+        operation: "cancel extraction job",
+        fallback: true,
+      });
     if (fallbackError) throw new Error(fallbackError.message);
     return true;
   }
@@ -271,7 +305,13 @@ export async function claimNextQueuedJob(
     p_worker_id: workerId,
     p_lease_seconds: leaseSeconds,
   });
-  if (isMissingRelation(error)) return null;
+  if (isMissingRelation(error))
+    return handleSchemaCompatibilityFallback(error, {
+      featureName: EXTRACTION_JOBS_FEATURE,
+      table: "extraction_jobs",
+      operation: "claim next queued job",
+      fallback: null,
+    });
   if (error) throw new Error(error.message);
   return (data as ExtractionJob | null) ?? null;
 }
@@ -287,7 +327,13 @@ export async function heartbeatJob(
     p_worker_id: workerId,
     p_lease_seconds: leaseSeconds,
   });
-  if (isMissingRelation(error)) return false;
+  if (isMissingRelation(error))
+    return handleSchemaCompatibilityFallback(error, {
+      featureName: EXTRACTION_JOBS_FEATURE,
+      table: "extraction_jobs",
+      operation: "heartbeat extraction job",
+      fallback: false,
+    });
   if (error) throw new Error(error.message);
   return Boolean(data);
 }

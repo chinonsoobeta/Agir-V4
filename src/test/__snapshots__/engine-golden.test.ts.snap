@@ -1,5 +1,113 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`golden engine output snapshots > professional golden outputs for named fixture deals 1`] = `
+[
+  {
+    "approvedAssumptions": {
+      "equityAmount": 50000000,
+      "exitCapRatePct": 5.25,
+      "expenseRatioPct": 35,
+      "interestRatePct": 6.25,
+      "loanAmount": 162500000,
+    },
+    "metrics": {
+      "developmentProfit": -133561600,
+      "dscr": 0.5091,
+      "egi": 9404640,
+      "equityMultiple": 0,
+      "gpr": 9960000,
+      "irrPct": null,
+      "ltcPct": 65,
+      "noi": 6113016,
+      "profitOnCostPct": -53.4246,
+      "tdc": 250000000,
+      "yieldOnCostPct": 2.4452,
+    },
+    "name": "Harbour Centre",
+    "readiness": {
+      "conflicting": [],
+      "defaultable": [],
+      "missing": [],
+      "status": "ready",
+    },
+    "reconciliationFlags": [
+      "sources_vs_uses",
+      "covenant_feasibility",
+      "occupancy_vs_lender:Retail",
+      "occupancy_vs_lender:Office",
+    ],
+    "riskFlags": [
+      {
+        "actual": 212500000,
+        "expected": 250000000,
+        "key": "sources_vs_uses",
+        "severity": "error",
+      },
+      {
+        "actual": 6113016,
+        "expected": 14407782.48,
+        "key": "covenant_feasibility",
+        "severity": "error",
+      },
+      {
+        "actual": 92,
+        "expected": 93,
+        "key": "occupancy_vs_lender:Retail",
+        "severity": "warning",
+      },
+      {
+        "actual": 85,
+        "expected": 93,
+        "key": "occupancy_vs_lender:Office",
+        "severity": "warning",
+      },
+    ],
+    "verdict": "REJECT",
+  },
+  {
+    "approvedAssumptions": {
+      "equityAmount": 133600000,
+      "exitCapRatePct": 5.75,
+      "expenseRatioPct": 27,
+      "interestRatePct": 7.15,
+      "loanAmount": 200400000,
+    },
+    "metrics": {
+      "developmentProfit": 1367113,
+      "dscr": 1.2306,
+      "egi": 27380800,
+      "equityMultiple": 1.2759,
+      "gpr": 27440000,
+      "irrPct": 5.247,
+      "ltcPct": 57.8773,
+      "noi": 19987984,
+      "profitOnCostPct": 0.3948,
+      "tdc": 346250000,
+      "yieldOnCostPct": 5.7727,
+    },
+    "name": "Summit Point Logistics Park",
+    "readiness": {
+      "conflicting": [],
+      "defaultable": [],
+      "missing": [],
+      "status": "ready",
+    },
+    "reconciliationFlags": [
+      "sources_vs_uses",
+    ],
+    "riskFlags": [
+      {
+        "actual": 334000000,
+        "expected": 346250000,
+        "key": "sources_vs_uses",
+        "severity": "error",
+      },
+    ],
+    "verdict": "REJECT",
+  },
+]
+`;
+
 exports[`golden engine output snapshots > stable values: commercial per-sf program 1`] = `
 {
   "allInDscr": 0.8356,

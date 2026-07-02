@@ -2,6 +2,7 @@
 const hasAny = (env, keys) => keys.some((key) => Boolean(env[key]?.trim()));
 const normalizeMode = (mode) =>
   mode === "production" || mode === "staging" || mode === "test" ? mode : "development";
+const schemaCompatModes = new Set(["strict", "demo", "test"]);
 
 function validate(env, rawMode) {
   const mode = normalizeMode(rawMode);
@@ -13,6 +14,12 @@ function validate(env, rawMode) {
   const warnAny = (label, keys) => {
     if (!hasAny(env, keys)) warnings.push(`${label} is not configured (${keys.join(" or ")}).`);
   };
+  const schemaCompatMode = env.AGIR_SCHEMA_COMPAT_MODE?.trim();
+  if (schemaCompatMode && !schemaCompatModes.has(schemaCompatMode)) {
+    missing.push(
+      `valid AGIR_SCHEMA_COMPAT_MODE (expected strict, demo, or test; got ${schemaCompatMode})`,
+    );
+  }
 
   requireAny("Supabase URL", ["SUPABASE_URL", "VITE_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"]);
   requireAny("Supabase anon key", [
@@ -25,6 +32,9 @@ function validate(env, rawMode) {
   ]);
 
   if (mode === "production" || mode === "staging") {
+    if (schemaCompatMode && schemaCompatMode !== "strict") {
+      missing.push("AGIR_SCHEMA_COMPAT_MODE=strict for production/staging");
+    }
     requireAny("Supabase service role key", ["SUPABASE_SERVICE_ROLE_KEY"]);
     requireAny("Postgres URL", [
       "POSTGRES_URL",

@@ -1,0 +1,7 @@
+OCR Artifact Trap - synthetic corpus fixture
+Header: pg 12 of 120 | image box 65 sf | chart id 6.25 | ref 1.20x
+Tenant allowance: $75/SF for improvements, not office rent.
+Lease term: 12 years remaining, not a lease-up period.
+Parking ratio: 1.8 stalls per 1,000 SF, not DSCR.
+Sensitivity table says cap +50 bps and rent -5%; no base exit cap is stated.
+Random scan split: l a n d c o s t $ 3 4 , 5 0 0 , 0 0 0 should not be parsed.

@@ -4,6 +4,7 @@ Run before granting a sandbox workspace to an external evaluator.
 
 ## Automated Gates
 
+- `npm run pilot:gate`
 - `npm run smoke:fresh-env`
 - `npm run pilot:audit`
 - `npm run backend:audit`
@@ -14,6 +15,11 @@ Run before granting a sandbox workspace to an external evaluator.
 - `npm run build`
 - `npm run test:e2e`
 - `npm run test:rls`
+
+Use `npm run pilot:gate -- --quick` for a faster local preflight. Use
+`npm run pilot:gate -- --full` when the pilot environment has database and E2E
+targets configured; the summary marks DB/browser checks as skipped when their
+required environment variables are absent.
 
 ## Product Gates
 

@@ -230,6 +230,50 @@ describe("concurrency and scale guards", () => {
     expect(updates[1]).not.toHaveProperty("second_approval_by");
   });
 
+  test("assumption dual-control missing columns throw in strict schema mode", async () => {
+    const previousMode = process.env.AGIR_SCHEMA_COMPAT_MODE;
+    process.env.AGIR_SCHEMA_COMPAT_MODE = "strict";
+    const supabase = {
+      from(table: string) {
+        expect(table).toBe("assumptions");
+        return {
+          update() {
+            return this;
+          },
+          eq() {
+            return this;
+          },
+          select() {
+            return this;
+          },
+          async maybeSingle() {
+            return {
+              data: null,
+              error: {
+                code: "PGRST204",
+                message:
+                  "Could not find the 'override_reason' column of 'assumptions' in the schema cache",
+              },
+            };
+          },
+        };
+      },
+    };
+
+    try {
+      await expect(
+        updateAssumptionWithExpectedVersion(supabase, "a1", 1, {
+          current_version: 2,
+          override_reason: "conflict resolution",
+          dual_control_pending: true,
+        }),
+      ).rejects.toThrow(/assumption dual-control review.*assumptions\.dual-control columns/);
+    } finally {
+      if (previousMode == null) delete process.env.AGIR_SCHEMA_COMPAT_MODE;
+      else process.env.AGIR_SCHEMA_COMPAT_MODE = previousMode;
+    }
+  });
+
   test("extraction jobs fall back to inline execution when the job table is missing", async () => {
     const supabase = {
       from(table: string) {
@@ -273,6 +317,51 @@ describe("concurrency and scale guards", () => {
     expect(job.id).toContain("inline-job:assumption_extraction:demo-hash");
     expect(job.total).toBe(3);
     await expect(completeJob(ctx, job.id, {})).resolves.toBe(undefined);
+  });
+
+  test("extraction jobs throw clearly when the job table is missing in strict schema mode", async () => {
+    const previousMode = process.env.AGIR_SCHEMA_COMPAT_MODE;
+    process.env.AGIR_SCHEMA_COMPAT_MODE = "strict";
+    const supabase = {
+      from(table: string) {
+        expect(table).toBe("extraction_jobs");
+        return {
+          select() {
+            return this;
+          },
+          eq() {
+            return this;
+          },
+          async maybeSingle() {
+            return {
+              data: null,
+              error: {
+                code: "PGRST205",
+                message: "Could not find the table 'public.extraction_jobs' in the schema cache",
+              },
+            };
+          },
+        };
+      },
+    };
+
+    try {
+      await expect(
+        claimJob(
+          { supabase: supabase as never, userId: "user-1" },
+          {
+            kind: "assumption_extraction",
+            idempotencyKey: "strict-hash",
+            projectId: "project-1",
+          },
+        ),
+      ).rejects.toThrow(
+        /Required database schema is missing.*extraction_jobs queue.*extraction_jobs/,
+      );
+    } finally {
+      if (previousMode == null) delete process.env.AGIR_SCHEMA_COMPAT_MODE;
+      else process.env.AGIR_SCHEMA_COMPAT_MODE = previousMode;
+    }
   });
 
   test("underwriting refuses to run while approved assumptions are not synced to engine rows", async () => {

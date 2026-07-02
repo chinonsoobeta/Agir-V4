@@ -1,0 +1,6 @@
+Market Study - synthetic corpus fixture
+Demand is improving across the submarket, but this narrative intentionally has
+no direct rent, cap-rate, cost, loan, or unit-count assumption for the deal.
+The report mentions comparable projects, regional employment growth, and tenant
+interest qualitatively. Numbers in footnotes such as section 4.2 and page 18
+are references, not underwriting inputs.

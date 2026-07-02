@@ -4,7 +4,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
-import { isMissingColumn } from "./db-compat";
+import { handleSchemaCompatibilityFallback, isMissingColumn } from "./db-compat";
 import {
   ASSUMPTION_DEFS,
   ASSUMPTION_BY_KEY,
@@ -240,6 +240,13 @@ export async function updateAssumptionWithExpectedVersion(
     .select()
     .maybeSingle();
   if (isMissingColumn(error) && DUAL_CONTROL_COLUMNS.some((column) => column in patch)) {
+    handleSchemaCompatibilityFallback(error, {
+      featureName: "assumption dual-control review",
+      table: "assumptions",
+      column: "dual-control columns",
+      operation: "update assumption with dual-control fields",
+      fallback: undefined,
+    });
     const compatPatch = stripDualControlColumns(patch);
     const retry = await supabase
       .from("assumptions")

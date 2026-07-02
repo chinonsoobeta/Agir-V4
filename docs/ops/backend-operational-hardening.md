@@ -16,6 +16,14 @@ Required live checks:
 - `npm run schema:refresh-cache`
 - `npm run smoke:ephemeral-db` when `EPHEMERAL_DATABASE_URL` is present
 
+## Pilot Confidence Gate
+
+Run `npm run pilot:gate` before a customer demo or pilot sandbox handoff. It
+composes schema drift, migration safety, backend audits, pilot readiness,
+typecheck, unit tests, build, and env-gated RLS/E2E/load checks into one
+human-readable summary. `--quick` skips the build and runs the focused confidence
+subset; `--full` attempts the optional DB/browser checks too.
+
 ## Queue Worker
 
 Run `npm run worker:extraction` with:

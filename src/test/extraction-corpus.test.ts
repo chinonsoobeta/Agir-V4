@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import * as XLSX from "xlsx";
@@ -73,6 +74,12 @@ function expected(key: string, value: number): ExpectedAssumption {
 function textBuffer(text: string): ArrayBuffer {
   const bytes = new TextEncoder().encode(text);
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+function textFixture(name: string): ArrayBuffer {
+  return textBuffer(
+    readFileSync(path.join(import.meta.dirname, "fixtures", "extraction-corpus", name), "utf8"),
+  );
 }
 
 function workbookBuffer(sheets: { name: string; rows: unknown[][]; merges?: XLSX.Range[] }[]) {
@@ -266,6 +273,53 @@ function makeCorpus(): CorpusFixture[] {
       expected: [expected("debt_amount", 162_500_000)],
       expectedAbsent: ["lease_up_months"],
       expectedConflicts: ["exit_cap_rate"],
+    },
+    {
+      name: "lender_term_sheet_with_options.txt",
+      fileType: "text/plain",
+      buffer: textFixture("lender_term_sheet_with_options.txt"),
+      expected: [
+        expected("debt_amount", 162_500_000),
+        expected("interest_rate", 6.25),
+        expected("ltc", 65),
+        expected("min_dscr", 1.2),
+        expected("amortization_years", 30),
+      ],
+    },
+    {
+      name: "appraisal_stale_conflicting_values.txt",
+      fileType: "text/plain",
+      buffer: textFixture("appraisal_stale_conflicting_values.txt"),
+      expected: [],
+      expectedAbsent: ["total_project_cost"],
+      expectedConflicts: ["exit_cap_rate"],
+    },
+    {
+      name: "market_study_narrative_no_direct_values.txt",
+      fileType: "text/plain",
+      buffer: textFixture("market_study_narrative_no_direct_values.txt"),
+      expected: [],
+      expectedAbsent: [
+        "debt_amount",
+        "exit_cap_rate",
+        "hard_costs",
+        "residential_rent_monthly",
+        "residential_units",
+      ],
+    },
+    {
+      name: "ocr_false_positive_traps.txt",
+      fileType: "text/plain",
+      buffer: textFixture("ocr_false_positive_traps.txt"),
+      expected: [],
+      expectedAbsent: [
+        "dscr",
+        "lease_up_months",
+        "office_rent_psf",
+        "retail_rent_psf",
+        "exit_cap_rate",
+        "land_cost",
+      ],
     },
   ];
 }

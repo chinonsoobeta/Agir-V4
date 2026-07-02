@@ -44,6 +44,7 @@ describe("backend operational hardening contract", () => {
   test("deploy and compliance scripts are registered", () => {
     const pkg = JSON.parse(read("package.json"));
     expect(pkg.scripts["deploy:gate"]).toBe("node scripts/deploy-gate.mjs");
+    expect(pkg.scripts["pilot:gate"]).toBe("node scripts/pilot-confidence-gate.mjs");
     expect(pkg.scripts["audit:migrations"]).toBe("node scripts/audit-migration-safety.mjs");
     expect(pkg.scripts["smoke:ensure-ephemeral-db"]).toBe("node scripts/ensure-ephemeral-db.mjs");
     expect(pkg.scripts["schema:refresh-cache"]).toBe("node scripts/refresh-schema-cache.mjs");
@@ -55,6 +56,7 @@ describe("backend operational hardening contract", () => {
 
   test("deploy gate runs the backend institutional gate stack", () => {
     const gate = read("scripts/deploy-gate.mjs");
+    const pilotGate = read("scripts/pilot-confidence-gate.mjs");
     const refresh = read("scripts/refresh-schema-cache.mjs");
     expect(gate).toContain("audit-migration-safety.mjs");
     expect(gate).toContain("types:check");
@@ -63,6 +65,9 @@ describe("backend operational hardening contract", () => {
     expect(gate).toContain("TENANT_DB_LOAD_DATABASE_URL");
     expect(gate).toContain("DEPLOY_GATE_E2E");
     expect(gate).toContain("schema:refresh-cache");
+    expect(pilotGate).toContain("backend:audit");
+    expect(pilotGate).toContain("migration safety audit");
+    expect(pilotGate).toContain("pilot-blocking");
     expect(refresh).toContain("notify pgrst, 'reload schema'");
   });
 

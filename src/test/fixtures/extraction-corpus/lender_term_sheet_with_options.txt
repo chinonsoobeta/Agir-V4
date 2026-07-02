@@ -1,0 +1,8 @@
+Lender Term Sheet - synthetic corpus fixture
+Senior construction loan amount: $162,500,000.
+All-in interest rate: 6.25%.
+Loan-to-cost ratio: 65.0%.
+Minimum DSCR covenant: 1.20x.
+Amortization period: 30 years.
+Extension option: two 12-month extensions subject to a 0.25% fee.
+SOFR spread is 2.75%; do not treat spread as the all-in coupon.

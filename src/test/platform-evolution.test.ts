@@ -20,7 +20,7 @@ import {
 import { sortDeals } from "@/lib/deal-views";
 import { expandTemplate, milestoneTemplate } from "@/lib/milestone-templates";
 import { mapTimeline } from "@/lib/timeline";
-import { isMissingRelation, isMissingColumn } from "@/lib/db-compat";
+import { getSchemaCompatMode, isMissingColumn, isMissingRelation } from "@/lib/db-compat";
 import type { DealSummary } from "@/lib/portfolio.functions";
 
 // ---- Fixtures ----
@@ -422,15 +422,20 @@ describe("timeline mapping", () => {
 });
 
 describe("missing-relation detection", () => {
-  it("detects PostgREST schema-cache / missing-table errors", () => {
+  it("detects precise PostgREST missing-table errors", () => {
     expect(isMissingRelation({ code: "PGRST205" })).toBe(true);
     expect(isMissingRelation({ message: "Could not find the table 'public.x'" })).toBe(true);
-    expect(isMissingRelation({ message: "relation does not exist" })).toBe(true);
-    expect(isMissingRelation({ message: "schema cache" })).toBe(true);
+    expect(isMissingRelation({ message: 'relation "public.x" does not exist' })).toBe(true);
+    expect(
+      isMissingRelation({
+        message: "Could not find the table 'public.x' in the schema cache",
+      }),
+    ).toBe(true);
   });
   it("ignores unrelated errors and null", () => {
     expect(isMissingRelation(null)).toBe(false);
     expect(isMissingRelation({ message: "permission denied" })).toBe(false);
+    expect(isMissingRelation({ message: "schema cache reload already in progress" })).toBe(false);
   });
   it("detects a missing column (older schema vs newer code)", () => {
     expect(isMissingColumn({ code: "PGRST204" })).toBe(true);
@@ -441,5 +446,17 @@ describe("missing-relation detection", () => {
     ).toBe(true);
     expect(isMissingColumn({ message: "permission denied" })).toBe(false);
     expect(isMissingColumn(null)).toBe(false);
+  });
+  it("defaults compatibility mode by environment", () => {
+    expect(getSchemaCompatMode({ NODE_ENV: "production" } as NodeJS.ProcessEnv)).toBe("strict");
+    expect(getSchemaCompatMode({ AGIR_ENV: "staging" } as NodeJS.ProcessEnv)).toBe("strict");
+    expect(getSchemaCompatMode({ NODE_ENV: "test" } as NodeJS.ProcessEnv)).toBe("test");
+    expect(getSchemaCompatMode({ NODE_ENV: "development" } as NodeJS.ProcessEnv)).toBe("demo");
+    expect(
+      getSchemaCompatMode({
+        NODE_ENV: "production",
+        AGIR_SCHEMA_COMPAT_MODE: "demo",
+      } as NodeJS.ProcessEnv),
+    ).toBe("strict");
   });
 });

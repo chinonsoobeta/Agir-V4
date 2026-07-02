@@ -41,6 +41,7 @@
     "governance:dry-run": "node scripts/enforce-data-governance.mjs --dry-run",
     "restore:drill": "node scripts/restore-staging-from-backup.mjs",
     "pilot:audit": "node scripts/audit-pilot-readiness.mjs",
+    "pilot:gate": "node scripts/pilot-confidence-gate.mjs",
     "backend:audit": "node scripts/audit-backend-hardening.mjs && npm run audit:service-role && npm run audit:server-auth && npm run audit:idempotency && npm run audit:transactions && npm run audit:events && npm run audit:indexes && npm run load:tenant-scale",
     "env:validate": "node scripts/validate-env.mjs",
     "load:tenant-scale": "node scripts/tenant-scale-load.mjs",

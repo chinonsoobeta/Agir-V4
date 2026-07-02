@@ -1,0 +1,6 @@
+Appraisal Update - synthetic corpus fixture
+Current appraisal conclusion: exit cap rate 5.75%.
+Prior appraisal, dated 18 months earlier: exit cap rate 5.25%.
+The stale prior valuation is retained for comparison only.
+Current stabilized NOI: $12,400,000.
+Prior valuation was $205,000,000 and should not become total project cost.
