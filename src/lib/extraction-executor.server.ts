@@ -115,7 +115,9 @@ Respond as compact JSON only with keys: summary, key_assumptions, risks, importa
   } catch (e) {
     // AI gateway / key failures must persist a clear, retryable failed status.
     return await fail(
-      e instanceof Error ? e.message : "AI extraction is unavailable. Check the model configuration.",
+      e instanceof Error
+        ? e.message
+        : "AI extraction is unavailable. Check the model configuration.",
     );
   }
   let parsed: {

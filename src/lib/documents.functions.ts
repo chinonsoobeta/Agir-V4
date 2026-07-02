@@ -214,9 +214,8 @@ export const analyzeDocument = createServerFn({ method: "POST" })
       .single();
     if (docErr) throw new Error(docErr.message);
 
-    const { claimJob, completeJob, failJob, isInlineJob } = await import(
-      "./extraction-jobs.server"
-    );
+    const { claimJob, completeJob, failJob, isInlineJob } =
+      await import("./extraction-jobs.server");
 
     // EXTRACTION_ASYNC=1 moves the heavy pipeline (download, AV scan, OCR, AI)
     // off the request path: this handler only records a queued job and returns
@@ -262,9 +261,8 @@ export const analyzeDocument = createServerFn({ method: "POST" })
       return { queued: true as const, job_id: job.id, summary: "", assumptions: "", risks: "" };
     }
 
-    const { executeDocumentAnalysis, ExtractionFailure } = await import(
-      "./extraction-executor.server"
-    );
+    const { executeDocumentAnalysis, ExtractionFailure } =
+      await import("./extraction-executor.server");
     try {
       const extractionResult = await executeDocumentAnalysis(context, doc);
       await completeJob(context, job.id, extractionResult);

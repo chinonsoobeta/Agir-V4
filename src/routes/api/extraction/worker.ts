@@ -82,9 +82,8 @@ export const Route = createFileRoute("/api/extraction/worker")({
           });
         }
 
-        const { executeDocumentAnalysis, ExtractionFailure } = await import(
-          "@/lib/extraction-executor.server"
-        );
+        const { executeDocumentAnalysis, ExtractionFailure } =
+          await import("@/lib/extraction-executor.server");
         try {
           const result = await executeDocumentAnalysis(
             { supabase: supabaseAdmin, userId: job.owner_id },
