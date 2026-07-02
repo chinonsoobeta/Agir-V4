@@ -58,6 +58,15 @@ function isInlineJobId(jobId: string) {
   return jobId.startsWith(INLINE_JOB_PREFIX);
 }
 
+/**
+ * True when claimJob fell back to an in-memory pseudo-job because the
+ * extraction_jobs table is missing (pre-migration database). Such a job can
+ * never be picked up by a worker, so callers must execute in-request.
+ */
+export function isInlineJob(job: ExtractionJob): boolean {
+  return isInlineJobId(job.id);
+}
+
 function inlineJob(args: {
   kind: JobKind;
   idempotencyKey: string;
@@ -94,6 +103,10 @@ export async function claimJob(
     documentId?: string | null;
     total?: number | null;
     message?: string | null;
+    // true -> create the job as "queued" for an external worker to claim
+    // (claim_next_extraction_job); false/absent -> the caller executes the
+    // work itself in-request and the job starts "running".
+    enqueue?: boolean;
   },
 ): Promise<{ job: ExtractionJob; existed: boolean }> {
   const { data: existing, error: existingError } = await ctx.supabase
@@ -113,12 +126,12 @@ export async function claimJob(
     idempotency_key: args.idempotencyKey,
     project_id: args.projectId ?? null,
     document_id: args.documentId ?? null,
-    status: "running",
-    started_at: new Date().toISOString(),
+    status: args.enqueue ? "queued" : "running",
+    started_at: args.enqueue ? null : new Date().toISOString(),
     progress: 0,
     total: args.total ?? null,
     message: args.message ?? null,
-    attempts: 1,
+    attempts: args.enqueue ? 0 : 1,
   };
   let { data: row, error } = await ctx.supabase
     .from("extraction_jobs")

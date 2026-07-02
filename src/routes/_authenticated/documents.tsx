@@ -119,7 +119,15 @@ function DocumentsPage() {
   const analyze = useMutation({
     mutationFn: (d: DocumentRow) =>
       analyzeFn({ data: { id: d.id, name: d.name, category: d.category } }),
-    onSuccess: () => toast.success("AI analysis ready"),
+    onSuccess: (result) => {
+      // Async mode: the server only queued the job; a worker executes it and
+      // realtime refresh updates the row as it progresses.
+      if (result && "queued" in result && result.queued) {
+        toast.info("Analysis queued - a background worker will pick it up shortly.");
+      } else {
+        toast.success("AI analysis ready");
+      }
+    },
     onError: (e: Error) => toast.error(e.message),
     // Refetch on success AND failure so a persisted extraction_failed status surfaces.
     onSettled: () => qc.invalidateQueries({ queryKey: ["documents", "all"] }),
@@ -355,6 +363,8 @@ function DocQuality({ d }: { d: DocumentRow }) {
   }
   if (d.extraction_status === "running") {
     chips.push({ label: "extracting…", cls: "bg-primary/10 text-primary border-primary/30" });
+  } else if (d.extraction_status === "queued") {
+    chips.push({ label: "queued", cls: "bg-primary/10 text-primary border-primary/30" });
   }
   if (!chips.length) return null;
   return (

@@ -11,7 +11,10 @@ const TABLE_QUERY_KEYS: Record<string, QueryKey[]> = {
   financial_outputs: [["portfolio"], ["outputs"], ["compare"], ["timeline"], ["onboarding"]],
   assumptions: [["portfolio"], ["assumptions"], ["onboarding"]],
   decision_logs: [["portfolio"], ["decisions"], ["decision-history"], ["timeline"], ["onboarding"]],
-  documents: [["portfolio"], ["docs"], ["timeline"], ["onboarding"]],
+  documents: [["portfolio"], ["docs"], ["documents"], ["timeline"], ["onboarding"]],
+  // Async extraction: job transitions (queued -> running -> completed/failed)
+  // refresh the document surfaces so worker progress is visible live.
+  extraction_jobs: [["docs"], ["documents"]],
   activities: [["activities"], ["timeline"]],
   deal_milestones: [["milestones"], ["timeline"], ["onboarding"]],
   market_signals: [["market-signals"]],

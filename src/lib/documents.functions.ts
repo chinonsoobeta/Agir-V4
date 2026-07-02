@@ -214,8 +214,16 @@ export const analyzeDocument = createServerFn({ method: "POST" })
       .single();
     if (docErr) throw new Error(docErr.message);
 
-    const { claimJob, completeJob, failJob } = await import("./extraction-jobs.server");
-    const { scanDocument, UPLOAD_LIMITS } = await import("./upload-guards.server");
+    const { claimJob, completeJob, failJob, isInlineJob } = await import(
+      "./extraction-jobs.server"
+    );
+
+    // EXTRACTION_ASYNC=1 moves the heavy pipeline (download, AV scan, OCR, AI)
+    // off the request path: this handler only records a queued job and returns
+    // immediately; a worker (scripts/extraction-worker.mjs -> the token-guarded
+    // /api/extraction/worker endpoint) executes it. Default remains in-request
+    // so environments without a worker keep working unchanged.
+    let asyncMode = process.env.EXTRACTION_ASYNC === "1";
 
     // Idempotent + observable: one job per (owner, document content). A retry or
     // double-click re-attaches to the existing job instead of re-running OCR/AI.
@@ -226,6 +234,7 @@ export const analyzeDocument = createServerFn({ method: "POST" })
       projectId: doc.project_id,
       documentId: doc.id,
       message: "Extracting document text",
+      enqueue: asyncMode,
     });
     if (existed && job.status === "completed") {
       return (
@@ -236,128 +245,39 @@ export const analyzeDocument = createServerFn({ method: "POST" })
         }
       );
     }
+    // A pre-migration DB has no extraction_jobs table, so no worker could ever
+    // claim the job -- fall back to in-request execution rather than strand it.
+    if (isInlineJob(job)) asyncMode = false;
 
-    const failExtraction = async (message: string): Promise<never> => {
-      await context.supabase
-        .from("documents")
-        .update({
-          status: "extraction_failed",
-          extraction_status: "failed",
-          extraction_error: message,
-        })
-        .eq("id", data.id);
+    if (asyncMode) {
+      // Freshly enqueued, or re-attached to a job that is already queued or
+      // running: either way the worker owns execution from here. Mark the
+      // document so the UI shows a live "queued" badge (realtime refresh).
+      if (!existed) {
+        await context.supabase
+          .from("documents")
+          .update({ extraction_status: "queued" })
+          .eq("id", data.id);
+      }
+      return { queued: true as const, job_id: job.id, summary: "", assumptions: "", risks: "" };
+    }
+
+    const { executeDocumentAnalysis, ExtractionFailure } = await import(
+      "./extraction-executor.server"
+    );
+    try {
+      const extractionResult = await executeDocumentAnalysis(context, doc);
+      await completeJob(context, job.id, extractionResult);
+      return extractionResult;
+    } catch (err) {
+      // The executor has already persisted the failure to the document row.
+      const message =
+        err instanceof ExtractionFailure
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Document analysis failed.";
       await failJob(context, job.id, message);
-      throw new Error(message);
-    };
-
-    await context.supabase
-      .from("documents")
-      .update({ extraction_status: "running" })
-      .eq("id", data.id);
-
-    const { downloadDocumentBlob } = await import("./storage-download.server");
-    const dl = await downloadDocumentBlob(context.supabase, doc.storage_path);
-    if (dl.error || !dl.data) {
-      // failExtraction always throws (Promise<never>), so the code below is
-      // unreachable when the download failed; narrow dl.data for the compiler.
-      await failExtraction(dl.error?.message ?? "Unable to download document for extraction.");
+      throw err instanceof Error ? err : new Error(message);
     }
-    const buffer = await dl.data!.arrayBuffer();
-
-    // Safety scan BEFORE any parsing: structural checks always, plus an external
-    // AV/content scan when DOCUMENT_SCAN_URL is configured (fails closed).
-    const scan = await scanDocument(doc.name, buffer);
-    await context.supabase
-      .from("documents")
-      .update({
-        scan_status: scan.ok ? "clean" : "rejected",
-        scan_detail: `[${scan.engine}] ${scan.detail}`,
-      })
-      .eq("id", data.id);
-    if (!scan.ok) await failExtraction(`File rejected by safety scan: ${scan.detail}`);
-
-    const { extractFileTextWithMeta } = await import("./document-text.server");
-    const extracted = await extractFileTextWithMeta(doc.name, doc.file_type, buffer);
-    const pageCount = extracted.ocrTotalPages;
-    // Max-pages guard with graceful messaging for very large uploads.
-    if (pageCount != null && pageCount > UPLOAD_LIMITS.maxDocumentPages) {
-      await context.supabase.from("documents").update({ page_count: pageCount }).eq("id", data.id);
-      await failExtraction(
-        `Document has ${pageCount} pages, above the ${UPLOAD_LIMITS.maxDocumentPages}-page limit for automated extraction. Split the file or request a manual review.`,
-      );
-    }
-    // Persist per-document extraction signals so low-confidence (OCR) docs are
-    // visibly flagged for analyst review before they can drive a verdict.
-    await context.supabase
-      .from("documents")
-      .update({
-        page_count: pageCount,
-        ocr_confidence: extracted.ocrConfidence,
-      })
-      .eq("id", data.id);
-    const text = extracted.text;
-    if (!text.trim()) await failExtraction("No extractable text was found in this document.");
-
-    const { getAgirModel } = await import("./ai-gateway.server");
-    const { generateText } = await import("ai");
-    let result: { text: string };
-    try {
-      result = await generateText({
-        model: getAgirModel(),
-        temperature: 0,
-        system: "Summarize only the supplied document text. Do not infer missing financial values.",
-        prompt: `Document: ${data.name}
-Category: ${data.category || "uncategorized"}
-
-TEXT:
-${text.slice(0, 30000)}
-
-Respond as compact JSON only with keys: summary, key_assumptions, risks, important_dates, financial_highlights. If a value is absent, write "Not found in document."`,
-      });
-    } catch (e) {
-      // AI gateway / key failures must persist a clear, retryable failed status.
-      await failExtraction(
-        e instanceof Error
-          ? e.message
-          : "AI extraction is unavailable. Check the model configuration.",
-      );
-      return { summary: "", assumptions: "", risks: "" }; // unreachable: failExtraction throws
-    }
-    let parsed: {
-      summary?: string;
-      key_assumptions?: string;
-      risks?: string;
-      important_dates?: string;
-      financial_highlights?: string;
-    } = {};
-    try {
-      const m = result.text.match(/\{[\s\S]*\}/);
-      if (m) parsed = JSON.parse(m[0]);
-    } catch {
-      /* keep empty */
-    }
-    const summary = parsed.summary ?? text.slice(0, 500);
-    const assumptions = [
-      parsed.key_assumptions,
-      parsed.financial_highlights,
-      parsed.important_dates,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-    const risks = parsed.risks ?? "";
-    const { error } = await context.supabase
-      .from("documents")
-      .update({
-        ai_summary: summary,
-        ai_assumptions: assumptions,
-        ai_risks: risks,
-        status: "analyzed",
-        extraction_status: "completed",
-        extraction_error: null,
-      })
-      .eq("id", data.id);
-    if (error) throw new Error(error.message);
-    const extractionResult = { summary, assumptions, risks };
-    await completeJob(context, job.id, extractionResult);
-    return extractionResult;
   });
