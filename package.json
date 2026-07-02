@@ -46,7 +46,8 @@
     "load:tenant-scale": "node scripts/tenant-scale-load.mjs",
     "load:tenant-db": "node scripts/tenant-db-concurrency-smoke.mjs",
     "worker:extraction": "node scripts/extraction-worker.mjs",
-    "sla:probe": "node scripts/sla-probe.mjs"
+    "sla:probe": "node scripts/sla-probe.mjs",
+    "readiness:deployed": "node scripts/deployed-readiness-check.mjs"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.199",

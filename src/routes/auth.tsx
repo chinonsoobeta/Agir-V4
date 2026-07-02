@@ -62,6 +62,12 @@ function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  // Submit stays disabled until React has hydrated: before that the onSubmit
+  // handler is not attached, so the browser would do a NATIVE form submit -
+  // a full reload to /auth? that throws away the user's keystrokes. Users on
+  // slow connections hit this window; the E2E suite did too.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -285,7 +291,7 @@ function AuthPage() {
                       onToggle={() => setShowPassword((s) => !s)}
                     />
                   </Field>
-                  <Button type="submit" className="w-full" disabled={loading}>
+                  <Button type="submit" className="w-full" disabled={loading || !hydrated}>
                     {loading ? "Signing in…" : "Sign in"}
                   </Button>
                 </form>
@@ -326,7 +332,7 @@ function AuthPage() {
                       onToggle={() => setShowPassword((s) => !s)}
                     />
                   </Field>
-                  <Button type="submit" className="w-full" disabled={loading}>
+                  <Button type="submit" className="w-full" disabled={loading || !hydrated}>
                     {loading ? "Creating…" : "Create account"}
                   </Button>
                 </form>
@@ -343,7 +349,7 @@ function AuthPage() {
                       onChange={(e) => setEmail(e.target.value)}
                     />
                   </Field>
-                  <Button type="submit" className="w-full" disabled={loading}>
+                  <Button type="submit" className="w-full" disabled={loading || !hydrated}>
                     {loading ? "Sending…" : "Send reset link"}
                   </Button>
                 </form>

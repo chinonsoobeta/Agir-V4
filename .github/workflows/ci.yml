@@ -21,8 +21,8 @@ jobs:
     name: Typecheck, test, build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -42,15 +42,18 @@ jobs:
     name: Supabase types in sync with migrations
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned: "latest" made this job's behavior change under our feet
+          # (generated-types format and local-stack behavior can shift between
+          # CLI releases). Bump deliberately, together with a local regen.
+          version: 2.109.0
       # Boots the local stack and applies every migration in supabase/migrations.
       - run: supabase start
       - run: npm run types:check
@@ -59,15 +62,18 @@ jobs:
     name: Playwright browser E2E
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned: "latest" made this job's behavior change under our feet
+          # (generated-types format and local-stack behavior can shift between
+          # CLI releases). Bump deliberately, together with a local regen.
+          version: 2.109.0
       # Boots the local stack and applies every migration in supabase/migrations.
       - run: supabase start
       # Bridge the local stack's generated keys into the env names the app and
@@ -86,12 +92,25 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run E2E (boots dev server via Playwright webServer)
         run: npm run test:e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+      # Surface the E2E outcome in the job summary so a failure is impossible
+      # to miss from the run page (the auth-setup failure that silently skipped
+      # 16 specs for several commits motivated this).
+      - name: Publish E2E summary
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo "## Playwright E2E"
+            echo "Full HTML report: the **playwright-report** artifact on this run."
+            echo ""
+            echo '> A failure in the `[setup] authenticate` project skips every other spec -'
+            echo '> treat "N did not run" as failures, not passes.'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   rls:
     name: Postgres RLS policy proof
@@ -113,8 +132,8 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/agir_test
       PGSSLMODE: disable
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -132,8 +151,8 @@ jobs:
     # configured, so fork PRs are unaffected; arm it by setting the
     # SCHEMA_DRIFT_DATABASE_URL secret (a read-capable URL to prod/staging).
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -169,8 +188,8 @@ jobs:
       EPHEMERAL_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agir_ephemeral_test
       PGSSLMODE: disable
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
