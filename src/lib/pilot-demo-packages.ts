@@ -16,12 +16,14 @@ export const PILOT_DEAL_PACKAGES: PilotDealPackage[] = [
     assetType: "Mixed-use development",
     intendedOutcome:
       "Validate that messy rent-roll rows and lender terms produce a conservative underwriting case without invented lease-up.",
-    availability: "fixture_only",
+    availability: "seedable",
     documents: [
       "Rivergate_Appraisal_Valuation_Memo.pdf",
       "Rivergate_Construction_Budget.xlsx",
+      "Rivergate_Environmental_Tax_Addendum.pdf",
       "Rivergate_Lender_Term_Sheet.pdf",
       "Rivergate_Market_Study.pdf",
+      "Rivergate_Rate_Lock_Addendum.pdf",
       "Rivergate_Rent_Roll.xlsx",
       "Rivergate_Sponsor_Investment_Summary.pdf",
     ],
@@ -40,12 +42,17 @@ export const PILOT_DEAL_PACKAGES: PilotDealPackage[] = [
     assetType: "Industrial development",
     intendedOutcome:
       "Validate industrial $/SF rent basis, tenant lease abstracts, incentives, and lender terms through extraction and underwriting.",
-    availability: "fixture_only",
+    availability: "seedable",
     documents: [
       "Summit_Point_Appraisal_Valuation_Memo.pdf",
       "Summit_Point_Construction_Budget.xlsx",
+      "Summit_Point_Environmental_Infrastructure_Memo.pdf",
       "Summit_Point_Lender_Term_Sheet.pdf",
+      "Summit_Point_Market_Study.pdf",
+      "Summit_Point_Rate_Lock_Addendum.pdf",
       "Summit_Point_Rent_Roll.xlsx",
+      "Summit_Point_Sponsor_Investment_Summary.pdf",
+      "Summit_Point_Tax_Incentives_Addendum.pdf",
       "Summit_Point_Tenant_Lease_Abstracts.pdf",
     ],
     expectedWorkflow: [

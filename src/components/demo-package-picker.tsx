@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { seedHarbourCentre } from "@/lib/demo.functions";
+import { seedDemoPackage, seedHarbourCentre } from "@/lib/demo.functions";
 import { PILOT_DEAL_PACKAGES, type PilotDealPackage } from "@/lib/pilot-demo-packages";
 
 type DemoPackagePickerProps = {
@@ -24,8 +24,12 @@ type DemoPackagePickerProps = {
 // Each seedable package must be wired to its own seeder here. A "seedable"
 // package with no entry cannot be seeded – this prevents the whole picker from
 // silently seeding the wrong deal (previously every button seeded Harbour Centre).
-const SEEDERS: Record<string, true> = {
-  "harbour-centre": true,
+// harbour-centre uses the bespoke pre-populated seeder; the workflow packages
+// (source documents only, analyst runs extraction) go through seedDemoPackage.
+const SEEDERS: Record<string, "preseeded" | "workflow"> = {
+  "harbour-centre": "preseeded",
+  rivergate: "workflow",
+  "summit-point": "workflow",
 };
 
 const AVAILABILITY_LABEL: Record<PilotDealPackage["availability"], string> = {
@@ -38,9 +42,11 @@ export function DemoPackagePicker({ trigger }: DemoPackagePickerProps) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const seedFn = useServerFn(seedHarbourCentre);
+  const seedPackageFn = useServerFn(seedDemoPackage);
   const seed = useMutation({
     mutationFn: (pkg: PilotDealPackage) => {
-      if (pkg.id === "harbour-centre") return seedFn();
+      if (SEEDERS[pkg.id] === "preseeded") return seedFn();
+      if (SEEDERS[pkg.id] === "workflow") return seedPackageFn({ data: { slug: pkg.id } });
       // Guard: never fall back to seeding a different deal than the one clicked.
       throw new Error(`No seeder is configured for "${pkg.name}" yet.`);
     },

@@ -17,5 +17,6 @@ test("demo user sees the unsupervised demo guide and package picker", async ({ p
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText("Harbour Centre", { exact: true })).toBeVisible();
   await expect(dialog.getByText(/Resolve exit-cap conflict/i)).toBeVisible();
-  await expect(dialog.getByRole("button", { name: /seed package/i })).toBeVisible();
+  // One live seeder per seedable package: Harbour Centre, Rivergate, Summit Point.
+  await expect(dialog.getByRole("button", { name: /seed package/i })).toHaveCount(3);
 });
