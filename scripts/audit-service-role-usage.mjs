@@ -11,6 +11,10 @@ const allowed = new Set([
   "src/lib/health.server.ts",
   "src/lib/scim/supabase-store.server.ts",
   "src/lib/storage-download.server.ts",
+  // Reviewed 2026-07-02: extraction-worker execution endpoint. Disarmed (404)
+  // without EXTRACTION_WORKER_TOKEN; constant-time token check; the job row is
+  // re-read from the DB and execution is scoped to the job's owner_id.
+  "src/routes/api/extraction/worker.ts",
 ]);
 const patterns = [
   /supabaseAdmin\b/,
