@@ -13,7 +13,7 @@ import {
 } from "@/lib/assumptions.functions";
 import { listAssumptions } from "@/lib/assumptions.functions";
 import { listMemoSnapshots, diffMemoSnapshot } from "@/lib/memo-snapshot.functions";
-import { listReconciliationFlags } from "@/lib/underwriting.functions";
+import { getUnderwritingRunState, listReconciliationFlags } from "@/lib/underwriting.functions";
 import { listMemos } from "@/lib/memo.functions";
 import {
   castVote,
@@ -127,6 +127,11 @@ const flagsQ = (pid: string) =>
     queryKey: ["recon-flags", pid],
     queryFn: () => listReconciliationFlags({ data: { project_id: pid } }),
   });
+const runStateQ = (pid: string) =>
+  queryOptions({
+    queryKey: ["uw-run-state", pid],
+    queryFn: () => getUnderwritingRunState({ data: { project_id: pid } }),
+  });
 const memosQ = (pid: string) =>
   queryOptions({
     queryKey: ["memos", pid],
@@ -159,6 +164,7 @@ type DecisionLogRow = {
   decision: string;
   rationale: string | null;
   conditions: string | null;
+  run_id?: string | null;
   user_name: string | null;
   created_at: string;
 };
@@ -200,6 +206,7 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
   const { data: assumptions } = useSuspenseQuery(assumptionsQ(projectId));
   const { data: decisions } = useSuspenseQuery(decisionsQ(projectId));
   const { data: flags } = useSuspenseQuery(flagsQ(projectId));
+  const { data: runState } = useSuspenseQuery(runStateQ(projectId));
   const { data: memos } = useSuspenseQuery(memosQ(projectId));
   const { data: voteData } = useSuspenseQuery(icVotesQ(projectId));
   const { data: condData } = useSuspenseQuery(icCondsQ(projectId));
@@ -266,21 +273,37 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
       .find((d) => d.decision !== "return_to_underwriting") ?? null;
   const [superseding, setSuperseding] = useState(false);
   const locked = !!finalDecision && !superseding;
+  const latestCompletedRun = runState.latest_completed_run as
+    | { id: string; run_number?: number; verdict_code?: string | null }
+    | null;
+  const finalDecisionRun = finalDecision?.run_id
+    ? ((runState.runs as Array<{ id: string; run_number?: number }>).find(
+        (run) => run.id === finalDecision.run_id,
+      ) ?? null)
+    : null;
+  const decisionDrift =
+    !!finalDecision?.run_id &&
+    !!latestCompletedRun?.id &&
+    finalDecision.run_id !== latestCompletedRun.id;
 
   // Do not present any recommendation, score, or condition before deterministic
   // underwriting and findings exist: that would be a recommendation-like output
   // with no basis. Show workflow state instead.
-  if (!decision.hasUnderwriting || !decision.findings) {
+  if (!decision.hasUnderwriting || !decision.findings || runState.freshness === "blocked") {
     return (
       <Card className="p-6 elevated">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
               <Gavel className="size-4 text-muted-foreground" />
-              <h3 className="display text-xl">Underwriting not run</h3>
+              <h3 className="display text-xl">
+                {runState.freshness === "blocked" ? "Underwriting blocked" : "Underwriting not run"}
+              </h3>
             </div>
             <p className="text-sm text-muted-foreground mt-2">
-              Committee review unlocks after deterministic underwriting is complete.
+              {runState.freshness === "blocked"
+                ? "Committee review is locked until approved inputs are ready for a deterministic run."
+                : "Committee review unlocks after deterministic underwriting is complete."}
             </p>
           </div>
           <Badge variant="outline" className="bg-muted/30 text-muted-foreground border-border">
@@ -351,6 +374,34 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
       )}
 
       <CommitteeReadinessCard readiness={readiness} />
+
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <SectionLabel>Run Context</SectionLabel>
+          {latestCompletedRun ? (
+            <>
+              <Badge variant="outline" className="bg-success/10 text-success border-success/30">
+                Run version v{latestCompletedRun.run_number}
+              </Badge>
+              <Badge variant="outline" className="text-[11px]">
+                {latestCompletedRun.verdict_code ?? decision.recommendation}
+              </Badge>
+            </>
+          ) : (
+            <Badge variant="outline" className="text-[11px]">
+              Pending run
+            </Badge>
+          )}
+          {runState.freshness === "stale" && (
+            <Badge
+              variant="outline"
+              className="bg-warning/10 text-warning border-warning/30 text-[11px]"
+            >
+              Outputs stale
+            </Badge>
+          )}
+        </div>
+      </Card>
 
       {/* Approval conditions + critical findings */}
       <div className="grid lg:grid-cols-2 gap-4">
@@ -449,6 +500,20 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
             </p>
             {finalDecision.rationale && (
               <p className="mt-2 text-sm whitespace-pre-wrap">{finalDecision.rationale}</p>
+            )}
+            {finalDecisionRun && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Relied on run version v{finalDecisionRun.run_number}
+              </p>
+            )}
+            {decisionDrift && (
+              <div className="mt-3 flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
+                <AlertTriangle className="size-4 shrink-0" />
+                <span>
+                  Latest completed run is v{latestCompletedRun?.run_number}. This decision remains
+                  tied to v{finalDecisionRun?.run_number ?? "earlier"}.
+                </span>
+              </div>
             )}
             <Button
               variant="outline"

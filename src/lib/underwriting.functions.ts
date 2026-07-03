@@ -10,7 +10,9 @@ import { z } from "zod";
 import {
   acceptDefaultsForContext,
   getEngineInputForContext,
+  getUnderwritingRunStateForContext,
   getUnderwritingReadinessForContext,
+  listUnderwritingRunsForContext,
   listReconciliationFlagsForContext,
   resolveConflictForContext,
   runFullUnderwritingForContext,
@@ -31,6 +33,11 @@ const RunFullUnderwritingSchema = z.object({
   mode: z.enum(["ai", "deterministic"]).default("ai"),
 });
 
+const ListRunsSchema = z.object({
+  project_id: z.string().uuid(),
+  limit: z.number().int().min(1).max(25).optional(),
+});
+
 export const getEngineInput = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((d: { project_id: string }) => ProjectIdSchema.parse(d))
@@ -40,6 +47,16 @@ export const getUnderwritingReadiness = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((d: { project_id: string }) => ProjectIdSchema.parse(d))
   .handler(getUnderwritingReadinessForContext);
+
+export const getUnderwritingRunState = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { project_id: string }) => ProjectIdSchema.parse(d))
+  .handler(getUnderwritingRunStateForContext);
+
+export const listUnderwritingRuns = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { project_id: string; limit?: number }) => ListRunsSchema.parse(d))
+  .handler(listUnderwritingRunsForContext);
 
 export const acceptDefaults = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

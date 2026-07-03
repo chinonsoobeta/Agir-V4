@@ -17,6 +17,7 @@ import {
 import {
   acceptDefaults,
   getUnderwritingReadiness,
+  getUnderwritingRunState,
   listReconciliationFlags,
   resolveConflict,
   runFullUnderwriting,
@@ -90,6 +91,18 @@ type MemoRow = Omit<Tables<"investment_memos">, "content" | "verification_report
   content: MemoContent | null;
   verification_report: MemoVerificationReport;
 };
+type RunVersionRow = {
+  id: string;
+  run_number: number;
+  run_mode: string;
+  status: string;
+  verdict_code: string | null;
+  input_fingerprint: string;
+  output_fingerprint: string | null;
+  input_snapshot: unknown;
+  output_snapshot: unknown;
+  computed_at: string;
+};
 
 const outputsQ = (pid: string) =>
   queryOptions({
@@ -115,6 +128,11 @@ const readinessQ = (pid: string) =>
   queryOptions({
     queryKey: ["uw-readiness", pid],
     queryFn: () => getUnderwritingReadiness({ data: { project_id: pid } }),
+  });
+const runStateQ = (pid: string) =>
+  queryOptions({
+    queryKey: ["uw-run-state", pid],
+    queryFn: () => getUnderwritingRunState({ data: { project_id: pid } }),
   });
 const flagsQ = (pid: string) =>
   queryOptions({
@@ -185,19 +203,6 @@ const inputLabel = (key: string) =>
   INPUT_LABELS[key] ??
   (key.startsWith("occupancy:") ? `Stabilized occupancy: ${key.slice(10)}` : key);
 
-function latestTimestamp(rows: Array<Record<string, unknown>>, keys: string[]) {
-  let latest = 0;
-  for (const row of rows) {
-    for (const key of keys) {
-      const raw = row[key];
-      if (typeof raw !== "string") continue;
-      const ts = new Date(raw).getTime();
-      if (Number.isFinite(ts)) latest = Math.max(latest, ts);
-    }
-  }
-  return latest;
-}
-
 // Conflict values are raw numbers; append the unit the key implies so e.g. an
 // exit cap reads "4.75%" not "4.75". Only percentage keys get a suffix; dollar
 // and count keys are left as-is.
@@ -225,6 +230,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   const { data: outputs } = useSuspenseQuery(outputsQ(projectId));
   const { data: risks } = useSuspenseQuery(risksQ(projectId));
   const { data: readiness } = useSuspenseQuery(readinessQ(projectId));
+  const { data: runState } = useSuspenseQuery(runStateQ(projectId));
   const { data: flags } = useSuspenseQuery(flagsQ(projectId));
   const { data: assumptions } = useSuspenseQuery(assumptionsQ(projectId));
   const qc = useQueryClient();
@@ -260,6 +266,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
         "decisions",
         "memos",
         "memo-debug",
+        "uw-run-state",
       ].map((key) => qc.invalidateQueries({ queryKey: [key, projectId] })),
     );
   };
@@ -582,6 +589,10 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
             </div>
           </div>
         </Card>
+        <RunHistory
+          runs={(runState.runs ?? []) as RunVersionRow[]}
+          currentFingerprint={runState.current_input_fingerprint}
+        />
       </div>
     );
   }
@@ -610,16 +621,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
     metric("equity_multiple")?.formula_text?.includes("Equity wipeout"),
   );
   const defaultedKeys: string[] = readiness.defaultedKeys ?? [];
-  const latestOutputAt = latestTimestamp(outputs as Array<Record<string, unknown>>, [
-    "computed_at",
-  ]);
-  const latestApprovedInputAt = latestTimestamp(
-    (assumptions as AssumptionRow[]).filter((row) =>
-      ["approved", "modified", "default_accepted", "calculated"].includes(row.status ?? ""),
-    ) as Array<Record<string, unknown>>,
-    ["approved_at", "updated_at"],
-  );
-  const outputsStale = outputs.length > 0 && latestApprovedInputAt > latestOutputAt;
+  const outputsStale = runState.freshness === "stale";
 
   // IC-grade structure: surface the LP/GP waterfall and a multi-tranche stack
   // only when they are configured. Without them the LP return equals the deal
@@ -813,6 +815,11 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
           </div>
         )}
       </Card>
+
+      <RunHistory
+        runs={(runState.runs ?? []) as RunVersionRow[]}
+        currentFingerprint={runState.current_input_fingerprint}
+      />
 
       {/* Reconciliation banners: error flags cannot be silently dropped */}
       {flags.length > 0 && (
@@ -1140,6 +1147,248 @@ function UnderwritingMetric({
   );
 }
 
+function shortHash(value: string | null | undefined) {
+  return value ? value.slice(0, 10) : "pending";
+}
+
+function runModeLabel(mode: string) {
+  return mode === "ai_assisted_default_selection"
+    ? "AI-assisted default selection"
+    : "Deterministic run";
+}
+
+function asPlainRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function flattenSnapshot(value: unknown, prefix = ""): Record<string, unknown> {
+  if (value == null || typeof value !== "object") return prefix ? { [prefix]: value } : {};
+  if (Array.isArray(value)) {
+    return value.reduce<Record<string, unknown>>((acc, item, index) => {
+      Object.assign(acc, flattenSnapshot(item, `${prefix}${prefix ? "." : ""}${index}`));
+      return acc;
+    }, {});
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, raw] of Object.entries(asPlainRecord(value))) {
+    const nextKey = prefix ? `${prefix}.${key}` : key;
+    if (raw != null && typeof raw === "object") Object.assign(out, flattenSnapshot(raw, nextKey));
+    else out[nextKey] = raw;
+  }
+  return out;
+}
+
+function outputMap(value: unknown) {
+  const rows = Array.isArray(value) ? value : [];
+  const wanted = new Set([
+    "base::exit_value",
+    "base::dscr",
+    "base::irr_estimate",
+    "base::equity_multiple",
+    "base::development_profit",
+    "base::verdict",
+  ]);
+  const out = new Map<string, { label: string; value: unknown; unit: string | null }>();
+  for (const raw of rows) {
+    const row = asPlainRecord(raw);
+    const key = `${row.scenario_key}::${row.metric_key}`;
+    if (!wanted.has(key)) continue;
+    out.set(key, {
+      label: String(row.metric_label ?? row.metric_key ?? key),
+      value: row.value_numeric ?? row.formula_text ?? null,
+      unit: typeof row.unit === "string" ? row.unit : null,
+    });
+  }
+  return out;
+}
+
+function compactChanges(a: Record<string, unknown>, b: Record<string, unknown>, limit: number) {
+  const rows: Array<{ key: string; was: unknown; now: unknown }> = [];
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (JSON.stringify(a[key] ?? null) === JSON.stringify(b[key] ?? null)) continue;
+    rows.push({ key, was: a[key] ?? null, now: b[key] ?? null });
+    if (rows.length >= limit) break;
+  }
+  return rows;
+}
+
+function RunHistory({
+  runs,
+  currentFingerprint,
+}: {
+  runs: RunVersionRow[];
+  currentFingerprint: string;
+}) {
+  const latest = runs[0] ?? null;
+  const previous = runs[1] ?? null;
+  const inputChanges =
+    latest && previous
+      ? compactChanges(
+          flattenSnapshot(previous.input_snapshot),
+          flattenSnapshot(latest.input_snapshot),
+          6,
+        )
+      : [];
+  const outputChanges = (() => {
+    if (!latest || !previous) return [];
+    const prev = outputMap(previous.output_snapshot);
+    const next = outputMap(latest.output_snapshot);
+    const rows: Array<{ key: string; label: string; was: unknown; now: unknown; unit: string | null }> = [];
+    for (const key of new Set([...prev.keys(), ...next.keys()])) {
+      const a = prev.get(key);
+      const b = next.get(key);
+      if (JSON.stringify(a?.value ?? null) === JSON.stringify(b?.value ?? null)) continue;
+      rows.push({
+        key,
+        label: b?.label ?? a?.label ?? key,
+        was: a?.value ?? null,
+        now: b?.value ?? null,
+        unit: b?.unit ?? a?.unit ?? null,
+      });
+      if (rows.length >= 6) break;
+    }
+    return rows;
+  })();
+
+  if (!runs.length) {
+    return (
+      <Card className="p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
+            Run history
+          </div>
+          <Badge variant="outline" className="text-[11px]">
+            Pending run
+          </Badge>
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">
+          No run versions have been recorded for this deal.
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/20 px-4 py-2">
+        <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
+          Run history
+        </div>
+        <span className="font-mono text-[11px] text-muted-foreground">
+          current input {shortHash(currentFingerprint)}
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="data-grid w-full">
+          <thead>
+            <tr>
+              <th className="text-left">Version</th>
+              <th className="text-left">Status</th>
+              <th className="text-left">Computed</th>
+              <th className="text-left">Mode</th>
+              <th className="text-left">Verdict</th>
+              <th className="text-left">Input hash</th>
+              <th className="text-left">Freshness</th>
+            </tr>
+          </thead>
+          <tbody>
+            {runs.slice(0, 10).map((run) => {
+              const isCurrent =
+                run.status === "completed" && run.input_fingerprint === currentFingerprint;
+              return (
+                <tr key={run.id}>
+                  <td className="font-medium">v{run.run_number}</td>
+                  <td>
+                    <Badge
+                      variant="outline"
+                      className={
+                        run.status === "completed"
+                          ? "bg-success/10 text-success border-success/30 text-[11px]"
+                          : run.status === "blocked"
+                            ? "bg-warning/10 text-warning border-warning/30 text-[11px]"
+                            : "bg-destructive/10 text-destructive border-destructive/30 text-[11px]"
+                      }
+                    >
+                      {run.status}
+                    </Badge>
+                  </td>
+                  <td className="text-xs text-muted-foreground">
+                    {new Date(run.computed_at).toLocaleString()}
+                  </td>
+                  <td className="text-xs">{runModeLabel(run.run_mode)}</td>
+                  <td className="text-xs">{run.verdict_code ?? "Blocked"}</td>
+                  <td className="font-mono text-[11px]">{shortHash(run.input_fingerprint)}</td>
+                  <td>
+                    {isCurrent ? (
+                      <Badge
+                        variant="outline"
+                        className="bg-success/10 text-success border-success/30 text-[11px]"
+                      >
+                        Current
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[11px]">
+                        Historical
+                      </Badge>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {previous && (
+        <div className="grid gap-4 border-t border-border p-4 lg:grid-cols-2">
+          <div>
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
+              Changed inputs: v{previous.run_number} to v{latest?.run_number}
+            </div>
+            {inputChanges.length ? (
+              <ul className="mt-2 space-y-1">
+                {inputChanges.map((change) => (
+                  <li key={change.key} className="text-xs">
+                    <span className="font-mono text-muted-foreground">{change.key}</span>{" "}
+                    <span className="text-muted-foreground">{String(change.was)}</span>
+                    <span className="mx-1">to</span>
+                    <span>{String(change.now)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">No input changes recorded.</p>
+            )}
+          </div>
+          <div>
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
+              Changed headline outputs
+            </div>
+            {outputChanges.length ? (
+              <ul className="mt-2 space-y-1">
+                {outputChanges.map((change) => (
+                  <li key={change.key} className="text-xs">
+                    <span className="font-medium">{change.label}</span>{" "}
+                    <span className="text-muted-foreground">{String(change.was)}</span>
+                    <span className="mx-1">to</span>
+                    <span>{String(change.now)}</span>
+                    {change.unit && <span className="text-muted-foreground"> {change.unit}</span>}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                No headline output changes recorded.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function bandClass(band: string): string {
   if (band === "strong" || band === "exceptional")
     return "text-primary border-primary/40 bg-primary/5";
@@ -1431,6 +1680,7 @@ const MEMO_SECTIONS: Array<{ key: string; label: string }> = [
 export function MemoSection({ projectId }: { projectId: string }) {
   const { data: memos } = useSuspenseQuery(memosQ(projectId));
   const { data: debug } = useSuspenseQuery(memoDebugQ(projectId));
+  const { data: runState } = useSuspenseQuery(runStateQ(projectId));
   const qc = useQueryClient();
   const generateMemoFn = useServerFn(generateMemo);
   const [error, setError] = useState<string | null>(null);
@@ -1442,6 +1692,7 @@ export function MemoSection({ projectId }: { projectId: string }) {
       qc.invalidateQueries({ queryKey: ["memos", projectId] });
       qc.invalidateQueries({ queryKey: ["audit", projectId] });
       qc.invalidateQueries({ queryKey: ["memo-debug", projectId] });
+      qc.invalidateQueries({ queryKey: ["uw-run-state", projectId] });
       const mode =
         row?.content?.generation_mode ??
         (row?.status === "generated_deterministic" ? "deterministic" : "ai");
@@ -1461,6 +1712,15 @@ export function MemoSection({ projectId }: { projectId: string }) {
 
   const latest: any = memos[0] ?? null;
   const content = (latest?.content ?? {}) as Record<string, any>;
+  const memoRun = content.run_version as
+    | { id?: string; run_number?: number; input_fingerprint?: string }
+    | null
+    | undefined;
+  const memoStale =
+    Boolean(memoRun?.input_fingerprint) &&
+    memoRun?.input_fingerprint !== runState.current_input_fingerprint;
+  const canGenerateMemo =
+    debug.can_generate && runState.freshness !== "stale" && runState.freshness !== "blocked";
   const needsReview = Boolean(
     latest &&
     (content.needs_review ||
@@ -1491,10 +1751,18 @@ export function MemoSection({ projectId }: { projectId: string }) {
           <div className="mt-2 flex flex-wrap gap-1.5">
             <Badge
               variant="outline"
-              className={`text-[11px] ${debug.can_generate ? "bg-success/10 text-success border-success/30" : "bg-warning/10 text-warning border-warning/30"}`}
+              className={`text-[11px] ${canGenerateMemo ? "bg-success/10 text-success border-success/30" : "bg-warning/10 text-warning border-warning/30"}`}
             >
-              {debug.can_generate ? "Memo available" : "Memo blocked"}
+              {canGenerateMemo ? "Memo available" : "Memo blocked"}
             </Badge>
+            {memoStale && (
+              <Badge
+                variant="outline"
+                className="text-[11px] bg-warning/10 text-warning border-warning/30"
+              >
+                Memo stale
+              </Badge>
+            )}
             {latestStatus && (
               <Badge variant="outline" className="text-[11px] uppercase">
                 {latestStatus}
@@ -1513,9 +1781,13 @@ export function MemoSection({ projectId }: { projectId: string }) {
         <Button
           size="sm"
           onClick={() => gen.mutate()}
-          disabled={!debug.can_generate || gen.isPending}
+          disabled={!canGenerateMemo || gen.isPending}
           title={
-            debug.can_generate
+            runState.freshness === "stale"
+              ? "Outputs stale. Re-run deterministic underwriting before generating a memo."
+              : runState.freshness === "blocked"
+                ? "Underwriting blocked. Resolve inputs before generating a memo."
+                : debug.can_generate
               ? "Generate the memo from deterministic outputs and approved assumptions."
               : debug.blocking_reasons.join(" ")
           }
@@ -1537,6 +1809,16 @@ export function MemoSection({ projectId }: { projectId: string }) {
               ))}
             </ul>
           </div>
+        </div>
+      )}
+      {debug.can_generate && !canGenerateMemo && (
+        <div className="flex items-start gap-2 text-xs text-warning bg-warning/5 border border-warning/20 rounded p-3">
+          <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+          <span>
+            {runState.freshness === "stale"
+              ? "Outputs stale. Re-run deterministic underwriting before generating a memo."
+              : "Underwriting blocked. Resolve inputs before generating a memo."}
+          </span>
         </div>
       )}
       {debug.can_generate && !debug.env.has_anthropic_key && (
@@ -1619,6 +1901,11 @@ export function MemoSection({ projectId }: { projectId: string }) {
               {latest.status ?? "generated"}
             </Badge>
             <span>{new Date(latest.created_at).toLocaleString()}</span>
+            {memoRun?.run_number && (
+              <Badge variant="outline" className="text-[11px]">
+                Run version v{memoRun.run_number}
+              </Badge>
+            )}
             {content.deterministic_verdict?.code && (
               <Badge
                 variant="outline"

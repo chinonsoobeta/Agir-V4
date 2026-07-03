@@ -1366,22 +1366,43 @@ export const recordDecision = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const by = await userName(context);
-    const { data: row, error } = await context.supabase
+    const { getUnderwritingRunStateForContext } = await import("./underwriting.server");
+    const runState = await getUnderwritingRunStateForContext({
+      data: { project_id: data.project_id },
+      context,
+    });
+    const decisionRun = runState.latest_completed_run as { id: string; run_number: number } | null;
+    const decisionInsert = {
+      project_id: data.project_id,
+      owner_id: context.userId,
+      user_id: context.userId,
+      user_name: by,
+      run_id: decisionRun?.id ?? null,
+      decision: data.decision,
+      rationale: data.rationale,
+      conditions: data.conditions ?? null,
+    };
+    let decisionWrite = await context.supabase
       .from("decision_logs")
-      .insert({
-        project_id: data.project_id,
-        owner_id: context.userId,
-        user_id: context.userId,
-        user_name: by,
-        decision: data.decision,
-        rationale: data.rationale,
-        conditions: data.conditions ?? null,
-      })
+      .insert(decisionInsert)
       .select()
       .single();
+    if (isMissingColumn(decisionWrite.error)) {
+      const compatInsert: Record<string, unknown> = { ...decisionInsert };
+      delete compatInsert.run_id;
+      decisionWrite = await context.supabase
+        .from("decision_logs")
+        .insert(compatInsert as any)
+        .select()
+        .single();
+    }
+    const { data: row, error } = decisionWrite;
     if (error) throw new Error(error.message);
     await auditLog(context, data.project_id, "decision", row.id, "ic_decision", {
       decision: data.decision,
+      run_id: decisionRun?.id ?? null,
+      run_number: decisionRun?.run_number ?? null,
+      run_freshness: runState.freshness,
     });
     // Freeze exactly what the committee saw behind an immutable version, tied to
     // this decision. A later input edit can be diffed but never rewrites it.

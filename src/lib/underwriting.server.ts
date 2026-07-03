@@ -38,6 +38,7 @@ import {
 import { generateFindings } from "./findings";
 import { reconcileRecommendation } from "./decision";
 import { AI_AUTHORITY_NOTE } from "./ai-authority";
+import { handleSchemaCompatibilityFallback, isMissingRelation } from "./db-compat";
 
 // Taxonomy (review queue) → engine key mapping. Conflicting review-queue rows
 // are surfaced to readiness through this mapping so a conflicted key blocks
@@ -68,6 +69,169 @@ async function auditWorkflowEvent(
     action,
     payload,
   });
+}
+
+type UnderwritingRunStatus = "completed" | "blocked" | "failed";
+type UnderwritingRunMode = "deterministic" | "ai_assisted_default_selection";
+
+function persistedRunMode(mode: "ai" | "deterministic"): UnderwritingRunMode {
+  return mode === "ai" ? "ai_assisted_default_selection" : "deterministic";
+}
+
+function orderedRecord<T extends Record<string, unknown>>(row: T) {
+  return Object.fromEntries(
+    Object.entries(row)
+      .filter(([, value]) => value !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
+}
+
+function normalizeProjectRows(rows: ProjectInputRows) {
+  const sortBy = (a: Record<string, unknown>, b: Record<string, unknown>) =>
+    String(a.key ?? a.category ?? a.unit_type ?? "").localeCompare(
+      String(b.key ?? b.category ?? b.unit_type ?? ""),
+    );
+  return {
+    scalars: rows.scalars.map(orderedRecord).sort(sortBy),
+    budget: rows.budget.map(orderedRecord).sort(sortBy),
+    revenue: rows.revenue.map(orderedRecord).sort(sortBy),
+  };
+}
+
+function runBlockedReasons(readiness: ReturnType<typeof computeReadiness>) {
+  return [
+    ...readiness.missing.map((key) => ({ kind: "missing", key })),
+    ...readiness.conflicting.map((key) => ({ kind: "conflicting", key })),
+  ];
+}
+
+function acceptedDefaultsUsed(rows: ProjectInputRows) {
+  const scalarDefaults = rows.scalars
+    .filter((row) => row.status === "default_accepted")
+    .map((row) => ({ key: row.key, value: row.value_numeric, source: row.source ?? "default" }));
+  const budgetDefaults = rows.budget
+    .filter((row) => row.status === "default_accepted")
+    .map((row) => ({ key: `budget:${row.category}`, value: row.amount, source: "default" }));
+  const revenueDefaults = rows.revenue
+    .filter((row) => row.status === "default_accepted")
+    .map((row) => ({ key: `revenue:${row.unit_type}`, source: "default" }));
+  return [...scalarDefaults, ...budgetDefaults, ...revenueDefaults];
+}
+
+function conflictResolutionsUsed(rows: ProjectInputRows) {
+  return rows.scalars
+    .filter((row) => (row as any).resolution_note || row.conflict_values)
+    .map((row) => ({
+      key: row.key,
+      value: row.value_numeric,
+      resolution_note: (row as any).resolution_note ?? null,
+      conflict_values: row.conflict_values ?? null,
+    }));
+}
+
+function outputSnapshot(rows: Array<Record<string, unknown>>) {
+  return rows.map((row) => ({
+    scenario_key: row.scenario_key,
+    metric_key: row.metric_key,
+    metric_label: row.metric_label ?? null,
+    value_numeric: row.value_numeric ?? null,
+    unit: row.unit ?? null,
+    formula_text: row.formula_text ?? null,
+  }));
+}
+
+async function nextRunNumber(ctx: any, projectId: string) {
+  const { data, error } = await ctx.supabase
+    .from("underwriting_runs")
+    .select("run_number")
+    .eq("project_id", projectId)
+    .order("run_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (isMissingRelation(error)) {
+    return handleSchemaCompatibilityFallback(error, {
+      featureName: "underwriting run versions",
+      table: "underwriting_runs",
+      operation: "find next run number",
+      fallback: null as number | null,
+    });
+  }
+  if (error) throw new Error(error.message);
+  return (data?.run_number ?? 0) + 1;
+}
+
+async function insertUnderwritingRun(
+  ctx: any,
+  input: {
+    projectId: string;
+    status: UnderwritingRunStatus;
+    mode: "ai" | "deterministic";
+    inputFingerprint: string;
+    outputFingerprint?: string | null;
+    verdictCode?: string | null;
+    blockedReasons?: unknown[];
+    acceptedDefaults?: unknown[];
+    conflictResolutions?: unknown[];
+    inputSnapshot?: unknown;
+    outputSnapshot?: unknown[];
+  },
+) {
+  const runNumber = await nextRunNumber(ctx, input.projectId);
+  if (runNumber == null) return null;
+  const { data: row, error } = await ctx.supabase
+    .from("underwriting_runs")
+    .insert({
+      project_id: input.projectId,
+      owner_id: ctx.userId,
+      run_number: runNumber,
+      run_mode: persistedRunMode(input.mode),
+      status: input.status,
+      input_fingerprint: input.inputFingerprint,
+      output_fingerprint: input.outputFingerprint ?? null,
+      verdict_code: input.verdictCode ?? null,
+      blocked_reasons: input.blockedReasons ?? [],
+      accepted_defaults_used: input.acceptedDefaults ?? [],
+      conflict_resolutions_used: input.conflictResolutions ?? [],
+      input_snapshot: input.inputSnapshot ?? {},
+      output_snapshot: input.outputSnapshot ?? [],
+      created_by: ctx.userId,
+    })
+    .select()
+    .single();
+  if (isMissingRelation(error)) {
+    return handleSchemaCompatibilityFallback(error, {
+      featureName: "underwriting run versions",
+      table: "underwriting_runs",
+      operation: "insert run version",
+      fallback: null,
+    });
+  }
+  if (error) throw new Error(error.message);
+  return row;
+}
+
+async function currentInputBasis(supabase: any, projectId: string) {
+  const { stableJsonHash } = await import("./hash.server");
+  const rows = await loadProjectRows(supabase, projectId);
+  const readiness = computeReadiness(rows);
+  if (readiness.status === "blocked") {
+    return {
+      rows,
+      readiness,
+      input: null,
+      inputFingerprint: stableJsonHash({
+        readiness,
+        rows: normalizeProjectRows(rows),
+      }),
+    };
+  }
+  const input = assembleEngineInput(rows);
+  return {
+    rows,
+    readiness,
+    input,
+    inputFingerprint: stableJsonHash(input),
+  };
 }
 
 function valuesMatch(actual: unknown, expected: unknown) {
@@ -698,23 +862,49 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
   };
 
   if (readiness.status === "blocked") {
+    const { stableJsonHash } = await import("./hash.server");
+    const inputFingerprint = stableJsonHash({
+      readiness,
+      rows: normalizeProjectRows(rows),
+    });
+    const blockedRun = await insertUnderwritingRun(context, {
+      projectId: data.project_id,
+      status: "blocked",
+      mode: analysisMode,
+      inputFingerprint,
+      blockedReasons: runBlockedReasons(readiness),
+      acceptedDefaults: acceptedDefaultsUsed(rows),
+      conflictResolutions: conflictResolutionsUsed(rows),
+      inputSnapshot: normalizeProjectRows(rows),
+    });
     // Fail closed: zero metrics, zero charts, no partial numbers.
     await auditWorkflowEvent(context, data.project_id, "underwriting_blocked", {
       readiness,
       analysis_mode: analysisMode,
       ai_note: aiFailureReason,
+      run_id: blockedRun?.id ?? null,
+      run_number: blockedRun?.run_number ?? null,
+      input_fingerprint: inputFingerprint,
     });
-    return { blocked: true as const, readiness, ...aiMeta };
+    return {
+      blocked: true as const,
+      readiness,
+      run_version: blockedRun
+        ? { id: blockedRun.id, run_number: blockedRun.run_number, status: blockedRun.status }
+        : null,
+      ...aiMeta,
+    };
   }
   await assertApprovedAssumptionsSynced(context.supabase, data.project_id);
 
   const input = assembleEngineInput(rows);
+  const { stableJsonHash } = await import("./hash.server");
+  const inputFingerprint = stableJsonHash(input);
 
   // Idempotency: key the run by (project, content-hash of the engine input +
   // mode). A double-click or retry with identical inputs returns the cached
   // result instead of re-running the (billing-relevant) insight/findings work
   // and re-writing the output tables.
-  const { stableJsonHash } = await import("./hash.server");
   const { claimJob, completeJob } = await import("./extraction-jobs.server");
   const runKey = stableJsonHash({ input, mode: analysisMode });
   const { job: runJob, existed: runExisted } = await claimJob(context, {
@@ -724,14 +914,42 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
     message: "Running underwriting",
   });
   if (runExisted && runJob.status === "completed" && runJob.result_json) {
-    const { count, error } = await context.supabase
+    const { data: cachedOutputs, error } = await context.supabase
       .from("financial_outputs")
-      .select("id", { count: "exact", head: true })
+      .select("scenario_key,metric_key,metric_label,value_numeric,unit,formula_text")
       .eq("project_id", data.project_id);
     if (error) throw new Error(error.message);
-    if ((count ?? 0) > 0) {
-      // Cached identical run: shape matches the success return below.
-      return runJob.result_json as any;
+    if ((cachedOutputs ?? []).length > 0) {
+      const cachedOutputSnapshot = outputSnapshot(
+        (cachedOutputs ?? []) as Array<Record<string, unknown>>,
+      );
+      const cachedRun = await insertUnderwritingRun(context, {
+        projectId: data.project_id,
+        status: "completed",
+        mode: analysisMode,
+        inputFingerprint,
+        outputFingerprint: stableJsonHash(cachedOutputSnapshot),
+        verdictCode:
+          ((runJob.result_json as any)?.verdict?.code as string | undefined) ??
+          ((runJob.result_json as any)?.verdictCode as string | undefined) ??
+          null,
+        acceptedDefaults: acceptedDefaultsUsed(rows),
+        conflictResolutions: conflictResolutionsUsed(rows),
+        inputSnapshot: input,
+        outputSnapshot: cachedOutputSnapshot,
+      });
+      await auditWorkflowEvent(context, data.project_id, "underwriting_run_version_created", {
+        run_id: cachedRun?.id ?? null,
+        run_number: cachedRun?.run_number ?? null,
+        source: "cached_completed_job",
+        input_fingerprint: inputFingerprint,
+      });
+      return {
+        ...(runJob.result_json as any),
+        run_version: cachedRun
+          ? { id: cachedRun.id, run_number: cachedRun.run_number, status: cachedRun.status }
+          : null,
+      };
     }
   }
 
@@ -933,6 +1151,23 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
       portfolioSample: portfolioNorms.sampleSize,
     },
   });
+  const persistedOutputSnapshot = outputSnapshot(outputInserts);
+  const outputFingerprint = stableJsonHash(persistedOutputSnapshot);
+  const completedRun = await insertUnderwritingRun(context, {
+    projectId: data.project_id,
+    status: "completed",
+    mode: analysisMode,
+    inputFingerprint,
+    outputFingerprint,
+    verdictCode: verdict.code,
+    acceptedDefaults: acceptedDefaultsUsed(rows),
+    conflictResolutions: conflictResolutionsUsed(rows),
+    inputSnapshot: input,
+    outputSnapshot: persistedOutputSnapshot,
+  });
+  if (completedRun) {
+    for (const row of outputInserts) row.run_id = completedRun.id;
+  }
   const { error: outErr } = await context.supabase.from("financial_outputs").insert(outputInserts);
   if (outErr) throw new Error(outErr.message);
 
@@ -982,6 +1217,10 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
       equity_wipeout: base.equityWipeout,
       analysis_mode: analysisMode,
       ai_accepted_defaults: aiAcceptedDefaults,
+      run_id: completedRun?.id ?? null,
+      run_number: completedRun?.run_number ?? null,
+      input_fingerprint: inputFingerprint,
+      output_fingerprint: outputFingerprint,
     },
   });
 
@@ -994,6 +1233,9 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
     irrStatus: base.irrStatus,
     flags,
     values: base.values,
+    run_version: completedRun
+      ? { id: completedRun.id, run_number: completedRun.run_number, status: completedRun.status }
+      : null,
     ...aiMeta,
   };
   await completeJob(context, runJob.id, result);
@@ -1014,4 +1256,65 @@ export async function listReconciliationFlagsForContext({
     .order("severity", { ascending: false });
   if (error) throw new Error(error.message);
   return rows ?? [];
+}
+
+export async function listUnderwritingRunsForContext({
+  data,
+  context,
+}: {
+  data: { project_id: string; limit?: number };
+  context: any;
+}) {
+  const limit = Math.min(Math.max(data.limit ?? 10, 1), 25);
+  const { data: rows, error } = await context.supabase
+    .from("underwriting_runs")
+    .select("*")
+    .eq("project_id", data.project_id)
+    .order("run_number", { ascending: false })
+    .limit(limit);
+  if (isMissingRelation(error)) {
+    return handleSchemaCompatibilityFallback(error, {
+      featureName: "underwriting run versions",
+      table: "underwriting_runs",
+      operation: "list run versions",
+      fallback: [],
+    });
+  }
+  if (error) throw new Error(error.message);
+  return rows ?? [];
+}
+
+export async function getUnderwritingRunStateForContext({
+  data,
+  context,
+}: {
+  data: { project_id: string };
+  context: any;
+}) {
+  const basis = await currentInputBasis(context.supabase, data.project_id);
+  const runs = await listUnderwritingRunsForContext({
+    data: { project_id: data.project_id, limit: 10 },
+    context,
+  });
+  const latestCompleted =
+    runs.find((run: any) => run.status === "completed") ??
+    null;
+  const latestRun = runs[0] ?? null;
+  const freshness =
+    basis.readiness.status === "blocked"
+      ? "blocked"
+      : !latestCompleted
+        ? "pending"
+        : latestCompleted.input_fingerprint === basis.inputFingerprint
+          ? "current"
+          : "stale";
+  return {
+    project_id: data.project_id,
+    freshness,
+    readiness: basis.readiness,
+    current_input_fingerprint: basis.inputFingerprint,
+    latest_run: latestRun,
+    latest_completed_run: latestCompleted,
+    runs,
+  };
 }

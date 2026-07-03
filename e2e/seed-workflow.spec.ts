@@ -41,7 +41,7 @@ test("seed Harbour Centre demo and review its underwriting surfaces", async ({ p
   await expect(page.getByLabel("Deal workflow status")).toBeVisible();
   await expect(page.getByText(/documents? extracted|extraction pending/i).first()).toBeVisible();
   await expect(page.getByText(/conflicts?/i).first()).toBeVisible();
-  await expect(page.getByText(/pending run/i).first()).toBeVisible();
+  await expect(page.getByText(/blocked|pending run/i).first()).toBeVisible();
 
   // Documents tab: the six bundled source documents are linked.
   await page.getByRole("tab", { name: /documents/i }).click();
@@ -110,8 +110,10 @@ test("professional demo workflow resolves provenance and fail-closed underwritin
   await expect(runLocator).toHaveCount(0);
 
   await page.getByRole("tab", { name: /investment committee/i }).click();
-  await expect(page.getByRole("heading", { name: /Underwriting not run/i })).toBeVisible();
-  await expect(page.getByText(/Committee review unlocks/i)).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /Underwriting blocked|Underwriting not run/i }),
+  ).toBeVisible();
+  await expect(page.getByText(/Committee review is locked|Committee review unlocks/i)).toBeVisible();
   await expect(page.getByText(/IC review blocked/i).first()).toBeVisible();
 
   await page.getByRole("tab", { name: /audit/i }).click();
@@ -163,6 +165,8 @@ test("professional demo workflow completes deterministic underwriting, memo, and
   await page.getByRole("tab", { name: /analysis/i }).click();
   await expect(page.getByLabel(/Analysis status/i)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/Outputs current/i).first()).toBeVisible();
+  await expect(page.getByText(/Run history/i).first()).toBeVisible();
+  await expect(page.getByText(/Run version v1/i).first()).toBeVisible();
   await expect(page.getByText(/Pending underwriting run/).first()).toBeHidden({
     timeout: 20_000,
   });
@@ -205,6 +209,23 @@ test("professional demo workflow completes deterministic underwriting, memo, and
     .getByRole("button", { name: /Generate Memo/i })
     .first()
     .click();
+  await expect
+    .poll(
+      async () => {
+        const supabase = localSupabaseAdmin();
+        const { count, error } = await supabase
+          .from("investment_memos")
+          .select("id", { count: "exact", head: true })
+          .eq("project_id", projectId!);
+        if (error) throw new Error(error.message);
+        return count ?? 0;
+      },
+      { timeout: 60_000 },
+    )
+    .toBeGreaterThan(0);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Harbour Centre" })).toBeVisible();
+  await page.getByRole("tab", { name: /investment committee/i }).click();
   await expect(page.getByText(/Memo available|Memo ready/i).first()).toBeVisible();
   await expect(
     page
@@ -212,6 +233,28 @@ test("professional demo workflow completes deterministic underwriting, memo, and
       .filter({ visible: true })
       .first(),
   ).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/Run version v1/i).first()).toBeVisible();
+
+  const supabase = localSupabaseAdmin();
+  const { error: staleInputErr } = await supabase
+    .from("underwriting_inputs")
+    .update({ value_numeric: 36, updated_at: new Date().toISOString() })
+    .eq("project_id", projectId!)
+    .eq("key", "expense_ratio_pct");
+  if (staleInputErr) throw new Error(staleInputErr.message);
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Harbour Centre" })).toBeVisible();
+  await expect(page.getByText(/Outputs stale/i).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Memo stale/i).first()).toBeVisible();
+
+  await runDeterministicUnderwritingForProject(projectId!);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Harbour Centre" })).toBeVisible();
+  await expect(page.getByText(/Outputs current/i).first()).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("tab", { name: /analysis/i }).click();
+  await expect(page.getByText(/Run version v2/i).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Changed inputs/i).first()).toBeVisible();
 
   await page.getByRole("tab", { name: /audit/i }).click();
   await expect(page.getByText(/accept_defaults/i).first()).toBeVisible({ timeout: 20_000 });

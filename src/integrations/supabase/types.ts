@@ -410,6 +410,74 @@ export type Database = {
           },
         ];
       };
+      underwriting_runs: {
+        Row: {
+          accepted_defaults_used: Json;
+          blocked_reasons: Json;
+          computed_at: string;
+          conflict_resolutions_used: Json;
+          created_at: string;
+          created_by: string;
+          id: string;
+          input_fingerprint: string;
+          input_snapshot: Json;
+          output_fingerprint: string | null;
+          output_snapshot: Json;
+          owner_id: string;
+          project_id: string;
+          run_mode: string;
+          run_number: number;
+          status: string;
+          verdict_code: string | null;
+        };
+        Insert: {
+          accepted_defaults_used?: Json;
+          blocked_reasons?: Json;
+          computed_at?: string;
+          conflict_resolutions_used?: Json;
+          created_at?: string;
+          created_by: string;
+          id?: string;
+          input_fingerprint: string;
+          input_snapshot?: Json;
+          output_fingerprint?: string | null;
+          output_snapshot?: Json;
+          owner_id: string;
+          project_id: string;
+          run_mode: string;
+          run_number: number;
+          status: string;
+          verdict_code?: string | null;
+        };
+        Update: {
+          accepted_defaults_used?: Json;
+          blocked_reasons?: Json;
+          computed_at?: string;
+          conflict_resolutions_used?: Json;
+          created_at?: string;
+          created_by?: string;
+          id?: string;
+          input_fingerprint?: string;
+          input_snapshot?: Json;
+          output_fingerprint?: string | null;
+          output_snapshot?: Json;
+          owner_id?: string;
+          project_id?: string;
+          run_mode?: string;
+          run_number?: number;
+          status?: string;
+          verdict_code?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "underwriting_runs_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       cash_flows: {
         Row: {
           amount: number;
@@ -737,6 +805,7 @@ export type Database = {
           owner_id: string;
           project_id: string;
           rationale: string | null;
+          run_id: string | null;
           user_id: string;
           user_name: string | null;
         };
@@ -748,6 +817,7 @@ export type Database = {
           owner_id: string;
           project_id: string;
           rationale?: string | null;
+          run_id?: string | null;
           user_id: string;
           user_name?: string | null;
         };
@@ -759,6 +829,7 @@ export type Database = {
           owner_id?: string;
           project_id?: string;
           rationale?: string | null;
+          run_id?: string | null;
           user_id?: string;
           user_name?: string | null;
         };
@@ -768,6 +839,13 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "decision_logs_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "underwriting_runs";
             referencedColumns: ["id"];
           },
         ];
@@ -1069,6 +1147,7 @@ export type Database = {
           metric_label: string | null;
           owner_id: string;
           project_id: string;
+          run_id: string | null;
           scenario_key: string;
           unit: string | null;
           value_numeric: number | null;
@@ -1082,6 +1161,7 @@ export type Database = {
           metric_label?: string | null;
           owner_id: string;
           project_id: string;
+          run_id?: string | null;
           scenario_key?: string;
           unit?: string | null;
           value_numeric?: number | null;
@@ -1095,6 +1175,7 @@ export type Database = {
           metric_label?: string | null;
           owner_id?: string;
           project_id?: string;
+          run_id?: string | null;
           scenario_key?: string;
           unit?: string | null;
           value_numeric?: number | null;
@@ -1105,6 +1186,13 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "financial_outputs_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "underwriting_runs";
             referencedColumns: ["id"];
           },
         ];
@@ -1358,6 +1446,7 @@ export type Database = {
           id: string;
           owner_id: string;
           project_id: string;
+          run_id: string | null;
           status: string | null;
           verification_report: Json | null;
         };
@@ -1367,6 +1456,7 @@ export type Database = {
           id?: string;
           owner_id: string;
           project_id: string;
+          run_id?: string | null;
           status?: string | null;
           verification_report?: Json | null;
         };
@@ -1376,6 +1466,7 @@ export type Database = {
           id?: string;
           owner_id?: string;
           project_id?: string;
+          run_id?: string | null;
           status?: string | null;
           verification_report?: Json | null;
         };
@@ -1385,6 +1476,13 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "investment_memos_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "underwriting_runs";
             referencedColumns: ["id"];
           },
         ];

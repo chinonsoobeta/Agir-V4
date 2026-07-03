@@ -6,6 +6,7 @@ import { buildAllowedValues, verifyNumericProvenance, type AllowedValue } from "
 import { DEFAULT_AI_MODEL } from "./ai-gateway.server";
 import type { MemoReportContext } from "./memo-report";
 import { AI_AUTHORITY_NOTE } from "./ai-authority";
+import { isMissingColumn } from "./db-compat";
 
 // The LLM's only job here is PROSE around values injected from engine output.
 // It runs at temperature 0, and every generated memo is post-verified: each
@@ -129,6 +130,17 @@ export const generateMemo = createServerFn({ method: "POST" })
         "Run deterministic underwriting before generating a memo: the memo presents engine output, never numbers of its own.",
       );
     }
+
+    const { getUnderwritingRunStateForContext } = await import("./underwriting.server");
+    const runState = await getUnderwritingRunStateForContext({ data, context });
+    if (runState.freshness === "stale") {
+      throw new Error("Outputs stale. Re-run deterministic underwriting before generating a memo.");
+    }
+    if (runState.freshness === "blocked") {
+      throw new Error("Underwriting blocked. Resolve inputs before generating a memo.");
+    }
+    const memoRun =
+      runState.freshness === "current" ? (runState.latest_completed_run as any) : null;
 
     const outputValue = (scenario: string, key: string) =>
       Number(
@@ -341,29 +353,63 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
           ? "generated"
           : "needs_review";
 
-    const { data: row, error: insErr } = await context.supabase
+    const memoInsert = {
+      project_id: project.id,
+      owner_id: context.userId,
+      run_id: memoRun?.id ?? null,
+      status,
+      content: {
+        ...memo,
+        generation_mode,
+        report,
+        deterministic_verdict: verdict,
+        run_version: memoRun
+          ? {
+              id: memoRun.id,
+              run_number: memoRun.run_number,
+              input_fingerprint: memoRun.input_fingerprint,
+            }
+          : null,
+        unresolved_error_flags: errorFlags,
+        needs_review: !provenance.pass,
+        parse_warning,
+        ai_note,
+        authority_note: AI_AUTHORITY_NOTE,
+      },
+      verification_report: verificationReport,
+    };
+    let memoWrite = await context.supabase
       .from("investment_memos")
-      .insert({
-        project_id: project.id,
-        owner_id: context.userId,
-        status,
-        content: {
-          ...memo,
-          generation_mode,
-          report,
-          deterministic_verdict: verdict,
-          unresolved_error_flags: errorFlags,
-          needs_review: !provenance.pass,
-          parse_warning,
-          ai_note,
-          authority_note: AI_AUTHORITY_NOTE,
-        },
-        verification_report: verificationReport,
-      })
+      .insert(memoInsert)
       .select()
       .single();
+    if (isMissingColumn(memoWrite.error)) {
+      const compatInsert: Record<string, unknown> = { ...memoInsert };
+      delete compatInsert.run_id;
+      memoWrite = await context.supabase
+        .from("investment_memos")
+        .insert(compatInsert as any)
+        .select()
+        .single();
+    }
+    const { data: row, error: insErr } = memoWrite;
     if (insErr)
       throw new Error(`Memo generation failed saving investment_memos: ${insErr.message}`);
+
+    await context.supabase.from("audit_logs").insert({
+      project_id: project.id,
+      owner_id: context.userId,
+      user_id: context.userId,
+      entity_type: "investment_memos",
+      entity_id: row.id,
+      action: "memo_generated",
+      payload: {
+        run_id: memoRun?.id ?? null,
+        run_number: memoRun?.run_number ?? null,
+        verification_pass: provenance.pass,
+        generation_mode,
+      },
+    });
 
     await context.supabase.from("activities").insert({
       project_id: project.id,

@@ -4,7 +4,7 @@ import { getProject } from "@/lib/projects.functions";
 import { listDocuments } from "@/lib/documents.functions";
 import { listAssumptions, listFinancialOutputs, listDecisions } from "@/lib/assumptions.functions";
 import { listMemos } from "@/lib/memo.functions";
-import { getUnderwritingReadiness } from "@/lib/underwriting.functions";
+import { getUnderwritingReadiness, getUnderwritingRunState } from "@/lib/underwriting.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -80,6 +80,11 @@ const uwReadinessQ = (id: string) =>
     queryKey: ["uw-readiness", id],
     queryFn: () => getUnderwritingReadiness({ data: { project_id: id } }),
   });
+const uwRunStateQ = (id: string) =>
+  queryOptions({
+    queryKey: ["uw-run-state", id],
+    queryFn: () => getUnderwritingRunState({ data: { project_id: id } }),
+  });
 
 const TABS = [
   { value: "decision", label: "Decision" },
@@ -109,6 +114,7 @@ function DealDetail() {
   const { data: decisions = [] } = useSuspenseQuery(decisionsQ(id));
   const { data: memos = [] } = useSuspenseQuery(memosQ(id));
   const { data: uwReadiness } = useSuspenseQuery(uwReadinessQ(id));
+  const { data: uwRunState } = useSuspenseQuery(uwRunStateQ(id));
 
   const decision = buildDecision(
     outputs as unknown as OutputRow[],
@@ -198,6 +204,7 @@ function DealDetail() {
             decisions={decisions}
             memos={memos}
             readiness={uwReadiness}
+            runState={uwRunState}
             hasUnderwriting={decision.hasUnderwriting}
           />
         </div>
@@ -299,19 +306,6 @@ function toneClass(tone: WorkflowTone) {
   }
 }
 
-function latestTime(rows: Array<Record<string, unknown>>, keys: string[]) {
-  let latest = 0;
-  for (const row of rows) {
-    for (const key of keys) {
-      const raw = row[key];
-      if (typeof raw !== "string") continue;
-      const ts = new Date(raw).getTime();
-      if (Number.isFinite(ts)) latest = Math.max(latest, ts);
-    }
-  }
-  return latest;
-}
-
 function DealWorkflowStrip({
   documents,
   assumptions,
@@ -319,6 +313,7 @@ function DealWorkflowStrip({
   decisions,
   memos,
   readiness,
+  runState,
   hasUnderwriting,
 }: {
   documents: Tables<"documents">[];
@@ -327,6 +322,7 @@ function DealWorkflowStrip({
   decisions: Tables<"decision_logs">[];
   memos: Tables<"investment_memos">[];
   readiness: Awaited<ReturnType<typeof getUnderwritingReadiness>>;
+  runState: Awaited<ReturnType<typeof getUnderwritingRunState>>;
   hasUnderwriting: boolean;
 }) {
   const extractedDocs = documents.filter((doc) => doc.ai_summary || doc.extraction_status === "completed");
@@ -339,15 +335,18 @@ function DealWorkflowStrip({
     REVIEWED_ASSUMPTION_STATUSES.has(row.status ?? ""),
   ).length;
   const defaultCount = readiness.defaults.length;
-  const outputTime = latestTime(outputs as Array<Record<string, unknown>>, ["computed_at"]);
-  const approvedInputTime = latestTime(
-    assumptions.filter((row) => REVIEWED_ASSUMPTION_STATUSES.has(row.status ?? "")) as Array<
-      Record<string, unknown>
-    >,
-    ["approved_at", "updated_at"],
-  );
-  const outputsStale = hasUnderwriting && approvedInputTime > outputTime;
+  const outputsBlocked = runState.freshness === "blocked";
+  const outputsStale = hasUnderwriting && runState.freshness === "stale";
+  const latestCompletedRun = runState.latest_completed_run as
+    | { run_number?: number; input_fingerprint?: string }
+    | null;
   const latestMemo = memos[0] ?? null;
+  const latestMemoRun = (latestMemo?.content as { run_version?: { input_fingerprint?: string; run_number?: number } } | null)
+    ?.run_version;
+  const memoStale =
+    !!latestMemo &&
+    !!latestMemoRun?.input_fingerprint &&
+    latestMemoRun.input_fingerprint !== runState.current_input_fingerprint;
   const terminalDecision = decisions.find((row) =>
     ["approve", "approve_with_conditions", "reject"].includes(String(row.decision)),
   );
@@ -434,19 +433,31 @@ function DealWorkflowStrip({
           tone: "success",
           icon: CheckCircle2,
         },
-    outputsStale
+    outputsBlocked
+      ? {
+          key: "outputs",
+          label: "Blocked",
+          detail: "No current metrics",
+          tone: "danger",
+          icon: Lock,
+        }
+      : outputsStale
       ? {
           key: "outputs",
           label: "Outputs stale",
-          detail: "Re-run underwriting",
+          detail: latestCompletedRun?.run_number
+            ? `Latest completed run v${latestCompletedRun.run_number}`
+            : "Re-run underwriting",
           tone: "warning",
           icon: RefreshCw,
         }
       : hasUnderwriting
         ? {
             key: "outputs",
-            label: "Underwriting complete",
-            detail: "Outputs current",
+            label: "Outputs current",
+            detail: latestCompletedRun?.run_number
+              ? `Run version v${latestCompletedRun.run_number}`
+              : "Underwriting complete",
             tone: "success",
             icon: CheckCircle2,
           }
@@ -468,9 +479,13 @@ function DealWorkflowStrip({
       : latestMemo
         ? {
             key: "committee",
-            label: "Memo ready",
-            detail: latestMemo.status ?? "generated",
-            tone: latestMemo.status === "needs_review" ? "warning" : "success",
+            label: memoStale ? "Memo stale" : "Memo ready",
+            detail: memoStale
+              ? "Inputs changed after memo run"
+              : latestMemoRun?.run_number
+                ? `Run version v${latestMemoRun.run_number}`
+                : latestMemo.status ?? "generated",
+            tone: memoStale || latestMemo.status === "needs_review" ? "warning" : "success",
             icon: FileText,
           }
         : hasUnderwriting
