@@ -7,7 +7,7 @@ import {
   APPROVED_ASSUMPTION_SYNC_MESSAGE,
   assertApprovedAssumptionsSynced,
   persistAcceptedDefaults,
-} from "@/lib/underwriting.functions";
+} from "@/lib/underwriting.server";
 import { loadReportData } from "@/lib/reports/report-data.server";
 import { claimJob, completeJob } from "@/lib/extraction-jobs.server";
 

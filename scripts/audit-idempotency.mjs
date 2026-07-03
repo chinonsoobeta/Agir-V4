@@ -11,7 +11,7 @@ const requirements = [
     phrases: ["content_hash", "idempotencyKey", "claimJob"],
   },
   {
-    file: "src/lib/underwriting.functions.ts",
+    file: "src/lib/underwriting.server.ts",
     phrases: ["stableJsonHash", "runKey", "idempotencyKey"],
   },
 ];

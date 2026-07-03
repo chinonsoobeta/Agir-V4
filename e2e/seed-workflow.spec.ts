@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { seedPackageAndOpen } from "./seed-helpers";
-import { runFullUnderwritingForContext } from "../src/lib/underwriting.functions";
+import { runFullUnderwritingForContext } from "../src/lib/underwriting.server";
 
 function localSupabaseAdmin() {
   const env = Object.fromEntries(
@@ -67,7 +67,10 @@ test("professional demo workflow resolves provenance and fail-closed underwritin
   await expect(page.getByText(/Confidence/i).first()).toBeVisible();
   await expect(page.getByText(/Harbour_Centre_Lender_Term_Sheet\.pdf/i).first()).toBeVisible();
 
-  await page.getByRole("button", { name: /Use conservative/i }).first().click();
+  await page
+    .getByRole("button", { name: /Use conservative/i })
+    .first()
+    .click();
   await expect(
     page.getByText(/Updated/i).or(page.getByText(/Conflict Resolution Center/i)),
   ).toBeVisible({ timeout: 20_000 });
@@ -90,9 +93,13 @@ test("professional demo workflow resolves provenance and fail-closed underwritin
   await expect(page.getByText(/Expense ratio/i).first()).toBeVisible();
   await expect(page.getByText(/Hold period/i).first()).toBeVisible();
   await expect(page.getByText(/Selling costs/i).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Accept defaults", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /^Accept \d+ defaults$|^Accept defaults$/i }),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: /Let AI accept defaults & run/i })).toBeVisible();
-  await expect(page.getByText(/engine runs only on approved or default-accepted inputs/i)).toBeVisible();
+  await expect(
+    page.getByText(/engine runs only on approved or default-accepted inputs/i),
+  ).toBeVisible();
   await expect(runLocator).toHaveCount(0);
 
   await page.getByRole("tab", { name: /investment committee/i }).click();
@@ -124,20 +131,23 @@ test("professional demo workflow completes deterministic underwriting, memo, and
 
   await page.getByRole("tab", { name: /analysis/i }).click();
   await expect(page.getByText(/Underwriting blocked/i)).toBeVisible({ timeout: 20_000 });
-  await page.getByRole("button", { name: /Use conservative/i }).first().click();
+  await page
+    .getByRole("button", { name: /Use conservative/i })
+    .first()
+    .click();
   await expect(page.getByText(/Conflicting inputs: resolve explicitly/i)).toBeHidden({
     timeout: 20_000,
   });
 
-  const acceptDefaults = page.getByRole("button", { name: "Accept defaults", exact: true });
+  const acceptDefaults = page.getByRole("button", {
+    name: /^Accept \d+ defaults$|^Accept defaults$/i,
+  });
   await expect(acceptDefaults).toBeVisible({ timeout: 20_000 });
   await expect(acceptDefaults).toBeEnabled({ timeout: 20_000 });
   await acceptDefaults.click();
 
   const projectId = new URL(page.url()).pathname.split("/").filter(Boolean).at(-1);
-  expect(projectId).toMatch(
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-  );
+  expect(projectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
   await runDeterministicUnderwritingForProject(projectId!);
   await page.reload();
   await expect(page.getByRole("heading", { name: "Harbour Centre" })).toBeVisible();
@@ -152,10 +162,25 @@ test("professional demo workflow completes deterministic underwriting, memo, and
       .filter({ visible: true })
       .first(),
   ).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/Exit Value/i).filter({ visible: true }).first()).toBeVisible();
+  await expect(
+    page
+      .getByText(/Exit Value/i)
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible();
   await expect(page.getByText(/DSCR/i).filter({ visible: true }).first()).toBeVisible();
-  await expect(page.getByText(/Debt Yield/i).filter({ visible: true }).first()).toBeVisible();
-  await expect(page.getByText(/Equity Multiple/i).filter({ visible: true }).first()).toBeVisible();
+  await expect(
+    page
+      .getByText(/Debt Yield/i)
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByText(/Equity Multiple/i)
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible();
   await expect(page.getByText(/Risk Register/i)).toBeVisible();
   await expect(page.getByText(/Evidence: source documents behind these numbers/i)).toBeVisible();
   await expect(page.getByText(/Expense ratio\s*·\s*default/i).first()).toBeVisible();
@@ -165,7 +190,10 @@ test("professional demo workflow completes deterministic underwriting, memo, and
   await expect(page.getByText(/Engine Recommendation/i)).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(/Investment Score/i).first()).toBeVisible();
   await expect(page.getByText(/Investment Memo/i).first()).toBeVisible();
-  await page.getByRole("button", { name: /Generate Memo/i }).first().click();
+  await page
+    .getByRole("button", { name: /Generate Memo/i })
+    .first()
+    .click();
   await expect(
     page
       .getByText(/Executive Summary|Approved Assumptions|Financial Highlights/i)

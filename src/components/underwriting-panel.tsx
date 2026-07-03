@@ -37,6 +37,9 @@ import {
   FileText,
   Download,
   Sparkles,
+  CheckCircle2,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
@@ -223,29 +226,44 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   const mode: "ai" | "deterministic" = aiMode ? "ai" : "deterministic";
   const [lastMode, setLastMode] = useState<"ai" | "deterministic" | null>(null);
   const [lastBlockedReason, setLastBlockedReason] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [lastAcceptedDefaults, setLastAcceptedDefaults] = useState<string[]>([]);
+  const [lastCompletedRun, setLastCompletedRun] = useState<{
+    mode: "ai" | "deterministic";
+    verdict: string;
+    at: string;
+  } | null>(null);
 
-  const invalidate = () => {
-    for (const key of [
-      "outputs",
-      "risks",
-      "uw-readiness",
-      "recon-flags",
-      "assumptions",
-      "readiness",
-      "audit",
-      "decisions",
-      "memos",
-      "memo-debug",
-    ]) {
-      qc.invalidateQueries({ queryKey: [key, projectId] });
-    }
+  const invalidate = async () => {
+    await Promise.all(
+      [
+        "outputs",
+        "risks",
+        "uw-readiness",
+        "recon-flags",
+        "assumptions",
+        "readiness",
+        "audit",
+        "decisions",
+        "memos",
+        "memo-debug",
+      ].map((key) => qc.invalidateQueries({ queryKey: [key, projectId] })),
+    );
   };
 
   const run = useMutation({
     mutationFn: (overrideMode?: "ai" | "deterministic") =>
       runFn({ data: { project_id: projectId, mode: overrideMode ?? mode } }),
-    onSuccess: (r: RunResult) => {
-      invalidate();
+    onMutate: () => {
+      setStatusMessage(
+        mode === "ai"
+          ? "Checking defaults, then running the deterministic engine."
+          : "Running deterministic underwriting.",
+      );
+      setLastBlockedReason(null);
+    },
+    onSuccess: async (r: RunResult) => {
+      await invalidate();
       setLastMode(r.analysis_mode ?? null);
       setLastBlockedReason(
         r.blocked
@@ -261,6 +279,19 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
               .join("; ") || "readiness blocked"
           : null,
       );
+      if (r.blocked) {
+        setLastCompletedRun(null);
+        setStatusMessage("Run blocked. The engine did not persist partial metrics.");
+      } else {
+        setLastCompletedRun({
+          mode: r.analysis_mode ?? "deterministic",
+          verdict: r.verdict.code,
+          at: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+        });
+        setStatusMessage(
+          "Run complete. Results, risks, reconciliation flags, and audit are refreshed.",
+        );
+      }
       if (r.ai_note) toast.message(r.ai_note);
       if (r.ai_accepted_defaults?.length) {
         toast.message(
@@ -274,7 +305,10 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
           `Underwriting complete (${r.analysis_mode === "ai" ? "AI" : "deterministic"}): verdict ${r.verdict.code}`,
         );
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      setStatusMessage("Run failed before any new metrics were accepted.");
+      toast.error(e.message);
+    },
   });
   const runNow = () => {
     if (!run.isPending) {
@@ -288,27 +322,59 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   };
   const acceptDefaultsMut = useMutation({
     mutationFn: () => acceptDefaultsFn({ data: { project_id: projectId } }),
-    onSuccess: (r: AcceptDefaultsResult) => {
-      invalidate();
+    onMutate: () => {
+      setStatusMessage("Accepting static defaults with source=default provenance.");
+    },
+    onSuccess: async (r: AcceptDefaultsResult) => {
+      await invalidate();
+      setLastAcceptedDefaults(r.accepted);
+      setStatusMessage(
+        r.accepted.length
+          ? `Accepted ${r.accepted.length} default(s). Readiness refreshed.`
+          : "No defaultable gaps were available. Readiness refreshed.",
+      );
       toast.success(`Accepted ${r.accepted.length} default(s)`);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      setStatusMessage("Default acceptance failed. No defaults were applied silently.");
+      toast.error(e.message);
+    },
   });
   const resolve = useMutation({
     mutationFn: (d: { key: string; mode: "pick" | "conservative"; value?: number }) =>
       resolveFn({ data: { project_id: projectId, ...d } }),
-    onSuccess: (r: ResolveConflictResult) => {
-      invalidate();
+    onMutate: () => {
+      setStatusMessage("Resolving the documented conflict and refreshing readiness.");
+    },
+    onSuccess: async (r: ResolveConflictResult) => {
+      await invalidate();
+      setStatusMessage(`${inputLabel(r.key)} resolved to ${r.resolved}. Readiness refreshed.`);
       toast.success(`Resolved ${r.key} → ${r.resolved}`);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      setStatusMessage("Conflict resolution failed. The engine remains blocked.");
+      toast.error(e.message);
+    },
   });
 
   const blocked = readiness.status === "blocked";
+  const defaultKeys = new Set(readiness.defaults.map((d: ReadinessDefault) => d.key));
+  const defaultableMissing = readiness.missing.filter((key: string) => defaultKeys.has(key));
+  const nonDefaultMissing = readiness.missing.filter((key: string) => !defaultKeys.has(key));
+  const canAcceptDefaultsAndRun =
+    readiness.defaults.length > 0 &&
+    readiness.conflicts.length === 0 &&
+    nonDefaultMissing.length === 0;
+  const busy = run.isPending || acceptDefaultsMut.isPending || resolve.isPending;
 
   // ---- BLOCKED STATE: no metrics, no charts, no partial numbers. ----
   if (blocked) {
     const blockedStatus = statusConfig("underwriting", "blocked");
+    const blockerParts = [
+      readiness.conflicts.length ? `${readiness.conflicts.length} conflict(s)` : null,
+      nonDefaultMissing.length ? `${nonDefaultMissing.length} sourced input(s)` : null,
+      defaultableMissing.length ? `${defaultableMissing.length} defaultable input(s)` : null,
+    ].filter(Boolean);
     return (
       <div className="space-y-4">
         <Card className="p-6 border-destructive/40">
@@ -330,6 +396,28 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                 {blockedStatus.message} The engine runs only on approved or default-accepted inputs.
                 It never fills gaps on its own. Resolve the items below, then run underwriting.
               </p>
+              <div
+                role="status"
+                aria-live="polite"
+                className="mt-3 rounded border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  {busy ? (
+                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                  ) : (
+                    <Lock className="size-4 text-destructive" />
+                  )}
+                  <span className="font-medium">
+                    Blocking run: {blockerParts.join(", ") || "readiness check failed"}
+                  </span>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {statusMessage ??
+                    (canAcceptDefaultsAndRun
+                      ? "Only static defaults are missing; accepting them can unlock a run."
+                      : "Resolve conflicts and sourced gaps first. Defaults can be accepted, but they cannot override evidence conflicts.")}
+                </div>
+              </div>
               {readiness.missing.length > 0 && (
                 <div className="mt-4">
                   <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
@@ -343,6 +431,11 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                         {readiness.defaults.some((d: ReadinessDefault) => d.key === k) && (
                           <Badge variant="outline" className="text-[11px]">
                             default available
+                          </Badge>
+                        )}
+                        {!readiness.defaults.some((d: ReadinessDefault) => d.key === k) && (
+                          <Badge variant="outline" className="text-[11px]">
+                            source required
                           </Badge>
                         )}
                       </li>
@@ -384,7 +477,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                                   })
                                 }
                               >
-                                Use this value
+                                {resolve.isPending ? "Resolving..." : "Use this value"}
                               </Button>
                             </div>
                           ),
@@ -396,8 +489,12 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                         disabled={resolve.isPending}
                         onClick={() => resolve.mutate({ key: c.key, mode: "conservative" })}
                       >
-                        <Scale className="size-3.5 mr-1" />
-                        Use conservative
+                        {resolve.isPending ? (
+                          <Loader2 className="size-3.5 mr-1 animate-spin" />
+                        ) : (
+                          <Scale className="size-3.5 mr-1" />
+                        )}
+                        {resolve.isPending ? "Resolving..." : "Use conservative"}
                       </Button>
                       <p className="text-[11px] text-muted-foreground mt-1">
                         Conservative picks the documented value with the lower valuation/return.
@@ -424,19 +521,44 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                       disabled={acceptDefaultsMut.isPending}
                       onClick={() => acceptDefaultsMut.mutate()}
                     >
-                      Accept defaults
+                      {acceptDefaultsMut.isPending ? (
+                        <Loader2 className="size-3.5 mr-1 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="size-3.5 mr-1" />
+                      )}
+                      {acceptDefaultsMut.isPending
+                        ? "Accepting defaults..."
+                        : `Accept ${readiness.defaults.length} defaults`}
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={run.isPending}
-                      onMouseDown={runNow}
+                      disabled={run.isPending || !canAcceptDefaultsAndRun}
+                      onClick={runNow}
                       onKeyDown={runOnKeyboard}
+                      title={
+                        canAcceptDefaultsAndRun
+                          ? "Accepts listed static defaults, then runs the deterministic engine."
+                          : "Resolve conflicts and non-default missing inputs before running."
+                      }
                     >
-                      <Sparkles className="size-3.5 mr-1" />
-                      Let AI accept defaults & run
+                      {run.isPending ? (
+                        <Loader2 className="size-3.5 mr-1 animate-spin" />
+                      ) : (
+                        <Sparkles className="size-3.5 mr-1" />
+                      )}
+                      {run.isPending ? "Running..." : "Let AI accept defaults & run"}
                     </Button>
                   </div>
+                  {lastAcceptedDefaults.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {lastAcceptedDefaults.map((key) => (
+                        <Badge key={key} variant="outline" className="text-[11px]">
+                          {inputLabel(key)} accepted
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                   <p className="text-[11px] text-muted-foreground mt-1">
                     Writes source=default, status=default_accepted rows. Defaults are never applied
                     silently: AI only selects from these fixed values; it never invents a number,
@@ -529,42 +651,72 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
           }}
         >
           <ModeToggle aiMode={aiMode} setAiMode={setAiMode} />
-          <Button
-            type="button"
-            onMouseDown={runNow}
-            onKeyDown={runOnKeyboard}
-            disabled={run.isPending}
-          >
-            {aiMode ? <Sparkles className="size-4 mr-1" /> : <Calculator className="size-4 mr-1" />}
+          <Button type="button" onClick={runNow} onKeyDown={runOnKeyboard} disabled={run.isPending}>
+            {run.isPending ? (
+              <Loader2 className="size-4 mr-1 animate-spin" />
+            ) : aiMode ? (
+              <Sparkles className="size-4 mr-1" />
+            ) : (
+              <Calculator className="size-4 mr-1" />
+            )}
             {run.isPending
-              ? "Running…"
+              ? "Running..."
               : aiMode
-                ? "Run Underwriting (AI)"
-                : "Run Deterministic Underwriting"}
+                ? outputs.length
+                  ? "Re-run Underwriting (AI)"
+                  : "Run Underwriting (AI)"
+                : outputs.length
+                  ? "Re-run Deterministic Underwriting"
+                  : "Run Deterministic Underwriting"}
           </Button>
           <Button
             type="button"
             variant="outline"
-            onClick={runNow}
-            onKeyDown={runOnKeyboard}
+            onClick={() => {
+              void invalidate().then(() => setStatusMessage("Latest underwriting data refreshed."));
+            }}
             disabled={run.isPending}
           >
-            Refresh Base Case
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={runNow}
-            onKeyDown={runOnKeyboard}
-            disabled={run.isPending}
-          >
-            Refresh Stress Runs
+            <RefreshCw className="size-4 mr-1" />
+            Refresh Results
           </Button>
           {lastMode && <ModeBadge mode={lastMode} />}
           <span className="text-[11px] text-muted-foreground font-mono ml-auto">
             engine computes every number · AI only selects inputs
           </span>
         </form>
+        <div
+          role="status"
+          aria-live="polite"
+          className="mt-3 rounded border border-border bg-muted/10 px-3 py-2 text-sm"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            {run.isPending ? (
+              <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            ) : lastCompletedRun ? (
+              <CheckCircle2 className="size-4 text-primary" />
+            ) : outputs.length ? (
+              <CheckCircle2 className="size-4 text-primary" />
+            ) : (
+              <Calculator className="size-4 text-muted-foreground" />
+            )}
+            <span className="font-medium">
+              {run.isPending
+                ? "Deterministic engine running"
+                : lastCompletedRun
+                  ? `Run complete at ${lastCompletedRun.at}: ${lastCompletedRun.verdict}`
+                  : outputs.length
+                    ? `Results loaded: ${recommendation}`
+                    : "Inputs ready; no underwriting run has been persisted yet"}
+            </span>
+          </div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            {statusMessage ??
+              (outputs.length
+                ? "Base case, stress runs, risks, and audit are in sync with the latest loaded data."
+                : "Run underwriting to persist base case, stress runs, risk register, reconciliation flags, and audit.")}
+          </div>
+        </div>
         {defaultedKeys.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
             <span className="uppercase tracking-widest text-[11px] font-semibold">

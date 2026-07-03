@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 const requirements = [
   { file: "src/lib/assumptions.functions.ts", phrases: ["auditLog(", 'from("audit_logs")'] },
   {
-    file: "src/lib/underwriting.functions.ts",
+    file: "src/lib/underwriting.server.ts",
     phrases: ["accept_defaults", "resolve_conflict", "run_full_underwriting"],
   },
   { file: "src/lib/documents.functions.ts", phrases: ["signed_url_created", "writeAuditEvent"] },

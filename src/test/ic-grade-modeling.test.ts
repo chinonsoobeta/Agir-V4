@@ -25,7 +25,7 @@ import {
 import { buildMemoReport, memoReportText } from "@/lib/memo-report";
 import { computeInvestmentVerdict } from "@/lib/verdict";
 import { ASSUMPTION_BY_KEY } from "@/lib/assumption-taxonomy";
-import { buildReconciliationContext } from "@/lib/underwriting.functions";
+import { buildReconciliationContext } from "@/lib/underwriting.server";
 
 const NEUTRAL_WF: WaterfallConfig = {
   lpEquityPct: 100,
