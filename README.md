@@ -130,6 +130,22 @@ npm run test     # Vitest: engine, extraction, memo, and reports suites
 npm run build    # production build
 ```
 
+### Browser workflow checks
+
+Playwright runs against a real rendered app and the seeded demo user. Start a
+local Supabase stack, export the `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and
+`SUPABASE_SERVICE_ROLE_KEY` values from `supabase status -o env`, then run:
+
+```bash
+node scripts/ensure-demo-user.mjs
+npm run test:e2e
+```
+
+Set `E2E_BASE_URL` to target an already-running app. The Harbour Centre E2E
+spec exercises document visibility, assumption provenance/confidence, explicit
+conflict resolution, fail-closed blocked underwriting controls, memo readiness,
+and audit signals without external AI credentials.
+
 ---
 
 ## Project layout

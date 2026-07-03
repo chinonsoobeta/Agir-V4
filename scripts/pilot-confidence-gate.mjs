@@ -7,6 +7,16 @@ const full = args.has("--full");
 const skipRls = args.has("--skip-rls");
 
 const hasAny = (keys) => keys.some((key) => process.env[key]?.trim());
+const hasSchemaDriftDatabase = hasAny([
+  "SCHEMA_DRIFT_DATABASE_URL",
+  "POSTGRES_URL",
+  "DATABASE_URL",
+  "SUPABASE_DB_URL",
+  "SUPABASE_DATABASE_URL",
+  "SUPABASE_POSTGRES_URL",
+  "POSTGRES_PRISMA_URL",
+  "POSTGRES_URL_NON_POOLING",
+]);
 const hasDatabaseUrl = hasAny([
   "POSTGRES_URL",
   "DATABASE_URL",
@@ -28,7 +38,21 @@ const checks = [
     command: "npm",
     args: ["run", "drift:check"],
     required: true,
-    scope: "pilot-blocking",
+    scope: "pilot-blocking when DB is configured",
+    armedEnv: [
+      "SCHEMA_DRIFT_DATABASE_URL",
+      "POSTGRES_URL",
+      "DATABASE_URL",
+      "SUPABASE_DB_URL",
+      "SUPABASE_DATABASE_URL",
+      "SUPABASE_POSTGRES_URL",
+      "POSTGRES_PRISMA_URL",
+      "POSTGRES_URL_NON_POOLING",
+    ],
+    skip:
+      hasSchemaDriftDatabase || full
+        ? null
+        : "no SCHEMA_DRIFT_DATABASE_URL, POSTGRES_URL, DATABASE_URL, SUPABASE_DB_URL, SUPABASE_DATABASE_URL, SUPABASE_POSTGRES_URL, POSTGRES_PRISMA_URL, or POSTGRES_URL_NON_POOLING",
   },
   {
     name: "migration safety audit",
@@ -89,6 +113,7 @@ const checks = [
     args: ["run", "test:rls"],
     required: true,
     scope: "pilot-blocking when test DB is configured",
+    armedEnv: ["EPHEMERAL_DATABASE_URL", "SUPABASE_TEST_DATABASE_URL"],
     skip: skipRls
       ? "skipped by --skip-rls"
       : hasRlsDatabase || full
@@ -101,6 +126,15 @@ const checks = [
     args: ["run", "migrate:dry-run"],
     required: true,
     scope: "pilot-blocking when DB is configured",
+    armedEnv: [
+      "POSTGRES_URL",
+      "DATABASE_URL",
+      "SUPABASE_DB_URL",
+      "SUPABASE_DATABASE_URL",
+      "SUPABASE_POSTGRES_URL",
+      "POSTGRES_PRISMA_URL",
+      "POSTGRES_URL_NON_POOLING",
+    ],
     skip: hasDatabaseUrl || full ? null : "no database URL configured",
   },
   {
@@ -109,6 +143,7 @@ const checks = [
     args: ["run", "audit:verify-chains"],
     required: false,
     scope: "production evidence",
+    armedEnv: ["AUDIT_CHAIN_DATABASE_URL"],
     skip: hasAuditChainDatabase || full ? null : "no AUDIT_CHAIN_DATABASE_URL",
   },
   {
@@ -117,6 +152,7 @@ const checks = [
     args: ["run", "governance:dry-run"],
     required: false,
     scope: "production evidence",
+    armedEnv: ["DATA_GOVERNANCE_DATABASE_URL"],
     skip: hasGovernanceDatabase || full ? null : "no DATA_GOVERNANCE_DATABASE_URL",
   },
   {
@@ -125,6 +161,7 @@ const checks = [
     args: ["run", "load:tenant-db"],
     required: false,
     scope: "scale evidence",
+    armedEnv: ["TENANT_DB_LOAD_DATABASE_URL"],
     skip: hasTenantDbLoadDatabase || full ? null : "no TENANT_DB_LOAD_DATABASE_URL",
   },
   {
@@ -133,6 +170,7 @@ const checks = [
     args: ["run", "test:e2e"],
     required: false,
     scope: "local/dev-only unless PILOT_GATE_E2E=1",
+    armedEnv: ["PILOT_GATE_E2E", "E2E_BASE_URL"],
     skip: shouldRunE2e ? null : "set PILOT_GATE_E2E=1 or E2E_BASE_URL to run",
   },
 ];
@@ -144,8 +182,15 @@ function fmtMs(ms) {
 
 function printSummary(results) {
   const rows = [
-    ["Check", "Scope", "Status", "Duration", "Reason"],
-    ...results.map((r) => [r.name, r.scope, r.status, fmtMs(r.durationMs), r.reason ?? ""]),
+    ["Check", "Mode", "Scope", "Status", "Duration", "Reason"],
+    ...results.map((r) => [
+      r.name,
+      r.mode,
+      r.scope,
+      r.status,
+      fmtMs(r.durationMs),
+      r.reason ?? "",
+    ]),
   ];
   const widths = rows[0].map((_, i) => Math.max(...rows.map((row) => row[i].length)));
   console.log("\n[pilot-gate] summary");
@@ -160,9 +205,11 @@ let exitCode = 0;
 
 for (const check of checks) {
   const start = Date.now();
+  const mode = check.skip ? "SKIPPED" : check.armedEnv?.length ? "ARMED" : "ALWAYS";
   if (check.skip) {
     results.push({
       ...check,
+      mode,
       status: "SKIP",
       durationMs: Date.now() - start,
       reason: check.skip,
@@ -179,6 +226,7 @@ for (const check of checks) {
   const failed = result.status !== 0;
   results.push({
     ...check,
+    mode,
     status: failed ? "FAIL" : "PASS",
     durationMs: Date.now() - start,
     reason: failed ? `exited ${result.status ?? "unknown"}` : "",

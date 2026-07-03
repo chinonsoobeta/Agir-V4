@@ -838,7 +838,7 @@ function AiSection() {
             <MetricTile
               label="Avg duration"
               value={formatDuration(ops?.jobs.averageDurationMs)}
-              detail={`${ops?.jobs.running ?? 0} running · ${ops?.jobs.stuck ?? 0} stuck`}
+              detail={`p95 ${formatDuration(ops?.jobs.p95DurationMs)} · ${ops?.jobs.stuck ?? 0} stuck`}
             />
             <MetricTile
               label="AI fallback"
@@ -851,6 +851,49 @@ function AiSection() {
               detail={firstReason(ops?.underwritingBlocked.byReason)}
             />
           </div>
+
+          {ops?.jobsByWindow && (
+            <div className="rounded-lg border border-border overflow-hidden">
+              <div className="px-3 py-2 text-[11px] uppercase tracking-widest text-muted-foreground border-b border-border">
+                Extraction job trend
+              </div>
+              <div className="overflow-x-auto">
+                <table className="data-grid w-full text-sm">
+                  <thead>
+                    <tr>
+                      <th className="text-left">Window</th>
+                      <th className="text-right">Jobs</th>
+                      <th className="text-right">Success</th>
+                      <th className="text-right">Avg</th>
+                      <th className="text-right">p95</th>
+                      <th className="text-right">Stuck</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(["24h", "7d", "30d"] as const).map((w) => {
+                      const row = ops.jobsByWindow[w];
+                      return (
+                        <tr key={w}>
+                          <td className="font-medium">{w}</td>
+                          <td className="text-right num">{row.total}</td>
+                          <td className="text-right num">
+                            {row.successRate == null
+                              ? "n/a"
+                              : `${Math.round(row.successRate * 100)}%`}
+                          </td>
+                          <td className="text-right num">
+                            {formatDuration(row.averageDurationMs)}
+                          </td>
+                          <td className="text-right num">{formatDuration(row.p95DurationMs)}</td>
+                          <td className="text-right num">{row.stuck}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-border p-3">

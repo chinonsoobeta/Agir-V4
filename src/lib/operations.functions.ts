@@ -5,6 +5,7 @@ import { z } from "zod";
 import { handleSchemaCompatibilityFallback, isMissingRelation } from "./db-compat";
 import {
   summarizeOperationalJobs,
+  summarizeOperationalWindows,
   windowToSince,
   type OperationalWindow,
 } from "./operational-quality";
@@ -239,13 +240,14 @@ export const getOperationalQualityMetrics = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const window = data.window as OperationalWindow;
     const since = windowToSince(window);
+    const longestSince = windowToSince("30d");
 
     const jobsRes = await context.supabase
       .from("extraction_jobs")
       .select(
         "id,status,kind,created_at,started_at,finished_at,error,heartbeat_at,lease_expires_at,cancellation_requested,dead_lettered_at",
       )
-      .gte("created_at", since)
+      .gte("created_at", longestSince)
       .order("created_at", { ascending: false })
       .limit(1000);
     if (isMissingRelation(jobsRes.error)) {
@@ -257,6 +259,7 @@ export const getOperationalQualityMetrics = createServerFn({ method: "GET" })
           window,
           since,
           jobs: summarizeOperationalJobs([]),
+          jobsByWindow: summarizeOperationalWindows([]),
           documents: emptyDocumentQuality(),
           aiFallbacks: { total: 0, byReason: {} },
           underwritingBlocked: { total: 0, byReason: {} },
@@ -276,7 +279,7 @@ export const getOperationalQualityMetrics = createServerFn({ method: "GET" })
       .select(
         "id,name,scan_status,scan_detail,extraction_status,extraction_error,page_count,upload_date",
       )
-      .gte("upload_date", since)
+      .gte("upload_date", longestSince)
       .order("upload_date", { ascending: false })
       .limit(1000);
     if (documentsRes.error && !isMissingRelation(documentsRes.error)) {
@@ -287,20 +290,24 @@ export const getOperationalQualityMetrics = createServerFn({ method: "GET" })
       .from("audit_logs")
       .select("action,payload,created_at")
       .in("action", ["ai_fallback", "underwriting_blocked"])
-      .gte("created_at", since)
+      .gte("created_at", longestSince)
       .order("created_at", { ascending: false })
       .limit(1000);
     if (auditRes.error && !isMissingRelation(auditRes.error))
       throw new Error(auditRes.error.message);
 
-    const aiFallbacks = summarizeAuditReasons(auditRes.data ?? [], "ai_fallback");
-    const underwritingBlocked = summarizeUnderwritingBlocked(auditRes.data ?? []);
+    const jobsByWindow = summarizeOperationalWindows((jobsRes.data ?? []) as any);
+    const documentsRows = scopeRows(documentsRes.data ?? [], "upload_date", since);
+    const auditRows = scopeRows(auditRes.data ?? [], "created_at", since);
+    const aiFallbacks = summarizeAuditReasons(auditRows, "ai_fallback");
+    const underwritingBlocked = summarizeUnderwritingBlocked(auditRows);
 
     return {
       window,
       since,
-      jobs: summarizeOperationalJobs((jobsRes.data ?? []) as any),
-      documents: summarizeDocumentQuality(documentsRes.data ?? []),
+      jobs: jobsByWindow[window],
+      jobsByWindow,
+      documents: summarizeDocumentQuality(documentsRows),
       aiFallbacks,
       underwritingBlocked,
       schemaCompatibilityFallbacks: {
@@ -377,4 +384,13 @@ function summarizeUnderwritingBlocked(rows: any[]) {
     }
   }
   return { total: Object.values(byReason).reduce((sum, n) => sum + n, 0), byReason };
+}
+
+function scopeRows<T extends Record<string, any>>(rows: T[], dateKey: keyof T, since: string) {
+  const threshold = Date.parse(since);
+  return rows.filter((row) => {
+    const value = row[dateKey];
+    const ts = typeof value === "string" ? Date.parse(value) : NaN;
+    return Number.isFinite(ts) && ts >= threshold;
+  });
 }

@@ -21,6 +21,18 @@ Use `npm run pilot:gate -- --quick` for a faster local preflight. Use
 targets configured; the summary marks DB/browser checks as skipped when their
 required environment variables are absent.
 
+Armed DB-backed checks:
+
+- Schema drift / migration dry-run: set one of `SCHEMA_DRIFT_DATABASE_URL`,
+  `POSTGRES_URL`, `DATABASE_URL`, `SUPABASE_DB_URL`, `SUPABASE_DATABASE_URL`,
+  `SUPABASE_POSTGRES_URL`, `POSTGRES_PRISMA_URL`, or `POSTGRES_URL_NON_POOLING`.
+- RLS workspace policies: set `EPHEMERAL_DATABASE_URL` or
+  `SUPABASE_TEST_DATABASE_URL`.
+- Audit-chain verification: set `AUDIT_CHAIN_DATABASE_URL`.
+- Data-governance dry run: set `DATA_GOVERNANCE_DATABASE_URL`.
+- Tenant DB concurrency smoke: set `TENANT_DB_LOAD_DATABASE_URL`.
+- Browser workflow: set `PILOT_GATE_E2E=1` or `E2E_BASE_URL`.
+
 ## Product Gates
 
 - Pilot package selected.

@@ -1,0 +1,9 @@
+Rent Roll Export,,,,,
+Merged header: area and rent columns were split by OCR,,,,,
+Component,Suite,Area,Units,Rent,Rent Basis,Occupancy
+Residential,A-Line,,120,3250,per_unit,94%
+Residential,B-Line,,100,3050,per_unit,93%
+Residential,Subtotal,,220,,,
+Retail,Ground,18000,,42,$/SF/Yr,92%
+Office,Podium,32000,,36,$/SF/Yr,85%
+Grand Total,,50000,220,,,

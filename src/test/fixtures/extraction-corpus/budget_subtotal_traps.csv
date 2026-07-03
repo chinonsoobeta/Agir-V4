@@ -1,0 +1,10 @@
+Section,Line Item,Amount,Notes
+Uses,Land acquisition,"$34,500,000",approved purchase agreement
+Uses,Building shell,"$120,000,000",hard cost component
+Uses,Sitework and offsites,"$42,000,000",hard cost component
+Uses,Total hard costs,"$162,000,000",subtotal row - do not double count
+Uses,Soft costs,"$27,500,000",architect permits insurance
+Uses,Construction contingency,"$8,000,000",separate contingency
+Uses,Loan fees and interest reserve,"$6,500,000",financing costs
+Uses,Total development cost,"$238,500,000",grand total only
+Notes,Developer fee,"$7,000,000",not currently a modeled engine input

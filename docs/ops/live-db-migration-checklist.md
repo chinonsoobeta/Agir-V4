@@ -36,7 +36,22 @@ so a deploy can never silently outrun the database again:
 The scheduled ops workflow (`ops-scheduled.yml` service-probes job) picks up
 the same secret and starts drift-checking on a schedule as well.
 
-## 3. Pre-demo readiness probe (run against the DEPLOYED app)
+## 3. Arm the live Supabase confidence job
+
+CI also includes an optional "Armed live Supabase confidence" job. It always
+runs `npm run pilot:gate -- --quick`; DB-backed checks are marked `SKIP` until
+their secrets are configured, and any armed check exits non-zero on failure.
+
+Configure only the checks you are ready to enforce:
+
+- `SCHEMA_DRIFT_DATABASE_URL`: read-capable prod/staging URL for schema drift.
+- `LIVE_SUPABASE_DATABASE_URL`: direct/session-pooler URL for migration dry-run.
+- `SUPABASE_TEST_DATABASE_URL`: disposable test DB for live RLS policies.
+- `AUDIT_CHAIN_DATABASE_URL`: audit-chain verification database.
+- `DATA_GOVERNANCE_DATABASE_URL`: governance dry-run database.
+- `TENANT_DB_LOAD_DATABASE_URL`: tenant concurrency smoke database.
+
+## 4. Pre-demo readiness probe (run against the DEPLOYED app)
 
 ```bash
 npm run readiness:deployed -- https://<deployed-app>

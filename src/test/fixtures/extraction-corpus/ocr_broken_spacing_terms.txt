@@ -1,0 +1,13 @@
+S C A N N E D   L E N D E R   T E R M   S H E E T
+page 3 of 14 | scanner confidence 71%
+
+Senior construction loan
+amount: $ 1 6 2 , 5 0 0 , 0 0 0
+all-in interest rate: 6 . 2 5 %
+loan-to-cost ratio (LTC): 6 5 %
+minimum DSCR covenant: 1 . 2 0 x
+amortization after conversion: 3 0 years
+
+Extension option: two six-month extensions.
+Origination fee: 1.00%.
+SOFR spread: 2.75%; not the all-in rate.

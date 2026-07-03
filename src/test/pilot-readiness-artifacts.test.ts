@@ -69,6 +69,8 @@ describe("pilot readiness artifacts", () => {
     expect(gate).toContain("test:rls");
     expect(gate).toContain("PILOT_GATE_E2E");
     expect(gate).toContain("[pilot-gate] summary");
+    expect(gate).toContain("ARMED");
+    expect(gate).toContain("SCHEMA_DRIFT_DATABASE_URL");
     expect(gate).toContain('scope: "pilot-blocking"');
   });
 });

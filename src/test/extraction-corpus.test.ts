@@ -26,6 +26,7 @@ type ExpectedAssumption = {
 
 type CorpusFixture = {
   name: string;
+  pattern: string;
   fileType: string;
   buffer: ArrayBuffer;
   expected: ExpectedAssumption[];
@@ -132,6 +133,7 @@ function makeCorpus(): CorpusFixture[] {
   return [
     {
       name: "messy_sources_and_uses.csv",
+      pattern: "budget",
       fileType: "text/csv",
       buffer: textBuffer(
         [
@@ -153,6 +155,7 @@ function makeCorpus(): CorpusFixture[] {
     },
     {
       name: "multi_sheet_scaled_budget_and_rent_roll.xlsx",
+      pattern: "mixed_workbook",
       fileType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       buffer: workbookBuffer([
         {
@@ -202,6 +205,7 @@ function makeCorpus(): CorpusFixture[] {
     },
     {
       name: "ocr_style_lender_notes.txt",
+      pattern: "ocr_text",
       fileType: "text/plain",
       buffer: textBuffer(
         [
@@ -225,6 +229,7 @@ function makeCorpus(): CorpusFixture[] {
     },
     {
       name: "broker_opinion_messy.pdf",
+      pattern: "broker_om",
       fileType: "application/pdf",
       buffer: pdfBuffer([
         "Broker opinion extract - OCR corrected",
@@ -244,6 +249,7 @@ function makeCorpus(): CorpusFixture[] {
     },
     {
       name: "false_positive_guards.txt",
+      pattern: "false_positive_trap",
       fileType: "text/plain",
       buffer: textBuffer(
         [
@@ -258,6 +264,7 @@ function makeCorpus(): CorpusFixture[] {
     },
     {
       name: "adversarial_conflicting_terms.txt",
+      pattern: "conflict",
       fileType: "text/plain",
       buffer: textBuffer(
         [
@@ -275,7 +282,52 @@ function makeCorpus(): CorpusFixture[] {
       expectedConflicts: ["exit_cap_rate"],
     },
     {
+      name: "broker_om_conflicting_assumptions.txt",
+      pattern: "broker_om",
+      fileType: "text/plain",
+      buffer: textFixture("broker_om_conflicting_assumptions.txt"),
+      expected: [
+        expected("land_cost", 34_500_000),
+        expected("hard_costs", 162_000_000),
+        expected("soft_costs", 27_500_000),
+        expected("debt_amount", 162_500_000),
+      ],
+      expectedAbsent: ["office_rent_psf"],
+      expectedConflicts: ["exit_cap_rate", "residential_rent_monthly"],
+    },
+    {
+      name: "budget_subtotal_traps.csv",
+      pattern: "budget",
+      fileType: "text/csv",
+      buffer: textFixture("budget_subtotal_traps.csv"),
+      expected: [
+        expected("land_cost", 34_500_000),
+        expected("hard_costs", 162_000_000),
+        expected("soft_costs", 27_500_000),
+        expected("contingency", 8_000_000),
+        expected("financing_costs", 6_500_000),
+        expected("total_project_cost", 238_500_000),
+      ],
+    },
+    {
+      name: "rent_roll_merged_header_export.csv",
+      pattern: "rent_roll",
+      fileType: "text/csv",
+      buffer: textFixture("rent_roll_merged_header_export.csv"),
+      expected: [],
+      expectedAbsent: ["residential_rent_monthly"],
+    },
+    {
+      name: "ocr_broken_spacing_terms.txt",
+      pattern: "ocr_text",
+      fileType: "text/plain",
+      buffer: textFixture("ocr_broken_spacing_terms.txt"),
+      expected: [],
+      expectedAbsent: ["debt_amount", "min_dscr"],
+    },
+    {
       name: "lender_term_sheet_with_options.txt",
+      pattern: "lender_term_sheet",
       fileType: "text/plain",
       buffer: textFixture("lender_term_sheet_with_options.txt"),
       expected: [
@@ -288,6 +340,7 @@ function makeCorpus(): CorpusFixture[] {
     },
     {
       name: "appraisal_stale_conflicting_values.txt",
+      pattern: "appraisal",
       fileType: "text/plain",
       buffer: textFixture("appraisal_stale_conflicting_values.txt"),
       expected: [],
@@ -296,6 +349,7 @@ function makeCorpus(): CorpusFixture[] {
     },
     {
       name: "market_study_narrative_no_direct_values.txt",
+      pattern: "market_study",
       fileType: "text/plain",
       buffer: textFixture("market_study_narrative_no_direct_values.txt"),
       expected: [],
@@ -309,6 +363,7 @@ function makeCorpus(): CorpusFixture[] {
     },
     {
       name: "ocr_false_positive_traps.txt",
+      pattern: "false_positive_trap",
       fileType: "text/plain",
       buffer: textFixture("ocr_false_positive_traps.txt"),
       expected: [],
@@ -393,6 +448,33 @@ function computeMetrics(
   return metrics;
 }
 
+function computePatternMetrics(
+  runs: { pattern: string; expectedRows: ExpectedAssumption[]; predictions: Map<string, number> }[],
+): Record<string, FieldMetrics> {
+  const metrics: Record<string, FieldMetrics> = {};
+  for (const { pattern, expectedRows, predictions } of runs) {
+    const truePositive = expectedRows.filter((row) =>
+      valuesMatch(predictions.get(row.key), row.value),
+    ).length;
+    const prev = metrics[pattern] ?? {
+      expected: 0,
+      predicted: 0,
+      truePositive: 0,
+      recall: 1,
+      precision: 1,
+    };
+    prev.expected += expectedRows.length;
+    prev.predicted += predictions.size;
+    prev.truePositive += truePositive;
+    metrics[pattern] = prev;
+  }
+  for (const metric of Object.values(metrics)) {
+    metric.recall = metric.expected ? metric.truePositive / metric.expected : 1;
+    metric.precision = metric.predicted ? metric.truePositive / metric.predicted : 1;
+  }
+  return metrics;
+}
+
 function summarize(metrics: Record<string, FieldMetrics>) {
   return Object.entries(metrics)
     .sort(([a], [b]) => a.localeCompare(b))
@@ -406,7 +488,11 @@ function summarize(metrics: Record<string, FieldMetrics>) {
 describe("labeled extraction corpus", () => {
   test("reports and ratchets precision/recall by field type", async () => {
     const corpus = makeCorpus();
-    const runs: { expectedRows: ExpectedAssumption[]; predictions: Map<string, number> }[] = [];
+    const runs: {
+      pattern: string;
+      expectedRows: ExpectedAssumption[];
+      predictions: Map<string, number>;
+    }[] = [];
 
     for (const fixture of corpus) {
       const grouped = await extractGroupedAssumptions(fixture);
@@ -423,13 +509,14 @@ describe("labeled extraction corpus", () => {
           "conflicting",
         );
       }
-      runs.push({ expectedRows: fixture.expected, predictions: extracted });
+      runs.push({ pattern: fixture.pattern, expectedRows: fixture.expected, predictions: extracted });
     }
 
     const metrics = computeMetrics(runs);
+    const patternMetrics = computePatternMetrics(runs);
     const dashboard = buildExtractionCorpusDashboard(metrics, FIELD_TYPE_FLOORS);
     console.info(
-      `\nExtraction corpus metrics\n${summarize(metrics)}\n${renderExtractionCorpusDashboard(dashboard)}`,
+      `\nExtraction corpus metrics by field type\n${summarize(metrics)}\n\nExtraction corpus metrics by document pattern\n${summarize(patternMetrics)}\n${renderExtractionCorpusDashboard(dashboard)}`,
     );
 
     for (const [fieldType, floor] of Object.entries(FIELD_TYPE_FLOORS)) {

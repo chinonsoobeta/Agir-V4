@@ -14,6 +14,8 @@ export type OperationalJobRow = {
   dead_lettered_at?: string | null;
 };
 
+export type OperationalJobSummary = ReturnType<typeof summarizeOperationalJobs>;
+
 export function windowToSince(window: OperationalWindow, now = new Date()) {
   const ms =
     window === "24h"
@@ -73,6 +75,7 @@ export function summarizeOperationalJobs(rows: OperationalJobRow[], now = new Da
     averageDurationMs: durations.length
       ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length)
       : null,
+    p95DurationMs: percentile(durations, 0.95),
     failuresByReason,
     running,
     stuck,
@@ -81,8 +84,29 @@ export function summarizeOperationalJobs(rows: OperationalJobRow[], now = new Da
   };
 }
 
+export function summarizeOperationalWindows(rows: OperationalJobRow[], now = new Date()) {
+  const windows: OperationalWindow[] = ["24h", "7d", "30d"];
+  return Object.fromEntries(
+    windows.map((window) => {
+      const since = Date.parse(windowToSince(window, now));
+      const scoped = rows.filter((row) => {
+        const created = row.created_at ? Date.parse(row.created_at) : NaN;
+        return Number.isFinite(created) && created >= since;
+      });
+      return [window, summarizeOperationalJobs(scoped, now)];
+    }),
+  ) as Record<OperationalWindow, OperationalJobSummary>;
+}
+
 export function normalizeReason(reason?: string | null) {
   const trimmed = (reason ?? "").trim();
   if (!trimmed) return "Unspecified";
   return trimmed.replace(/\s+/g, " ").slice(0, 120);
+}
+
+function percentile(values: number[], p: number) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = Math.min(sorted.length - 1, Math.ceil(sorted.length * p) - 1);
+  return Math.round(sorted[idx]);
 }

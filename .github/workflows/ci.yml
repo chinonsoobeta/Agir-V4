@@ -161,6 +161,29 @@ jobs:
         env:
           SCHEMA_DRIFT_DATABASE_URL: ${{ secrets.SCHEMA_DRIFT_DATABASE_URL }}
 
+  live-db-confidence:
+    name: Armed live Supabase confidence
+    runs-on: ubuntu-latest
+    # Optional but fail-hard when armed: configure the secrets below to make CI
+    # prove live schema drift, migration dry-run, audit-chain verification,
+    # governance dry-run, tenant DB concurrency, and RLS policy behavior.
+    env:
+      SCHEMA_DRIFT_DATABASE_URL: ${{ secrets.SCHEMA_DRIFT_DATABASE_URL }}
+      DATABASE_URL: ${{ secrets.LIVE_SUPABASE_DATABASE_URL }}
+      AUDIT_CHAIN_DATABASE_URL: ${{ secrets.AUDIT_CHAIN_DATABASE_URL }}
+      DATA_GOVERNANCE_DATABASE_URL: ${{ secrets.DATA_GOVERNANCE_DATABASE_URL }}
+      TENANT_DB_LOAD_DATABASE_URL: ${{ secrets.TENANT_DB_LOAD_DATABASE_URL }}
+      SUPABASE_TEST_DATABASE_URL: ${{ secrets.SUPABASE_TEST_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run armed pilot gate checks
+        run: npm run pilot:gate -- --quick
+
   ephemeral-db-smoke:
     name: Ephemeral DB migration + RLS smoke
     runs-on: ubuntu-latest
