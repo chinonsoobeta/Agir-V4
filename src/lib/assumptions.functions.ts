@@ -284,6 +284,18 @@ const PRESENT_STATUSES = new Set([
 ]);
 const COMPONENT_OCCUPANCY_KEYS = ["residential_occupancy", "retail_occupancy", "office_occupancy"];
 
+function isStructuredTableDocument(name: string, fileType: string | null | undefined): boolean {
+  const lower = name.toLowerCase();
+  const type = (fileType ?? "").toLowerCase();
+  return (
+    /\.(xlsx|xls|csv|tsv)$/i.test(lower) ||
+    type.includes("sheet") ||
+    type.includes("excel") ||
+    type.includes("csv") ||
+    type.includes("tab-separated")
+  );
+}
+
 function hasPresentAssumption(map: Map<string, any>, key: string) {
   const row = map.get(key);
   return Boolean(
@@ -559,7 +571,7 @@ export const extractAssumptions = createServerFn({ method: "POST" })
           source_location: c.source_location,
         }));
         allCandidates.push(...cands);
-        if (/\.(xlsx|xls)$/i.test(d.name)) {
+        if (isStructuredTableDocument(d.name, d.file_type)) {
           // Each structured parser runs in its own guard: a failure in one (a
           // corrupt sheet) must not discard the other parser's output, the
           // free-text candidates already collected above, or mislabel the whole

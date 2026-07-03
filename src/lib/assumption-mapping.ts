@@ -337,6 +337,13 @@ export function mapCandidates(candidates: Candidate[]): MappedCandidate[] {
   for (const c of candidates) {
     const m = mapCandidateToKey(c);
     if (!m) continue;
+    if (
+      m.field_key === "exit_cap_rate" &&
+      /\(mid [^)]+\)/i.test(c.value_text) &&
+      /sensitivity\s+only/i.test(c.context)
+    ) {
+      continue;
+    }
     const def = ASSUMPTION_BY_KEY[m.field_key];
     if (!def) continue;
     if (def.numeric && c.value_numeric == null) continue;

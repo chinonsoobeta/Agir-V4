@@ -50,6 +50,7 @@ import {
   TAXONOMY_TO_BUDGET_CATEGORY,
   TAXONOMY_TO_REVENUE_FIELD,
 } from "./taxonomy-engine-map";
+import { ASSUMPTION_BY_KEY } from "./assumption-taxonomy";
 
 const ProjectIdSchema = z.object({ project_id: z.string().uuid() });
 export const APPROVED_ASSUMPTION_SYNC_MESSAGE =
@@ -123,7 +124,7 @@ export async function assertApprovedAssumptionsSynced(supabase: any, projectId: 
       const synced = (budget ?? []).some(
         (input: any) =>
           input.category === budgetCategory &&
-          input.label === row.field_label &&
+          (budgetCategory !== "other" || input.label === row.field_label) &&
           input.status === "approved" &&
           valuesMatch(input.amount, row.value_numeric),
       );
@@ -386,6 +387,68 @@ export async function persistAcceptedDefaults(
   return accepted;
 }
 
+async function mirrorAcceptedDefaultsToAssumptions(
+  supabase: any,
+  opts: {
+    projectId: string;
+    userId: string;
+    keys: string[];
+  },
+) {
+  const approvedAt = new Date().toISOString();
+  for (const engineKey of opts.keys) {
+    const taxonomyKey = ENGINE_SCALAR_TO_TAXONOMY[engineKey];
+    const def = taxonomyKey ? ASSUMPTION_BY_KEY[taxonomyKey] : null;
+    const defaultDef = DEFAULTS[engineKey];
+    if (!def || !defaultDef) continue;
+
+    const { data: existing, error: existingError } = await supabase
+      .from("assumptions")
+      .select("id,current_version,status")
+      .eq("project_id", opts.projectId)
+      .eq("field_key", taxonomyKey)
+      .maybeSingle();
+    if (existingError) throw new Error(existingError.message);
+
+    const payload = {
+      project_id: opts.projectId,
+      owner_id: opts.userId,
+      field_key: def.key,
+      field_label: def.label,
+      category: def.category,
+      unit: def.unit,
+      value_numeric: defaultDef.value,
+      value_text: null,
+      status: "default_accepted" as const,
+      conflict_values: null,
+      confidence_score: 100,
+      confidence_band: "high" as const,
+      source_document_id: null,
+      source_location: "Static default",
+      source_text: defaultDef.label,
+      formula_text: `Static default accepted by analyst: ${defaultDef.label}`,
+      ai_reasoning:
+        "Static default accepted explicitly. AI did not invent this value; the deterministic engine reads the fixed default.",
+      approved_by: opts.userId,
+      approved_at: approvedAt,
+    };
+
+    if (existing) {
+      const { error } = await supabase
+        .from("assumptions")
+        .update({
+          ...payload,
+          current_version: Number(existing.current_version ?? 1) + 1,
+        })
+        .eq("id", existing.id);
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await supabase.from("assumptions").insert(payload);
+      if (error) throw new Error(error.message);
+    }
+  }
+}
+
 export const acceptDefaults = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: { project_id: string }) => ProjectIdSchema.parse(d))
@@ -397,6 +460,11 @@ export const acceptDefaults = createServerFn({ method: "POST" })
       userId: context.userId,
       keys: readiness.defaultable,
       via: "analyst",
+    });
+    await mirrorAcceptedDefaultsToAssumptions(context.supabase, {
+      projectId: data.project_id,
+      userId: context.userId,
+      keys: accepted,
     });
     await context.supabase.from("audit_logs").insert({
       project_id: data.project_id,
@@ -547,6 +615,11 @@ async function aiSelectDefaults(
     via: "ai",
   });
   if (accepted.length) {
+    await mirrorAcceptedDefaultsToAssumptions(ctx.supabase, {
+      projectId,
+      userId: ctx.userId,
+      keys: accepted,
+    });
     await ctx.supabase.from("audit_logs").insert({
       project_id: projectId,
       owner_id: ctx.userId,
@@ -562,20 +635,20 @@ async function aiSelectDefaults(
 
 // ---------- The underwriting run (engine math is always deterministic) ----------
 
-export const runFullUnderwriting = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .validator((d: { project_id: string; mode?: "ai" | "deterministic" }) =>
-    z
-      .object({
-        project_id: z.string().uuid(),
-        // AI is the default. It only selects inputs (which consensual static
-        // defaults to accept); the deterministic engine performs every
-        // calculation in BOTH modes. "deterministic" disables the AI step.
-        mode: z.enum(["ai", "deterministic"]).default("ai"),
-      })
-      .parse(d),
-  )
-  .handler(async ({ data, context }) => {
+const RunFullUnderwritingSchema = z.object({
+  project_id: z.string().uuid(),
+  // AI is the default. It only selects inputs (which consensual static
+  // defaults to accept); the deterministic engine performs every
+  // calculation in BOTH modes. "deterministic" disables the AI step.
+  mode: z.enum(["ai", "deterministic"]).default("ai"),
+});
+
+type RunFullUnderwritingData = z.infer<typeof RunFullUnderwritingSchema>;
+
+export async function runFullUnderwritingForContext(
+  data: RunFullUnderwritingData,
+  context: any,
+) {
     const { enforceRateLimit } = await import("./rate-limit.server");
     await enforceRateLimit(context, "underwriting_run", {
       metadata: { project_id: data.project_id, mode: data.mode ?? "ai" },
@@ -655,8 +728,15 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
       message: "Running underwriting",
     });
     if (runExisted && runJob.status === "completed" && runJob.result_json) {
-      // Cached identical run: shape matches the success return below.
-      return runJob.result_json as any;
+      const { count, error } = await context.supabase
+        .from("financial_outputs")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", data.project_id);
+      if (error) throw new Error(error.message);
+      if ((count ?? 0) > 0) {
+        // Cached identical run: shape matches the success return below.
+        return runJob.result_json as any;
+      }
     }
 
     const base = runUnderwriting(input);
@@ -924,7 +1004,14 @@ export const runFullUnderwriting = createServerFn({ method: "POST" })
     };
     await completeJob(context, runJob.id, result);
     return result;
-  });
+}
+
+export const runFullUnderwriting = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { project_id: string; mode?: "ai" | "deterministic" }) =>
+    RunFullUnderwritingSchema.parse(d),
+  )
+  .handler(async ({ data, context }) => runFullUnderwritingForContext(data, context));
 
 export const listReconciliationFlags = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

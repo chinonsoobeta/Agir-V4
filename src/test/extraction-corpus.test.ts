@@ -57,6 +57,17 @@ const FIELD_TYPE_FLOORS: Record<string, { recall: number; precision: number }> =
   units: { recall: 1, precision: 1 },
 };
 
+const PATTERN_FLOORS: Record<string, { recall: number; precision: number }> = {
+  appraisal: { recall: 1, precision: 1 },
+  broker_om: { recall: 1, precision: 1 },
+  budget: { recall: 1, precision: 1 },
+  false_positive_trap: { recall: 1, precision: 1 },
+  lender_term_sheet: { recall: 1, precision: 1 },
+  market_study: { recall: 1, precision: 1 },
+  ocr_text: { recall: 1, precision: 1 },
+  rent_roll: { recall: 1, precision: 1 },
+};
+
 function fieldTypeFor(key: string) {
   const unit = ASSUMPTION_BY_KEY[key]?.unit;
   if (unit === "$" || unit === "$/SF") return "currency";
@@ -70,6 +81,17 @@ function fieldTypeFor(key: string) {
 
 function expected(key: string, value: number): ExpectedAssumption {
   return { key, value, fieldType: fieldTypeFor(key) };
+}
+
+function shouldRunStructuredParsers(name: string, fileType: string) {
+  const lower = name.toLowerCase();
+  const type = fileType.toLowerCase();
+  return (
+    /\.(xlsx|xls|csv|tsv)$/i.test(lower) ||
+    type.includes("sheet") ||
+    type.includes("excel") ||
+    type.includes("csv")
+  );
 }
 
 function textBuffer(text: string): ArrayBuffer {
@@ -287,6 +309,7 @@ function makeCorpus(): CorpusFixture[] {
       fileType: "text/plain",
       buffer: textFixture("broker_om_conflicting_assumptions.txt"),
       expected: [
+        expected("stabilized_occupancy", 94),
         expected("land_cost", 34_500_000),
         expected("hard_costs", 162_000_000),
         expected("soft_costs", 27_500_000),
@@ -314,16 +337,30 @@ function makeCorpus(): CorpusFixture[] {
       pattern: "rent_roll",
       fileType: "text/csv",
       buffer: textFixture("rent_roll_merged_header_export.csv"),
-      expected: [],
-      expectedAbsent: ["residential_rent_monthly"],
+      expected: [
+        expected("residential_units", 220),
+        expected("residential_rent_monthly", 3159.090909090909),
+        expected("residential_occupancy", 93.54545454545455),
+        expected("retail_sf", 18_000),
+        expected("retail_rent_psf", 42),
+        expected("retail_occupancy", 92),
+        expected("office_sf", 32_000),
+        expected("office_rent_psf", 36),
+        expected("office_occupancy", 85),
+      ],
     },
     {
       name: "ocr_broken_spacing_terms.txt",
       pattern: "ocr_text",
       fileType: "text/plain",
       buffer: textFixture("ocr_broken_spacing_terms.txt"),
-      expected: [],
-      expectedAbsent: ["debt_amount", "min_dscr"],
+      expected: [
+        expected("debt_amount", 162_500_000),
+        expected("interest_rate", 6.25),
+        expected("ltc", 65),
+        expected("min_dscr", 1.2),
+        expected("amortization_years", 30),
+      ],
     },
     {
       name: "lender_term_sheet_with_options.txt",
@@ -383,7 +420,7 @@ async function extractGroupedAssumptions(fixture: CorpusFixture) {
   const text = await extractFileText(fixture.name, fixture.fileType, fixture.buffer);
   const mapped: MappedCandidate[] = mapCandidates(extractCandidates(fixture.name, text));
 
-  if (fixture.name.endsWith(".xlsx")) {
+  if (shouldRunStructuredParsers(fixture.name, fixture.fileType)) {
     mapped.push(
       ...aggregateBudgetRows(parseBudgetWorkbook(fixture.buffer).inserted, {
         name: fixture.name,
@@ -515,8 +552,9 @@ describe("labeled extraction corpus", () => {
     const metrics = computeMetrics(runs);
     const patternMetrics = computePatternMetrics(runs);
     const dashboard = buildExtractionCorpusDashboard(metrics, FIELD_TYPE_FLOORS);
+    const patternDashboard = buildExtractionCorpusDashboard(patternMetrics, PATTERN_FLOORS);
     console.info(
-      `\nExtraction corpus metrics by field type\n${summarize(metrics)}\n\nExtraction corpus metrics by document pattern\n${summarize(patternMetrics)}\n${renderExtractionCorpusDashboard(dashboard)}`,
+      `\nExtraction corpus metrics by field type\n${summarize(metrics)}\n\nExtraction corpus metrics by document pattern\n${summarize(patternMetrics)}\n${renderExtractionCorpusDashboard(dashboard)}\n\n${renderExtractionCorpusDashboard(patternDashboard)}`,
     );
 
     for (const [fieldType, floor] of Object.entries(FIELD_TYPE_FLOORS)) {
@@ -526,6 +564,11 @@ describe("labeled extraction corpus", () => {
       expect(metric.precision, `${fieldType} precision`).toBeGreaterThanOrEqual(floor.precision);
     }
     expect(dashboard.every((row) => row.status === "pass")).toBe(true);
+    for (const pattern of Object.keys(PATTERN_FLOORS)) {
+      const metric = patternMetrics[pattern];
+      expect(metric, `${pattern} metrics should be reported`).toBeDefined();
+    }
+    expect(patternDashboard.every((row) => row.status === "pass")).toBe(true);
   }, 30_000);
 
   test("runs a real anonymized document corpus through extraction", async () => {

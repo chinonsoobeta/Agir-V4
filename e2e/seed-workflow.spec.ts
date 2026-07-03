@@ -1,5 +1,35 @@
 import { test, expect } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
+import { readFileSync } from "node:fs";
 import { seedPackageAndOpen } from "./seed-helpers";
+import { runFullUnderwritingForContext } from "../src/lib/underwriting.functions";
+
+function localSupabaseAdmin() {
+  const env = Object.fromEntries(
+    readFileSync(".env.local", "utf8")
+      .trim()
+      .split(/\n/)
+      .map((line) => line.split("=")),
+  );
+  return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+async function runDeterministicUnderwritingForProject(projectId: string) {
+  const supabase = localSupabaseAdmin();
+  const { data: project, error } = await supabase
+    .from("projects")
+    .select("owner_id")
+    .eq("id", projectId)
+    .single();
+  if (error) throw new Error(error.message);
+  const result = await runFullUnderwritingForContext(
+    { project_id: projectId, mode: "deterministic" },
+    { supabase, userId: project.owner_id },
+  );
+  expect(result.blocked).toBe(false);
+}
 
 // The critical underwriting workflow, end to end through the UI: seed a demo
 // deal, then confirm the analyst-facing surfaces it produces — source
@@ -35,7 +65,7 @@ test("professional demo workflow resolves provenance and fail-closed underwritin
   await expect(page.getByText(/Deal Readiness Score/i)).toBeVisible();
   await expect(page.getByText(/Conflict Resolution Center/i)).toBeVisible();
   await expect(page.getByText(/Confidence/i).first()).toBeVisible();
-  await expect(page.getByText(/Source/i).first()).toBeVisible();
+  await expect(page.getByText(/Harbour_Centre_Lender_Term_Sheet\.pdf/i).first()).toBeVisible();
 
   await page.getByRole("button", { name: /Use conservative/i }).first().click();
   await expect(
@@ -72,4 +102,79 @@ test("professional demo workflow resolves provenance and fail-closed underwritin
 
   await page.getByRole("tab", { name: /audit/i }).click();
   await expect(page.getByText(/Audit|underwriting|assumption/i).first()).toBeVisible();
+});
+
+test("professional demo workflow completes deterministic underwriting, memo, and audit path", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await seedPackageAndOpen(page, "Harbour Centre");
+  await expect(page.getByRole("heading", { name: "Harbour Centre" })).toBeVisible();
+
+  await page.getByRole("tab", { name: /documents/i }).click();
+  await expect(page.getByText(/Harbour_Centre_Construction_Budget/i).first()).toBeVisible();
+  await expect(page.getByText(/Harbour_Centre_Rent_Roll/i).first()).toBeVisible();
+  await expect(page.getByText(/Extracted/i).first()).toBeVisible();
+
+  await page.getByRole("tab", { name: /assumptions/i }).click();
+  await expect(page.getByText(/Deal Readiness Score/i)).toBeVisible();
+  await expect(page.getByText(/Conflict Resolution Center/i)).toBeVisible();
+  await expect(page.getByText(/Confidence/i).first()).toBeVisible();
+  await expect(page.getByText(/Harbour_Centre_Lender_Term_Sheet\.pdf/i).first()).toBeVisible();
+
+  await page.getByRole("tab", { name: /analysis/i }).click();
+  await expect(page.getByText(/Underwriting blocked/i)).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: /Use conservative/i }).first().click();
+  await expect(page.getByText(/Conflicting inputs: resolve explicitly/i)).toBeHidden({
+    timeout: 20_000,
+  });
+
+  const acceptDefaults = page.getByRole("button", { name: "Accept defaults", exact: true });
+  await expect(acceptDefaults).toBeVisible({ timeout: 20_000 });
+  await expect(acceptDefaults).toBeEnabled({ timeout: 20_000 });
+  await acceptDefaults.click();
+
+  const projectId = new URL(page.url()).pathname.split("/").filter(Boolean).at(-1);
+  expect(projectId).toMatch(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  );
+  await runDeterministicUnderwritingForProject(projectId!);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Harbour Centre" })).toBeVisible();
+  await page.getByRole("tab", { name: /analysis/i }).click();
+  await expect(page.getByText(/Pending underwriting run/).first()).toBeHidden({
+    timeout: 20_000,
+  });
+
+  await expect(
+    page
+      .getByText(/Recommendation (APPROVE|REJECT|RETURN_TO_UNDERWRITING)/i)
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Exit Value/i).filter({ visible: true }).first()).toBeVisible();
+  await expect(page.getByText(/DSCR/i).filter({ visible: true }).first()).toBeVisible();
+  await expect(page.getByText(/Debt Yield/i).filter({ visible: true }).first()).toBeVisible();
+  await expect(page.getByText(/Equity Multiple/i).filter({ visible: true }).first()).toBeVisible();
+  await expect(page.getByText(/Risk Register/i)).toBeVisible();
+  await expect(page.getByText(/Evidence: source documents behind these numbers/i)).toBeVisible();
+  await expect(page.getByText(/Expense ratio\s*·\s*default/i).first()).toBeVisible();
+  await expect(page.getByText(/Static defaults \(no document\)/i).first()).toBeVisible();
+
+  await page.getByRole("tab", { name: /investment committee/i }).click();
+  await expect(page.getByText(/Engine Recommendation/i)).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(/Investment Score/i).first()).toBeVisible();
+  await expect(page.getByText(/Investment Memo/i).first()).toBeVisible();
+  await page.getByRole("button", { name: /Generate Memo/i }).first().click();
+  await expect(
+    page
+      .getByText(/Executive Summary|Approved Assumptions|Financial Highlights/i)
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible({ timeout: 60_000 });
+
+  await page.getByRole("tab", { name: /audit/i }).click();
+  await expect(page.getByText(/accept_defaults/i).first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(/resolve_conflict/i).first()).toBeVisible();
+  await expect(page.getByText(/run_full_underwriting/i).first()).toBeVisible();
 });

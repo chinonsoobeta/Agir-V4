@@ -3,7 +3,7 @@
 // zero charts, no partial numbers. When ready, every figure shown is a
 // deterministic engine output with its formula and provenance.
 
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { queryOptions, useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -220,20 +220,47 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   // accept: the engine still computes every number). Toggle off to force the
   // pure deterministic path.
   const [aiMode, setAiMode] = useState(true);
-  const mode = aiMode ? "ai" : ("deterministic" as const);
+  const mode: "ai" | "deterministic" = aiMode ? "ai" : "deterministic";
   const [lastMode, setLastMode] = useState<"ai" | "deterministic" | null>(null);
+  const [lastBlockedReason, setLastBlockedReason] = useState<string | null>(null);
 
   const invalidate = () => {
-    for (const key of ["outputs", "risks", "uw-readiness", "recon-flags", "assumptions"]) {
+    for (const key of [
+      "outputs",
+      "risks",
+      "uw-readiness",
+      "recon-flags",
+      "assumptions",
+      "readiness",
+      "audit",
+      "decisions",
+      "memos",
+      "memo-debug",
+    ]) {
       qc.invalidateQueries({ queryKey: [key, projectId] });
     }
   };
 
   const run = useMutation({
-    mutationFn: () => runFn({ data: { project_id: projectId, mode } }),
+    mutationFn: (overrideMode?: "ai" | "deterministic") =>
+      runFn({ data: { project_id: projectId, mode: overrideMode ?? mode } }),
     onSuccess: (r: RunResult) => {
       invalidate();
       setLastMode(r.analysis_mode ?? null);
+      setLastBlockedReason(
+        r.blocked
+          ? [
+              r.readiness?.missing?.length
+                ? `missing ${r.readiness.missing.map(inputLabel).join(", ")}`
+                : null,
+              r.readiness?.conflicting?.length
+                ? `conflicting ${r.readiness.conflicting.map(inputLabel).join(", ")}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join("; ") || "readiness blocked"
+          : null,
+      );
       if (r.ai_note) toast.message(r.ai_note);
       if (r.ai_accepted_defaults?.length) {
         toast.message(
@@ -249,6 +276,16 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+  const runNow = () => {
+    if (!run.isPending) {
+      run.mutate(undefined);
+    }
+  };
+  const runOnKeyboard = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    runNow();
+  };
   const acceptDefaultsMut = useMutation({
     mutationFn: () => acceptDefaultsFn({ data: { project_id: projectId } }),
     onSuccess: (r: AcceptDefaultsResult) => {
@@ -382,6 +419,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                   </ul>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Button
+                      type="button"
                       size="sm"
                       disabled={acceptDefaultsMut.isPending}
                       onClick={() => acceptDefaultsMut.mutate()}
@@ -392,7 +430,8 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                       size="sm"
                       variant="outline"
                       disabled={run.isPending}
-                      onClick={() => run.mutate()}
+                      onMouseDown={runNow}
+                      onKeyDown={runOnKeyboard}
                     >
                       <Sparkles className="size-3.5 mr-1" />
                       Let AI accept defaults & run
@@ -482,9 +521,20 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   return (
     <div className="space-y-4">
       <Card className="p-5">
-        <div className="flex flex-wrap items-center gap-2">
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            runNow();
+          }}
+        >
           <ModeToggle aiMode={aiMode} setAiMode={setAiMode} />
-          <Button onClick={() => run.mutate()} disabled={run.isPending}>
+          <Button
+            type="button"
+            onMouseDown={runNow}
+            onKeyDown={runOnKeyboard}
+            disabled={run.isPending}
+          >
             {aiMode ? <Sparkles className="size-4 mr-1" /> : <Calculator className="size-4 mr-1" />}
             {run.isPending
               ? "Running…"
@@ -492,17 +542,29 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                 ? "Run Underwriting (AI)"
                 : "Run Deterministic Underwriting"}
           </Button>
-          <Button variant="outline" onClick={() => run.mutate()} disabled={run.isPending}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={runNow}
+            onKeyDown={runOnKeyboard}
+            disabled={run.isPending}
+          >
             Refresh Base Case
           </Button>
-          <Button variant="outline" onClick={() => run.mutate()} disabled={run.isPending}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={runNow}
+            onKeyDown={runOnKeyboard}
+            disabled={run.isPending}
+          >
             Refresh Stress Runs
           </Button>
           {lastMode && <ModeBadge mode={lastMode} />}
           <span className="text-[11px] text-muted-foreground font-mono ml-auto">
             engine computes every number · AI only selects inputs
           </span>
-        </div>
+        </form>
         {defaultedKeys.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
             <span className="uppercase tracking-widest text-[11px] font-semibold">
@@ -513,6 +575,16 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                 {inputLabel(k)} · default
               </Badge>
             ))}
+          </div>
+        )}
+        {run.error && (
+          <div className="mt-3 rounded border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {run.error.message}
+          </div>
+        )}
+        {lastBlockedReason && (
+          <div className="mt-3 rounded border border-warning/30 bg-warning/5 px-3 py-2 text-sm text-warning">
+            Underwriting run blocked: {lastBlockedReason}
           </div>
         )}
       </Card>

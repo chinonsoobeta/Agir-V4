@@ -44,8 +44,65 @@ export const rentRollHeaderScore: HeaderScorer = (cells) => {
   return s;
 };
 
-const parseNumeric = (cell: unknown): number =>
-  typeof cell === "number" ? cell : Number(String(cell ?? "").replace(/[$,%\s]/g, ""));
+const parseNumeric = (cell: unknown): number => {
+  if (cell == null || String(cell).trim() === "") return NaN;
+  return typeof cell === "number" ? cell : Number(String(cell).replace(/[$,%\s]/g, ""));
+};
+
+function isSubtotalOrTotalRow(unitType: string, row: SheetRow): boolean {
+  const rowText = row
+    .map((cell) => String(cell ?? ""))
+    .join(" ")
+    .toLowerCase();
+  return /\b(?:sub\s*total|subtotal|grand total|total)\b/.test(`${unitType} ${rowText}`);
+}
+
+function aggregateRentRollRows(rows: ParsedRentRollRow[]): ParsedRentRollRow[] {
+  const groups = new Map<string, ParsedRentRollRow[]>();
+  for (const row of rows) {
+    const key = `${row.unitType.toLowerCase()}|${row.rentBasis}`;
+    const group = groups.get(key) ?? [];
+    group.push(row);
+    groups.set(key, group);
+  }
+
+  const out: ParsedRentRollRow[] = [];
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      out.push(group[0]);
+      continue;
+    }
+    const first = group[0];
+    const sfTotal = group.reduce((sum, row) => sum + (row.avgSf ?? 0), 0);
+    const unitTotal = group.reduce((sum, row) => sum + row.unitCount, 0);
+    const weightFor = (row: ParsedRentRollRow) =>
+      row.rentBasis === "per_sf" && row.avgSf ? row.avgSf : row.unitCount;
+    const weightTotal = group.reduce((sum, row) => sum + weightFor(row), 0);
+    const weighted = (pick: (row: ParsedRentRollRow) => number | null) => {
+      if (weightTotal <= 0) return null;
+      let total = 0;
+      let seen = false;
+      for (const row of group) {
+        const value = pick(row);
+        if (value == null || !Number.isFinite(value)) continue;
+        total += value * weightFor(row);
+        seen = true;
+      }
+      return seen ? total / weightTotal : null;
+    };
+    out.push({
+      unitType: first.unitType,
+      tenant: group.map((row) => row.tenant).filter(Boolean).join(", ") || null,
+      unitCount: unitTotal || first.unitCount,
+      avgSf: sfTotal || first.avgSf,
+      rent: weighted((row) => row.rent) ?? first.rent,
+      rentBasis: first.rentBasis,
+      occupancyPct: weighted((row) => row.occupancyPct),
+      sourceCellRef: group.map((row) => row.sourceCellRef).join("; "),
+    });
+  }
+  return out;
+}
 
 // Parse one rent-roll sheet. Returns no rows when the sheet lacks the required
 // type / count / rent columns, so a non-rent-roll tab contributes nothing.
@@ -64,7 +121,9 @@ function parseRentRollSheet(
   const rentIndex = header.findIndex(isRentHeader);
   // Word-boundary \bsf\b so a rent column like "Rent PSF" (the "sf" inside
   // "psf") is NOT taken as the square-footage column; also exclude rent headers.
-  const sfIndex = header.findIndex((h) => /\bsf\b|square/.test(h) && !isRentHeader(h));
+  const sfIndex = header.findIndex(
+    (h) => /\bsf\b|square|rentable area|\barea\b|\brsf\b|\bgla\b/.test(h) && !isRentHeader(h),
+  );
   // A commercial schedule is keyed by SF, not a unit count: accept a sheet that
   // has a type + rent column and EITHER a count or an SF column. (Requiring a
   // count column silently zeroed every retail/office rent roll.)
@@ -80,9 +139,13 @@ function parseRentRollSheet(
   dataRows.forEach((row, i) => {
     const rowNumber = headerRowIndex + i + 2;
     const unitType = String(row[typeIndex] ?? "").trim();
+    if (!unitType) return;
+    if (isSubtotalOrTotalRow(unitType, row)) {
+      rejected.push({ row: rowNumber, reason: "Subtotal or total row.", values: row });
+      return;
+    }
     const tenant = tenantIndex >= 0 ? String(row[tenantIndex] ?? "").trim() || null : null;
-    // No count column (an SF-keyed commercial schedule): each row is one suite.
-    const unitCount = countIndex >= 0 ? parseNumeric(row[countIndex] ?? 0) : 1;
+    const rawUnitCount = countIndex >= 0 ? parseNumeric(row[countIndex]) : NaN;
     const avgSf = sfIndex >= 0 ? parseNumeric(row[sfIndex] ?? 0) || null : null;
     const rent = parseNumeric(row[rentIndex]);
     const occupancyRaw = occupancyIndex >= 0 ? parseNumeric(row[occupancyIndex]) : NaN;
@@ -94,18 +157,33 @@ function parseRentRollSheet(
       : occupancyRaw > 0 && occupancyRaw <= 1
         ? occupancyRaw * 100
         : occupancyRaw;
-    if (!unitType || !Number.isFinite(unitCount) || !Number.isFinite(rent) || rent <= 0) {
-      rejected.push({ row: rowNumber, reason: "Missing unit type, count, or rent.", values: row });
-      return;
-    }
     const basisText = rentBasisIndex >= 0 ? String(row[rentBasisIndex] ?? "").toLowerCase() : "";
-    const rentBasis: ParsedRentRollRow["rentBasis"] = /per[_\s-]*sf|psf|square/.test(basisText)
+    const rentBasis: ParsedRentRollRow["rentBasis"] = /per[_\s-]*sf|psf|\$?\s*\/\s*sf|sf\s*\/\s*yr|square/.test(
+      basisText,
+    )
       ? "per_sf"
       : /per[_\s-]*unit|unit|month|mo/.test(basisText)
         ? "per_unit"
         : perSfRent && avgSf
           ? "per_sf"
           : "per_unit";
+    const annualOtherIncome =
+      /other income|ancillary|parking|solar/.test(unitType.toLowerCase()) &&
+      /annual|year|yr/.test(basisText);
+    // Blank unit cells are normal in commercial SF-keyed schedules. Treat each
+    // per-SF row as one suite, but keep residential/unit schedules strict.
+    const unitCount =
+      Number.isFinite(rawUnitCount) && rawUnitCount > 0
+        ? rawUnitCount
+        : annualOtherIncome
+          ? 1
+        : rentBasis === "per_sf"
+          ? 1
+          : NaN;
+    if (!Number.isFinite(unitCount) || !Number.isFinite(rent) || rent <= 0) {
+      rejected.push({ row: rowNumber, reason: "Missing unit type, count, or rent.", values: row });
+      return;
+    }
     inserted.push({
       unitType,
       tenant,
@@ -144,7 +222,7 @@ export function parseRentRollWorkbook(buffer: ArrayBuffer): RentRollParseResult 
     rejected.push(...result.rejected);
   }
   return {
-    inserted,
+    inserted: aggregateRentRollRows(inserted),
     rejected,
     meta: {
       sheetsScanned: workbook.SheetNames.length,

@@ -57,6 +57,14 @@ function toNumber(raw: string): number {
   return Number(raw.replace(/,/g, ""));
 }
 
+function toOcrNumber(raw: string): number {
+  return toNumber(raw.replace(/\s+/g, ""));
+}
+
+function hasOcrDigitSpacing(raw: string): boolean {
+  return /\d\s+\d|\d\s+[,.]|\d[,.]\s+\d/.test(raw);
+}
+
 function contextAround(text: string, idx: number, len: number, span = 80): string {
   const start = Math.max(0, idx - span);
   const end = Math.min(text.length, idx + len + span);
@@ -71,8 +79,25 @@ function labelHint(text: string, idx: number, span = 64): string {
   const start = Math.max(0, idx - span);
   let seg = text.slice(start, idx);
   const nl = seg.lastIndexOf("\n");
-  if (nl >= 0) seg = seg.slice(nl + 1);
-  return seg.replace(/\s+/g, " ").trim();
+  let prevLine = "";
+  if (nl >= 0) {
+    const before = seg.slice(0, nl);
+    prevLine = before.slice(before.lastIndexOf("\n") + 1);
+    seg = seg.slice(nl + 1);
+  }
+  const current = seg.replace(/\s+/g, " ").trim();
+  const previous = prevLine.replace(/\s+/g, " ").trim();
+  if (
+    previous &&
+    current &&
+    /^(amount|rate|ratio|covenant|period|term)\b/i.test(current) &&
+    /\b(loan|debt|equity|amortization|dscr|ltc|loan-to-cost|interest|construction)\b/i.test(
+      previous,
+    )
+  ) {
+    return `${previous} ${current}`.trim();
+  }
+  return current;
 }
 
 // Spreadsheet lines are emitted as "Sheet <name> row <n>: <label> | <value>".
@@ -149,6 +174,52 @@ export function extractCandidates(docName: string, text: string): Candidate[] {
   };
 
   const passes: Pass[] = [
+    // OCR often inserts spaces inside numbers while preserving the financial
+    // label: "$ 1 6 2 , 5 0 0 , 0 0 0", "1 . 2 0 x", "6 . 2 5 %".
+    // These targeted passes normalize only the numeric token; labels and
+    // downstream alias/guard logic still decide whether the value is usable.
+    {
+      re: /(?:CAD|USD|US\$|C\$|\$)\s*((?:\d\s*){1,3}(?:,\s*(?:\d\s*){3})+(?:\.\s*(?:\d\s*)+)?)\s*(million|billion|thousand|mm|bn|m|b|k)?\b/gi,
+      handle: (m) => {
+        if (!hasOcrDigitSpacing(m[1])) return null;
+        const n = toOcrNumber(m[1]);
+        if (!isFinite(n)) return null;
+        return {
+          kind: "currency",
+          value_numeric: n * scaleMultiplier(m[2]),
+          value_text: m[0].trim(),
+          unit: "$",
+        };
+      },
+    },
+    {
+      re: /((?:\d\s*)+(?:\.\s*(?:\d\s*)+)?)\s*(?:%|percent\b|pct\b)/gi,
+      handle: (m) => {
+        if (!hasOcrDigitSpacing(m[1])) return null;
+        const n = toOcrNumber(m[1]);
+        if (!isFinite(n)) return null;
+        return { kind: "percent", value_numeric: n, value_text: m[0].trim(), unit: "%" };
+      },
+    },
+    {
+      re: /((?:\d\s*)+(?:\.\s*(?:\d\s*)+)?)\s*(?:x|×)\b/gi,
+      handle: (m) => {
+        if (!hasOcrDigitSpacing(m[1])) return null;
+        const n = toOcrNumber(m[1]);
+        if (!isFinite(n) || n > 20) return null;
+        return { kind: "ratio", value_numeric: n, value_text: m[0].trim(), unit: "x" };
+      },
+    },
+    {
+      re: /((?:\d\s*)+(?:\.\s*(?:\d\s*)+)?)[-\s]*(years?|yrs?|months?|mos?)\b/gi,
+      handle: (m) => {
+        if (!hasOcrDigitSpacing(m[1])) return null;
+        const n = toOcrNumber(m[1]);
+        if (!isFinite(n)) return null;
+        const unit = m[2].toLowerCase().startsWith("mo") ? "mo" : "yr";
+        return { kind: "duration", value_numeric: n, value_text: m[0].trim(), unit };
+      },
+    },
     // Rent: monthly: "$3,050/month", "$3,050 per unit per month", "$3,050/unit/month".
     {
       re: /\$?\s?([\d,]+(?:\.\d+)?)\s*(?:\/\s*mo(?:nth)?\b|per\s+month\b|per\s+unit\s+per\s+month\b|\/\s*unit\s*\/\s*(?:mo|month)\b|per\s+unit\s*\/\s*(?:mo|month)\b)/gi,

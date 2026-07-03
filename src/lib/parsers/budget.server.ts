@@ -26,6 +26,8 @@ export type BudgetParseResult = {
 export function categoryFor(label: string): ParsedBudgetRow["category"] {
   const normalized = label.toLowerCase();
   if (/^other\b/.test(normalized)) return "other";
+  if (/developer fee/.test(normalized)) return "other";
+  if (/sitework/.test(normalized)) return "hard";
   // Reserves and offsite/infrastructure go to "other": checked BEFORE land so
   // "offsite" (contains "site") and "environmental" are not miscategorised.
   if (/environmental|remediation|pfas|\besa\b/.test(normalized)) return "other";
@@ -159,7 +161,14 @@ function parseBudgetSheet(
       const magnitude = cleaned === "" ? NaN : Number(cleaned);
       parsedAmount = Number.isFinite(magnitude) && negative ? -magnitude : magnitude;
     }
-    const amount = Number.isFinite(parsedAmount) ? parsedAmount * scale : parsedAmount;
+    const creditOrOffset = /credit|offset|reimburs|refund|allowance|reduction|deduction/i.test(
+      `${categoryLabel} ${label}`,
+    );
+    const normalizedAmount =
+      Number.isFinite(parsedAmount) && parsedAmount < 0 && !creditOrOffset
+        ? Math.abs(parsedAmount)
+        : parsedAmount;
+    const amount = Number.isFinite(normalizedAmount) ? normalizedAmount * scale : normalizedAmount;
     if (/^total$/i.test(categoryLabel) || /total development cost|^total$/i.test(label)) {
       rejected.push({
         row: rowNumber,
