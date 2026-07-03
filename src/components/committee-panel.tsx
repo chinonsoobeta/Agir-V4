@@ -272,15 +272,26 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
   // with no basis. Show workflow state instead.
   if (!decision.hasUnderwriting || !decision.findings) {
     return (
-      <Card className="p-12 text-center elevated">
-        <Gavel className="size-8 mx-auto text-muted-foreground" />
-        <h3 className="display text-xl mt-4">Underwriting not run</h3>
-        <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-          No investment recommendation available yet. Resolve the required assumptions and run
-          deterministic underwriting in <span className="text-foreground">Analysis</span>. The
-          recommendation, Investment Score, conditions and findings will appear here once outputs
-          exist.
-        </p>
+      <Card className="p-6 elevated">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Gavel className="size-4 text-muted-foreground" />
+              <h3 className="display text-xl">Underwriting not run</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">
+              Committee review unlocks after deterministic underwriting is complete.
+            </p>
+          </div>
+          <Badge variant="outline" className="bg-muted/30 text-muted-foreground border-border">
+            IC review blocked
+          </Badge>
+        </div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-3">
+          <ReadinessMiniItem label="Assumptions" value="Resolve blockers" tone="warning" />
+          <ReadinessMiniItem label="Underwriting" value="Run required" tone="danger" />
+          <ReadinessMiniItem label="Memo" value="Waiting on outputs" tone="neutral" />
+        </div>
       </Card>
     );
   }
@@ -523,7 +534,7 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
                   </AlertDialogTitle>
                   <AlertDialogDescription>
                     This writes a permanent, hash-chained entry and snapshots the memo. It cannot be
-                    edited – only superseded by a later decision.
+                    edited. Only a later decision can supersede it.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <div className="rounded-md border border-border bg-muted/20 p-3 text-sm whitespace-pre-wrap">
@@ -601,6 +612,29 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
           </ul>
         )}
       </Card>
+    </div>
+  );
+}
+
+function ReadinessMiniItem({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "neutral" | "warning" | "danger";
+}) {
+  const cls =
+    tone === "danger"
+      ? "border-destructive/30 bg-destructive/5 text-destructive"
+      : tone === "warning"
+        ? "border-warning/30 bg-warning/5 text-warning"
+        : "border-border bg-muted/10 text-muted-foreground";
+  return (
+    <div className={`rounded-md border px-3 py-2 ${cls}`}>
+      <div className="text-[11px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="mt-1 text-sm font-medium">{value}</div>
     </div>
   );
 }

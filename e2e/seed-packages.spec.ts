@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { seedPackageAndOpen } from "./seed-helpers";
 
 // The workflow-mode demo packages: seeding creates the project and links the
-// bundled SOURCE documents only — the analyst runs extraction in-app, so the
+// bundled SOURCE documents only. The analyst runs extraction in-app, so the
 // assertions here are project identity + documents present, not assumptions.
 test("seed Rivergate and land in a project with its source documents", async ({ page }) => {
   await seedPackageAndOpen(page, "Rivergate");

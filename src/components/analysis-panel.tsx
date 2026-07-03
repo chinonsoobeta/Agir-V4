@@ -6,6 +6,7 @@ import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import { listFinancialOutputs, listAssumptions } from "@/lib/assumptions.functions";
 import { getEngineInput } from "@/lib/underwriting.functions";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { buildDecision } from "@/lib/decision";
 import type { AssumptionRow, OutputRow } from "@/lib/decision";
 import { SectionLabel, Eyebrow, TONE_TEXT } from "@/components/decision-ui";
@@ -75,6 +76,24 @@ export function AnalysisPanel({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
+      <div
+        className="flex flex-wrap items-center gap-2 rounded-md border border-success/30 bg-success/5 px-3 py-2 text-xs"
+        aria-label="Analysis status"
+      >
+        <Badge variant="outline" className="bg-success/10 text-success border-success/30">
+          Underwriting complete
+        </Badge>
+        <Badge variant="outline" className="text-[11px]">
+          {presentStress.length + 1} scenario{presentStress.length === 0 ? "" : "s"}
+        </Badge>
+        <Badge variant="outline" className="text-[11px]">
+          Recommendation {decision.recommendation}
+        </Badge>
+        <span className="text-muted-foreground">
+          Metrics below are deterministic outputs with formula and input provenance.
+        </span>
+      </div>
+
       {/* What breaks the deal: stress matrix */}
       <section>
         <div className="flex items-center gap-2 mb-3">

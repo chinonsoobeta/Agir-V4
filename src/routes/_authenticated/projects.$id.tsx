@@ -3,6 +3,8 @@ import { useSuspenseQuery, queryOptions, useQueryClient } from "@tanstack/react-
 import { getProject } from "@/lib/projects.functions";
 import { listDocuments } from "@/lib/documents.functions";
 import { listAssumptions, listFinancialOutputs, listDecisions } from "@/lib/assumptions.functions";
+import { listMemos } from "@/lib/memo.functions";
+import { getUnderwritingReadiness } from "@/lib/underwriting.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,7 +15,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeft, FileText, MapPin } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  CircleDot,
+  Clock3,
+  FileText,
+  Lock,
+  MapPin,
+  RefreshCw,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { DocumentDropzone } from "@/components/document-dropzone";
@@ -57,6 +70,16 @@ const decisionsQ = (id: string) =>
     queryKey: ["decisions", id],
     queryFn: () => listDecisions({ data: { project_id: id } }),
   });
+const memosQ = (id: string) =>
+  queryOptions({
+    queryKey: ["memos", id],
+    queryFn: () => listMemos({ data: { project_id: id } }),
+  });
+const uwReadinessQ = (id: string) =>
+  queryOptions({
+    queryKey: ["uw-readiness", id],
+    queryFn: () => getUnderwritingReadiness({ data: { project_id: id } }),
+  });
 
 const TABS = [
   { value: "decision", label: "Decision" },
@@ -84,6 +107,8 @@ function DealDetail() {
   const { data: assumptions = [] } = useSuspenseQuery(assumptionsQ(id));
   const { data: outputs = [] } = useSuspenseQuery(outputsQ(id));
   const { data: decisions = [] } = useSuspenseQuery(decisionsQ(id));
+  const { data: memos = [] } = useSuspenseQuery(memosQ(id));
+  const { data: uwReadiness } = useSuspenseQuery(uwReadinessQ(id));
 
   const decision = buildDecision(
     outputs as unknown as OutputRow[],
@@ -166,6 +191,15 @@ function DealDetail() {
               </div>
             )}
           </div>
+          <DealWorkflowStrip
+            documents={documents}
+            assumptions={assumptions}
+            outputs={outputs}
+            decisions={decisions}
+            memos={memos}
+            readiness={uwReadiness}
+            hasUnderwriting={decision.hasUnderwriting}
+          />
         </div>
       </header>
 
@@ -231,6 +265,252 @@ function DealDetail() {
         </Tabs>
       </div>
     </>
+  );
+}
+
+type WorkflowTone = "neutral" | "success" | "warning" | "danger" | "info";
+type WorkflowItem = {
+  key: string;
+  label: string;
+  detail: string;
+  tone: WorkflowTone;
+  icon: LucideIcon;
+};
+
+const REVIEWED_ASSUMPTION_STATUSES = new Set([
+  "approved",
+  "modified",
+  "default_accepted",
+  "calculated",
+]);
+
+function toneClass(tone: WorkflowTone) {
+  switch (tone) {
+    case "success":
+      return "border-success/30 bg-success/10 text-success";
+    case "warning":
+      return "border-warning/30 bg-warning/10 text-warning";
+    case "danger":
+      return "border-destructive/30 bg-destructive/10 text-destructive";
+    case "info":
+      return "border-primary/30 bg-primary/10 text-primary";
+    default:
+      return "border-border bg-muted/20 text-muted-foreground";
+  }
+}
+
+function latestTime(rows: Array<Record<string, unknown>>, keys: string[]) {
+  let latest = 0;
+  for (const row of rows) {
+    for (const key of keys) {
+      const raw = row[key];
+      if (typeof raw !== "string") continue;
+      const ts = new Date(raw).getTime();
+      if (Number.isFinite(ts)) latest = Math.max(latest, ts);
+    }
+  }
+  return latest;
+}
+
+function DealWorkflowStrip({
+  documents,
+  assumptions,
+  outputs,
+  decisions,
+  memos,
+  readiness,
+  hasUnderwriting,
+}: {
+  documents: Tables<"documents">[];
+  assumptions: Tables<"assumptions">[];
+  outputs: Tables<"financial_outputs">[];
+  decisions: Tables<"decision_logs">[];
+  memos: Tables<"investment_memos">[];
+  readiness: Awaited<ReturnType<typeof getUnderwritingReadiness>>;
+  hasUnderwriting: boolean;
+}) {
+  const extractedDocs = documents.filter((doc) => doc.ai_summary || doc.extraction_status === "completed");
+  const failedDocs = documents.filter(
+    (doc) => doc.status === "extraction_failed" || doc.extraction_status === "failed",
+  );
+  const conflicts = assumptions.filter((row) => row.status === "conflicting").length;
+  const missing = assumptions.filter((row) => row.status === "missing").length;
+  const reviewed = assumptions.filter((row) =>
+    REVIEWED_ASSUMPTION_STATUSES.has(row.status ?? ""),
+  ).length;
+  const defaultCount = readiness.defaults.length;
+  const outputTime = latestTime(outputs as Array<Record<string, unknown>>, ["computed_at"]);
+  const approvedInputTime = latestTime(
+    assumptions.filter((row) => REVIEWED_ASSUMPTION_STATUSES.has(row.status ?? "")) as Array<
+      Record<string, unknown>
+    >,
+    ["approved_at", "updated_at"],
+  );
+  const outputsStale = hasUnderwriting && approvedInputTime > outputTime;
+  const latestMemo = memos[0] ?? null;
+  const terminalDecision = decisions.find((row) =>
+    ["approve", "approve_with_conditions", "reject"].includes(String(row.decision)),
+  );
+
+  const items: WorkflowItem[] = [
+    failedDocs.length
+      ? {
+          key: "docs",
+          label: `${failedDocs.length} extraction failed`,
+          detail: `${documents.length} document${documents.length === 1 ? "" : "s"} linked`,
+          tone: "danger",
+          icon: AlertTriangle,
+        }
+      : extractedDocs.length
+        ? {
+            key: "docs",
+            label: `${extractedDocs.length} document${extractedDocs.length === 1 ? "" : "s"} extracted`,
+            detail: `${documents.length} linked`,
+            tone: "success",
+            icon: FileText,
+          }
+        : documents.length
+          ? {
+              key: "docs",
+              label: "Extraction pending",
+              detail: `${documents.length} document${documents.length === 1 ? "" : "s"} linked`,
+              tone: "warning",
+              icon: Clock3,
+            }
+          : {
+              key: "docs",
+              label: "No documents",
+              detail: "Upload sources",
+              tone: "neutral",
+              icon: FileText,
+            },
+    conflicts > 0
+      ? {
+          key: "assumptions",
+          label: `${conflicts} conflict${conflicts === 1 ? "" : "s"}`,
+          detail: `${reviewed}/${assumptions.length || 0} reviewed`,
+          tone: "danger",
+          icon: AlertTriangle,
+        }
+      : missing > 0
+        ? {
+            key: "assumptions",
+            label: `${missing} missing`,
+            detail: `${reviewed}/${assumptions.length || 0} reviewed`,
+            tone: "warning",
+            icon: Clock3,
+          }
+        : assumptions.length
+          ? {
+              key: "assumptions",
+              label: "Assumptions reviewed",
+              detail: `${reviewed}/${assumptions.length} approved for engine`,
+              tone: "success",
+              icon: CheckCircle2,
+            }
+          : {
+              key: "assumptions",
+              label: "No assumptions",
+              detail: "Run extraction",
+              tone: "neutral",
+              icon: CircleDot,
+            },
+    readiness.status === "blocked"
+      ? {
+          key: "readiness",
+          label: `${defaultCount} default${defaultCount === 1 ? "" : "s"} available`,
+          detail: readiness.conflicts.length
+            ? `${readiness.conflicts.length} conflict${readiness.conflicts.length === 1 ? "" : "s"} block run`
+            : `${readiness.missing.length} input${readiness.missing.length === 1 ? "" : "s"} missing`,
+          tone: readiness.conflicts.length ? "danger" : "warning",
+          icon: readiness.conflicts.length ? Lock : AlertTriangle,
+        }
+      : {
+          key: "readiness",
+          label: "Ready to run",
+          detail: readiness.defaultedKeys.length
+            ? `${readiness.defaultedKeys.length} accepted default${readiness.defaultedKeys.length === 1 ? "" : "s"}`
+            : "Approved inputs complete",
+          tone: "success",
+          icon: CheckCircle2,
+        },
+    outputsStale
+      ? {
+          key: "outputs",
+          label: "Outputs stale",
+          detail: "Re-run underwriting",
+          tone: "warning",
+          icon: RefreshCw,
+        }
+      : hasUnderwriting
+        ? {
+            key: "outputs",
+            label: "Underwriting complete",
+            detail: "Outputs current",
+            tone: "success",
+            icon: CheckCircle2,
+          }
+        : {
+            key: "outputs",
+            label: "Pending run",
+            detail: "No metrics persisted",
+            tone: readiness.status === "blocked" ? "neutral" : "info",
+            icon: CircleDot,
+          },
+    terminalDecision
+      ? {
+          key: "committee",
+          label: "IC decision recorded",
+          detail: String(terminalDecision.decision).replace(/_/g, " "),
+          tone: "success",
+          icon: CheckCircle2,
+        }
+      : latestMemo
+        ? {
+            key: "committee",
+            label: "Memo ready",
+            detail: latestMemo.status ?? "generated",
+            tone: latestMemo.status === "needs_review" ? "warning" : "success",
+            icon: FileText,
+          }
+        : hasUnderwriting
+          ? {
+              key: "committee",
+              label: "IC review ready",
+              detail: "Generate memo next",
+              tone: "info",
+              icon: CircleDot,
+            }
+          : {
+              key: "committee",
+              label: "IC review blocked",
+              detail: "Underwriting required",
+              tone: "neutral",
+              icon: Lock,
+            },
+  ];
+
+  return (
+    <div
+      className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-5"
+      aria-label="Deal workflow status"
+    >
+      {items.map((item) => {
+        const Icon = item.icon;
+        return (
+          <div
+            key={item.key}
+            className={`min-w-0 rounded-md border px-3 py-2 ${toneClass(item.tone)}`}
+          >
+            <div className="flex items-center gap-2">
+              <Icon className="size-3.5 shrink-0" />
+              <span className="truncate text-xs font-semibold">{item.label}</span>
+            </div>
+            <div className="mt-1 truncate text-[11px] text-muted-foreground">{item.detail}</div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -304,10 +584,9 @@ function DocumentsTab({
           Deal Documents
         </div>
         {docs.length === 0 ? (
-          <p className="text-sm text-muted-foreground mt-3">
-            No documents are linked to this deal yet. Drop an offering memo, rent roll, or budget
-            above. Agir will extract the assumptions automatically.
-          </p>
+          <div className="mt-3 rounded-md border border-border bg-muted/10 px-3 py-2 text-sm text-muted-foreground">
+            No documents linked. Upload a source package to begin extraction.
+          </div>
         ) : (
           <ul className="mt-4 space-y-2">
             {docs.map((d) => {
@@ -340,7 +619,7 @@ function DocumentsTab({
             className="mt-4 inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
             onClick={onReviewAssumptions}
           >
-            Review extracted assumptions →
+            Review extracted assumptions
           </button>
         )}
       </Card>

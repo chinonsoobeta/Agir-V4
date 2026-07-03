@@ -31,6 +31,7 @@ import {
   RefreshCw,
   AlertCircle,
   Calculator,
+  Loader2,
 } from "lucide-react";
 import { REQUIRED_KEYS } from "@/lib/assumption-taxonomy";
 import {
@@ -129,6 +130,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
   const [editOf, setEditOf] = useState<any | null>(null);
   const [historyOf, setHistoryOf] = useState<any | null>(null);
   const [report, setReport] = useState<any | null>(null);
+  const [lastChange, setLastChange] = useState<string | null>(null);
   // AI runs by default; the deterministic engine is always the backup. The
   // toggle lets an analyst force the pure deterministic path on demand.
   const [aiMode, setAiMode] = useState(true);
@@ -147,23 +149,35 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
     },
     { high: 0, medium: 0, low: 0, missing: 0 },
   );
+  const statusCounts = assumptions.reduce<Record<string, number>>((acc, a) => {
+    const status = a.status ?? "unknown";
+    acc[status] = (acc[status] ?? 0) + 1;
+    return acc;
+  }, {});
 
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ["assumptions", projectId] });
-    qc.invalidateQueries({ queryKey: ["readiness", projectId] });
-    qc.invalidateQueries({ queryKey: ["outputs", projectId] });
-    qc.invalidateQueries({ queryKey: ["risks", projectId] });
-    qc.invalidateQueries({ queryKey: ["uw-readiness", projectId] });
-    qc.invalidateQueries({ queryKey: ["recon-flags", projectId] });
+  const invalidate = async () => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["assumptions", projectId] }),
+      qc.invalidateQueries({ queryKey: ["readiness", projectId] }),
+      qc.invalidateQueries({ queryKey: ["outputs", projectId] }),
+      qc.invalidateQueries({ queryKey: ["risks", projectId] }),
+      qc.invalidateQueries({ queryKey: ["uw-readiness", projectId] }),
+      qc.invalidateQueries({ queryKey: ["recon-flags", projectId] }),
+      qc.invalidateQueries({ queryKey: ["memos", projectId] }),
+      qc.invalidateQueries({ queryKey: ["memo-debug", projectId] }),
+    ]);
   };
 
   const extract = useMutation({
     mutationFn: () => extractFn({ data: { project_id: projectId, mode } }),
-    onSuccess: (r: any) => {
-      invalidate();
+    onSuccess: async (r: any) => {
+      await invalidate();
       setReport(r);
+      setLastChange(
+        `Extraction refreshed: ${r.found} found, ${r.conflicting} conflicting, ${r.missing} missing.`,
+      );
       toast.success(
-        `Pipeline complete (${r.analysis_mode === "ai" ? "AI" : "deterministic"}): ${r.found} found · ${r.conflicting} conflicting · ${r.missing} missing`,
+        `Pipeline complete (${r.analysis_mode === "ai" ? "AI" : "deterministic"}): ${r.found} found, ${r.conflicting} conflicting, ${r.missing} missing`,
       );
       if (r.ai_note) toast.message(r.ai_note);
     },
@@ -171,8 +185,8 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
   });
   const recompute = useMutation({
     mutationFn: () => recomputeFn({ data: { project_id: projectId, mode } }),
-    onSuccess: (r: any) => {
-      invalidate();
+    onSuccess: async (r: any) => {
+      await invalidate();
       if (r.blocked)
         toast.error("Underwriting is blocked: resolve missing/conflicting inputs first.");
       else
@@ -185,17 +199,28 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
   });
   const review = useMutation({
     mutationFn: (d: any) => reviewFn({ data: d }),
-    onSuccess: () => {
-      invalidate();
-      toast.success("Updated");
+    onSuccess: async (_row: unknown, variables: any) => {
+      await invalidate();
+      const subject =
+        assumptions.find((a) => a.id === variables.id)?.field_label ?? "Assumption";
+      const actionLabel =
+        variables.action === "approve"
+          ? "approved"
+          : variables.action === "reject"
+            ? "rejected"
+            : "updated and approved";
+      setLastChange(`${subject} ${actionLabel}. Readiness and outputs refreshed.`);
+      toast.success(`${subject} ${actionLabel}`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
   const secondApproveFn = useServerFn(secondApproveOverride);
   const secondApprove = useMutation({
     mutationFn: (id: string) => secondApproveFn({ data: { id } }),
-    onSuccess: () => {
-      invalidate();
+    onSuccess: async (_row: unknown, id: string) => {
+      await invalidate();
+      const subject = assumptions.find((a) => a.id === id)?.field_label ?? "Override";
+      setLastChange(`${subject} second-approved and available to the engine.`);
       toast.success("Override second-approved -- now applied to the engine");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -290,6 +315,37 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
           <Field label="Low Confidence">{confidenceCounts.low}</Field>
           <Field label="Missing">{confidenceCounts.missing}</Field>
         </div>
+        <div className="mt-4 flex flex-wrap gap-1.5" aria-label="Assumption status summary">
+          {[
+            "extracted",
+            "approved",
+            "modified",
+            "conflicting",
+            "default_accepted",
+            "rejected",
+            "calculated",
+          ].map((status) => {
+            const cfg = statusConfig("assumption", status);
+            return (
+              <Badge
+                key={status}
+                variant="outline"
+                className={`${statusClassName(cfg.severity)} text-[11px]`}
+              >
+                {cfg.label}: {statusCounts[status] ?? 0}
+              </Badge>
+            );
+          })}
+        </div>
+        {lastChange && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mt-3 rounded border border-success/30 bg-success/5 px-3 py-2 text-xs text-success"
+          >
+            {lastChange}
+          </div>
+        )}
         {readiness.missing_required.length > 0 && (
           <div className="mt-4 flex items-start gap-2 text-xs text-warning bg-warning/5 border border-warning/20 rounded p-3">
             <AlertCircle className="size-4 shrink-0 mt-0.5" />
@@ -357,10 +413,13 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
                               id: a.id,
                               action: "modify",
                               value_numeric: Number(cv.value),
-                              change_reason: `Resolved conflict → ${cv.value}`,
+                              change_reason: `Resolved conflict to ${cv.value}`,
                             })
                           }
                         >
+                          {review.isPending && review.variables?.id === a.id ? (
+                            <Loader2 className="size-3.5 mr-1 animate-spin" />
+                          ) : null}
                           <span className="num">{Number(cv.value).toLocaleString()}</span>
                           {cv.source && (
                             <span className="text-[11px] text-muted-foreground ml-1.5 max-w-[110px] truncate">
@@ -384,10 +443,13 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
                             id: a.id,
                             action: "modify",
                             value_numeric: conservative,
-                            change_reason: `Resolved conflict → conservative ${conservative}`,
+                            change_reason: `Resolved conflict to conservative ${conservative}`,
                           })
                         }
                       >
+                        {review.isPending && review.variables?.id === a.id ? (
+                          <Loader2 className="size-3.5 mr-1 animate-spin" />
+                        ) : null}
                         Use conservative ({conservative.toLocaleString()})
                       </Button>
                     )}
@@ -468,7 +530,10 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
                     review.mutate({ id: a.id, action: "reject", change_reason: "Rejected" })
                   }
                   onSecondApprove={() => secondApprove.mutate(a.id)}
-                  pending={review.isPending || secondApprove.isPending}
+                  pending={
+                    (review.isPending && review.variables?.id === a.id) ||
+                    (secondApprove.isPending && secondApprove.variables === a.id)
+                  }
                 />
               ))}
             </div>
@@ -905,6 +970,12 @@ function AssumptionCard({
         </div>
         <StatusBadge domain="assumption" status={a.status} />
       </div>
+      {pending && (
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Loader2 className="size-3 animate-spin" />
+          Updating review state
+        </div>
+      )}
       <div className="flex flex-wrap gap-1.5">
         <Badge variant="outline" className="text-[11px]">
           {provenance.label}
@@ -971,7 +1042,11 @@ function AssumptionCard({
             disabled={a.status === "missing" || a.status === "conflicting" || pending}
             onClick={onApprove}
           >
-            <Check className="size-3.5" />
+            {pending ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Check className="size-3.5" />
+            )}
           </Button>
           <Button
             variant="ghost"
@@ -982,7 +1057,11 @@ function AssumptionCard({
             disabled={pending}
             onClick={onReject}
           >
-            <X className="size-3.5" />
+            {pending ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <X className="size-3.5" />
+            )}
           </Button>
         </div>
       </div>

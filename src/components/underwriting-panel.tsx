@@ -185,6 +185,19 @@ const inputLabel = (key: string) =>
   INPUT_LABELS[key] ??
   (key.startsWith("occupancy:") ? `Stabilized occupancy: ${key.slice(10)}` : key);
 
+function latestTimestamp(rows: Array<Record<string, unknown>>, keys: string[]) {
+  let latest = 0;
+  for (const row of rows) {
+    for (const key of keys) {
+      const raw = row[key];
+      if (typeof raw !== "string") continue;
+      const ts = new Date(raw).getTime();
+      if (Number.isFinite(ts)) latest = Math.max(latest, ts);
+    }
+  }
+  return latest;
+}
+
 // Conflict values are raw numbers; append the unit the key implies so e.g. an
 // exit cap reads "4.75%" not "4.75". Only percentage keys get a suffix; dollar
 // and count keys are left as-is.
@@ -597,6 +610,16 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
     metric("equity_multiple")?.formula_text?.includes("Equity wipeout"),
   );
   const defaultedKeys: string[] = readiness.defaultedKeys ?? [];
+  const latestOutputAt = latestTimestamp(outputs as Array<Record<string, unknown>>, [
+    "computed_at",
+  ]);
+  const latestApprovedInputAt = latestTimestamp(
+    (assumptions as AssumptionRow[]).filter((row) =>
+      ["approved", "modified", "default_accepted", "calculated"].includes(row.status ?? ""),
+    ) as Array<Record<string, unknown>>,
+    ["approved_at", "updated_at"],
+  );
+  const outputsStale = outputs.length > 0 && latestApprovedInputAt > latestOutputAt;
 
   // IC-grade structure: surface the LP/GP waterfall and a multi-tranche stack
   // only when they are configured. Without them the LP return equals the deal
@@ -651,7 +674,17 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
           }}
         >
           <ModeToggle aiMode={aiMode} setAiMode={setAiMode} />
-          <Button type="button" onClick={runNow} onKeyDown={runOnKeyboard} disabled={run.isPending}>
+          <Button
+            type="button"
+            onClick={runNow}
+            onKeyDown={runOnKeyboard}
+            disabled={run.isPending}
+            title={
+              run.isPending
+                ? "Wait for the current deterministic run to finish."
+                : "Run the deterministic engine from approved and default-accepted inputs."
+            }
+          >
             {run.isPending ? (
               <Loader2 className="size-4 mr-1 animate-spin" />
             ) : aiMode ? (
@@ -676,15 +709,53 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
               void invalidate().then(() => setStatusMessage("Latest underwriting data refreshed."));
             }}
             disabled={run.isPending}
+            title={run.isPending ? "Wait for the current deterministic run to finish." : undefined}
           >
             <RefreshCw className="size-4 mr-1" />
             Refresh Results
           </Button>
           {lastMode && <ModeBadge mode={lastMode} />}
           <span className="text-[11px] text-muted-foreground font-mono ml-auto">
-            engine computes every number · AI only selects inputs
+            engine computes every number · AI only selects fixed static defaults
           </span>
         </form>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <Badge variant="outline" className="text-[11px] bg-success/10 text-success border-success/30">
+            Ready to run
+          </Badge>
+          {outputsStale ? (
+            <Badge
+              variant="outline"
+              className="text-[11px] bg-warning/10 text-warning border-warning/30"
+            >
+              Outputs stale
+            </Badge>
+          ) : outputs.length ? (
+            <Badge
+              variant="outline"
+              className="text-[11px] bg-success/10 text-success border-success/30"
+            >
+              Outputs current
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-[11px]">
+              Pending run
+            </Badge>
+          )}
+          {defaultedKeys.length > 0 && (
+            <Badge
+              variant="outline"
+              className="text-[11px] bg-warning/10 text-warning border-warning/30"
+            >
+              {defaultedKeys.length} accepted default{defaultedKeys.length === 1 ? "" : "s"}
+            </Badge>
+          )}
+          {run.isPending && (
+            <Badge variant="outline" className="text-[11px]">
+              Running
+            </Badge>
+          )}
+        </div>
         <div
           role="status"
           aria-live="polite"
@@ -713,7 +784,9 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
           <div className="mt-1 text-xs text-muted-foreground">
             {statusMessage ??
               (outputs.length
-                ? "Base case, stress runs, risks, and audit are in sync with the latest loaded data."
+                ? outputsStale
+                  ? "Approved inputs changed after the last computed output. Re-run underwriting before relying on results."
+                  : "Base case, stress runs, risks, and audit are in sync with the latest loaded data."
                 : "Run underwriting to persist base case, stress runs, risk register, reconciliation flags, and audit.")}
           </div>
         </div>
@@ -1400,17 +1473,52 @@ export function MemoSection({ projectId }: { projectId: string }) {
   const provenanceFailed = Boolean(
     latest && latest.verification_report && latest.verification_report.pass === false,
   );
+  const latestStatus = latest?.status ?? null;
+  const verificationPassed =
+    latest?.verification_report?.pass === true
+      ? true
+      : latest?.verification_report?.pass === false
+        ? false
+        : null;
 
   return (
     <Card className="p-5 space-y-3 border-primary/30">
       <div className="flex items-center justify-between gap-3">
-        <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
-          Investment Memo
+        <div>
+          <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
+            Investment Memo
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <Badge
+              variant="outline"
+              className={`text-[11px] ${debug.can_generate ? "bg-success/10 text-success border-success/30" : "bg-warning/10 text-warning border-warning/30"}`}
+            >
+              {debug.can_generate ? "Memo available" : "Memo blocked"}
+            </Badge>
+            {latestStatus && (
+              <Badge variant="outline" className="text-[11px] uppercase">
+                {latestStatus}
+              </Badge>
+            )}
+            {verificationPassed != null && (
+              <Badge
+                variant="outline"
+                className={`text-[11px] ${verificationPassed ? "bg-success/10 text-success border-success/30" : "bg-warning/10 text-warning border-warning/30"}`}
+              >
+                {verificationPassed ? "Verification passed" : "Verification review"}
+              </Badge>
+            )}
+          </div>
         </div>
         <Button
           size="sm"
           onClick={() => gen.mutate()}
           disabled={!debug.can_generate || gen.isPending}
+          title={
+            debug.can_generate
+              ? "Generate the memo from deterministic outputs and approved assumptions."
+              : debug.blocking_reasons.join(" ")
+          }
         >
           <FileText className="size-4 mr-1" />
           {gen.isPending ? "Generating…" : "Generate Memo"}
@@ -1557,9 +1665,9 @@ export function MemoSection({ projectId }: { projectId: string }) {
           )}
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">
-          No memo yet. Run deterministic underwriting, then generate the memo.
-        </p>
+        <div className="rounded-md border border-border bg-muted/10 px-3 py-2 text-sm text-muted-foreground">
+          No memo yet. Complete underwriting, then generate the IC memo.
+        </div>
       )}
 
       {/* Dev-only readiness debug */}

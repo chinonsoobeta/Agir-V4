@@ -32,12 +32,16 @@ async function runDeterministicUnderwritingForProject(projectId: string) {
 }
 
 // The critical underwriting workflow, end to end through the UI: seed a demo
-// deal, then confirm the analyst-facing surfaces it produces — source
+// deal, then confirm the analyst-facing surfaces it produces: source
 // documents and the assumption review register (including the documented
 // exit-cap conflict the engine must never resolve silently).
 test("seed Harbour Centre demo and review its underwriting surfaces", async ({ page }) => {
   await seedPackageAndOpen(page, "Harbour Centre");
   await expect(page.getByRole("heading", { name: "Harbour Centre" })).toBeVisible();
+  await expect(page.getByLabel("Deal workflow status")).toBeVisible();
+  await expect(page.getByText(/documents? extracted|extraction pending/i).first()).toBeVisible();
+  await expect(page.getByText(/conflicts?/i).first()).toBeVisible();
+  await expect(page.getByText(/pending run/i).first()).toBeVisible();
 
   // Documents tab: the six bundled source documents are linked.
   await page.getByRole("tab", { name: /documents/i }).click();
@@ -56,6 +60,8 @@ test("professional demo workflow resolves provenance and fail-closed underwritin
 }) => {
   await seedPackageAndOpen(page, "Harbour Centre");
   await expect(page.getByRole("heading", { name: "Harbour Centre" })).toBeVisible();
+  await expect(page.getByLabel("Deal workflow status")).toBeVisible();
+  await expect(page.getByText(/IC review blocked/i).first()).toBeVisible();
 
   await page.getByRole("tab", { name: /documents/i }).click();
   await expect(page.getByText(/Harbour_Centre_Construction_Budget/i).first()).toBeVisible();
@@ -63,6 +69,7 @@ test("professional demo workflow resolves provenance and fail-closed underwritin
 
   await page.getByRole("tab", { name: /assumptions/i }).click();
   await expect(page.getByText(/Deal Readiness Score/i)).toBeVisible();
+  await expect(page.getByLabel(/Assumption status summary/i)).toBeVisible();
   await expect(page.getByText(/Conflict Resolution Center/i)).toBeVisible();
   await expect(page.getByText(/Confidence/i).first()).toBeVisible();
   await expect(page.getByText(/Harbour_Centre_Lender_Term_Sheet\.pdf/i).first()).toBeVisible();
@@ -104,8 +111,8 @@ test("professional demo workflow resolves provenance and fail-closed underwritin
 
   await page.getByRole("tab", { name: /investment committee/i }).click();
   await expect(page.getByRole("heading", { name: /Underwriting not run/i })).toBeVisible();
-  await expect(page.getByText(/No investment recommendation available yet/i)).toBeVisible();
-  await expect(page.getByText(/run deterministic underwriting in Analysis/i)).toBeVisible();
+  await expect(page.getByText(/Committee review unlocks/i)).toBeVisible();
+  await expect(page.getByText(/IC review blocked/i).first()).toBeVisible();
 
   await page.getByRole("tab", { name: /audit/i }).click();
   await expect(page.getByText(/Audit|underwriting|assumption/i).first()).toBeVisible();
@@ -117,6 +124,7 @@ test("professional demo workflow completes deterministic underwriting, memo, and
   test.setTimeout(120_000);
   await seedPackageAndOpen(page, "Harbour Centre");
   await expect(page.getByRole("heading", { name: "Harbour Centre" })).toBeVisible();
+  await expect(page.getByLabel("Deal workflow status")).toBeVisible();
 
   await page.getByRole("tab", { name: /documents/i }).click();
   await expect(page.getByText(/Harbour_Centre_Construction_Budget/i).first()).toBeVisible();
@@ -125,6 +133,7 @@ test("professional demo workflow completes deterministic underwriting, memo, and
 
   await page.getByRole("tab", { name: /assumptions/i }).click();
   await expect(page.getByText(/Deal Readiness Score/i)).toBeVisible();
+  await expect(page.getByLabel(/Assumption status summary/i)).toBeVisible();
   await expect(page.getByText(/Conflict Resolution Center/i)).toBeVisible();
   await expect(page.getByText(/Confidence/i).first()).toBeVisible();
   await expect(page.getByText(/Harbour_Centre_Lender_Term_Sheet\.pdf/i).first()).toBeVisible();
@@ -152,6 +161,8 @@ test("professional demo workflow completes deterministic underwriting, memo, and
   await page.reload();
   await expect(page.getByRole("heading", { name: "Harbour Centre" })).toBeVisible();
   await page.getByRole("tab", { name: /analysis/i }).click();
+  await expect(page.getByLabel(/Analysis status/i)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Outputs current/i).first()).toBeVisible();
   await expect(page.getByText(/Pending underwriting run/).first()).toBeHidden({
     timeout: 20_000,
   });
@@ -194,6 +205,7 @@ test("professional demo workflow completes deterministic underwriting, memo, and
     .getByRole("button", { name: /Generate Memo/i })
     .first()
     .click();
+  await expect(page.getByText(/Memo available|Memo ready/i).first()).toBeVisible();
   await expect(
     page
       .getByText(/Executive Summary|Approved Assumptions|Financial Highlights/i)
