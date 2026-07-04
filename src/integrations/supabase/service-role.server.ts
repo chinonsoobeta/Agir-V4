@@ -7,6 +7,7 @@ export const SERVICE_ROLE_CAPABILITIES = {
   demo_seed: "Seed isolated demo data and demo documents.",
   document_storage_recovery: "Recover storage objects after authenticated download denial.",
   extraction_worker: "Claim and heartbeat durable extraction jobs.",
+  run_history_write: "Persist immutable normalized underwriting run history rows.",
   scim_provisioning: "Provision users and workspace memberships from enterprise IdP events.",
   schema_maintenance: "Refresh schema cache and run schema drift maintenance.",
 } as const;

@@ -30,7 +30,7 @@ In-scope:
 - Report generation and memo output
 
 Out of scope:
-- Third-party dependencies — report issues to the upstream maintainer
+- Third-party dependencies: report issues to the upstream maintainer
 - Theoretical vulnerabilities without a working proof of concept
 - Attacks requiring physical access to a deployed server
 - Social engineering of the Agir team

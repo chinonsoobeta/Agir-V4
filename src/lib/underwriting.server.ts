@@ -186,6 +186,12 @@ const RUN_HISTORY_TABLES = {
   risk_register: "run_risk_register",
 } as const;
 
+async function runHistoryWriteClient(fallback: any) {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return fallback;
+  const { getServiceRoleClient } = await import("@/integrations/supabase/service-role.server");
+  return getServiceRoleClient("run_history_write");
+}
+
 async function insertRunHistoryRows(
   supabase: any,
   sourceTable: keyof typeof RUN_HISTORY_TABLES,
@@ -195,7 +201,8 @@ async function insertRunHistoryRows(
 ) {
   if (!rows.length) return;
   const table = RUN_HISTORY_TABLES[sourceTable];
-  const res = await supabase.from(table).insert(normalizedRows(rows, runId));
+  const writer = await runHistoryWriteClient(supabase);
+  const res = await writer.from(table).insert(normalizedRows(rows, runId));
   if (isMissingRelation(res.error)) {
     handleSchemaCompatibilityFallback(res.error, {
       featureName: "normalized underwriting run history",

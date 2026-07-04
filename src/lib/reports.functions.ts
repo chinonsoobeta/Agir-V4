@@ -9,6 +9,7 @@ import { z } from "zod";
 import { verifyNumericProvenance } from "./engine";
 import { memoReportText } from "./memo-report";
 import { REPORT_BY_TYPE, REPORT_TYPES, type ReportType } from "./reports/report-definitions";
+import type { RunFreshness } from "./reports/report-common";
 
 const ReportTypeSchema = z.enum([
   "investor_report",
@@ -196,14 +197,9 @@ export const generateReport = createServerFn({ method: "POST" })
       data: { project_id: data.project_id },
       context,
     });
-    if (runState.freshness === "blocked") {
-      throw new Error("Underwriting blocked. Resolve inputs before generating this report.");
-    }
-    if (runState.freshness === "stale") {
-      throw new Error(
-        "Outputs stale. Re-run deterministic underwriting before generating this report.",
-      );
-    }
+    const { reportFreshnessBlockReason } = await import("./reports/report-common");
+    const freshnessBlockReason = reportFreshnessBlockReason(def, runState.freshness as RunFreshness);
+    if (freshnessBlockReason) throw new Error(freshnessBlockReason);
     const reportRun = runState.latest_completed_run as any | null;
     if (def.requiresUnderwriting && !reportRun?.id) {
       throw new Error("Run deterministic underwriting before generating this report.");

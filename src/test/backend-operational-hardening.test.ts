@@ -95,6 +95,7 @@ describe("backend operational hardening contract", () => {
       "demo_seed",
       "document_storage_recovery",
       "extraction_worker",
+      "run_history_write",
       "schema_maintenance",
       "scim_provisioning",
     ]);

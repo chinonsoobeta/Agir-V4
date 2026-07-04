@@ -42,6 +42,22 @@ export type ReportStatus =
   | "missing_project"
   | "missing_required_data";
 
+export type RunFreshness = "current" | "stale" | "blocked" | "unknown";
+
+export function reportFreshnessBlockReason(
+  def: ReportDefinition,
+  freshness: RunFreshness,
+): string | null {
+  if (!def.requiresUnderwriting) return null;
+  if (freshness === "blocked") {
+    return "Underwriting blocked. Resolve inputs before generating this report.";
+  }
+  if (freshness === "stale") {
+    return "Outputs stale. Re-run deterministic underwriting before generating this report.";
+  }
+  return null;
+}
+
 // Pure readiness decision, shared by the server fn and unit tests.
 export function computeReportStatus(
   def: ReportDefinition,

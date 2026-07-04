@@ -19,7 +19,12 @@ import { harbourSeedRows } from "@/lib/engine/harbour-fixture";
 import { ASSUMPTION_BY_KEY } from "@/lib/assumption-taxonomy";
 import { memoReportText } from "@/lib/memo-report";
 import { REPORT_DEFINITIONS, REPORT_BY_TYPE } from "@/lib/reports/report-definitions";
-import { computeReportStatus, deriveCore, reportAllowedValues } from "@/lib/reports/report-common";
+import {
+  computeReportStatus,
+  deriveCore,
+  reportAllowedValues,
+  reportFreshnessBlockReason,
+} from "@/lib/reports/report-common";
 import { buildReport } from "@/lib/reports/report-builders";
 import type { ReportData } from "@/lib/reports/report-data.server";
 import { renderReportXlsxArrayBuffer } from "@/lib/reports/report-xlsx";
@@ -242,6 +247,13 @@ describe("report readiness", () => {
     });
     expect(r.ready).toBe(true);
     expect(r.warnings.join(" ")).toMatch(/Underwriting has not run/);
+  });
+
+  test("freshness gate blocks only underwriting-dependent reports", () => {
+    expect(reportFreshnessBlockReason(inv, "stale")).toMatch(/Outputs stale/);
+    expect(reportFreshnessBlockReason(inv, "blocked")).toMatch(/Underwriting blocked/);
+    expect(reportFreshnessBlockReason(internal, "stale")).toBeNull();
+    expect(reportFreshnessBlockReason(internal, "blocked")).toBeNull();
   });
 });
 
