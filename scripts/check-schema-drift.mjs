@@ -57,14 +57,32 @@ async function main() {
 
   const client = new pg.Client({
     connectionString,
-    ssl: { rejectUnauthorized: false },
+    ssl: /localhost|127\.0\.0\.1/.test(connectionString) ? false : { rejectUnauthorized: false },
   });
   try {
     await client.connect();
-    const { rows } = await client.query(
-      "select version from supabase_migrations.schema_migrations order by version",
-    );
-    const applied = rows.map((r) => String(r.version)).sort();
+    const appliedRows = [];
+    const { rows: supabaseLedger } = await client.query("select to_regclass($1) as name", [
+      "supabase_migrations.schema_migrations",
+    ]);
+    if (supabaseLedger[0]?.name) {
+      const { rows } = await client.query(
+        "select version::text as version from supabase_migrations.schema_migrations",
+      );
+      appliedRows.push(...rows);
+    }
+    const { rows: publicLedger } = await client.query("select to_regclass($1) as name", [
+      "public.schema_migrations",
+    ]);
+    if (publicLedger[0]?.name) {
+      const { rows } = await client.query(
+        "select left(version::text, 14) as version from public.schema_migrations",
+      );
+      appliedRows.push(...rows);
+    }
+    const applied = Array.from(
+      new Set(appliedRows.map((r) => String(r.version).slice(0, 14))),
+    ).sort();
     const expectedSet = new Set(expected);
     const appliedSet = new Set(applied);
     const pending = expected.filter((v) => !appliedSet.has(v));
@@ -74,6 +92,47 @@ async function main() {
       if (pending.length) console.error(`  pending (in repo, not applied): ${pending.join(", ")}`);
       if (extra.length) console.error(`  extra (applied, not in repo):    ${extra.join(", ")}`);
       console.error("  Apply migrations (npm run migrate) or reconcile the repo before deploying.");
+      process.exit(1);
+    }
+    const required = [
+      ["public", "underwriting_runs", "id"],
+      ["public", "underwriting_runs", "run_number"],
+      ["public", "underwriting_runs", "input_fingerprint"],
+      ["public", "financial_outputs", "run_id"],
+      ["public", "investment_memos", "run_id"],
+      ["public", "decision_logs", "run_id"],
+      ["public", "cash_flows", "run_id"],
+      ["public", "reconciliation_flags", "run_id"],
+      ["public", "risk_register", "run_id"],
+    ];
+    const { rows: columnRows } = await client.query(
+      `
+        select table_schema, table_name, column_name
+        from information_schema.columns
+        where table_schema = 'public'
+          and (
+            (table_name = 'underwriting_runs' and column_name in ('id', 'run_number', 'input_fingerprint'))
+            or (table_name in (
+              'financial_outputs',
+              'investment_memos',
+              'decision_logs',
+              'cash_flows',
+              'reconciliation_flags',
+              'risk_register'
+            ) and column_name = 'run_id')
+          )
+      `,
+    );
+    const present = new Set(
+      columnRows.map((row) => `${row.table_schema}.${row.table_name}.${row.column_name}`),
+    );
+    const missingColumns = required
+      .map(([schema, table, column]) => `${schema}.${table}.${column}`)
+      .filter((key) => !present.has(key));
+    if (missingColumns.length) {
+      console.error(`[drift-gate] FAIL: run-version schema is incomplete via ${envVar}.`);
+      for (const key of missingColumns) console.error(`  missing: ${key}`);
+      console.error("  Apply migrations and refresh the schema cache before deploying.");
       process.exit(1);
     }
     console.log(`[drift-gate] PASS: ${applied.length} migrations in sync via ${envVar}.`);

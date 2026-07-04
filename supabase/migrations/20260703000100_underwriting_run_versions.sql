@@ -34,20 +34,56 @@ CREATE INDEX IF NOT EXISTS idx_underwriting_runs_project_status
 ALTER TABLE public.financial_outputs
   ADD COLUMN IF NOT EXISTS run_id UUID REFERENCES public.underwriting_runs(id) ON DELETE SET NULL;
 
+ALTER TABLE public.cash_flows
+  ADD COLUMN IF NOT EXISTS run_id UUID REFERENCES public.underwriting_runs(id) ON DELETE SET NULL;
+
+ALTER TABLE public.reconciliation_flags
+  ADD COLUMN IF NOT EXISTS run_id UUID REFERENCES public.underwriting_runs(id) ON DELETE SET NULL;
+
+ALTER TABLE public.risk_register
+  ADD COLUMN IF NOT EXISTS run_id UUID REFERENCES public.underwriting_runs(id) ON DELETE SET NULL;
+
 ALTER TABLE public.investment_memos
   ADD COLUMN IF NOT EXISTS run_id UUID REFERENCES public.underwriting_runs(id) ON DELETE SET NULL;
 
 ALTER TABLE public.decision_logs
   ADD COLUMN IF NOT EXISTS run_id UUID REFERENCES public.underwriting_runs(id) ON DELETE SET NULL;
 
+ALTER TABLE public.memo_snapshots
+  ADD COLUMN IF NOT EXISTS run_id UUID REFERENCES public.underwriting_runs(id) ON DELETE SET NULL;
+
 CREATE INDEX IF NOT EXISTS idx_financial_outputs_run_id
   ON public.financial_outputs (run_id);
+
+CREATE INDEX IF NOT EXISTS idx_cash_flows_run_id
+  ON public.cash_flows (run_id);
+
+CREATE INDEX IF NOT EXISTS idx_reconciliation_flags_run_id
+  ON public.reconciliation_flags (run_id);
+
+CREATE INDEX IF NOT EXISTS idx_risk_register_run_id
+  ON public.risk_register (run_id);
 
 CREATE INDEX IF NOT EXISTS idx_investment_memos_run_id
   ON public.investment_memos (run_id);
 
 CREATE INDEX IF NOT EXISTS idx_decision_logs_run_id
   ON public.decision_logs (run_id);
+
+CREATE INDEX IF NOT EXISTS idx_memo_snapshots_run_id
+  ON public.memo_snapshots (run_id);
+
+CREATE INDEX IF NOT EXISTS idx_financial_outputs_project_run
+  ON public.financial_outputs (project_id, run_id);
+
+CREATE INDEX IF NOT EXISTS idx_cash_flows_project_run
+  ON public.cash_flows (project_id, run_id);
+
+CREATE INDEX IF NOT EXISTS idx_reconciliation_flags_project_run
+  ON public.reconciliation_flags (project_id, run_id);
+
+CREATE INDEX IF NOT EXISTS idx_risk_register_project_run
+  ON public.risk_register (project_id, run_id);
 
 ALTER TABLE public.underwriting_runs ENABLE ROW LEVEL SECURITY;
 

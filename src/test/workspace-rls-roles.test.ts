@@ -13,6 +13,12 @@ import {
   canCastIcVote,
   canWriteIcCondition,
   canManageMember,
+  canRunUnderwriting,
+  canGenerateMemo,
+  canRecordDecision,
+  canExportAuditPackage,
+  canManageWorkspace,
+  FIRM_ROLE_WORKSPACE_ROLE,
   type RoleViewer,
   type ParentProject,
   type WorkspaceRole,
@@ -61,6 +67,26 @@ describe("workspace role matrix: deal-child rows", () => {
     expect(canWriteDealChild(personal, member)).toBe(true); // u-member owns it
     expect(canManageProject(personal, member)).toBe(true);
     expect(canWriteDealChild(personal, owner)).toBe(false); // different user, no workspace
+  });
+
+  test("institutional role helpers map to existing workspace enforcement", () => {
+    expect(FIRM_ROLE_WORKSPACE_ROLE).toEqual({
+      analyst: "member",
+      associate: "member",
+      vp: "admin",
+      ic_member: "member",
+      admin: "admin",
+      auditor: "viewer",
+    });
+    expect(canRunUnderwriting(project, member)).toBe(true);
+    expect(canGenerateMemo(project, member)).toBe(true);
+    expect(canRecordDecision(project, member)).toBe(true);
+    expect(canExportAuditPackage(project, viewer)).toBe(true);
+    expect(canRunUnderwriting(project, viewer)).toBe(false);
+    expect(canGenerateMemo(project, viewer)).toBe(false);
+    expect(canRecordDecision(project, viewer)).toBe(false);
+    expect(canManageWorkspace(project, admin)).toBe(true);
+    expect(canManageWorkspace(project, member)).toBe(false);
   });
 });
 

@@ -10,8 +10,13 @@ import { z } from "zod";
 import {
   acceptDefaultsForContext,
   getEngineInputForContext,
+  getLatestCompletedRunOutputsForContext,
   getUnderwritingRunStateForContext,
   getUnderwritingReadinessForContext,
+  listCashFlowsForRunForContext,
+  listFinancialOutputsForRunForContext,
+  listReconciliationFlagsForRunForContext,
+  listRisksForRunForContext,
   listUnderwritingRunsForContext,
   listReconciliationFlagsForContext,
   resolveConflictForContext,
@@ -38,6 +43,11 @@ const ListRunsSchema = z.object({
   limit: z.number().int().min(1).max(25).optional(),
 });
 
+const RunOutputsSchema = z.object({
+  project_id: z.string().uuid(),
+  run_id: z.string().uuid(),
+});
+
 export const getEngineInput = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((d: { project_id: string }) => ProjectIdSchema.parse(d))
@@ -57,6 +67,31 @@ export const listUnderwritingRuns = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((d: { project_id: string; limit?: number }) => ListRunsSchema.parse(d))
   .handler(listUnderwritingRunsForContext);
+
+export const getLatestCompletedRunOutputs = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { project_id: string }) => ProjectIdSchema.parse(d))
+  .handler(getLatestCompletedRunOutputsForContext);
+
+export const listFinancialOutputsForRun = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { project_id: string; run_id: string }) => RunOutputsSchema.parse(d))
+  .handler(listFinancialOutputsForRunForContext);
+
+export const listCashFlowsForRun = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { project_id: string; run_id: string }) => RunOutputsSchema.parse(d))
+  .handler(listCashFlowsForRunForContext);
+
+export const listReconciliationFlagsForRun = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { project_id: string; run_id: string }) => RunOutputsSchema.parse(d))
+  .handler(listReconciliationFlagsForRunForContext);
+
+export const listRisksForRun = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { project_id: string; run_id: string }) => RunOutputsSchema.parse(d))
+  .handler(listRisksForRunForContext);
 
 export const acceptDefaults = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

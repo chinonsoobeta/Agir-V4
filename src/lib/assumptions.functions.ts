@@ -1371,7 +1371,11 @@ export const recordDecision = createServerFn({ method: "POST" })
       data: { project_id: data.project_id },
       context,
     });
-    const decisionRun = runState.latest_completed_run as { id: string; run_number: number } | null;
+    const decisionRun = runState.latest_completed_run as {
+      id: string;
+      run_number: number;
+      input_fingerprint?: string;
+    } | null;
     const decisionInsert = {
       project_id: data.project_id,
       owner_id: context.userId,
@@ -1402,6 +1406,7 @@ export const recordDecision = createServerFn({ method: "POST" })
       decision: data.decision,
       run_id: decisionRun?.id ?? null,
       run_number: decisionRun?.run_number ?? null,
+      input_fingerprint: decisionRun?.input_fingerprint ?? null,
       run_freshness: runState.freshness,
     });
     // Freeze exactly what the committee saw behind an immutable version, tied to

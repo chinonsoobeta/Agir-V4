@@ -119,10 +119,10 @@ export const generateMemo = createServerFn({ method: "POST" })
 
     const assumptions = assumptionsRes.data ?? [];
     const engineInputs = engineInputsRes.data ?? [];
-    const outputs = outputsRes.data ?? [];
-    const cashFlows = cashFlowsRes.data ?? [];
-    const flags = flagsRes.data ?? [];
-    const risks = risksRes.data ?? [];
+    let outputs = outputsRes.data ?? [];
+    let cashFlows = cashFlowsRes.data ?? [];
+    let flags = flagsRes.data ?? [];
+    let risks = risksRes.data ?? [];
     const documents = documentsRes.data ?? [];
 
     if (!outputs.length) {
@@ -141,6 +141,14 @@ export const generateMemo = createServerFn({ method: "POST" })
     }
     const memoRun =
       runState.freshness === "current" ? (runState.latest_completed_run as any) : null;
+    if (memoRun?.id) {
+      const { getLatestCompletedRunOutputsForContext } = await import("./underwriting.server");
+      const scoped = await getLatestCompletedRunOutputsForContext({ data, context });
+      if (scoped.outputs.length) outputs = scoped.outputs as typeof outputs;
+      if (scoped.cash_flows.length) cashFlows = scoped.cash_flows as typeof cashFlows;
+      if (scoped.reconciliation_flags.length) flags = scoped.reconciliation_flags as typeof flags;
+      if (scoped.risks.length) risks = scoped.risks as typeof risks;
+    }
 
     const outputValue = (scenario: string, key: string) =>
       Number(
@@ -367,7 +375,9 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
           ? {
               id: memoRun.id,
               run_number: memoRun.run_number,
+              run_mode: memoRun.run_mode,
               input_fingerprint: memoRun.input_fingerprint,
+              output_fingerprint: memoRun.output_fingerprint,
             }
           : null,
         unresolved_error_flags: errorFlags,
@@ -406,6 +416,7 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
       payload: {
         run_id: memoRun?.id ?? null,
         run_number: memoRun?.run_number ?? null,
+        input_fingerprint: memoRun?.input_fingerprint ?? null,
         verification_pass: provenance.pass,
         generation_mode,
       },

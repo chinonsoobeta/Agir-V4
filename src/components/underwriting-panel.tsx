@@ -722,7 +722,10 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
           </span>
         </form>
         <div className="mt-3 flex flex-wrap gap-1.5">
-          <Badge variant="outline" className="text-[11px] bg-success/10 text-success border-success/30">
+          <Badge
+            variant="outline"
+            className="text-[11px] bg-success/10 text-success border-success/30"
+          >
             Ready to run
           </Badge>
           {outputsStale ? (
@@ -1235,7 +1238,13 @@ function RunHistory({
     if (!latest || !previous) return [];
     const prev = outputMap(previous.output_snapshot);
     const next = outputMap(latest.output_snapshot);
-    const rows: Array<{ key: string; label: string; was: unknown; now: unknown; unit: string | null }> = [];
+    const rows: Array<{
+      key: string;
+      label: string;
+      was: unknown;
+      now: unknown;
+      unit: string | null;
+    }> = [];
     for (const key of new Set([...prev.keys(), ...next.keys()])) {
       const a = prev.get(key);
       const b = next.get(key);
@@ -1713,7 +1722,7 @@ export function MemoSection({ projectId }: { projectId: string }) {
   const latest: any = memos[0] ?? null;
   const content = (latest?.content ?? {}) as Record<string, any>;
   const memoRun = content.run_version as
-    | { id?: string; run_number?: number; input_fingerprint?: string }
+    | { id?: string; run_number?: number; run_mode?: string; input_fingerprint?: string }
     | null
     | undefined;
   const memoStale =
@@ -1763,6 +1772,14 @@ export function MemoSection({ projectId }: { projectId: string }) {
                 Memo stale
               </Badge>
             )}
+            {memoStale && (
+              <Badge
+                variant="outline"
+                className="text-[11px] bg-warning/10 text-warning border-warning/30"
+              >
+                Inputs changed after memo run
+              </Badge>
+            )}
             {latestStatus && (
               <Badge variant="outline" className="text-[11px] uppercase">
                 {latestStatus}
@@ -1788,8 +1805,8 @@ export function MemoSection({ projectId }: { projectId: string }) {
               : runState.freshness === "blocked"
                 ? "Underwriting blocked. Resolve inputs before generating a memo."
                 : debug.can_generate
-              ? "Generate the memo from deterministic outputs and approved assumptions."
-              : debug.blocking_reasons.join(" ")
+                  ? "Generate the memo from deterministic outputs and approved assumptions."
+                  : debug.blocking_reasons.join(" ")
           }
         >
           <FileText className="size-4 mr-1" />
@@ -1904,6 +1921,26 @@ export function MemoSection({ projectId }: { projectId: string }) {
             {memoRun?.run_number && (
               <Badge variant="outline" className="text-[11px]">
                 Run version v{memoRun.run_number}
+              </Badge>
+            )}
+            {memoRun?.run_mode && (
+              <Badge variant="outline" className="text-[11px]">
+                {memoRun.run_mode === "deterministic"
+                  ? "Deterministic run"
+                  : "AI-assisted defaults"}
+              </Badge>
+            )}
+            {memoRun?.input_fingerprint && (
+              <Badge variant="outline" className="text-[11px] font-mono">
+                Input {shortHash(memoRun.input_fingerprint)}
+              </Badge>
+            )}
+            {verificationPassed != null && (
+              <Badge
+                variant="outline"
+                className={`text-[11px] ${verificationPassed ? "bg-success/10 text-success border-success/30" : "bg-warning/10 text-warning border-warning/30"}`}
+              >
+                {verificationPassed ? "Verification passed" : "Verification review"}
               </Badge>
             )}
             {content.deterministic_verdict?.code && (

@@ -62,3 +62,106 @@ export function buildCustomerAuditPackage(input: CustomerAuditPackageInput): Cus
     },
   };
 }
+
+export type DealRunAuditPackageInput = {
+  generatedAt: string;
+  project: Record<string, unknown>;
+  run: {
+    id: string;
+    run_number: number;
+    run_mode: string;
+    status: string;
+    input_fingerprint: string;
+    output_fingerprint?: string | null;
+    accepted_defaults_used?: unknown;
+    conflict_resolutions_used?: unknown;
+  };
+  approvedInputs: unknown[];
+  acceptedDefaults: unknown[];
+  conflictResolutions: unknown[];
+  outputs: unknown[];
+  reconciliationFlags: unknown[];
+  risks: unknown[];
+  memo: { id: string; status?: string | null; run_id?: string | null } | null;
+  decision: { id: string; decision?: string | null; run_id?: string | null } | null;
+  auditEvents: Array<{
+    id: string;
+    action: string;
+    entity_type?: string | null;
+    created_at?: string;
+  }>;
+};
+
+export type DealRunAuditPackage = {
+  manifest: {
+    schema: "agir.deal-run-audit-package.v1";
+    project_id: string | null;
+    run_id: string;
+    run_number: number;
+    input_fingerprint: string;
+    generated_at: string;
+    counts: {
+      approved_inputs: number;
+      accepted_defaults: number;
+      conflict_resolutions: number;
+      outputs: number;
+      reconciliation_flags: number;
+      risks: number;
+      audit_events: number;
+    };
+  };
+  payload: {
+    project: Record<string, unknown>;
+    run: DealRunAuditPackageInput["run"];
+    approved_inputs: unknown[];
+    accepted_defaults: unknown[];
+    conflict_resolutions: unknown[];
+    outputs: unknown[];
+    reconciliation_flags: unknown[];
+    risk_register: unknown[];
+    memo: DealRunAuditPackageInput["memo"];
+    ic_decision: DealRunAuditPackageInput["decision"];
+    audit_events: DealRunAuditPackageInput["auditEvents"];
+  };
+};
+
+export function buildDealRunAuditPackage(input: DealRunAuditPackageInput): DealRunAuditPackage {
+  const projectId =
+    typeof input.project.id === "string"
+      ? input.project.id
+      : typeof input.project.project_id === "string"
+        ? input.project.project_id
+        : null;
+  return {
+    manifest: {
+      schema: "agir.deal-run-audit-package.v1",
+      project_id: projectId,
+      run_id: input.run.id,
+      run_number: input.run.run_number,
+      input_fingerprint: input.run.input_fingerprint,
+      generated_at: input.generatedAt,
+      counts: {
+        approved_inputs: input.approvedInputs.length,
+        accepted_defaults: input.acceptedDefaults.length,
+        conflict_resolutions: input.conflictResolutions.length,
+        outputs: input.outputs.length,
+        reconciliation_flags: input.reconciliationFlags.length,
+        risks: input.risks.length,
+        audit_events: input.auditEvents.length,
+      },
+    },
+    payload: {
+      project: input.project,
+      run: input.run,
+      approved_inputs: input.approvedInputs,
+      accepted_defaults: input.acceptedDefaults,
+      conflict_resolutions: input.conflictResolutions,
+      outputs: input.outputs,
+      reconciliation_flags: input.reconciliationFlags,
+      risk_register: input.risks,
+      memo: input.memo,
+      ic_decision: input.decision,
+      audit_events: input.auditEvents,
+    },
+  };
+}

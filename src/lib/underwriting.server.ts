@@ -38,7 +38,7 @@ import {
 import { generateFindings } from "./findings";
 import { reconcileRecommendation } from "./decision";
 import { AI_AUTHORITY_NOTE } from "./ai-authority";
-import { handleSchemaCompatibilityFallback, isMissingRelation } from "./db-compat";
+import { handleSchemaCompatibilityFallback, isMissingColumn, isMissingRelation } from "./db-compat";
 
 // Taxonomy (review queue) → engine key mapping. Conflicting review-queue rows
 // are surfaced to readiness through this mapping so a conflicted key blocks
@@ -138,6 +138,55 @@ function outputSnapshot(rows: Array<Record<string, unknown>>) {
     unit: row.unit ?? null,
     formula_text: row.formula_text ?? null,
   }));
+}
+
+function withoutRunId<T extends Record<string, unknown>>(rows: T[]) {
+  return rows.map((row) => {
+    const compat = { ...row };
+    delete compat.run_id;
+    return compat;
+  });
+}
+
+async function insertRowsWithRunIdCompatibility(
+  supabase: any,
+  table: string,
+  rows: Array<Record<string, unknown>>,
+  operation: string,
+) {
+  const insert = await supabase.from(table).insert(rows);
+  if (!isMissingColumn(insert.error)) return insert;
+
+  handleSchemaCompatibilityFallback(insert.error, {
+    featureName: "underwriting run scoped outputs",
+    table,
+    column: "run_id",
+    operation,
+    fallback: null,
+  });
+  return supabase.from(table).insert(withoutRunId(rows));
+}
+
+async function stampLatestRowsWithRunId(
+  supabase: any,
+  projectId: string,
+  runId: string,
+  tables: string[],
+) {
+  for (const table of tables) {
+    const write = await supabase.from(table).update({ run_id: runId }).eq("project_id", projectId);
+    if (!isMissingColumn(write.error)) {
+      if (write.error) throw new Error(write.error.message);
+      continue;
+    }
+    handleSchemaCompatibilityFallback(write.error, {
+      featureName: "underwriting run scoped outputs",
+      table,
+      column: "run_id",
+      operation: "stamp latest rows with run id",
+      fallback: null,
+    });
+  }
 }
 
 async function nextRunNumber(ctx: any, projectId: string) {
@@ -944,6 +993,14 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
         source: "cached_completed_job",
         input_fingerprint: inputFingerprint,
       });
+      if (cachedRun?.id) {
+        await stampLatestRowsWithRunId(context.supabase, data.project_id, cachedRun.id, [
+          "financial_outputs",
+          "cash_flows",
+          "reconciliation_flags",
+          "risk_register",
+        ]);
+      }
       return {
         ...(runJob.result_json as any),
         run_version: cachedRun
@@ -1168,7 +1225,12 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
   if (completedRun) {
     for (const row of outputInserts) row.run_id = completedRun.id;
   }
-  const { error: outErr } = await context.supabase.from("financial_outputs").insert(outputInserts);
+  const { error: outErr } = await insertRowsWithRunIdCompatibility(
+    context.supabase,
+    "financial_outputs",
+    outputInserts,
+    "insert financial outputs",
+  );
   if (outErr) throw new Error(outErr.message);
 
   const cashFlowInserts = scenarioOutputs.flatMap(({ key: scenarioKey, output }) =>
@@ -1179,28 +1241,49 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
       period_year: row.periodYear,
       line_key: row.lineKey,
       amount: row.amount,
+      run_id: completedRun?.id ?? null,
     })),
   );
   if (cashFlowInserts.length) {
-    const { error } = await context.supabase.from("cash_flows").insert(cashFlowInserts);
+    const { error } = await insertRowsWithRunIdCompatibility(
+      context.supabase,
+      "cash_flows",
+      cashFlowInserts,
+      "insert cash flows",
+    );
     if (error) throw new Error(error.message);
   }
 
   if (flags.length) {
-    const { error } = await context.supabase
-      .from("reconciliation_flags")
-      .insert(
-        flags.map((flag) => ({ project_id: data.project_id, owner_id: context.userId, ...flag })),
-      );
+    const flagRows = flags.map((flag) => ({
+      project_id: data.project_id,
+      owner_id: context.userId,
+      run_id: completedRun?.id ?? null,
+      ...flag,
+    }));
+    const { error } = await insertRowsWithRunIdCompatibility(
+      context.supabase,
+      "reconciliation_flags",
+      flagRows,
+      "insert reconciliation flags",
+    );
     if (error) throw new Error(error.message);
   }
 
   if (risks.length) {
-    await context.supabase
-      .from("risk_register")
-      .insert(
-        risks.map((risk) => ({ project_id: data.project_id, owner_id: context.userId, ...risk })),
-      );
+    const riskRows = risks.map((risk) => ({
+      project_id: data.project_id,
+      owner_id: context.userId,
+      run_id: completedRun?.id ?? null,
+      ...risk,
+    }));
+    const { error } = await insertRowsWithRunIdCompatibility(
+      context.supabase,
+      "risk_register",
+      riskRows,
+      "insert risk register",
+    );
+    if (error) throw new Error(error.message);
   }
 
   const { writeAuditEvent } = await import("./audit.server");
@@ -1284,6 +1367,179 @@ export async function listUnderwritingRunsForContext({
   return rows ?? [];
 }
 
+async function getUnderwritingRunForProject(supabase: any, projectId: string, runId: string) {
+  const { data: run, error } = await supabase
+    .from("underwriting_runs")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("id", runId)
+    .maybeSingle();
+  if (isMissingRelation(error)) {
+    return handleSchemaCompatibilityFallback(error, {
+      featureName: "underwriting run versions",
+      table: "underwriting_runs",
+      operation: "load run version",
+      fallback: null,
+    });
+  }
+  if (error) throw new Error(error.message);
+  return run ?? null;
+}
+
+export async function getLatestCompletedRunForContext({
+  data,
+  context,
+}: {
+  data: { project_id: string };
+  context: any;
+}) {
+  const { data: run, error } = await context.supabase
+    .from("underwriting_runs")
+    .select("*")
+    .eq("project_id", data.project_id)
+    .eq("status", "completed")
+    .order("run_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (isMissingRelation(error)) {
+    return handleSchemaCompatibilityFallback(error, {
+      featureName: "underwriting run versions",
+      table: "underwriting_runs",
+      operation: "load latest completed run",
+      fallback: null,
+    });
+  }
+  if (error) throw new Error(error.message);
+  return run ?? null;
+}
+
+async function selectRunScopedRows(
+  supabase: any,
+  table: string,
+  projectId: string,
+  runId: string,
+  select = "*",
+) {
+  const res = await supabase
+    .from(table)
+    .select(select)
+    .eq("project_id", projectId)
+    .eq("run_id", runId);
+  if (!isMissingColumn(res.error)) return res;
+
+  handleSchemaCompatibilityFallback(res.error, {
+    featureName: "underwriting run scoped outputs",
+    table,
+    column: "run_id",
+    operation: "load run scoped rows",
+    fallback: null,
+  });
+  return { data: [], error: null };
+}
+
+export async function listFinancialOutputsForRunForContext({
+  data,
+  context,
+}: {
+  data: { project_id: string; run_id: string };
+  context: any;
+}) {
+  const run = await getUnderwritingRunForProject(context.supabase, data.project_id, data.run_id);
+  if (!run) return [];
+  const { data: rows, error } = await selectRunScopedRows(
+    context.supabase,
+    "financial_outputs",
+    data.project_id,
+    data.run_id,
+  );
+  if (error) throw new Error(error.message);
+  if ((rows ?? []).length) return rows ?? [];
+  return Array.isArray(run.output_snapshot) ? run.output_snapshot : [];
+}
+
+export async function listCashFlowsForRunForContext({
+  data,
+  context,
+}: {
+  data: { project_id: string; run_id: string };
+  context: any;
+}) {
+  const { data: rows, error } = await selectRunScopedRows(
+    context.supabase,
+    "cash_flows",
+    data.project_id,
+    data.run_id,
+  );
+  if (error) throw new Error(error.message);
+  return rows ?? [];
+}
+
+export async function listReconciliationFlagsForRunForContext({
+  data,
+  context,
+}: {
+  data: { project_id: string; run_id: string };
+  context: any;
+}) {
+  const { data: rows, error } = await selectRunScopedRows(
+    context.supabase,
+    "reconciliation_flags",
+    data.project_id,
+    data.run_id,
+  );
+  if (error) throw new Error(error.message);
+  return rows ?? [];
+}
+
+export async function listRisksForRunForContext({
+  data,
+  context,
+}: {
+  data: { project_id: string; run_id: string };
+  context: any;
+}) {
+  const { data: rows, error } = await selectRunScopedRows(
+    context.supabase,
+    "risk_register",
+    data.project_id,
+    data.run_id,
+  );
+  if (error) throw new Error(error.message);
+  return rows ?? [];
+}
+
+export async function getLatestCompletedRunOutputsForContext({
+  data,
+  context,
+}: {
+  data: { project_id: string };
+  context: any;
+}) {
+  const run = await getLatestCompletedRunForContext({ data, context });
+  if (!run) {
+    return { run: null, outputs: [], cash_flows: [], reconciliation_flags: [], risks: [] };
+  }
+  const [outputs, cashFlows, flags, risks] = await Promise.all([
+    listFinancialOutputsForRunForContext({
+      data: { project_id: data.project_id, run_id: run.id },
+      context,
+    }),
+    listCashFlowsForRunForContext({
+      data: { project_id: data.project_id, run_id: run.id },
+      context,
+    }),
+    listReconciliationFlagsForRunForContext({
+      data: { project_id: data.project_id, run_id: run.id },
+      context,
+    }),
+    listRisksForRunForContext({
+      data: { project_id: data.project_id, run_id: run.id },
+      context,
+    }),
+  ]);
+  return { run, outputs, cash_flows: cashFlows, reconciliation_flags: flags, risks };
+}
+
 export async function getUnderwritingRunStateForContext({
   data,
   context,
@@ -1296,9 +1552,7 @@ export async function getUnderwritingRunStateForContext({
     data: { project_id: data.project_id, limit: 10 },
     context,
   });
-  const latestCompleted =
-    runs.find((run: any) => run.status === "completed") ??
-    null;
+  const latestCompleted = runs.find((run: any) => run.status === "completed") ?? null;
   const latestRun = runs[0] ?? null;
   const freshness =
     basis.readiness.status === "blocked"

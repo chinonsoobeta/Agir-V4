@@ -487,6 +487,7 @@ export type Database = {
           owner_id: string;
           period_year: number;
           project_id: string;
+          run_id: string | null;
           scenario_key: string;
         };
         Insert: {
@@ -497,6 +498,7 @@ export type Database = {
           owner_id: string;
           period_year: number;
           project_id: string;
+          run_id?: string | null;
           scenario_key?: string;
         };
         Update: {
@@ -507,6 +509,7 @@ export type Database = {
           owner_id?: string;
           period_year?: number;
           project_id?: string;
+          run_id?: string | null;
           scenario_key?: string;
         };
         Relationships: [
@@ -515,6 +518,13 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "cash_flows_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "underwriting_runs";
             referencedColumns: ["id"];
           },
         ];
@@ -1543,6 +1553,7 @@ export type Database = {
           owner_id: string;
           project_id: string;
           report_json: Json;
+          run_id: string | null;
           verdict_code: string | null;
           version: number;
         };
@@ -1559,6 +1570,7 @@ export type Database = {
           owner_id: string;
           project_id: string;
           report_json: Json;
+          run_id?: string | null;
           verdict_code?: string | null;
           version: number;
         };
@@ -1575,6 +1587,7 @@ export type Database = {
           owner_id?: string;
           project_id?: string;
           report_json?: Json;
+          run_id?: string | null;
           verdict_code?: string | null;
           version?: number;
         };
@@ -1598,6 +1611,13 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "memo_snapshots_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "underwriting_runs";
             referencedColumns: ["id"];
           },
         ];
@@ -1846,6 +1866,7 @@ export type Database = {
           owner_id: string;
           project_id: string;
           resolved: boolean;
+          run_id: string | null;
           severity: Database["public"]["Enums"]["reconciliation_severity"];
         };
         Insert: {
@@ -1858,6 +1879,7 @@ export type Database = {
           owner_id: string;
           project_id: string;
           resolved?: boolean;
+          run_id?: string | null;
           severity?: Database["public"]["Enums"]["reconciliation_severity"];
         };
         Update: {
@@ -1870,6 +1892,7 @@ export type Database = {
           owner_id?: string;
           project_id?: string;
           resolved?: boolean;
+          run_id?: string | null;
           severity?: Database["public"]["Enums"]["reconciliation_severity"];
         };
         Relationships: [
@@ -1878,6 +1901,13 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "reconciliation_flags_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "underwriting_runs";
             referencedColumns: ["id"];
           },
         ];
@@ -2022,6 +2052,7 @@ export type Database = {
           project_id: string;
           related_assumption_id: string | null;
           risk_type: string;
+          run_id: string | null;
           severity: Database["public"]["Enums"]["risk_severity"];
           title: string;
         };
@@ -2033,6 +2064,7 @@ export type Database = {
           project_id: string;
           related_assumption_id?: string | null;
           risk_type: string;
+          run_id?: string | null;
           severity?: Database["public"]["Enums"]["risk_severity"];
           title: string;
         };
@@ -2044,6 +2076,7 @@ export type Database = {
           project_id?: string;
           related_assumption_id?: string | null;
           risk_type?: string;
+          run_id?: string | null;
           severity?: Database["public"]["Enums"]["risk_severity"];
           title?: string;
         };
@@ -2060,6 +2093,13 @@ export type Database = {
             columns: ["related_assumption_id"];
             isOneToOne: false;
             referencedRelation: "assumptions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "risk_register_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "underwriting_runs";
             referencedColumns: ["id"];
           },
         ];

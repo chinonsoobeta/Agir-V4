@@ -42,6 +42,7 @@ export function canWriteRow(row: TenantRow, viewer: Viewer): boolean {
 // real enforcement.
 
 export type WorkspaceRole = "owner" | "admin" | "member" | "viewer";
+export type FirmRole = "analyst" | "associate" | "vp" | "ic_member" | "admin" | "auditor";
 // The caller's role per workspace they belong to (absent => not a member).
 export type RoleViewer = { userId: string; roles: Record<string, WorkspaceRole> };
 // A parent project a deal-child / governance row hangs off.
@@ -51,6 +52,15 @@ export type ParentProject = { owner_id: string; workspace_id: string | null };
 const WRITE_ROLES: ReadonlySet<WorkspaceRole> = new Set(["owner", "admin", "member"]);
 // Roles permitted to manage the project itself (UPDATE/DELETE) and members.
 const ADMIN_ROLES: ReadonlySet<WorkspaceRole> = new Set(["owner", "admin"]);
+
+export const FIRM_ROLE_WORKSPACE_ROLE: Record<FirmRole, WorkspaceRole> = {
+  analyst: "member",
+  associate: "member",
+  vp: "admin",
+  ic_member: "member",
+  admin: "admin",
+  auditor: "viewer",
+};
 
 export function workspaceRole(
   workspaceId: string | null,
@@ -84,6 +94,26 @@ export function canManageProject(project: ParentProject, viewer: RoleViewer): bo
   if (project.workspace_id == null) return project.owner_id === viewer.userId;
   const role = workspaceRole(project.workspace_id, viewer);
   return role != null && ADMIN_ROLES.has(role);
+}
+
+export function canRunUnderwriting(parent: ParentProject, viewer: RoleViewer): boolean {
+  return canWriteDealChild(parent, viewer);
+}
+
+export function canGenerateMemo(parent: ParentProject, viewer: RoleViewer): boolean {
+  return canWriteDealChild(parent, viewer);
+}
+
+export function canRecordDecision(parent: ParentProject, viewer: RoleViewer): boolean {
+  return canWriteDealChild(parent, viewer);
+}
+
+export function canExportAuditPackage(parent: ParentProject, viewer: RoleViewer): boolean {
+  return canReadDealChild(parent, viewer);
+}
+
+export function canManageWorkspace(project: ParentProject, viewer: RoleViewer): boolean {
+  return canManageProject(project, viewer);
 }
 
 // Casting an IC vote: a non-viewer collaborator may write only their OWN vote.

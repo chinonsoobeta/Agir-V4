@@ -8,7 +8,18 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
-import { isMissingRelation } from "./db-compat";
+import { handleSchemaCompatibilityFallback, isMissingColumn, isMissingRelation } from "./db-compat";
+
+type MemoSnapshotListRow = {
+  id: string;
+  version: number;
+  verdict_code: string | null;
+  content_hash: string;
+  decision_id: string | null;
+  run_id?: string | null;
+  created_at: string;
+  created_by_name: string | null;
+};
 
 export const createMemoSnapshot = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -22,11 +33,31 @@ export const listMemoSnapshots = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { data: rows, error } = await context.supabase
+    let read: {
+      data: MemoSnapshotListRow[] | null;
+      error: { code?: string; message?: string } | null;
+    } = await context.supabase
       .from("memo_snapshots")
-      .select("id, version, verdict_code, content_hash, decision_id, created_at, created_by_name")
+      .select(
+        "id, version, verdict_code, content_hash, decision_id, run_id, created_at, created_by_name",
+      )
       .eq("project_id", data.project_id)
       .order("version", { ascending: false });
+    if (isMissingColumn(read.error)) {
+      handleSchemaCompatibilityFallback(read.error, {
+        featureName: "memo snapshot run binding",
+        table: "memo_snapshots",
+        column: "run_id",
+        operation: "list memo snapshots",
+        fallback: null,
+      });
+      read = await context.supabase
+        .from("memo_snapshots")
+        .select("id, version, verdict_code, content_hash, decision_id, created_at, created_by_name")
+        .eq("project_id", data.project_id)
+        .order("version", { ascending: false });
+    }
+    const { data: rows, error } = read;
     if (isMissingRelation(error)) return [];
     if (error) throw new Error(error.message);
     return rows ?? [];

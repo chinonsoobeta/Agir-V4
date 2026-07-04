@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/integrations/supabase/types";
-import { isMissingRelation } from "./db-compat";
+import { handleSchemaCompatibilityFallback, isMissingColumn, isMissingRelation } from "./db-compat";
 import { stableJsonHash } from "./hash.server";
 
 const SNAPSHOT_ASSUMPTION_STATUSES: Database["public"]["Enums"]["assumption_status"][] = [
@@ -36,13 +36,14 @@ async function loadSnapshotInputs(ctx: Ctx, projectId: string) {
       .eq("project_id", projectId),
     ctx.supabase
       .from("investment_memos")
-      .select("id, content, status, created_at")
+      .select("id, run_id, content, status, created_at")
       .eq("project_id", projectId)
       .order("created_at", { ascending: false })
       .limit(1),
   ]);
   const memo = (memos ?? [])[0] ?? null;
   const memoReport = asRecord(asRecord(memo?.content)?.report);
+  const memoRun = asRecord(asRecord(memo?.content)?.run_version);
   const report = (asRecord(memo?.content)?.report ?? null) as Json;
   const verdictRow = (outputs ?? []).find((o) => o.metric_key === "verdict");
   const verdictRaw =
@@ -52,6 +53,12 @@ async function loadSnapshotInputs(ctx: Ctx, projectId: string) {
     assumptions: assumptions ?? [],
     outputs: outputs ?? [],
     memoId: memo?.id ?? null,
+    runId:
+      typeof memo?.run_id === "string"
+        ? memo.run_id
+        : typeof memoRun?.id === "string"
+          ? memoRun.id
+          : null,
     report,
     verdictCode,
   };
@@ -92,24 +99,39 @@ export async function createMemoSnapshotInternal(
   if (lastError) throw new Error(lastError.message);
   const version = (last?.version ?? 0) + 1;
 
-  const { data: row, error } = await ctx.supabase
-    .from("memo_snapshots")
-    .insert({
-      project_id: projectId,
-      owner_id: ctx.userId,
-      memo_id: inputs.memoId,
-      decision_id: decisionId,
-      version,
-      verdict_code: inputs.verdictCode,
-      assumptions_json: inputs.assumptions,
-      outputs_json: inputs.outputs,
-      report_json: inputs.report,
-      content_hash: contentHash,
-      created_by: ctx.userId,
-      created_by_name: createdByName,
-    })
-    .select()
-    .single();
+  const snapshotInsert = {
+    project_id: projectId,
+    owner_id: ctx.userId,
+    memo_id: inputs.memoId,
+    decision_id: decisionId,
+    run_id: inputs.runId,
+    version,
+    verdict_code: inputs.verdictCode,
+    assumptions_json: inputs.assumptions,
+    outputs_json: inputs.outputs,
+    report_json: inputs.report,
+    content_hash: contentHash,
+    created_by: ctx.userId,
+    created_by_name: createdByName,
+  };
+  let write = await ctx.supabase.from("memo_snapshots").insert(snapshotInsert).select().single();
+  if (isMissingColumn(write.error)) {
+    handleSchemaCompatibilityFallback(write.error, {
+      featureName: "memo snapshot run binding",
+      table: "memo_snapshots",
+      column: "run_id",
+      operation: "insert memo snapshot",
+      fallback: null,
+    });
+    const compatInsert: Record<string, unknown> = { ...snapshotInsert };
+    delete compatInsert.run_id;
+    write = await ctx.supabase
+      .from("memo_snapshots")
+      .insert(compatInsert as any)
+      .select()
+      .single();
+  }
+  const { data: row, error } = write;
   if (isMissingRelation(error)) {
     throw new Error("Memo snapshots need the latest database migration.");
   }
