@@ -16,6 +16,10 @@ const ReportTypeSchema = z.enum([
   "executive_summary",
   "internal_team_report",
 ]);
+const AuditPackageSchema = z.object({
+  project_id: z.string().uuid(),
+  run_id: z.string().uuid().optional(),
+});
 
 // Minimal structural shape of the count query this helper drives over arbitrary
 // tables. The concrete Supabase client is asserted to this at the call site (it
@@ -129,12 +133,17 @@ export const getReportReadiness = createServerFn({ method: "GET" })
 
     const { data: latest } = await context.supabase
       .from("generated_reports")
-      .select("generated_at")
+      .select("generated_at,run_id,input_fingerprint,output_fingerprint")
       .eq("project_id", project_id)
       .eq("report_type", report_type)
       .order("generated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    const { getUnderwritingRunStateForContext } = await import("./underwriting.server");
+    const runState = await getUnderwritingRunStateForContext({ data: { project_id }, context });
+    const reportStale =
+      !!latest?.input_fingerprint &&
+      latest.input_fingerprint !== runState.current_input_fingerprint;
 
     const { computeReportStatus } = await import("./reports/report-common");
     const decision = computeReportStatus(def, {
@@ -153,6 +162,13 @@ export const getReportReadiness = createServerFn({ method: "GET" })
       warnings: decision.warnings,
       counts,
       latest_generated_at: latest?.generated_at ?? null,
+      latest_report_run_id: latest?.run_id ?? null,
+      latest_report_input_fingerprint: latest?.input_fingerprint ?? null,
+      latest_report_output_fingerprint: latest?.output_fingerprint ?? null,
+      latest_completed_run: runState.latest_completed_run ?? null,
+      current_input_fingerprint: runState.current_input_fingerprint,
+      outputs_freshness: runState.freshness,
+      report_stale: reportStale,
       project_name: project.name,
       project_status: project.status,
     };
@@ -173,6 +189,35 @@ export const generateReport = createServerFn({ method: "POST" })
     const { loadReportData } = await import("./reports/report-data.server");
     const reportData = await loadReportData(context.supabase, data.project_id);
     if (!reportData.project) throw new Error("Project not found.");
+
+    const { getUnderwritingRunStateForContext, getLatestCompletedRunOutputsForContext } =
+      await import("./underwriting.server");
+    const runState = await getUnderwritingRunStateForContext({
+      data: { project_id: data.project_id },
+      context,
+    });
+    if (runState.freshness === "blocked") {
+      throw new Error("Underwriting blocked. Resolve inputs before generating this report.");
+    }
+    if (runState.freshness === "stale") {
+      throw new Error(
+        "Outputs stale. Re-run deterministic underwriting before generating this report.",
+      );
+    }
+    const reportRun = runState.latest_completed_run as any | null;
+    if (def.requiresUnderwriting && !reportRun?.id) {
+      throw new Error("Run deterministic underwriting before generating this report.");
+    }
+    if (reportRun?.id) {
+      const scoped = await getLatestCompletedRunOutputsForContext({
+        data: { project_id: data.project_id },
+        context,
+      });
+      reportData.outputs = scoped.outputs as typeof reportData.outputs;
+      reportData.cashFlows = scoped.cash_flows as typeof reportData.cashFlows;
+      reportData.flags = scoped.reconciliation_flags as typeof reportData.flags;
+      reportData.risks = scoped.risks as typeof reportData.risks;
+    }
 
     const baseOutputs = reportData.outputs.filter((o) => o.scenario_key === "base").length;
     if (def.requiresUnderwriting && baseOutputs === 0) {
@@ -198,8 +243,26 @@ export const generateReport = createServerFn({ method: "POST" })
       report,
       provenance,
       generatedAt,
+      run: reportRun
+        ? {
+            id: reportRun.id,
+            run_number: reportRun.run_number,
+            run_mode: reportRun.run_mode,
+            input_fingerprint: reportRun.input_fingerprint,
+            output_fingerprint: reportRun.output_fingerprint,
+          }
+        : null,
     });
     report.provenance_manifest = provenance_manifest;
+    (report as any).run_version = reportRun
+      ? {
+          id: reportRun.id,
+          run_number: reportRun.run_number,
+          run_mode: reportRun.run_mode,
+          input_fingerprint: reportRun.input_fingerprint,
+          output_fingerprint: reportRun.output_fingerprint,
+        }
+      : null;
     const verification_report = {
       report_type: data.report_type,
       pass: provenance.pass,
@@ -207,6 +270,10 @@ export const generateReport = createServerFn({ method: "POST" })
       orphans: provenance.orphans,
       verified_at: new Date().toISOString(),
       manifest: provenance_manifest,
+      run_id: reportRun?.id ?? null,
+      run_number: reportRun?.run_number ?? null,
+      input_fingerprint: reportRun?.input_fingerprint ?? null,
+      output_fingerprint: reportRun?.output_fingerprint ?? null,
     };
     const status = provenance.pass ? "generated" : "needs_review";
 
@@ -220,6 +287,11 @@ export const generateReport = createServerFn({ method: "POST" })
         status,
         content_json: { ...report, needs_review: !provenance.pass, provenance_manifest },
         verification_report,
+        run_id: reportRun?.id ?? null,
+        run_number: reportRun?.run_number ?? null,
+        run_mode: reportRun?.run_mode ?? null,
+        input_fingerprint: reportRun?.input_fingerprint ?? null,
+        output_fingerprint: reportRun?.output_fingerprint ?? null,
         generated_at: generatedAt,
       })
       .select("id")
@@ -246,3 +318,16 @@ export const generateReport = createServerFn({ method: "POST" })
   });
 
 export const REPORT_TYPE_LIST = REPORT_TYPES;
+
+export const exportDealRunAuditPackage = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => AuditPackageSchema.parse(d))
+  .handler(async ({ data, context }): Promise<any> => {
+    const { buildDealRunAuditPackageForContext } = await import("./deal-audit-package.server");
+    const pkg = await buildDealRunAuditPackageForContext(
+      context,
+      data.project_id,
+      data.run_id ?? null,
+    );
+    return JSON.parse(JSON.stringify(pkg));
+  });

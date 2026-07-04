@@ -1365,12 +1365,22 @@ export const recordDecision = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    const { assertWorkflowPermission } = await import("./workflow-permissions.server");
+    await assertWorkflowPermission(context, data.project_id, "canRecordDecision");
     const by = await userName(context);
     const { getUnderwritingRunStateForContext } = await import("./underwriting.server");
     const runState = await getUnderwritingRunStateForContext({
       data: { project_id: data.project_id },
       context,
     });
+    if (runState.freshness === "blocked") {
+      throw new Error("Underwriting blocked. Resolve inputs before recording an IC decision.");
+    }
+    if (runState.freshness === "stale") {
+      throw new Error(
+        "Outputs stale. Re-run deterministic underwriting before recording an IC decision.",
+      );
+    }
     const decisionRun = runState.latest_completed_run as {
       id: string;
       run_number: number;

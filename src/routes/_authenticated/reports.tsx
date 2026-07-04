@@ -26,7 +26,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { listProjects } from "@/lib/projects.functions";
-import { getReportReadiness, generateReport } from "@/lib/reports.functions";
+import {
+  exportDealRunAuditPackage,
+  generateReport,
+  getReportReadiness,
+} from "@/lib/reports.functions";
 import {
   REPORT_DEFINITIONS,
   type ReportDefinition,
@@ -172,7 +176,51 @@ function ProjectSelector({
         </SelectContent>
       </Select>
       {projectId && <ProjectStatusLine projectId={projectId} />}
+      {projectId && <AuditPackageButton projectId={projectId} />}
     </Card>
+  );
+}
+
+function AuditPackageButton({ projectId }: { projectId: string }) {
+  const exportFn = useServerFn(exportDealRunAuditPackage);
+  const [busy, setBusy] = useState(false);
+  async function run() {
+    setBusy(true);
+    try {
+      const pkg = (await exportFn({ data: { project_id: projectId } })) as {
+        manifest: { project_id?: string | null };
+      };
+      const name = `${safeName(String(pkg.manifest.project_id ?? "deal"))}_audit_package.json`;
+      const blob = new Blob([JSON.stringify(pkg, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Audit package downloaded");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Audit package export failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      onClick={run}
+      disabled={busy}
+      title={busy ? "Generating audit package." : "Download the latest run audit package."}
+    >
+      {busy ? (
+        <Loader2 className="size-3.5 mr-1 animate-spin" />
+      ) : (
+        <Shield className="size-3.5 mr-1" />
+      )}
+      Audit package
+    </Button>
   );
 }
 
@@ -185,7 +233,14 @@ function ProjectStatusLine({ projectId }: { projectId: string }) {
   });
   if (!data) return null;
   const c = data.counts;
-  const uw = c.base_outputs > 0 ? "Underwriting generated" : "Underwriting not run";
+  const uw =
+    data.outputs_freshness === "current"
+      ? "Outputs current"
+      : data.outputs_freshness === "stale"
+        ? "Outputs stale"
+        : c.base_outputs > 0
+          ? "Underwriting generated"
+          : "Underwriting not run";
   const memo = c.memos > 0 ? "Memo generated" : "No memo";
   return (
     <div className="text-xs text-muted-foreground sm:ml-auto">
@@ -323,6 +378,35 @@ function ReportCard({
               )}
             {lastGenerated && (
               <span className="text-xs text-muted-foreground">Last generated: {lastGenerated}</span>
+            )}
+            {readiness?.outputs_freshness === "current" && (
+              <Badge
+                variant="outline"
+                className="text-xs bg-success/10 text-success border-success/30"
+              >
+                Outputs current
+              </Badge>
+            )}
+            {readiness?.outputs_freshness === "stale" && (
+              <Badge
+                variant="outline"
+                className="text-xs bg-warning/10 text-warning border-warning/30"
+              >
+                Outputs stale
+              </Badge>
+            )}
+            {readiness?.report_stale && (
+              <Badge
+                variant="outline"
+                className="text-xs bg-warning/10 text-warning border-warning/30"
+              >
+                Report stale
+              </Badge>
+            )}
+            {readiness?.latest_completed_run?.run_number && (
+              <span className="text-xs text-muted-foreground">
+                Run version v{readiness.latest_completed_run.run_number}
+              </span>
             )}
           </div>
         </div>

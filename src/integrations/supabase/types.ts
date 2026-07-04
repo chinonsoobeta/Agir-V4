@@ -410,74 +410,6 @@ export type Database = {
           },
         ];
       };
-      underwriting_runs: {
-        Row: {
-          accepted_defaults_used: Json;
-          blocked_reasons: Json;
-          computed_at: string;
-          conflict_resolutions_used: Json;
-          created_at: string;
-          created_by: string;
-          id: string;
-          input_fingerprint: string;
-          input_snapshot: Json;
-          output_fingerprint: string | null;
-          output_snapshot: Json;
-          owner_id: string;
-          project_id: string;
-          run_mode: string;
-          run_number: number;
-          status: string;
-          verdict_code: string | null;
-        };
-        Insert: {
-          accepted_defaults_used?: Json;
-          blocked_reasons?: Json;
-          computed_at?: string;
-          conflict_resolutions_used?: Json;
-          created_at?: string;
-          created_by: string;
-          id?: string;
-          input_fingerprint: string;
-          input_snapshot?: Json;
-          output_fingerprint?: string | null;
-          output_snapshot?: Json;
-          owner_id: string;
-          project_id: string;
-          run_mode: string;
-          run_number: number;
-          status: string;
-          verdict_code?: string | null;
-        };
-        Update: {
-          accepted_defaults_used?: Json;
-          blocked_reasons?: Json;
-          computed_at?: string;
-          conflict_resolutions_used?: Json;
-          created_at?: string;
-          created_by?: string;
-          id?: string;
-          input_fingerprint?: string;
-          input_snapshot?: Json;
-          output_fingerprint?: string | null;
-          output_snapshot?: Json;
-          owner_id?: string;
-          project_id?: string;
-          run_mode?: string;
-          run_number?: number;
-          status?: string;
-          verdict_code?: string | null;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "underwriting_runs_project_id_fkey";
-            columns: ["project_id"];
-            isOneToOne: false;
-            referencedRelation: "projects";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
       cash_flows: {
         Row: {
           amount: number;
@@ -1213,9 +1145,14 @@ export type Database = {
           created_at: string;
           generated_at: string;
           id: string;
+          input_fingerprint: string | null;
+          output_fingerprint: string | null;
           owner_id: string;
           project_id: string;
           report_type: string;
+          run_id: string | null;
+          run_mode: string | null;
+          run_number: number | null;
           status: string;
           title: string | null;
           verification_report: Json | null;
@@ -1225,9 +1162,14 @@ export type Database = {
           created_at?: string;
           generated_at?: string;
           id?: string;
+          input_fingerprint?: string | null;
+          output_fingerprint?: string | null;
           owner_id: string;
           project_id: string;
           report_type: string;
+          run_id?: string | null;
+          run_mode?: string | null;
+          run_number?: number | null;
           status?: string;
           title?: string | null;
           verification_report?: Json | null;
@@ -1237,9 +1179,14 @@ export type Database = {
           created_at?: string;
           generated_at?: string;
           id?: string;
+          input_fingerprint?: string | null;
+          output_fingerprint?: string | null;
           owner_id?: string;
           project_id?: string;
           report_type?: string;
+          run_id?: string | null;
+          run_mode?: string | null;
+          run_number?: number | null;
           status?: string;
           title?: string | null;
           verification_report?: Json | null;
@@ -1250,6 +1197,13 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "generated_reports_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "underwriting_runs";
             referencedColumns: ["id"];
           },
         ];
@@ -2104,6 +2058,235 @@ export type Database = {
           },
         ];
       };
+      run_cash_flows: {
+        Row: {
+          amount: number;
+          computed_at: string;
+          id: string;
+          line_key: Database["public"]["Enums"]["cash_flow_line_key"];
+          owner_id: string;
+          period_year: number;
+          project_id: string;
+          run_id: string;
+          scenario_key: string;
+        };
+        Insert: {
+          amount: number;
+          computed_at?: string;
+          id?: string;
+          line_key: Database["public"]["Enums"]["cash_flow_line_key"];
+          owner_id: string;
+          period_year: number;
+          project_id: string;
+          run_id: string;
+          scenario_key?: string;
+        };
+        Update: {
+          amount?: number;
+          computed_at?: string;
+          id?: string;
+          line_key?: Database["public"]["Enums"]["cash_flow_line_key"];
+          owner_id?: string;
+          period_year?: number;
+          project_id?: string;
+          run_id?: string;
+          scenario_key?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "run_cash_flows_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "run_cash_flows_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "underwriting_runs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      run_financial_outputs: {
+        Row: {
+          computed_at: string;
+          formula_text: string | null;
+          id: string;
+          inputs: Json | null;
+          metric_key: string;
+          metric_label: string | null;
+          owner_id: string;
+          project_id: string;
+          run_id: string;
+          scenario_key: string;
+          unit: string | null;
+          value_numeric: number | null;
+        };
+        Insert: {
+          computed_at?: string;
+          formula_text?: string | null;
+          id?: string;
+          inputs?: Json | null;
+          metric_key: string;
+          metric_label?: string | null;
+          owner_id: string;
+          project_id: string;
+          run_id: string;
+          scenario_key?: string;
+          unit?: string | null;
+          value_numeric?: number | null;
+        };
+        Update: {
+          computed_at?: string;
+          formula_text?: string | null;
+          id?: string;
+          inputs?: Json | null;
+          metric_key?: string;
+          metric_label?: string | null;
+          owner_id?: string;
+          project_id?: string;
+          run_id?: string;
+          scenario_key?: string;
+          unit?: string | null;
+          value_numeric?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "run_financial_outputs_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "run_financial_outputs_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "underwriting_runs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      run_reconciliation_flags: {
+        Row: {
+          actual: number | null;
+          check_key: string;
+          created_at: string;
+          expected: number | null;
+          id: string;
+          message: string;
+          owner_id: string;
+          project_id: string;
+          resolved: boolean;
+          run_id: string;
+          severity: Database["public"]["Enums"]["reconciliation_severity"];
+        };
+        Insert: {
+          actual?: number | null;
+          check_key: string;
+          created_at?: string;
+          expected?: number | null;
+          id?: string;
+          message: string;
+          owner_id: string;
+          project_id: string;
+          resolved?: boolean;
+          run_id: string;
+          severity?: Database["public"]["Enums"]["reconciliation_severity"];
+        };
+        Update: {
+          actual?: number | null;
+          check_key?: string;
+          created_at?: string;
+          expected?: number | null;
+          id?: string;
+          message?: string;
+          owner_id?: string;
+          project_id?: string;
+          resolved?: boolean;
+          run_id?: string;
+          severity?: Database["public"]["Enums"]["reconciliation_severity"];
+        };
+        Relationships: [
+          {
+            foreignKeyName: "run_reconciliation_flags_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "run_reconciliation_flags_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "underwriting_runs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      run_risk_register: {
+        Row: {
+          created_at: string;
+          description: string | null;
+          id: string;
+          owner_id: string;
+          project_id: string;
+          related_assumption_id: string | null;
+          risk_type: string;
+          run_id: string;
+          severity: Database["public"]["Enums"]["risk_severity"];
+          title: string;
+        };
+        Insert: {
+          created_at?: string;
+          description?: string | null;
+          id?: string;
+          owner_id: string;
+          project_id: string;
+          related_assumption_id?: string | null;
+          risk_type: string;
+          run_id: string;
+          severity?: Database["public"]["Enums"]["risk_severity"];
+          title: string;
+        };
+        Update: {
+          created_at?: string;
+          description?: string | null;
+          id?: string;
+          owner_id?: string;
+          project_id?: string;
+          related_assumption_id?: string | null;
+          risk_type?: string;
+          run_id?: string;
+          severity?: Database["public"]["Enums"]["risk_severity"];
+          title?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "run_risk_register_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "run_risk_register_related_assumption_id_fkey";
+            columns: ["related_assumption_id"];
+            isOneToOne: false;
+            referencedRelation: "assumptions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "run_risk_register_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "underwriting_runs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       scenarios: {
         Row: {
           cost_change: number | null;
@@ -2162,6 +2345,21 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      schema_migrations: {
+        Row: {
+          applied_at: string;
+          version: string;
+        };
+        Insert: {
+          applied_at?: string;
+          version: string;
+        };
+        Update: {
+          applied_at?: string;
+          version?: string;
+        };
+        Relationships: [];
       };
       underwriting_inputs: {
         Row: {
@@ -2234,6 +2432,74 @@ export type Database = {
             columns: ["source_document_id"];
             isOneToOne: false;
             referencedRelation: "documents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      underwriting_runs: {
+        Row: {
+          accepted_defaults_used: Json;
+          blocked_reasons: Json;
+          computed_at: string;
+          conflict_resolutions_used: Json;
+          created_at: string;
+          created_by: string;
+          id: string;
+          input_fingerprint: string;
+          input_snapshot: Json;
+          output_fingerprint: string | null;
+          output_snapshot: Json;
+          owner_id: string;
+          project_id: string;
+          run_mode: string;
+          run_number: number;
+          status: string;
+          verdict_code: string | null;
+        };
+        Insert: {
+          accepted_defaults_used?: Json;
+          blocked_reasons?: Json;
+          computed_at?: string;
+          conflict_resolutions_used?: Json;
+          created_at?: string;
+          created_by: string;
+          id?: string;
+          input_fingerprint: string;
+          input_snapshot?: Json;
+          output_fingerprint?: string | null;
+          output_snapshot?: Json;
+          owner_id: string;
+          project_id: string;
+          run_mode: string;
+          run_number: number;
+          status: string;
+          verdict_code?: string | null;
+        };
+        Update: {
+          accepted_defaults_used?: Json;
+          blocked_reasons?: Json;
+          computed_at?: string;
+          conflict_resolutions_used?: Json;
+          created_at?: string;
+          created_by?: string;
+          id?: string;
+          input_fingerprint?: string;
+          input_snapshot?: Json;
+          output_fingerprint?: string | null;
+          output_snapshot?: Json;
+          owner_id?: string;
+          project_id?: string;
+          run_mode?: string;
+          run_number?: number;
+          status?: string;
+          verdict_code?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "underwriting_runs_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
             referencedColumns: ["id"];
           },
         ];

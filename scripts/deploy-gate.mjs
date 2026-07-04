@@ -17,6 +17,7 @@ const checks = [
   ["generated Supabase types", "npm", ["run", "types:check"]],
   ...(hasDatabaseUrl ? [["migration dry-run", "npm", ["run", "migrate:dry-run"]]] : []),
   ...(hasDatabaseUrl ? [["schema cache refresh", "npm", ["run", "schema:refresh-cache"]]] : []),
+  ...(hasDatabaseUrl ? [["fresh environment smoke", "npm", ["run", "smoke:fresh-env"]]] : []),
   ["backend audit", "npm", ["run", "backend:audit"]],
   ["typecheck", "npm", ["run", "typecheck"]],
   ["unit tests", "npm", ["run", "test"]],

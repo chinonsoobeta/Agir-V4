@@ -5,10 +5,12 @@ import type { Database } from "@/integrations/supabase/types";
 import { buildDealRunAuditPackage } from "./customer-audit-package";
 import {
   getLatestCompletedRunForContext,
+  listCashFlowsForRunForContext,
   listFinancialOutputsForRunForContext,
   listReconciliationFlagsForRunForContext,
   listRisksForRunForContext,
 } from "./underwriting.server";
+import { assertWorkflowPermission } from "./workflow-permissions.server";
 
 type Ctx = { supabase: SupabaseClient<Database>; userId: string };
 
@@ -19,6 +21,7 @@ export async function buildDealRunAuditPackageForContext(
   projectId: string,
   runId?: string | null,
 ) {
+  await assertWorkflowPermission(context, projectId, "canExportAuditPackage");
   const run = runId
     ? await context.supabase
         .from("underwriting_runs")
@@ -31,63 +34,78 @@ export async function buildDealRunAuditPackageForContext(
   const runRow = run.data;
   if (!runRow) throw new Error("No completed run is available for this deal.");
 
-  const [project, scalars, budget, revenue, outputs, flags, risks, memo, decision, auditEvents] =
-    await Promise.all([
-      context.supabase.from("projects").select("*").eq("id", projectId).single(),
-      context.supabase
-        .from("underwriting_inputs")
-        .select(
-          "key,value_numeric,status,source,source_text,formula_text,resolution_note,conflict_values",
-        )
-        .eq("project_id", projectId)
-        .in("status", [...INPUT_STATUSES]),
-      context.supabase
-        .from("development_budget")
-        .select("category,amount,status,source_text,formula_text")
-        .eq("project_id", projectId)
-        .in("status", [...INPUT_STATUSES]),
-      context.supabase
-        .from("revenue_program")
-        .select(
-          "unit_type,unit_count,avg_sf,market_rent_monthly,rent_basis,occupancy_pct,status,source_text",
-        )
-        .eq("project_id", projectId)
-        .in("status", [...INPUT_STATUSES]),
-      listFinancialOutputsForRunForContext({
-        data: { project_id: projectId, run_id: runRow.id },
-        context,
-      }),
-      listReconciliationFlagsForRunForContext({
-        data: { project_id: projectId, run_id: runRow.id },
-        context,
-      }),
-      listRisksForRunForContext({
-        data: { project_id: projectId, run_id: runRow.id },
-        context,
-      }),
-      context.supabase
-        .from("investment_memos")
-        .select("id,status,run_id,created_at,verification_report")
-        .eq("project_id", projectId)
-        .eq("run_id", runRow.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      context.supabase
-        .from("decision_logs")
-        .select("id,decision,run_id,created_at")
-        .eq("project_id", projectId)
-        .eq("run_id", runRow.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      context.supabase
-        .from("audit_logs")
-        .select("id,action,entity_type,entity_id,created_at,payload")
-        .eq("project_id", projectId)
-        .order("created_at", { ascending: false })
-        .limit(300),
-    ]);
+  const [
+    project,
+    scalars,
+    budget,
+    revenue,
+    outputs,
+    cashFlows,
+    flags,
+    risks,
+    memo,
+    decision,
+    auditEvents,
+  ] = await Promise.all([
+    context.supabase.from("projects").select("*").eq("id", projectId).single(),
+    context.supabase
+      .from("underwriting_inputs")
+      .select(
+        "key,value_numeric,status,source,source_text,formula_text,resolution_note,conflict_values",
+      )
+      .eq("project_id", projectId)
+      .in("status", [...INPUT_STATUSES]),
+    context.supabase
+      .from("development_budget")
+      .select("category,amount,status,source_text")
+      .eq("project_id", projectId)
+      .in("status", [...INPUT_STATUSES]),
+    context.supabase
+      .from("revenue_program")
+      .select(
+        "unit_type,unit_count,avg_sf,market_rent_monthly,rent_basis,occupancy_pct,status,source_text",
+      )
+      .eq("project_id", projectId)
+      .in("status", [...INPUT_STATUSES]),
+    listFinancialOutputsForRunForContext({
+      data: { project_id: projectId, run_id: runRow.id },
+      context,
+    }),
+    listCashFlowsForRunForContext({
+      data: { project_id: projectId, run_id: runRow.id },
+      context,
+    }),
+    listReconciliationFlagsForRunForContext({
+      data: { project_id: projectId, run_id: runRow.id },
+      context,
+    }),
+    listRisksForRunForContext({
+      data: { project_id: projectId, run_id: runRow.id },
+      context,
+    }),
+    context.supabase
+      .from("investment_memos")
+      .select("id,status,run_id,created_at,verification_report")
+      .eq("project_id", projectId)
+      .eq("run_id", runRow.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    context.supabase
+      .from("decision_logs")
+      .select("id,decision,run_id,created_at")
+      .eq("project_id", projectId)
+      .eq("run_id", runRow.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    context.supabase
+      .from("audit_logs")
+      .select("id,action,entity_type,entity_id,created_at,payload")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false })
+      .limit(300),
+  ]);
 
   for (const [label, result] of [
     ["project", project],
@@ -107,6 +125,15 @@ export async function buildDealRunAuditPackageForContext(
     ...((budget.data ?? []) as unknown[]),
     ...((revenue.data ?? []) as unknown[]),
   ];
+  const defaultAcceptedInputs = approvedInputs.filter(
+    (row) =>
+      typeof row === "object" &&
+      row != null &&
+      (row as { status?: unknown }).status === "default_accepted",
+  );
+  const staticDefaultsUsed = Array.isArray(runRow.accepted_defaults_used)
+    ? runRow.accepted_defaults_used
+    : [];
 
   return buildDealRunAuditPackage({
     generatedAt: new Date().toISOString(),
@@ -122,13 +149,16 @@ export async function buildDealRunAuditPackageForContext(
       conflict_resolutions_used: runRow.conflict_resolutions_used,
     },
     approvedInputs,
+    defaultAcceptedInputs,
     acceptedDefaults: Array.isArray(runRow.accepted_defaults_used)
       ? runRow.accepted_defaults_used
       : [],
+    staticDefaultsUsed,
     conflictResolutions: Array.isArray(runRow.conflict_resolutions_used)
       ? runRow.conflict_resolutions_used
       : [],
     outputs,
+    cashFlows,
     reconciliationFlags: flags,
     risks,
     memo: memo.data
@@ -141,7 +171,9 @@ export async function buildDealRunAuditPackageForContext(
       id: event.id,
       action: event.action,
       entity_type: event.entity_type,
+      entity_id: event.entity_id,
       created_at: event.created_at,
+      payload: event.payload,
     })),
   });
 }

@@ -45,6 +45,8 @@ export const generateMemo = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
+    const { assertWorkflowPermission } = await import("./workflow-permissions.server");
+    await assertWorkflowPermission(context, data.project_id, "canGenerateMemo");
     const { data: project, error: projErr } = await context.supabase
       .from("projects")
       .select("*")

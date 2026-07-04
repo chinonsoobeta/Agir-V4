@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -20,6 +20,9 @@ type ExcelParityFixture = {
 };
 
 type VarianceRow = ExpectedRow & {
+  project_deal_name: string;
+  scenario: string;
+  source_model_version: string;
   actual_value: number;
   absolute_variance: number;
   percentage_variance: number;
@@ -32,6 +35,13 @@ function loadFixture(name: string): ExcelParityFixture {
   const here = dirname(fileURLToPath(import.meta.url));
   const text = readFileSync(join(here, "fixtures", "excel-parity", name), "utf8");
   return JSON.parse(text) as ExcelParityFixture;
+}
+
+function listFixtureNames(): string[] {
+  const here = dirname(fileURLToPath(import.meta.url));
+  return readdirSync(join(here, "fixtures", "excel-parity"))
+    .filter((name) => name.endsWith(".json"))
+    .sort();
 }
 
 function metricValues(inputKey: ExcelParityFixture["input_key"]) {
@@ -62,6 +72,9 @@ function compareFixture(fixture: ExcelParityFixture): VarianceRow[] {
       row.expected_value === 0 ? absoluteVariance : absoluteVariance / Math.abs(row.expected_value);
     return {
       ...row,
+      project_deal_name: fixture.project_deal_name,
+      scenario: fixture.scenario,
+      source_model_version: fixture.source_model_version,
       actual_value: actualValue,
       absolute_variance: absoluteVariance,
       percentage_variance: percentageVariance,
@@ -78,7 +91,7 @@ function assertFixtureWithinTolerance(fixture: ExcelParityFixture) {
       failed
         .map(
           (row) =>
-            `${row.metric_key}: expected ${row.expected_value}, actual ${row.actual_value}, absolute variance ${row.absolute_variance}, percentage variance ${row.percentage_variance}`,
+            `${row.project_deal_name} ${row.scenario} ${row.metric_key}: expected ${row.expected_value}, actual ${row.actual_value}, absolute variance ${row.absolute_variance}, percentage variance ${row.percentage_variance}, tolerance ${row.tolerance}, source ${row.source_model_version}`,
         )
         .join("\n"),
     );
@@ -87,10 +100,15 @@ function assertFixtureWithinTolerance(fixture: ExcelParityFixture) {
 }
 
 describe("Excel parity validation scaffold", () => {
-  test("synthetic benchmark rows pass within tolerance", () => {
-    const fixture = loadFixture("synthetic-maple-heights.json");
-    const rows = assertFixtureWithinTolerance(fixture);
-    expect(rows.map((row) => row.metric_key)).toEqual(["tdc", "noi", "dscr", "equity_multiple"]);
+  test("all synthetic benchmark fixture files pass within tolerance", () => {
+    const fixtureNames = listFixtureNames();
+    expect(fixtureNames.length).toBeGreaterThan(0);
+    for (const name of fixtureNames) {
+      const fixture = loadFixture(name);
+      expect(fixture.fixture_kind).toBe("synthetic_excel_parity_scaffold");
+      const rows = assertFixtureWithinTolerance(fixture);
+      expect(rows.map((row) => row.metric_key)).toEqual(["tdc", "noi", "dscr", "equity_multiple"]);
+    }
   });
 
   test("variance outside tolerance fails with absolute and percentage variance", () => {
@@ -99,6 +117,8 @@ describe("Excel parity validation scaffold", () => {
       ...fixture,
       expected_outputs: [{ metric_key: "tdc", expected_value: 1, tolerance: 0.01 }],
     };
-    expect(() => assertFixtureWithinTolerance(badFixture)).toThrow(/percentage variance/);
+    expect(() => assertFixtureWithinTolerance(badFixture)).toThrow(
+      /Synthetic Maple Heights base tdc: expected 1, actual 42500000, absolute variance .* source Agir synthetic benchmark v1/,
+    );
   });
 });

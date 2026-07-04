@@ -77,9 +77,12 @@ export type DealRunAuditPackageInput = {
     conflict_resolutions_used?: unknown;
   };
   approvedInputs: unknown[];
+  defaultAcceptedInputs: unknown[];
   acceptedDefaults: unknown[];
+  staticDefaultsUsed: unknown[];
   conflictResolutions: unknown[];
   outputs: unknown[];
+  cashFlows: unknown[];
   reconciliationFlags: unknown[];
   risks: unknown[];
   memo: { id: string; status?: string | null; run_id?: string | null } | null;
@@ -88,7 +91,9 @@ export type DealRunAuditPackageInput = {
     id: string;
     action: string;
     entity_type?: string | null;
+    entity_id?: string | null;
     created_at?: string;
+    payload?: unknown;
   }>;
 };
 
@@ -102,9 +107,12 @@ export type DealRunAuditPackage = {
     generated_at: string;
     counts: {
       approved_inputs: number;
+      default_accepted_inputs: number;
       accepted_defaults: number;
+      static_defaults_used: number;
       conflict_resolutions: number;
       outputs: number;
+      cash_flows: number;
       reconciliation_flags: number;
       risks: number;
       audit_events: number;
@@ -114,9 +122,12 @@ export type DealRunAuditPackage = {
     project: Record<string, unknown>;
     run: DealRunAuditPackageInput["run"];
     approved_inputs: unknown[];
+    default_accepted_inputs: unknown[];
     accepted_defaults: unknown[];
+    static_defaults_used: unknown[];
     conflict_resolutions: unknown[];
     outputs: unknown[];
+    cash_flows: unknown[];
     reconciliation_flags: unknown[];
     risk_register: unknown[];
     memo: DealRunAuditPackageInput["memo"];
@@ -142,9 +153,12 @@ export function buildDealRunAuditPackage(input: DealRunAuditPackageInput): DealR
       generated_at: input.generatedAt,
       counts: {
         approved_inputs: input.approvedInputs.length,
+        default_accepted_inputs: input.defaultAcceptedInputs.length,
         accepted_defaults: input.acceptedDefaults.length,
+        static_defaults_used: input.staticDefaultsUsed.length,
         conflict_resolutions: input.conflictResolutions.length,
         outputs: input.outputs.length,
+        cash_flows: input.cashFlows.length,
         reconciliation_flags: input.reconciliationFlags.length,
         risks: input.risks.length,
         audit_events: input.auditEvents.length,
@@ -154,9 +168,12 @@ export function buildDealRunAuditPackage(input: DealRunAuditPackageInput): DealR
       project: input.project,
       run: input.run,
       approved_inputs: input.approvedInputs,
+      default_accepted_inputs: input.defaultAcceptedInputs,
       accepted_defaults: input.acceptedDefaults,
+      static_defaults_used: input.staticDefaultsUsed,
       conflict_resolutions: input.conflictResolutions,
       outputs: input.outputs,
+      cash_flows: input.cashFlows,
       reconciliation_flags: input.reconciliationFlags,
       risk_register: input.risks,
       memo: input.memo,

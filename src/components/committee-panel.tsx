@@ -273,9 +273,11 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
       .find((d) => d.decision !== "return_to_underwriting") ?? null;
   const [superseding, setSuperseding] = useState(false);
   const locked = !!finalDecision && !superseding;
-  const latestCompletedRun = runState.latest_completed_run as
-    | { id: string; run_number?: number; verdict_code?: string | null }
-    | null;
+  const latestCompletedRun = runState.latest_completed_run as {
+    id: string;
+    run_number?: number;
+    verdict_code?: string | null;
+  } | null;
   const finalDecisionRun = finalDecision?.run_id
     ? ((runState.runs as Array<{ id: string; run_number?: number }>).find(
         (run) => run.id === finalDecision.run_id,
@@ -285,6 +287,14 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
     !!finalDecision?.run_id &&
     !!latestCompletedRun?.id &&
     finalDecision.run_id !== latestCompletedRun.id;
+  const workflowPermissions = runState.permissions ?? {
+    canRunUnderwriting: true,
+    canGenerateMemo: true,
+    canRecordDecision: true,
+    canExportAuditPackage: true,
+    canManageWorkspace: false,
+  };
+  const canRecordDecision = workflowPermissions.canRecordDecision;
 
   // Do not present any recommendation, score, or condition before deterministic
   // underwriting and findings exist: that would be a recommendation-like output
@@ -588,8 +598,20 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
             )}
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button className="mt-4" disabled={!rationale || submit.isPending}>
-                  {submit.isPending ? "Recording…" : "Record decision"}
+                <Button
+                  className="mt-4"
+                  disabled={!rationale || submit.isPending || !canRecordDecision}
+                  title={
+                    canRecordDecision
+                      ? "Record the IC decision for the current run version."
+                      : "Read-only role: cannot record IC decisions."
+                  }
+                >
+                  {submit.isPending
+                    ? "Recording..."
+                    : canRecordDecision
+                      ? "Record decision"
+                      : "Read-only role"}
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
@@ -607,7 +629,10 @@ export function CommitteePanel({ projectId }: { projectId: string }) {
                 </div>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => submit.mutate()}>
+                  <AlertDialogAction
+                    disabled={!canRecordDecision}
+                    onClick={() => canRecordDecision && submit.mutate()}
+                  >
                     Record decision
                   </AlertDialogAction>
                 </AlertDialogFooter>

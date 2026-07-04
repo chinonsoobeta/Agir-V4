@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { seedPackageAndOpen } from "./seed-helpers";
 import { runFullUnderwritingForContext } from "../src/lib/underwriting.server";
+import { buildDealRunAuditPackageForContext } from "../src/lib/deal-audit-package.server";
 
 function localSupabaseAdmin() {
   const env = Object.fromEntries(
@@ -29,6 +30,20 @@ async function runDeterministicUnderwritingForProject(projectId: string) {
     { supabase, userId: project.owner_id },
   );
   expect(result.blocked).toBe(false);
+}
+
+async function buildAuditPackageForProject(projectId: string) {
+  const supabase = localSupabaseAdmin();
+  const { data: project, error } = await supabase
+    .from("projects")
+    .select("owner_id")
+    .eq("id", projectId)
+    .single();
+  if (error) throw new Error(error.message);
+  return buildDealRunAuditPackageForContext(
+    { supabase: supabase as any, userId: project.owner_id },
+    projectId,
+  );
 }
 
 // The critical underwriting workflow, end to end through the UI: seed a demo
@@ -113,7 +128,9 @@ test("professional demo workflow resolves provenance and fail-closed underwritin
   await expect(
     page.getByRole("heading", { name: /Underwriting blocked|Underwriting not run/i }),
   ).toBeVisible();
-  await expect(page.getByText(/Committee review is locked|Committee review unlocks/i)).toBeVisible();
+  await expect(
+    page.getByText(/Committee review is locked|Committee review unlocks/i),
+  ).toBeVisible();
   await expect(page.getByText(/IC review blocked/i).first()).toBeVisible();
 
   await page.getByRole("tab", { name: /audit/i }).click();
@@ -256,8 +273,56 @@ test("professional demo workflow completes deterministic underwriting, memo, and
   await expect(page.getByText(/Run version v2/i).first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/Changed inputs/i).first()).toBeVisible();
 
+  await page.getByRole("tab", { name: /investment committee/i }).click();
+  const generateMemoAgain = page.getByRole("button", { name: /Generate Memo/i }).first();
+  await expect(generateMemoAgain).toBeEnabled({ timeout: 30_000 });
+  await generateMemoAgain.click();
+  await expect
+    .poll(
+      async () => {
+        const { count, error } = await supabase
+          .from("investment_memos")
+          .select("id", { count: "exact", head: true })
+          .eq("project_id", projectId!)
+          .not("run_id", "is", null);
+        if (error) throw new Error(error.message);
+        return count ?? 0;
+      },
+      { timeout: 60_000 },
+    )
+    .toBeGreaterThan(1);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Harbour Centre" })).toBeVisible();
+  await page.getByRole("tab", { name: /investment committee/i }).click();
+  await expect(page.getByText(/Memo stale/i)).toHaveCount(0);
+  await page
+    .getByLabel("Committee rationale")
+    .fill(
+      "Audit smoke approval: current run version, regenerated memo, and audit package verified.",
+    );
+  await page.getByRole("button", { name: "Record decision" }).click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Record decision", exact: true })
+    .click();
+  await expect(page.getByText(/Decision recorded/i).first()).toBeVisible({ timeout: 30_000 });
+
+  const auditPackage = await buildAuditPackageForProject(projectId!);
+  expect(auditPackage.manifest.run_id).toBeTruthy();
+  expect(auditPackage.manifest.input_fingerprint).toBeTruthy();
+  expect(auditPackage.manifest.counts.outputs).toBeGreaterThan(0);
+  expect(auditPackage.manifest.counts.cash_flows).toBeGreaterThan(0);
+  expect(auditPackage.payload.run.run_number).toBe(2);
+  expect(auditPackage.payload.memo?.run_id).toBe(auditPackage.manifest.run_id);
+  expect(auditPackage.payload.ic_decision?.run_id).toBe(auditPackage.manifest.run_id);
+  expect(auditPackage.payload.audit_events.map((event) => event.action)).toEqual(
+    expect.arrayContaining(["run_full_underwriting", "memo_generated", "ic_decision"]),
+  );
+
   await page.getByRole("tab", { name: /audit/i }).click();
   await expect(page.getByText(/accept_defaults/i).first()).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(/resolve_conflict/i).first()).toBeVisible();
   await expect(page.getByText(/run_full_underwriting/i).first()).toBeVisible();
+  await expect(page.getByText(/memo_generated/i).first()).toBeVisible();
+  await expect(page.getByText(/ic_decision/i).first()).toBeVisible();
 });

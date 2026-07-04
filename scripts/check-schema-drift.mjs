@@ -104,6 +104,13 @@ async function main() {
       ["public", "cash_flows", "run_id"],
       ["public", "reconciliation_flags", "run_id"],
       ["public", "risk_register", "run_id"],
+      ["public", "run_financial_outputs", "run_id"],
+      ["public", "run_cash_flows", "run_id"],
+      ["public", "run_reconciliation_flags", "run_id"],
+      ["public", "run_risk_register", "run_id"],
+      ["public", "generated_reports", "run_id"],
+      ["public", "generated_reports", "input_fingerprint"],
+      ["public", "generated_reports", "output_fingerprint"],
     ];
     const { rows: columnRows } = await client.query(
       `
@@ -120,6 +127,17 @@ async function main() {
               'reconciliation_flags',
               'risk_register'
             ) and column_name = 'run_id')
+            or (table_name in (
+              'run_financial_outputs',
+              'run_cash_flows',
+              'run_reconciliation_flags',
+              'run_risk_register'
+            ) and column_name = 'run_id')
+            or (table_name = 'generated_reports' and column_name in (
+              'run_id',
+              'input_fingerprint',
+              'output_fingerprint'
+            ))
           )
       `,
     );

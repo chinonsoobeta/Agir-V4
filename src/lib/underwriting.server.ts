@@ -39,6 +39,10 @@ import { generateFindings } from "./findings";
 import { reconcileRecommendation } from "./decision";
 import { AI_AUTHORITY_NOTE } from "./ai-authority";
 import { handleSchemaCompatibilityFallback, isMissingColumn, isMissingRelation } from "./db-compat";
+import {
+  assertWorkflowPermission,
+  getWorkflowPermissionsForProject,
+} from "./workflow-permissions.server";
 
 // Taxonomy (review queue) → engine key mapping. Conflicting review-queue rows
 // are surfaced to readiness through this mapping so a conflicted key blocks
@@ -165,6 +169,60 @@ async function insertRowsWithRunIdCompatibility(
     fallback: null,
   });
   return supabase.from(table).insert(withoutRunId(rows));
+}
+
+function normalizedRows(rows: Array<Record<string, unknown>>, runId: string) {
+  return rows.map((row) => {
+    const copy: Record<string, unknown> = { ...row, run_id: runId };
+    delete copy.id;
+    return copy;
+  });
+}
+
+const RUN_HISTORY_TABLES = {
+  financial_outputs: "run_financial_outputs",
+  cash_flows: "run_cash_flows",
+  reconciliation_flags: "run_reconciliation_flags",
+  risk_register: "run_risk_register",
+} as const;
+
+async function insertRunHistoryRows(
+  supabase: any,
+  sourceTable: keyof typeof RUN_HISTORY_TABLES,
+  rows: Array<Record<string, unknown>>,
+  runId: string,
+  operation: string,
+) {
+  if (!rows.length) return;
+  const table = RUN_HISTORY_TABLES[sourceTable];
+  const res = await supabase.from(table).insert(normalizedRows(rows, runId));
+  if (isMissingRelation(res.error)) {
+    handleSchemaCompatibilityFallback(res.error, {
+      featureName: "normalized underwriting run history",
+      table,
+      operation,
+      fallback: null,
+    });
+    return;
+  }
+  if (res.error) throw new Error(`${operation} failed: ${res.error.message}`);
+}
+
+async function copyLatestCompatibilityRowsToRun(supabase: any, projectId: string, runId: string) {
+  for (const [sourceTable, historyTable] of Object.entries(RUN_HISTORY_TABLES)) {
+    const { data, error } = await supabase
+      .from(sourceTable)
+      .select("*")
+      .eq("project_id", projectId);
+    if (error) throw new Error(`Loading ${sourceTable} for run history failed: ${error.message}`);
+    await insertRunHistoryRows(
+      supabase,
+      sourceTable as keyof typeof RUN_HISTORY_TABLES,
+      (data ?? []) as Array<Record<string, unknown>>,
+      runId,
+      `insert ${historyTable}`,
+    );
+  }
 }
 
 async function stampLatestRowsWithRunId(
@@ -667,6 +725,7 @@ export async function acceptDefaultsForContext({
   data: { project_id: string };
   context: any;
 }) {
+  await assertWorkflowPermission(context, data.project_id, "canRunUnderwriting");
   const rows = await loadProjectRows(context.supabase, data.project_id);
   const readiness = computeReadiness(rows);
   const accepted = await persistAcceptedDefaults(context.supabase, {
@@ -709,6 +768,7 @@ export async function resolveConflictForContext({
   data: ResolveConflictData;
   context: any;
 }) {
+  await assertWorkflowPermission(context, data.project_id, "canRunUnderwriting");
   const rows = await loadProjectRows(context.supabase, data.project_id);
   const row = rows.scalars.find((r) => r.key === data.key && r.status === "conflicting");
   if (!row) throw new Error(`No conflicting input found for key ${data.key}.`);
@@ -858,6 +918,7 @@ export type RunFullUnderwritingData = {
 };
 
 export async function runFullUnderwritingForContext(data: RunFullUnderwritingData, context: any) {
+  await assertWorkflowPermission(context, data.project_id, "canRunUnderwriting");
   const { enforceRateLimit } = await import("./rate-limit.server");
   await enforceRateLimit(context, "underwriting_run", {
     metadata: { project_id: data.project_id, mode: data.mode ?? "ai" },
@@ -1000,6 +1061,7 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
           "reconciliation_flags",
           "risk_register",
         ]);
+        await copyLatestCompatibilityRowsToRun(context.supabase, data.project_id, cachedRun.id);
       }
       return {
         ...(runJob.result_json as any),
@@ -1223,6 +1285,13 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
     outputSnapshot: persistedOutputSnapshot,
   });
   if (completedRun) {
+    await insertRunHistoryRows(
+      context.supabase,
+      "financial_outputs",
+      outputInserts,
+      completedRun.id,
+      "insert normalized financial outputs",
+    );
     for (const row of outputInserts) row.run_id = completedRun.id;
   }
   const { error: outErr } = await insertRowsWithRunIdCompatibility(
@@ -1244,6 +1313,15 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
       run_id: completedRun?.id ?? null,
     })),
   );
+  if (completedRun) {
+    await insertRunHistoryRows(
+      context.supabase,
+      "cash_flows",
+      cashFlowInserts,
+      completedRun.id,
+      "insert normalized cash flows",
+    );
+  }
   if (cashFlowInserts.length) {
     const { error } = await insertRowsWithRunIdCompatibility(
       context.supabase,
@@ -1261,6 +1339,15 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
       run_id: completedRun?.id ?? null,
       ...flag,
     }));
+    if (completedRun) {
+      await insertRunHistoryRows(
+        context.supabase,
+        "reconciliation_flags",
+        flagRows,
+        completedRun.id,
+        "insert normalized reconciliation flags",
+      );
+    }
     const { error } = await insertRowsWithRunIdCompatibility(
       context.supabase,
       "reconciliation_flags",
@@ -1277,6 +1364,15 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
       run_id: completedRun?.id ?? null,
       ...risk,
     }));
+    if (completedRun) {
+      await insertRunHistoryRows(
+        context.supabase,
+        "risk_register",
+        riskRows,
+        completedRun.id,
+        "insert normalized risk register",
+      );
+    }
     const { error } = await insertRowsWithRunIdCompatibility(
       context.supabase,
       "risk_register",
@@ -1420,6 +1516,26 @@ async function selectRunScopedRows(
   runId: string,
   select = "*",
 ) {
+  const historyTable = RUN_HISTORY_TABLES[table as keyof typeof RUN_HISTORY_TABLES];
+  if (historyTable) {
+    const historyRes = await supabase
+      .from(historyTable)
+      .select(select)
+      .eq("project_id", projectId)
+      .eq("run_id", runId);
+    if (isMissingRelation(historyRes.error)) {
+      handleSchemaCompatibilityFallback(historyRes.error, {
+        featureName: "normalized underwriting run history",
+        table: historyTable,
+        operation: "load normalized run rows",
+        fallback: null,
+      });
+    } else {
+      if (historyRes.error) return historyRes;
+      if ((historyRes.data ?? []).length) return historyRes;
+    }
+  }
+
   const res = await supabase
     .from(table)
     .select(select)
@@ -1547,6 +1663,7 @@ export async function getUnderwritingRunStateForContext({
   data: { project_id: string };
   context: any;
 }) {
+  const permissions = await getWorkflowPermissionsForProject(context, data.project_id);
   const basis = await currentInputBasis(context.supabase, data.project_id);
   const runs = await listUnderwritingRunsForContext({
     data: { project_id: data.project_id, limit: 10 },
@@ -1570,5 +1687,6 @@ export async function getUnderwritingRunStateForContext({
     latest_run: latestRun,
     latest_completed_run: latestCompleted,
     runs,
+    permissions,
   };
 }

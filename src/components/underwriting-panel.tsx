@@ -378,6 +378,14 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   });
 
   const blocked = readiness.status === "blocked";
+  const workflowPermissions = runState.permissions ?? {
+    canRunUnderwriting: true,
+    canGenerateMemo: true,
+    canRecordDecision: true,
+    canExportAuditPackage: true,
+    canManageWorkspace: false,
+  };
+  const canRunWorkflow = workflowPermissions.canRunUnderwriting;
   const defaultKeys = new Set(readiness.defaults.map((d: ReadinessDefault) => d.key));
   const defaultableMissing = readiness.missing.filter((key: string) => defaultKeys.has(key));
   const nonDefaultMissing = readiness.missing.filter((key: string) => !defaultKeys.has(key));
@@ -488,7 +496,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                                 size="sm"
                                 variant="outline"
                                 className="mt-2"
-                                disabled={resolve.isPending}
+                                disabled={resolve.isPending || !canRunWorkflow}
                                 onClick={() =>
                                   resolve.mutate({
                                     key: c.key,
@@ -506,8 +514,13 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                       <Button
                         size="sm"
                         className="mt-2"
-                        disabled={resolve.isPending}
+                        disabled={resolve.isPending || !canRunWorkflow}
                         onClick={() => resolve.mutate({ key: c.key, mode: "conservative" })}
+                        title={
+                          canRunWorkflow
+                            ? "Resolve using the conservative documented value."
+                            : "Read-only role: cannot resolve conflicts."
+                        }
                       >
                         {resolve.isPending ? (
                           <Loader2 className="size-3.5 mr-1 animate-spin" />
@@ -538,8 +551,13 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                     <Button
                       type="button"
                       size="sm"
-                      disabled={acceptDefaultsMut.isPending}
+                      disabled={acceptDefaultsMut.isPending || !canRunWorkflow}
                       onClick={() => acceptDefaultsMut.mutate()}
+                      title={
+                        canRunWorkflow
+                          ? "Accept static defaults with audit-backed provenance."
+                          : "Read-only role: cannot accept defaults."
+                      }
                     >
                       {acceptDefaultsMut.isPending ? (
                         <Loader2 className="size-3.5 mr-1 animate-spin" />
@@ -553,13 +571,15 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={run.isPending || !canAcceptDefaultsAndRun}
+                      disabled={run.isPending || !canAcceptDefaultsAndRun || !canRunWorkflow}
                       onClick={runNow}
                       onKeyDown={runOnKeyboard}
                       title={
-                        canAcceptDefaultsAndRun
-                          ? "Accepts listed static defaults, then runs the deterministic engine."
-                          : "Resolve conflicts and non-default missing inputs before running."
+                        !canRunWorkflow
+                          ? "Read-only role: cannot run underwriting."
+                          : canAcceptDefaultsAndRun
+                            ? "Accepts listed static defaults, then runs the deterministic engine."
+                            : "Resolve conflicts and non-default missing inputs before running."
                       }
                     >
                       {run.isPending ? (
@@ -680,11 +700,13 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
             type="button"
             onClick={runNow}
             onKeyDown={runOnKeyboard}
-            disabled={run.isPending}
+            disabled={run.isPending || !canRunWorkflow}
             title={
-              run.isPending
-                ? "Wait for the current deterministic run to finish."
-                : "Run the deterministic engine from approved and default-accepted inputs."
+              !canRunWorkflow
+                ? "Read-only role: cannot run underwriting."
+                : run.isPending
+                  ? "Wait for the current deterministic run to finish."
+                  : "Run the deterministic engine from approved and default-accepted inputs."
             }
           >
             {run.isPending ? (
@@ -1728,8 +1750,18 @@ export function MemoSection({ projectId }: { projectId: string }) {
   const memoStale =
     Boolean(memoRun?.input_fingerprint) &&
     memoRun?.input_fingerprint !== runState.current_input_fingerprint;
+  const workflowPermissions = runState.permissions ?? {
+    canRunUnderwriting: true,
+    canGenerateMemo: true,
+    canRecordDecision: true,
+    canExportAuditPackage: true,
+    canManageWorkspace: false,
+  };
   const canGenerateMemo =
-    debug.can_generate && runState.freshness !== "stale" && runState.freshness !== "blocked";
+    workflowPermissions.canGenerateMemo &&
+    debug.can_generate &&
+    runState.freshness !== "stale" &&
+    runState.freshness !== "blocked";
   const needsReview = Boolean(
     latest &&
     (content.needs_review ||
@@ -1804,9 +1836,11 @@ export function MemoSection({ projectId }: { projectId: string }) {
               ? "Outputs stale. Re-run deterministic underwriting before generating a memo."
               : runState.freshness === "blocked"
                 ? "Underwriting blocked. Resolve inputs before generating a memo."
-                : debug.can_generate
-                  ? "Generate the memo from deterministic outputs and approved assumptions."
-                  : debug.blocking_reasons.join(" ")
+                : !workflowPermissions.canGenerateMemo
+                  ? "Read-only role: cannot generate memos."
+                  : debug.can_generate
+                    ? "Generate the memo from deterministic outputs and approved assumptions."
+                    : debug.blocking_reasons.join(" ")
           }
         >
           <FileText className="size-4 mr-1" />

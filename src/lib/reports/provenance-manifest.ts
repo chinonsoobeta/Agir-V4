@@ -5,6 +5,11 @@ export type ReportProvenanceManifest = {
   schema: "agir.provenance.manifest.v1";
   report_type: string;
   generated_at: string;
+  run_id?: string | null;
+  run_number?: number | null;
+  run_mode?: string | null;
+  input_fingerprint?: string | null;
+  output_fingerprint?: string | null;
   verification_pass: boolean;
   token_count: number;
   orphan_count: number;
@@ -39,10 +44,20 @@ export function buildReportProvenanceManifest(args: {
   report: MemoReport;
   provenance: ProvenanceReport;
   generatedAt: string;
+  run?: {
+    id: string;
+    run_number: number;
+    run_mode: string;
+    input_fingerprint: string;
+    output_fingerprint?: string | null;
+  } | null;
 }): ReportProvenanceManifest {
   const payload = JSON.stringify({
     report_type: args.reportType,
     generated_at: args.generatedAt,
+    run_id: args.run?.id ?? null,
+    input_fingerprint: args.run?.input_fingerprint ?? null,
+    output_fingerprint: args.run?.output_fingerprint ?? null,
     title: args.report.title,
     project_name: args.report.project_name,
     sections: args.report.sections,
@@ -56,6 +71,11 @@ export function buildReportProvenanceManifest(args: {
     schema: "agir.provenance.manifest.v1",
     report_type: args.reportType,
     generated_at: args.generatedAt,
+    run_id: args.run?.id ?? null,
+    run_number: args.run?.run_number ?? null,
+    run_mode: args.run?.run_mode ?? null,
+    input_fingerprint: args.run?.input_fingerprint ?? null,
+    output_fingerprint: args.run?.output_fingerprint ?? null,
     verification_pass: args.provenance.pass,
     token_count: args.provenance.tokenCount,
     orphan_count: args.provenance.orphans.length,
