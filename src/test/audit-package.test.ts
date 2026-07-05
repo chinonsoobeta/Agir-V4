@@ -4,6 +4,7 @@ import {
   buildDealRunAuditPackage,
   type DealRunAuditPackageInput,
 } from "@/lib/customer-audit-package";
+import { snapshotRowsFromRun } from "@/lib/deal-audit-package.server";
 
 function seededDealEvidence(
   overrides: Partial<DealRunAuditPackageInput> = {},
@@ -110,5 +111,39 @@ describe("deal run audit package", () => {
     expect(() => assertDealRunAuditPackageValid(pkg)).toThrow(
       /Completed run is missing required output or cash-flow rows/,
     );
+  });
+
+  test("historical run evidence prefers immutable input snapshot over current input tables", () => {
+    const currentEditedInputs = [{ scope: "scalar", key: "loan_amount", value_numeric: 999 }];
+    const snapshotInputs = snapshotRowsFromRun({
+      input_snapshot: {
+        loanAmount: 100,
+        interestRatePct: 6,
+        amortYears: 30,
+        exitCapRatePct: 5,
+        budget: { land: 10, hard: 20 },
+        revenueProgram: [
+          {
+            unitType: "Residential",
+            unitCount: 10,
+            rent: 2000,
+            rentBasis: "per_unit",
+            occupancyPct: 95,
+          },
+        ],
+      },
+      accepted_defaults_used: [{ key: "selling_costs_pct" }],
+    });
+    const packageInputs = snapshotInputs.length ? snapshotInputs : currentEditedInputs;
+
+    expect(packageInputs).not.toBe(currentEditedInputs);
+    expect(packageInputs).toContainEqual(
+      expect.objectContaining({
+        key: "loan_amount",
+        value_numeric: 100,
+        source: "underwriting_runs.input_snapshot",
+      }),
+    );
+    expect(packageInputs).not.toContainEqual(expect.objectContaining({ value_numeric: 999 }));
   });
 });

@@ -38,7 +38,12 @@ import {
 import { generateFindings } from "./findings";
 import { reconcileRecommendation } from "./decision";
 import { AI_AUTHORITY_NOTE } from "./ai-authority";
-import { handleSchemaCompatibilityFallback, isMissingColumn, isMissingRelation } from "./db-compat";
+import {
+  handleSchemaCompatibilityFallback,
+  isMissingColumn,
+  isMissingFunction,
+  isMissingRelation,
+} from "./db-compat";
 import {
   assertWorkflowPermission,
   getWorkflowPermissionsForProject,
@@ -58,8 +63,14 @@ import { ASSUMPTION_BY_KEY } from "./assumption-taxonomy";
 export const APPROVED_ASSUMPTION_SYNC_MESSAGE =
   "Approved assumptions are still syncing to engine inputs. Retry underwriting in a moment.";
 
+type SupabaseFacade = any;
+type ServerContext = {
+  supabase: SupabaseFacade;
+  userId: string;
+};
+
 async function auditWorkflowEvent(
-  ctx: any,
+  ctx: ServerContext,
   projectId: string,
   action: string,
   payload: Record<string, unknown>,
@@ -106,6 +117,7 @@ function runBlockedReasons(readiness: ReturnType<typeof computeReadiness>) {
   return [
     ...readiness.missing.map((key) => ({ kind: "missing", key })),
     ...readiness.conflicting.map((key) => ({ kind: "conflicting", key })),
+    ...readiness.impossible.map((key) => ({ kind: "impossible", key })),
   ];
 }
 
@@ -153,7 +165,7 @@ function withoutRunId<T extends Record<string, unknown>>(rows: T[]) {
 }
 
 async function insertRowsWithRunIdCompatibility(
-  supabase: any,
+  supabase: SupabaseFacade,
   table: string,
   rows: Array<Record<string, unknown>>,
   operation: string,
@@ -186,14 +198,14 @@ const RUN_HISTORY_TABLES = {
   risk_register: "run_risk_register",
 } as const;
 
-async function runHistoryWriteClient(fallback: any) {
+async function runHistoryWriteClient(fallback: SupabaseFacade) {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return fallback;
   const { getServiceRoleClient } = await import("@/integrations/supabase/service-role.server");
   return getServiceRoleClient("run_history_write");
 }
 
 async function insertRunHistoryRows(
-  supabase: any,
+  supabase: SupabaseFacade,
   sourceTable: keyof typeof RUN_HISTORY_TABLES,
   rows: Array<Record<string, unknown>>,
   runId: string,
@@ -215,7 +227,68 @@ async function insertRunHistoryRows(
   if (res.error) throw new Error(`${operation} failed: ${res.error.message}`);
 }
 
-async function copyLatestCompatibilityRowsToRun(supabase: any, projectId: string, runId: string) {
+async function persistUnderwritingRunTransaction(
+  ctx: ServerContext,
+  input: {
+    projectId: string;
+    status: UnderwritingRunStatus;
+    mode: "ai" | "deterministic";
+    inputFingerprint: string;
+    outputFingerprint?: string | null;
+    verdictCode?: string | null;
+    blockedReasons?: unknown[];
+    acceptedDefaults?: unknown[];
+    conflictResolutions?: unknown[];
+    inputSnapshot?: unknown;
+    outputSnapshot?: unknown[];
+    financialOutputs?: Array<Record<string, unknown>>;
+    cashFlows?: Array<Record<string, unknown>>;
+    reconciliationFlags?: Array<Record<string, unknown>>;
+    risks?: Array<Record<string, unknown>>;
+    auditPayload?: Record<string, unknown>;
+    jobId?: string | null;
+    jobResult?: Record<string, unknown>;
+  },
+) {
+  const { data, error } = await ctx.supabase.rpc("persist_underwriting_run_transaction", {
+    p_project_id: input.projectId,
+    p_owner_id: ctx.userId,
+    p_created_by: ctx.userId,
+    p_run_mode: persistedRunMode(input.mode),
+    p_status: input.status,
+    p_input_fingerprint: input.inputFingerprint,
+    p_output_fingerprint: input.outputFingerprint ?? null,
+    p_verdict_code: input.verdictCode ?? null,
+    p_blocked_reasons: input.blockedReasons ?? [],
+    p_accepted_defaults_used: input.acceptedDefaults ?? [],
+    p_conflict_resolutions_used: input.conflictResolutions ?? [],
+    p_input_snapshot: input.inputSnapshot ?? {},
+    p_output_snapshot: input.outputSnapshot ?? [],
+    p_financial_outputs: input.financialOutputs ?? [],
+    p_cash_flows: input.cashFlows ?? [],
+    p_reconciliation_flags: input.reconciliationFlags ?? [],
+    p_risk_register: input.risks ?? [],
+    p_audit_payload: input.auditPayload ?? {},
+    p_job_id: input.jobId ?? null,
+    p_job_result: input.jobResult ?? null,
+  });
+  if (isMissingFunction(error) || isMissingRelation(error)) {
+    return handleSchemaCompatibilityFallback(error, {
+      featureName: "transactional underwriting run persistence",
+      table: "persist_underwriting_run_transaction",
+      operation: "persist underwriting run atomically",
+      fallback: null,
+    });
+  }
+  if (error) throw new Error(`Transactional underwriting persistence failed: ${error.message}`);
+  return data;
+}
+
+async function copyLatestCompatibilityRowsToRun(
+  supabase: SupabaseFacade,
+  projectId: string,
+  runId: string,
+) {
   for (const [sourceTable, historyTable] of Object.entries(RUN_HISTORY_TABLES)) {
     const { data, error } = await supabase
       .from(sourceTable)
@@ -233,7 +306,7 @@ async function copyLatestCompatibilityRowsToRun(supabase: any, projectId: string
 }
 
 async function stampLatestRowsWithRunId(
-  supabase: any,
+  supabase: SupabaseFacade,
   projectId: string,
   runId: string,
   tables: string[],
@@ -254,7 +327,7 @@ async function stampLatestRowsWithRunId(
   }
 }
 
-async function nextRunNumber(ctx: any, projectId: string) {
+async function nextRunNumber(ctx: ServerContext, projectId: string) {
   const { data, error } = await ctx.supabase
     .from("underwriting_runs")
     .select("run_number")
@@ -275,7 +348,7 @@ async function nextRunNumber(ctx: any, projectId: string) {
 }
 
 async function insertUnderwritingRun(
-  ctx: any,
+  ctx: ServerContext,
   input: {
     projectId: string;
     status: UnderwritingRunStatus;
@@ -324,7 +397,7 @@ async function insertUnderwritingRun(
   return row;
 }
 
-async function currentInputBasis(supabase: any, projectId: string) {
+async function currentInputBasis(supabase: SupabaseFacade, projectId: string) {
   const { stableJsonHash } = await import("./hash.server");
   const rows = await loadProjectRows(supabase, projectId);
   const readiness = computeReadiness(rows);
@@ -359,7 +432,7 @@ function revenueColumnFor(field: string) {
   return field === "rent" ? "market_rent_monthly" : field;
 }
 
-export async function assertApprovedAssumptionsSynced(supabase: any, projectId: string) {
+export async function assertApprovedAssumptionsSynced(supabase: SupabaseFacade, projectId: string) {
   const { data: assumptions, error } = await supabase
     .from("assumptions")
     .select("field_key,field_label,value_numeric,status")
@@ -422,7 +495,10 @@ export async function assertApprovedAssumptionsSynced(supabase: any, projectId: 
 }
 
 // The single loader. Everything the engine sees flows through here.
-async function loadProjectRows(supabase: any, projectId: string): Promise<ProjectInputRows> {
+async function loadProjectRows(
+  supabase: SupabaseFacade,
+  projectId: string,
+): Promise<ProjectInputRows> {
   const { loadProjectInputRepositoryRows } =
     await import("./repositories/project-inputs.repository");
   const { conflictingAssumptions, ...rows } = await loadProjectInputRepositoryRows(
@@ -484,7 +560,7 @@ async function loadProjectRows(supabase: any, projectId: string): Promise<Projec
 }
 
 export async function loadEngineInput(
-  supabase: any,
+  supabase: SupabaseFacade,
   projectId: string,
 ): Promise<UnderwritingInput> {
   return assembleEngineInput(await loadProjectRows(supabase, projectId));
@@ -502,10 +578,10 @@ export async function getEngineInputForContext({
   context,
 }: {
   data: { project_id: string };
-  context: any;
+  context: ServerContext;
 }): Promise<
   | { blocked: false; input: UnderwritingInput }
-  | { blocked: true; missing: string[]; conflicting: string[] }
+  | { blocked: true; missing: string[]; conflicting: string[]; impossible: string[] }
 > {
   try {
     const input = await loadEngineInput(context.supabase, data.project_id);
@@ -516,6 +592,7 @@ export async function getEngineInputForContext({
         blocked: true,
         missing: error.readiness.missing,
         conflicting: error.readiness.conflicting,
+        impossible: error.readiness.impossible,
       };
     }
     throw error;
@@ -596,7 +673,7 @@ export async function getUnderwritingReadinessForContext({
   context,
 }: {
   data: { project_id: string };
-  context: any;
+  context: ServerContext;
 }) {
   const rows = await loadProjectRows(context.supabase, data.project_id);
   const readiness = computeReadiness(rows);
@@ -623,7 +700,7 @@ export async function getUnderwritingReadinessForContext({
 // single .upsert([...]) is equivalent - and duplicate keys are collapsed first
 // because Postgres rejects a statement that touches the same conflict row twice.
 export async function persistAcceptedDefaults(
-  supabase: any,
+  supabase: SupabaseFacade,
   opts: {
     projectId: string;
     userId: string;
@@ -664,7 +741,7 @@ export async function persistAcceptedDefaults(
 }
 
 async function mirrorAcceptedDefaultsToAssumptions(
-  supabase: any,
+  supabase: SupabaseFacade,
   opts: {
     projectId: string;
     userId: string;
@@ -730,7 +807,7 @@ export async function acceptDefaultsForContext({
   context,
 }: {
   data: { project_id: string };
-  context: any;
+  context: ServerContext;
 }) {
   await assertWorkflowPermission(context, data.project_id, "canRunUnderwriting");
   const rows = await loadProjectRows(context.supabase, data.project_id);
@@ -773,7 +850,7 @@ export async function resolveConflictForContext({
   context,
 }: {
   data: ResolveConflictData;
-  context: any;
+  context: ServerContext;
 }) {
   await assertWorkflowPermission(context, data.project_id, "canRunUnderwriting");
   const rows = await loadProjectRows(context.supabase, data.project_id);
@@ -862,7 +939,7 @@ export async function resolveConflictForContext({
 // pre-approved constant. Accepted rows are written as default_accepted with
 // provenance and remain fully visible and reversible by the analyst.
 async function aiSelectDefaults(
-  ctx: any,
+  ctx: ServerContext,
   projectId: string,
   defaultable: string[],
 ): Promise<string[]> {
@@ -924,7 +1001,10 @@ export type RunFullUnderwritingData = {
   mode: "ai" | "deterministic";
 };
 
-export async function runFullUnderwritingForContext(data: RunFullUnderwritingData, context: any) {
+export async function runFullUnderwritingForContext(
+  data: RunFullUnderwritingData,
+  context: ServerContext,
+) {
   await assertWorkflowPermission(context, data.project_id, "canRunUnderwriting");
   const { enforceRateLimit } = await import("./rate-limit.server");
   await enforceRateLimit(context, "underwriting_run", {
@@ -984,7 +1064,7 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
       readiness,
       rows: normalizeProjectRows(rows),
     });
-    const blockedRun = await insertUnderwritingRun(context, {
+    let blockedRun = await persistUnderwritingRunTransaction(context, {
       projectId: data.project_id,
       status: "blocked",
       mode: analysisMode,
@@ -993,16 +1073,33 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
       acceptedDefaults: acceptedDefaultsUsed(rows),
       conflictResolutions: conflictResolutionsUsed(rows),
       inputSnapshot: normalizeProjectRows(rows),
+      auditPayload: {
+        readiness,
+        analysis_mode: analysisMode,
+        ai_note: aiFailureReason,
+      },
     });
-    // Fail closed: zero metrics, zero charts, no partial numbers.
-    await auditWorkflowEvent(context, data.project_id, "underwriting_blocked", {
-      readiness,
-      analysis_mode: analysisMode,
-      ai_note: aiFailureReason,
-      run_id: blockedRun?.id ?? null,
-      run_number: blockedRun?.run_number ?? null,
-      input_fingerprint: inputFingerprint,
-    });
+    if (!blockedRun) {
+      blockedRun = await insertUnderwritingRun(context, {
+        projectId: data.project_id,
+        status: "blocked",
+        mode: analysisMode,
+        inputFingerprint,
+        blockedReasons: runBlockedReasons(readiness),
+        acceptedDefaults: acceptedDefaultsUsed(rows),
+        conflictResolutions: conflictResolutionsUsed(rows),
+        inputSnapshot: normalizeProjectRows(rows),
+      });
+      // Fail closed: zero metrics, zero charts, no partial numbers.
+      await auditWorkflowEvent(context, data.project_id, "underwriting_blocked", {
+        readiness,
+        analysis_mode: analysisMode,
+        ai_note: aiFailureReason,
+        run_id: blockedRun?.id ?? null,
+        run_number: blockedRun?.run_number ?? null,
+        input_fingerprint: inputFingerprint,
+      });
+    }
     return {
       blocked: true as const,
       readiness,
@@ -1201,15 +1298,7 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
     verdictCode: reconciled.code,
   });
 
-  // Persist everything in one sweep.
-  await Promise.all([
-    context.supabase.from("financial_outputs").delete().eq("project_id", data.project_id),
-    context.supabase.from("cash_flows").delete().eq("project_id", data.project_id),
-    context.supabase.from("reconciliation_flags").delete().eq("project_id", data.project_id),
-    context.supabase.from("risk_register").delete().eq("project_id", data.project_id),
-  ]);
-
-  const outputInserts: any[] = [];
+  const outputInserts: Array<Record<string, unknown>> = [];
   for (const { key: scenarioKey, output } of scenarioOutputs) {
     for (const metric of output.metrics) {
       outputInserts.push({
@@ -1279,6 +1368,87 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
   });
   const persistedOutputSnapshot = outputSnapshot(outputInserts);
   const outputFingerprint = stableJsonHash(persistedOutputSnapshot);
+  const cashFlowInserts: Array<Record<string, unknown>> = scenarioOutputs.flatMap(
+    ({ key: scenarioKey, output }) =>
+      output.cashFlows.map((row) => ({
+        project_id: data.project_id,
+        owner_id: context.userId,
+        scenario_key: scenarioKey,
+        period_year: row.periodYear,
+        line_key: row.lineKey,
+        amount: row.amount,
+      })),
+  );
+  const flagRows: Array<Record<string, unknown>> = flags.map((flag) => ({
+    project_id: data.project_id,
+    owner_id: context.userId,
+    ...flag,
+  }));
+  const riskRows: Array<Record<string, unknown>> = risks.map((risk) => ({
+    project_id: data.project_id,
+    owner_id: context.userId,
+    ...risk,
+  }));
+  const runAuditPayload = {
+    scenarios: scenarioOutputs.map((s) => s.key),
+    verdict: verdict.code,
+    risk_score: riskScore,
+    error_flags: errorFlags.length,
+    equity_wipeout: base.equityWipeout,
+    analysis_mode: analysisMode,
+    ai_accepted_defaults: aiAcceptedDefaults,
+  };
+  const resultBase = {
+    blocked: false as const,
+    readiness,
+    verdict,
+    riskScore,
+    equityWipeout: base.equityWipeout,
+    irrStatus: base.irrStatus,
+    flags,
+    values: base.values,
+    ...aiMeta,
+  };
+
+  const transactionalRun = await persistUnderwritingRunTransaction(context, {
+    projectId: data.project_id,
+    status: "completed",
+    mode: analysisMode,
+    inputFingerprint,
+    outputFingerprint,
+    verdictCode: verdict.code,
+    acceptedDefaults: acceptedDefaultsUsed(rows),
+    conflictResolutions: conflictResolutionsUsed(rows),
+    inputSnapshot: input,
+    outputSnapshot: persistedOutputSnapshot,
+    financialOutputs: outputInserts,
+    cashFlows: cashFlowInserts,
+    reconciliationFlags: flagRows,
+    risks: riskRows,
+    auditPayload: runAuditPayload,
+    jobId: runJob.id,
+    jobResult: resultBase,
+  });
+  if (transactionalRun) {
+    return {
+      ...resultBase,
+      run_version: {
+        id: transactionalRun.id,
+        run_number: transactionalRun.run_number,
+        status: transactionalRun.status,
+      },
+    };
+  }
+
+  // Compatibility path for explicitly supported older schemas where the RPC
+  // has not landed yet.
+  await Promise.all([
+    context.supabase.from("financial_outputs").delete().eq("project_id", data.project_id),
+    context.supabase.from("cash_flows").delete().eq("project_id", data.project_id),
+    context.supabase.from("reconciliation_flags").delete().eq("project_id", data.project_id),
+    context.supabase.from("risk_register").delete().eq("project_id", data.project_id),
+  ]);
+
   const completedRun = await insertUnderwritingRun(context, {
     projectId: data.project_id,
     status: "completed",
@@ -1309,17 +1479,7 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
   );
   if (outErr) throw new Error(outErr.message);
 
-  const cashFlowInserts = scenarioOutputs.flatMap(({ key: scenarioKey, output }) =>
-    output.cashFlows.map((row) => ({
-      project_id: data.project_id,
-      owner_id: context.userId,
-      scenario_key: scenarioKey,
-      period_year: row.periodYear,
-      line_key: row.lineKey,
-      amount: row.amount,
-      run_id: completedRun?.id ?? null,
-    })),
-  );
+  for (const row of cashFlowInserts) row.run_id = completedRun?.id ?? null;
   if (completedRun) {
     await insertRunHistoryRows(
       context.supabase,
@@ -1340,12 +1500,7 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
   }
 
   if (flags.length) {
-    const flagRows = flags.map((flag) => ({
-      project_id: data.project_id,
-      owner_id: context.userId,
-      run_id: completedRun?.id ?? null,
-      ...flag,
-    }));
+    for (const row of flagRows) row.run_id = completedRun?.id ?? null;
     if (completedRun) {
       await insertRunHistoryRows(
         context.supabase,
@@ -1365,12 +1520,7 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
   }
 
   if (risks.length) {
-    const riskRows = risks.map((risk) => ({
-      project_id: data.project_id,
-      owner_id: context.userId,
-      run_id: completedRun?.id ?? null,
-      ...risk,
-    }));
+    for (const row of riskRows) row.run_id = completedRun?.id ?? null;
     if (completedRun) {
       await insertRunHistoryRows(
         context.supabase,
@@ -1396,13 +1546,7 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
     entityId: data.project_id,
     action: "run_full_underwriting",
     payload: {
-      scenarios: scenarioOutputs.map((s) => s.key),
-      verdict: verdict.code,
-      risk_score: riskScore,
-      error_flags: errorFlags.length,
-      equity_wipeout: base.equityWipeout,
-      analysis_mode: analysisMode,
-      ai_accepted_defaults: aiAcceptedDefaults,
+      ...runAuditPayload,
       run_id: completedRun?.id ?? null,
       run_number: completedRun?.run_number ?? null,
       input_fingerprint: inputFingerprint,
@@ -1411,18 +1555,10 @@ export async function runFullUnderwritingForContext(data: RunFullUnderwritingDat
   });
 
   const result = {
-    blocked: false as const,
-    readiness,
-    verdict,
-    riskScore,
-    equityWipeout: base.equityWipeout,
-    irrStatus: base.irrStatus,
-    flags,
-    values: base.values,
+    ...resultBase,
     run_version: completedRun
       ? { id: completedRun.id, run_number: completedRun.run_number, status: completedRun.status }
       : null,
-    ...aiMeta,
   };
   await completeJob(context, runJob.id, result);
   return result;
@@ -1433,7 +1569,7 @@ export async function listReconciliationFlagsForContext({
   context,
 }: {
   data: { project_id: string };
-  context: any;
+  context: ServerContext;
 }) {
   const { data: rows, error } = await context.supabase
     .from("reconciliation_flags")
@@ -1449,7 +1585,7 @@ export async function listUnderwritingRunsForContext({
   context,
 }: {
   data: { project_id: string; limit?: number };
-  context: any;
+  context: ServerContext;
 }) {
   const limit = Math.min(Math.max(data.limit ?? 10, 1), 25);
   const { data: rows, error } = await context.supabase
@@ -1470,7 +1606,11 @@ export async function listUnderwritingRunsForContext({
   return rows ?? [];
 }
 
-async function getUnderwritingRunForProject(supabase: any, projectId: string, runId: string) {
+async function getUnderwritingRunForProject(
+  supabase: SupabaseFacade,
+  projectId: string,
+  runId: string,
+) {
   const { data: run, error } = await supabase
     .from("underwriting_runs")
     .select("*")
@@ -1494,7 +1634,7 @@ export async function getLatestCompletedRunForContext({
   context,
 }: {
   data: { project_id: string };
-  context: any;
+  context: ServerContext;
 }) {
   const { data: run, error } = await context.supabase
     .from("underwriting_runs")
@@ -1517,7 +1657,7 @@ export async function getLatestCompletedRunForContext({
 }
 
 async function selectRunScopedRows(
-  supabase: any,
+  supabase: SupabaseFacade,
   table: string,
   projectId: string,
   runId: string,
@@ -1565,7 +1705,7 @@ export async function listFinancialOutputsForRunForContext({
   context,
 }: {
   data: { project_id: string; run_id: string };
-  context: any;
+  context: ServerContext;
 }) {
   const run = await getUnderwritingRunForProject(context.supabase, data.project_id, data.run_id);
   if (!run) return [];
@@ -1585,7 +1725,7 @@ export async function listCashFlowsForRunForContext({
   context,
 }: {
   data: { project_id: string; run_id: string };
-  context: any;
+  context: ServerContext;
 }) {
   const { data: rows, error } = await selectRunScopedRows(
     context.supabase,
@@ -1602,7 +1742,7 @@ export async function listReconciliationFlagsForRunForContext({
   context,
 }: {
   data: { project_id: string; run_id: string };
-  context: any;
+  context: ServerContext;
 }) {
   const { data: rows, error } = await selectRunScopedRows(
     context.supabase,
@@ -1619,7 +1759,7 @@ export async function listRisksForRunForContext({
   context,
 }: {
   data: { project_id: string; run_id: string };
-  context: any;
+  context: ServerContext;
 }) {
   const { data: rows, error } = await selectRunScopedRows(
     context.supabase,
@@ -1636,7 +1776,7 @@ export async function getLatestCompletedRunOutputsForContext({
   context,
 }: {
   data: { project_id: string };
-  context: any;
+  context: ServerContext;
 }) {
   const run = await getLatestCompletedRunForContext({ data, context });
   if (!run) {
@@ -1668,7 +1808,7 @@ export async function getUnderwritingRunStateForContext({
   context,
 }: {
   data: { project_id: string };
-  context: any;
+  context: ServerContext;
 }) {
   const permissions = await getWorkflowPermissionsForProject(context, data.project_id);
   const basis = await currentInputBasis(context.supabase, data.project_id);

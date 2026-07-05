@@ -1,16 +1,18 @@
 // Tier 2 hardening: prove the safety nets actually catch what they must.
 //
-// (2a) the engine-input plausibility boundary flags scale slips / impossibilities
-//      while leaving legitimately stressed deals alone, and
+// (2a) the engine-input boundary warns on unusual-but-possible stressed values,
+//      hard-blocks impossible values before assembly, and
 // (2b) every reconciliation check fires on a deal engineered to trip it and stays
 //      silent on a clean one.
 
 import { describe, expect, test } from "vitest";
 import {
+  computeReadiness,
   mapleHeightsInput,
   runReconciliationChecks,
   runUnderwriting,
   validateEngineInput,
+  type ProjectInputRows,
   type ReconciliationContext,
   type UnderwritingInput,
 } from "@/lib/engine";
@@ -19,6 +21,43 @@ import {
 
 describe("engine-input plausibility boundary", () => {
   const sensible = mapleHeightsInput() as UnderwritingInput;
+  const approvedRows = (): ProjectInputRows => ({
+    scalars: [
+      ["loan_amount", sensible.loanAmount],
+      ["interest_rate_pct", sensible.interestRatePct],
+      ["amort_years", sensible.amortYears],
+      ["equity_amount", sensible.equityAmount],
+      ["exit_cap_rate_pct", sensible.exitCapRatePct],
+      ["expense_ratio_pct", sensible.expenseRatioPct],
+      ["hold_years", sensible.holdYears],
+      ["selling_costs_pct", sensible.sellingCostsPct],
+      ["stabilized_occupancy_pct", sensible.stabilizedOccupancyPct],
+    ].map(([key, value]) => ({
+      key: String(key),
+      value_numeric: Number(value),
+      status: "approved",
+    })),
+    budget: [
+      ["land", sensible.budget.land],
+      ["hard", sensible.budget.hard],
+      ["soft", sensible.budget.soft],
+      ["contingency", sensible.budget.contingency],
+      ["financing_interest", sensible.budget.financingInterest],
+    ].map(([category, amount]) => ({
+      category: category as ProjectInputRows["budget"][number]["category"],
+      amount: Number(amount),
+      status: "approved",
+    })),
+    revenue: sensible.revenueProgram.map((r) => ({
+      unit_type: r.unitType,
+      unit_count: r.unitCount,
+      avg_sf: r.avgSf,
+      rent: r.rent,
+      rent_basis: r.rentBasis,
+      occupancy_pct: r.occupancyPct,
+      status: "approved",
+    })),
+  });
 
   test("a sensible deal produces no plausibility violations", () => {
     expect(validateEngineInput(sensible)).toEqual([]);
@@ -36,39 +75,69 @@ describe("engine-input plausibility boundary", () => {
   });
 
   test.each([
-    ["interestRatePct", { interestRatePct: 600 }],
-    ["exitCapRatePct", { exitCapRatePct: 0 }],
+    ["interestRatePct", { interestRatePct: 45 }],
     ["exitCapRatePct", { exitCapRatePct: 45 }],
-    ["expenseRatioPct", { expenseRatioPct: 350 }],
-    ["stabilizedOccupancyPct", { stabilizedOccupancyPct: 9400 }],
-    ["loanAmount", { loanAmount: -1 }],
-  ])("flags an implausible %s", (field, override) => {
+    ["rentGrowthPct", { rentGrowthPct: 30 }],
+    ["expenseGrowthPct", { expenseGrowthPct: -30 }],
+  ])("warns on unusual but possible %s", (field, override) => {
     const violations = validateEngineInput({ ...sensible, ...override } as UnderwritingInput);
     expect(violations.some((v) => v.field === field)).toBe(true);
   });
 
-  test("a negative budget line is flagged as a sign/scale slip", () => {
-    const v = validateEngineInput({
-      ...sensible,
-      budget: { ...sensible.budget, hard: -28_000_000 },
-    });
-    expect(v.some((x) => x.field === "budget.hard")).toBe(true);
+  test.each([
+    ["interest_rate_pct:outside_0_100", { scalar: ["interest_rate_pct", 600] }],
+    ["exit_cap_rate_pct:outside_0_100", { scalar: ["exit_cap_rate_pct", 0] }],
+    ["expense_ratio_pct:outside_0_100", { scalar: ["expense_ratio_pct", 350] }],
+    ["stabilized_occupancy_pct:outside_0_100", { scalar: ["stabilized_occupancy_pct", 9400] }],
+    ["loan_amount:negative", { scalar: ["loan_amount", -1] }],
+    ["hold_years:not_positive", { scalar: ["hold_years", 0] }],
+  ])("hard-blocks impossible scalar %s", (reason, override) => {
+    const rows = approvedRows();
+    const [key, value] = override.scalar as [string, number];
+    const row = rows.scalars.find((r) => r.key === key);
+    if (!row) throw new Error(`Missing scalar fixture row: ${key}`);
+    row.value_numeric = value;
+
+    const readiness = computeReadiness(rows);
+    expect(readiness.status).toBe("blocked");
+    expect(readiness.impossible).toContain(reason);
   });
 
-  test("a zero/negative rent or unit count is flagged per component", () => {
-    const v = validateEngineInput({
-      ...sensible,
-      revenueProgram: [{ unitType: "Residential", unitCount: 0, rent: 0, rentBasis: "per_unit" }],
-    });
-    expect(v.some((x) => x.field === "revenueProgram[0].rent")).toBe(true);
-    expect(v.some((x) => x.field === "revenueProgram[0].unitCount")).toBe(true);
+  test("a negative budget line hard-blocks readiness", () => {
+    const rows = approvedRows();
+    const hard = rows.budget.find((b) => b.category === "hard");
+    if (!hard) throw new Error("Missing hard-cost fixture row");
+    hard.amount = -28_000_000;
+
+    const readiness = computeReadiness(rows);
+    expect(readiness.status).toBe("blocked");
+    expect(readiness.impossible).toContain("budget:hard:negative");
   });
 
-  test("the violations surface as engine warnings, and a clean deal adds none", () => {
+  test("negative rent and unit count hard-block per component", () => {
+    const rows = approvedRows();
+    rows.revenue = [
+      {
+        unit_type: "Residential",
+        unit_count: -1,
+        rent: -1,
+        rent_basis: "per_unit",
+        occupancy_pct: 95,
+        status: "approved",
+      },
+    ];
+
+    const readiness = computeReadiness(rows);
+    expect(readiness.status).toBe("blocked");
+    expect(readiness.impossible).toContain("revenue:Residential:negative_rent");
+    expect(readiness.impossible).toContain("revenue:Residential:negative_units");
+  });
+
+  test("unusual-but-possible violations surface as engine warnings, and a clean deal adds none", () => {
     const clean = runUnderwriting(sensible);
     expect(clean.warnings.some((w) => w.key.startsWith("input_plausibility:"))).toBe(false);
 
-    const slipped = runUnderwriting({ ...sensible, interestRatePct: 600 });
+    const slipped = runUnderwriting({ ...sensible, interestRatePct: 45 });
     expect(slipped.warnings.some((w) => w.key === "input_plausibility:interestRatePct")).toBe(true);
   });
 });

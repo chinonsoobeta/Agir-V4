@@ -183,20 +183,27 @@ function fmtMs(ms) {
 function printSummary(results) {
   const rows = [
     ["Check", "Mode", "Scope", "Status", "Duration", "Reason"],
-    ...results.map((r) => [
-      r.name,
-      r.mode,
-      r.scope,
-      r.status,
-      fmtMs(r.durationMs),
-      r.reason ?? "",
-    ]),
+    ...results.map((r) => [r.name, r.mode, r.scope, r.status, fmtMs(r.durationMs), r.reason ?? ""]),
   ];
   const widths = rows[0].map((_, i) => Math.max(...rows.map((row) => row[i].length)));
   console.log("\n[pilot-gate] summary");
   for (const [idx, row] of rows.entries()) {
     console.log(row.map((cell, i) => cell.padEnd(widths[i])).join(" | "));
     if (idx === 0) console.log(widths.map((w) => "-".repeat(w)).join("-|-"));
+  }
+  const dbSkips = results.filter(
+    (r) =>
+      r.status === "SKIP" &&
+      r.armedEnv?.length &&
+      /database|POSTGRES|SUPABASE|URL/i.test(`${r.reason} ${r.armedEnv.join(" ")}`),
+  );
+  if (dbSkips.length) {
+    console.log(
+      "\n[pilot-gate] DB-backed checks skipped only because their database URL env vars are not configured:",
+    );
+    for (const r of dbSkips) {
+      console.log(`  - ${r.name}: set one of ${r.armedEnv.join(", ")}`);
+    }
   }
 }
 

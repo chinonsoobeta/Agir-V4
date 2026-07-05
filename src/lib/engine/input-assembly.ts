@@ -116,6 +116,7 @@ export type Readiness = {
   status: "ready" | "blocked";
   missing: string[];
   conflicting: string[];
+  impossible: string[];
   defaultable: string[]; // subset of missing fillable from DEFAULTS via "Accept defaults"
 };
 
@@ -123,6 +124,68 @@ function readableScalar(rows: ScalarInputRow[], key: string): ScalarInputRow | u
   return rows.find(
     (r) => r.key === key && ENGINE_READABLE_STATUSES.includes(r.status) && r.value_numeric != null,
   );
+}
+
+const NON_NEGATIVE_SCALARS = new Set([
+  "loan_amount",
+  "equity_amount",
+  "other_income_annual",
+  "mezz_loan_amount",
+  "refinance_amount",
+  "stated_total_project_cost",
+]);
+
+const PERCENT_0_TO_100_SCALARS = new Set([
+  "stabilized_occupancy_pct",
+  "lender_stabilized_occupancy_pct",
+  "expense_ratio_pct",
+  "selling_costs_pct",
+  "refinance_ltv_pct",
+  "lp_equity_pct",
+  "gp_equity_pct",
+  "preferred_return_pct",
+  "gp_catch_up_pct",
+  "promote_tier1_gp_pct",
+  "promote_tier2_gp_pct",
+]);
+
+const RATE_0_TO_100_SCALARS = new Set([
+  "interest_rate_pct",
+  "mezz_interest_rate_pct",
+  "refinance_rate_pct",
+]);
+
+const NON_NEGATIVE_PERIOD_SCALARS = new Set([
+  "amort_years",
+  "io_months",
+  "construction_months",
+  "lease_up_months",
+  "equity_draw_months",
+  "mezz_amort_years",
+  "mezz_io_months",
+  "refinance_month",
+  "refinance_amort_years",
+  "refinance_io_months",
+]);
+
+function impossibleScalarReason(key: string, raw: number | null | undefined): string | null {
+  if (raw == null || !Number.isFinite(Number(raw))) return `${key}:not_finite`;
+  const value = Number(raw);
+  if (NON_NEGATIVE_SCALARS.has(key) && value < 0) return `${key}:negative`;
+  if (PERCENT_0_TO_100_SCALARS.has(key) && (value < 0 || value > 100))
+    return `${key}:outside_0_100`;
+  if (RATE_0_TO_100_SCALARS.has(key) && (value < 0 || value > 100)) return `${key}:outside_0_100`;
+  if (key === "exit_cap_rate_pct" && (value <= 0 || value > 100)) return `${key}:outside_0_100`;
+  if (key === "hold_years" && value <= 0) return `${key}:not_positive`;
+  if (NON_NEGATIVE_PERIOD_SCALARS.has(key) && value < 0) return `${key}:negative_period`;
+  if (key === "avg_outstanding_factor" && (value < 0 || value > 1)) return `${key}:outside_0_1`;
+  if ((key === "rent_growth_pct" || key === "expense_growth_pct") && value < -100)
+    return `${key}:below_negative_100`;
+  return null;
+}
+
+function pushUnique(target: string[], key: string) {
+  if (!target.includes(key)) target.push(key);
 }
 
 // Complete = every figure GPR needs is present: count and rent always, and the
@@ -148,16 +211,16 @@ function weightedComponentOccupancy(program: RevenueUnitInput[]): number {
 export function computeReadiness(rows: ProjectInputRows): Readiness {
   const missing: string[] = [];
   const conflicting: string[] = [];
-  const pushMissing = (key: string) => {
-    if (!missing.includes(key)) missing.push(key);
-  };
-  const pushConflicting = (key: string) => {
-    if (!conflicting.includes(key)) conflicting.push(key);
-  };
+  const impossible: string[] = [];
+  const pushMissing = (key: string) => pushUnique(missing, key);
+  const pushConflicting = (key: string) => pushUnique(conflicting, key);
+  const pushImpossible = (key: string) => pushUnique(impossible, key);
 
   for (const category of REQUIRED_BUDGET_CATEGORIES) {
     const lines = rows.budget.filter((b) => b.category === category);
     if (lines.some((b) => b.status === "conflicting")) pushConflicting(`budget:${category}`);
+    else if (lines.some((b) => ENGINE_READABLE_STATUSES.includes(b.status) && Number(b.amount) < 0))
+      pushImpossible(`budget:${category}:negative`);
     else if (!lines.some((b) => ENGINE_READABLE_STATUSES.includes(b.status)))
       pushMissing(`budget:${category}`);
   }
@@ -165,13 +228,22 @@ export function computeReadiness(rows: ProjectInputRows): Readiness {
   for (const key of REQUIRED_SCALAR_KEYS) {
     const all = rows.scalars.filter((r) => r.key === key);
     if (all.some((r) => r.status === "conflicting")) pushConflicting(key);
-    else if (!readableScalar(rows.scalars, key)) pushMissing(key);
+    else {
+      const readable = readableScalar(rows.scalars, key);
+      const reason = impossibleScalarReason(key, readable?.value_numeric);
+      if (readable && reason) pushImpossible(reason);
+      else if (!readable) pushMissing(key);
+    }
   }
 
   // Optional engine targets still fail closed once they appear in the review
   // queue: an unresolved conflict cannot be silently treated as "absent".
   for (const row of rows.scalars) {
     if (row.status === "conflicting") pushConflicting(row.key);
+    if (ENGINE_READABLE_STATUSES.includes(row.status)) {
+      const reason = impossibleScalarReason(row.key, row.value_numeric);
+      if (reason) pushImpossible(reason);
+    }
   }
 
   // A positive mezzanine amount activates the subordinate-debt tranche. Its
@@ -192,6 +264,14 @@ export function computeReadiness(rows: ProjectInputRows): Readiness {
   const engineReadableComponents = rows.revenue.filter((r) =>
     ENGINE_READABLE_STATUSES.includes(r.status),
   );
+  for (const r of engineReadableComponents) {
+    if (Number(r.unit_count) < 0) pushImpossible(`revenue:${r.unit_type}:negative_units`);
+    if (Number(r.rent) < 0) pushImpossible(`revenue:${r.unit_type}:negative_rent`);
+    if (r.avg_sf != null && Number(r.avg_sf) < 0)
+      pushImpossible(`revenue:${r.unit_type}:negative_sf`);
+    if (r.occupancy_pct != null && (Number(r.occupancy_pct) < 0 || Number(r.occupancy_pct) > 100))
+      pushImpossible(`revenue:${r.unit_type}:occupancy_outside_0_100`);
+  }
   const readableComponents = engineReadableComponents.filter(isCompleteComponent);
   for (const r of engineReadableComponents) {
     if (
@@ -217,9 +297,13 @@ export function computeReadiness(rows: ProjectInputRows): Readiness {
 
   const defaultable = missing.filter((k) => DEFAULTS[k] != null);
   return {
-    status: missing.length === 0 && conflicting.length === 0 ? "ready" : "blocked",
+    status:
+      missing.length === 0 && conflicting.length === 0 && impossible.length === 0
+        ? "ready"
+        : "blocked",
     missing,
     conflicting,
+    impossible,
     defaultable,
   };
 }
@@ -284,7 +368,7 @@ export class UnderwritingBlockedError extends Error {
   readiness: Readiness;
   constructor(readiness: Readiness) {
     super(
-      `Underwriting is blocked. Missing: ${readiness.missing.join(", ") || "none"}. Conflicting: ${readiness.conflicting.join(", ") || "none"}.`,
+      `Underwriting is blocked. Missing: ${readiness.missing.join(", ") || "none"}. Conflicting: ${readiness.conflicting.join(", ") || "none"}. Impossible: ${readiness.impossible.join(", ") || "none"}.`,
     );
     this.name = "UnderwritingBlockedError";
     this.readiness = readiness;

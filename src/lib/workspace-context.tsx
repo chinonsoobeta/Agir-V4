@@ -30,7 +30,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     queryFn: () => listMyWorkspaces(),
     staleTime: 60_000,
   });
-  const workspaces = data ?? [];
+  const workspaces = useMemo(() => data ?? [], [data]);
 
   // The resolved active workspace: the stored id if still a member, else the first.
   const activeWorkspace = useMemo(() => {

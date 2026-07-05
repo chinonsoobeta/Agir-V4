@@ -16,6 +16,7 @@ import {
   canRunUnderwriting,
   canGenerateMemo,
   canRecordDecision,
+  canReviewAssumptions,
   canExportAuditPackage,
   canManageWorkspace,
   FIRM_ROLE_WORKSPACE_ROLE,
@@ -81,10 +82,12 @@ describe("workspace role matrix: deal-child rows", () => {
     expect(canRunUnderwriting(project, member)).toBe(true);
     expect(canGenerateMemo(project, member)).toBe(true);
     expect(canRecordDecision(project, member)).toBe(true);
+    expect(canReviewAssumptions(project, member)).toBe(true);
     expect(canExportAuditPackage(project, viewer)).toBe(true);
     expect(canRunUnderwriting(project, viewer)).toBe(false);
     expect(canGenerateMemo(project, viewer)).toBe(false);
     expect(canRecordDecision(project, viewer)).toBe(false);
+    expect(canReviewAssumptions(project, viewer)).toBe(false);
     expect(canManageWorkspace(project, admin)).toBe(true);
     expect(canManageWorkspace(project, member)).toBe(false);
   });
@@ -182,5 +185,65 @@ describe("workspace + engine readiness integration contract", () => {
     expect(
       validatePersistedAssumptionUnits([{ field_key: "min_all_in_dscr", unit: "%" }])[0].message,
     ).toContain("requires x");
+  });
+
+  test("impossible approved inputs hard-block readiness before engine assembly", () => {
+    const readyRows: ProjectInputRows = {
+      scalars: [
+        { key: "loan_amount", value_numeric: 60, status: "approved" },
+        { key: "equity_amount", value_numeric: 40, status: "approved" },
+        { key: "interest_rate_pct", value_numeric: 6, status: "approved" },
+        { key: "amort_years", value_numeric: 30, status: "approved" },
+        { key: "exit_cap_rate_pct", value_numeric: 5, status: "approved" },
+        { key: "expense_ratio_pct", value_numeric: 35, status: "approved" },
+        { key: "hold_years", value_numeric: 5, status: "approved" },
+        { key: "selling_costs_pct", value_numeric: 2, status: "approved" },
+        { key: "stabilized_occupancy_pct", value_numeric: 95, status: "approved" },
+      ],
+      budget: [
+        { category: "land", amount: 10, status: "approved" },
+        { category: "hard", amount: 50, status: "approved" },
+        { category: "soft", amount: 10, status: "approved" },
+        { category: "contingency", amount: 5, status: "approved" },
+        { category: "financing_interest", amount: 5, status: "approved" },
+      ],
+      revenue: [
+        {
+          unit_type: "Residential",
+          unit_count: 10,
+          rent: 2000,
+          rent_basis: "per_unit",
+          occupancy_pct: 95,
+          status: "approved",
+        },
+      ],
+    };
+
+    const negativeBudget = computeReadiness({
+      ...readyRows,
+      budget: readyRows.budget.map((row) =>
+        row.category === "hard" ? { ...row, amount: -1 } : row,
+      ),
+    });
+    expect(negativeBudget.status).toBe("blocked");
+    expect(negativeBudget.impossible).toContain("budget:hard:negative");
+
+    const impossibleOccupancy = computeReadiness({
+      ...readyRows,
+      scalars: readyRows.scalars.map((row) =>
+        row.key === "stabilized_occupancy_pct" ? { ...row, value_numeric: 101 } : row,
+      ),
+    });
+    expect(impossibleOccupancy.status).toBe("blocked");
+    expect(impossibleOccupancy.impossible).toContain("stabilized_occupancy_pct:outside_0_100");
+
+    const invalidHold = computeReadiness({
+      ...readyRows,
+      scalars: readyRows.scalars.map((row) =>
+        row.key === "hold_years" ? { ...row, value_numeric: 0 } : row,
+      ),
+    });
+    expect(invalidHold.status).toBe("blocked");
+    expect(invalidHold.impossible).toContain("hold_years:not_positive");
   });
 });

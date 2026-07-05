@@ -60,7 +60,96 @@ const BAND_STYLES: Record<string, string> = {
   missing: "text-muted-foreground",
 };
 
-function fmt(a: any) {
+type ConflictValue = { value?: unknown; source?: string | null } | number | string | null;
+type AssumptionRecord = {
+  id: string;
+  field_key: string;
+  field_label: string;
+  category?: string | null;
+  unit?: string | null;
+  value_numeric?: number | string | null;
+  value_text?: string | null;
+  status?: string | null;
+  confidence_score?: number | null;
+  confidence_band?: string | null;
+  conflict_values?: unknown;
+  documents?: { name?: string | null } | null;
+  source_location?: string | null;
+  source_text?: string | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  override_reason?: string | null;
+  ai_reasoning?: string | null;
+  dual_control_pending?: boolean | null;
+  second_approval_by?: string | null;
+  second_approver_name?: string | null;
+};
+type ReviewInput = {
+  id: string;
+  action: "approve" | "modify" | "reject" | "needs_review";
+  value_numeric?: number | null;
+  value_text?: string | null;
+  change_reason?: string;
+};
+type ExtractionReport = {
+  found?: number | null;
+  conflicting?: number | null;
+  missing?: number | null;
+  analysis_mode?: "ai" | "deterministic" | null;
+  ai_note?: string | null;
+  authority_note?: string | null;
+  stage1_candidates?: number | null;
+  stage2_classified?: number | null;
+  stage3_inferred_via_alias?: number | null;
+  ai_classified?: number | null;
+  can_underwrite?: boolean | null;
+  conflicts?: string[];
+  missing_required?: string[];
+  debug?: ExtractionDebug;
+};
+type ExtractionDebug = {
+  per_document?: DebugDocument[];
+  warnings?: string[];
+  documents_seen?: number | null;
+  documents_downloaded?: number | null;
+  documents_failed?: number | null;
+  total_candidates?: number | null;
+  alias_mapped_count?: number | null;
+  grouped_keys?: string[];
+  conflict_keys?: string[];
+  inserted_assumptions?: number | null;
+  updated_assumptions?: number | null;
+};
+type DebugDocument = {
+  document_id?: string;
+  name?: string;
+  needs_verification?: boolean;
+  ocr_confidence?: number;
+  ocr_truncated?: boolean;
+  ocr_pages_processed?: number;
+  ocr_total_pages?: number;
+  recovered_via_ocr?: boolean;
+  sheets_selected?: string[];
+  merged_cells_filled?: number;
+  download_ok?: boolean;
+  text_length?: number;
+  candidate_count?: number;
+  error?: string;
+  candidates_preview?: Array<{ value_text?: string; source_location?: string | null }>;
+  text_preview?: string;
+};
+type VersionRecord = {
+  id: string;
+  version_number: number;
+  status?: string | null;
+  created_at: string;
+  value_numeric?: number | string | null;
+  value_text?: string | null;
+  changed_by_name?: string | null;
+  change_reason?: string | null;
+};
+
+function fmt(a: AssumptionRecord) {
   if (a.value_numeric == null && !a.value_text) return "–";
   if (a.value_text) return a.value_text;
   const n = Number(a.value_numeric);
@@ -126,10 +215,10 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
   const recomputeFn = useServerFn(runFullUnderwriting);
   const reviewFn = useServerFn(reviewAssumption);
 
-  const [sourceOf, setSourceOf] = useState<any | null>(null);
-  const [editOf, setEditOf] = useState<any | null>(null);
-  const [historyOf, setHistoryOf] = useState<any | null>(null);
-  const [report, setReport] = useState<any | null>(null);
+  const [sourceOf, setSourceOf] = useState<AssumptionRecord | null>(null);
+  const [editOf, setEditOf] = useState<AssumptionRecord | null>(null);
+  const [historyOf, setHistoryOf] = useState<AssumptionRecord | null>(null);
+  const [report, setReport] = useState<ExtractionReport | null>(null);
   const [lastChange, setLastChange] = useState<string | null>(null);
   // AI runs by default; the deterministic engine is always the backup. The
   // toggle lets an analyst force the pure deterministic path on demand.
@@ -170,7 +259,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
 
   const extract = useMutation({
     mutationFn: () => extractFn({ data: { project_id: projectId, mode } }),
-    onSuccess: async (r: any) => {
+    onSuccess: async (r: ExtractionReport) => {
       await invalidate();
       setReport(r);
       setLastChange(
@@ -185,7 +274,11 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
   });
   const recompute = useMutation({
     mutationFn: () => recomputeFn({ data: { project_id: projectId, mode } }),
-    onSuccess: async (r: any) => {
+    onSuccess: async (r: {
+      blocked?: boolean;
+      analysis_mode?: "ai" | "deterministic";
+      ai_note?: string | null;
+    }) => {
       await invalidate();
       if (r.blocked)
         toast.error("Underwriting is blocked: resolve missing/conflicting inputs first.");
@@ -198,11 +291,10 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
     onError: (e: Error) => toast.error(e.message),
   });
   const review = useMutation({
-    mutationFn: (d: any) => reviewFn({ data: d }),
-    onSuccess: async (_row: unknown, variables: any) => {
+    mutationFn: (d: ReviewInput) => reviewFn({ data: d }),
+    onSuccess: async (_row: unknown, variables: ReviewInput) => {
       await invalidate();
-      const subject =
-        assumptions.find((a) => a.id === variables.id)?.field_label ?? "Assumption";
+      const subject = assumptions.find((a) => a.id === variables.id)?.field_label ?? "Assumption";
       const actionLabel =
         variables.action === "approve"
           ? "approved"
@@ -227,7 +319,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
   });
 
   // Group by category
-  const grouped = assumptions.reduce<Record<string, any[]>>((acc, a) => {
+  const grouped = assumptions.reduce<Record<string, AssumptionRecord[]>>((acc, a) => {
     (acc[a.category || "Other"] ||= []).push(a);
     return acc;
   }, {});
@@ -379,15 +471,18 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
           </p>
           <div className="mt-3 grid md:grid-cols-2 gap-3">
             {conflicts.map((a) => {
-              const values = (Array.isArray(a.conflict_values) ? a.conflict_values : [])
-                .map((cv: any) => ({
-                  value: typeof cv === "object" ? cv.value : cv,
-                  source: typeof cv === "object" ? cv.source : null,
+              const conflictValues = (
+                Array.isArray(a.conflict_values) ? a.conflict_values : []
+              ) as ConflictValue[];
+              const values = conflictValues
+                .map((cv: ConflictValue) => ({
+                  value: typeof cv === "object" && cv != null ? cv.value : cv,
+                  source: typeof cv === "object" && cv != null ? cv.source : null,
                 }))
-                .filter((cv: any) => Number.isFinite(Number(cv.value)));
+                .filter((cv) => Number.isFinite(Number(cv.value)));
               const conservative = conservativeValue(
                 a.field_key,
-                values.map((v: any) => Number(v.value)),
+                values.map((v) => Number(v.value)),
               );
               return (
                 <div
@@ -396,7 +491,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
                 >
                   <div className="text-sm font-medium">{a.field_label}</div>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {values.map((cv: any, i: number) => {
+                    {values.map((cv, i: number) => {
                       const supersede = isInterestKey(a.field_key) && supersedingSource(cv.source);
                       return (
                         <Button
@@ -458,7 +553,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
                     </Button>
                   </div>
                   {isInterestKey(a.field_key) &&
-                    values.some((cv: any) => supersedingSource(cv.source)) && (
+                    values.some((cv) => supersedingSource(cv.source)) && (
                       <p className="text-[11px] text-warning mt-2">
                         A rate lock / addendum value is present and likely supersedes the earlier
                         term sheet rate. Confirm before resolving: not auto-applied.
@@ -555,7 +650,7 @@ export function AssumptionReviewCenter({ projectId }: { projectId: string }) {
   );
 }
 
-function SourcePanel({ a, onClose }: { a: any | null; onClose: () => void }) {
+function SourcePanel({ a, onClose }: { a: AssumptionRecord | null; onClose: () => void }) {
   const provenance = a ? assumptionProvenance(a) : null;
   return (
     <Sheet open={!!a} onOpenChange={(o) => !o && onClose()}>
@@ -609,9 +704,9 @@ function EditPanel({
   onClose,
   onSubmit,
 }: {
-  a: any | null;
+  a: AssumptionRecord | null;
   onClose: () => void;
-  onSubmit: (d: any) => void;
+  onSubmit: (d: ReviewInput) => void;
 }) {
   const [val, setVal] = useState("");
   const [reason, setReason] = useState("");
@@ -699,7 +794,7 @@ function EditPanel({
   );
 }
 
-function HistoryPanel({ a, onClose }: { a: any | null; onClose: () => void }) {
+function HistoryPanel({ a, onClose }: { a: AssumptionRecord | null; onClose: () => void }) {
   return (
     <Sheet open={!!a} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-[500px] sm:max-w-[500px]">
@@ -724,7 +819,7 @@ function VersionsList({ assumptionId }: { assumptionId: string }) {
     return <p className="mt-4 text-sm text-muted-foreground">No version history.</p>;
   return (
     <ol className="mt-4 space-y-3">
-      {versions.map((v: any) => (
+      {(versions as VersionRecord[]).map((v) => (
         <li key={v.id} className="border-l-2 border-primary/40 pl-3 text-xs">
           <div className="flex items-center gap-2">
             <span className="font-mono text-primary">v{v.version_number}</span>
@@ -743,7 +838,15 @@ function VersionsList({ assumptionId }: { assumptionId: string }) {
   );
 }
 
-function ExtractionReportCard({ report, onClose }: { report: any; onClose: () => void }) {
+function ExtractionReportCard({
+  report,
+  onClose,
+}: {
+  report: ExtractionReport;
+  onClose: () => void;
+}) {
+  const conflicts = report.conflicts ?? [];
+  const missingRequired = report.missing_required ?? [];
   return (
     <Card className="p-5 border-primary/40">
       <div className="flex items-start justify-between">
@@ -752,7 +855,7 @@ function ExtractionReportCard({ report, onClose }: { report: any; onClose: () =>
             <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
               Extraction Audit Report · 3-stage pipeline
             </div>
-            <ModeBadge mode={report.analysis_mode} />
+            <ModeBadge mode={report.analysis_mode ?? undefined} />
           </div>
           <div className="text-sm mt-1">
             Stage 1 parsed <strong className="font-mono">{report.stage1_candidates}</strong>{" "}
@@ -778,27 +881,27 @@ function ExtractionReportCard({ report, onClose }: { report: any; onClose: () =>
           {report.can_underwrite ? "Yes: all required present" : "No: required fields missing"}
         </Field>
       </div>
-      {report.conflicts?.length > 0 && (
+      {conflicts.length > 0 && (
         <div className="mt-3 text-xs">
           <span className="font-semibold text-destructive uppercase tracking-widest">
             Conflicts:
           </span>{" "}
-          <span className="text-muted-foreground">{report.conflicts.join(" · ")}</span>
+          <span className="text-muted-foreground">{conflicts.join(" · ")}</span>
         </div>
       )}
-      {report.missing_required?.length > 0 && (
+      {missingRequired.length > 0 && (
         <div className="mt-2 text-xs">
           <span className="font-semibold text-warning uppercase tracking-widest">
             Missing required:
           </span>{" "}
-          <span className="text-muted-foreground">{report.missing_required.join(" · ")}</span>
+          <span className="text-muted-foreground">{missingRequired.join(" · ")}</span>
         </div>
       )}
     </Card>
   );
 }
 
-function recoveryLabel(d: any): string {
+function recoveryLabel(d: DebugDocument): string {
   const parts: string[] = [];
   if (d.recovered_via_ocr) parts.push(`OCR ${Math.round(d.ocr_confidence ?? 0)}%`);
   if (d.ocr_truncated) parts.push(`first ${d.ocr_pages_processed}/${d.ocr_total_pages} pages`);
@@ -808,8 +911,8 @@ function recoveryLabel(d: any): string {
   return parts.length ? parts.join(" · ") : d.download_ok ? "embedded text" : "";
 }
 
-function ExtractionDebugCard({ debug }: { debug: any }) {
-  const perDoc: any[] = debug.per_document ?? [];
+function ExtractionDebugCard({ debug }: { debug: ExtractionDebug }) {
+  const perDoc = debug.per_document ?? [];
   const needsVerification = perDoc.filter((d) => d.needs_verification);
   return (
     <Card className="p-5 border-chart-2/40">
@@ -867,7 +970,7 @@ function ExtractionDebugCard({ debug }: { debug: any }) {
             </tr>
           </thead>
           <tbody>
-            {perDoc.map((d: any) => (
+            {perDoc.map((d) => (
               <tr
                 key={d.document_id}
                 className={`align-top hover:bg-accent/30 ${d.needs_verification ? "bg-warning/10" : ""}`}
@@ -881,8 +984,8 @@ function ExtractionDebugCard({ debug }: { debug: any }) {
                   )}
                 </td>
                 <td className="text-center">{d.download_ok ? "OK" : "x"}</td>
-                <td className="text-right num">{d.text_length.toLocaleString()}</td>
-                <td className="text-right num">{d.candidate_count}</td>
+                <td className="text-right num">{(d.text_length ?? 0).toLocaleString()}</td>
+                <td className="text-right num">{d.candidate_count ?? 0}</td>
                 <td
                   className="text-muted-foreground max-w-[160px] truncate"
                   title={recoveryLabel(d)}
@@ -894,7 +997,7 @@ function ExtractionDebugCard({ debug }: { debug: any }) {
                     <span className="text-destructive">{d.error}</span>
                   ) : (
                     d.candidates_preview
-                      ?.map((c: any) =>
+                      ?.map((c) =>
                         c.source_location ? `${c.value_text} @ ${c.source_location}` : c.value_text,
                       )
                       .join(" · ") || d.text_preview
@@ -906,10 +1009,10 @@ function ExtractionDebugCard({ debug }: { debug: any }) {
         </table>
       </div>
 
-      {debug.warnings?.length > 0 && (
+      {(debug.warnings?.length ?? 0) > 0 && (
         <div className="mt-3 text-xs text-warning">
           <span className="font-semibold uppercase tracking-widest">Warnings:</span>{" "}
-          <span className="text-muted-foreground">{debug.warnings.join(" · ")}</span>
+          <span className="text-muted-foreground">{(debug.warnings ?? []).join(" · ")}</span>
         </div>
       )}
     </Card>
@@ -926,7 +1029,7 @@ function AssumptionCard({
   onSecondApprove,
   pending,
 }: {
-  a: any;
+  a: AssumptionRecord;
   onSource: () => void;
   onEdit: () => void;
   onHistory: () => void;
@@ -1057,11 +1160,7 @@ function AssumptionCard({
             disabled={pending}
             onClick={onReject}
           >
-            {pending ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <X className="size-3.5" />
-            )}
+            {pending ? <Loader2 className="size-3.5 animate-spin" /> : <X className="size-3.5" />}
           </Button>
         </div>
       </div>

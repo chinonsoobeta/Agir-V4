@@ -22,6 +22,7 @@ import {
   type MappedCandidate,
 } from "./assumption-mapping";
 import { AI_ASSISTED_ALIAS, AI_AUTHORITY_NOTE, aiClassificationReasoning } from "./ai-authority";
+import { assertWorkflowPermission } from "./workflow-permissions.server";
 
 // ---------- Read APIs ----------
 
@@ -1185,6 +1186,7 @@ export const reviewAssumption = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .single();
     if (error) throw new Error(error.message);
+    await assertWorkflowPermission(context, cur.project_id, "canReviewAssumptions");
     const by = await userName(context);
     const newVer = cur.current_version + 1;
     const patch: any = { current_version: newVer };
@@ -1295,6 +1297,7 @@ export const secondApproveOverride = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .single();
     if (error) throw new Error(error.message);
+    await assertWorkflowPermission(context, cur.project_id, "canReviewAssumptions");
     if (!(cur as any).dual_control_pending) {
       throw new Error("This assumption is not awaiting a second approval.");
     }

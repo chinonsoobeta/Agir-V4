@@ -5,6 +5,7 @@ import {
   canGenerateMemo,
   canManageWorkspace,
   canRecordDecision,
+  canReviewAssumptions,
   canRunUnderwriting,
   type ParentProject,
   type RoleViewer,
@@ -15,6 +16,7 @@ export type WorkflowPermissionKey =
   | "canRunUnderwriting"
   | "canGenerateMemo"
   | "canRecordDecision"
+  | "canReviewAssumptions"
   | "canExportAuditPackage"
   | "canManageWorkspace";
 
@@ -26,6 +28,7 @@ const emptyPermissions: WorkflowPermissions = {
   canRunUnderwriting: false,
   canGenerateMemo: false,
   canRecordDecision: false,
+  canReviewAssumptions: false,
   canExportAuditPackage: false,
   canManageWorkspace: false,
 };
@@ -68,6 +71,7 @@ export async function getWorkflowPermissionsForProject(
       canRunUnderwriting: canRunUnderwriting(project, viewer),
       canGenerateMemo: canGenerateMemo(project, viewer),
       canRecordDecision: canRecordDecision(project, viewer),
+      canReviewAssumptions: canReviewAssumptions(project, viewer),
       canExportAuditPackage: canExportAuditPackage(project, viewer),
       canManageWorkspace: canManageWorkspace(project, viewer),
     };
@@ -88,6 +92,7 @@ export async function assertWorkflowPermission(
       canRunUnderwriting: "run deterministic underwriting",
       canGenerateMemo: "generate an investment memo",
       canRecordDecision: "record an IC decision",
+      canReviewAssumptions: "review assumptions",
       canExportAuditPackage: "export the audit package",
       canManageWorkspace: "manage this workspace",
     };

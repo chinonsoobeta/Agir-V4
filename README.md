@@ -88,13 +88,13 @@ Reports fail closed (e.g. "Run deterministic underwriting before generating this
 
 ## Local development
 
-Requires **Node 22+** (the Supabase realtime client needs native WebSocket; Node 20 will not run the app).
+Requires **Node >=22 <25** (the Supabase realtime client needs native WebSocket; Node 20 will not run the app). The range is enforced in `package.json`; `.nvmrc` pins the local default to Node 22.
 
 ```bash
 nvm install 22 && nvm use 22
 npm install
 cp .env.example .env.local       # fill in Supabase values (see below)
-npm run dev                       # http://127.0.0.1:8080
+npm run dev                       # http://127.0.0.1:8081
 ```
 
 ### Running fully locally with no cloud account

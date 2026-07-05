@@ -63,7 +63,7 @@ export function PortfolioReports() {
     queryFn: () => listDecisionHistory(),
   });
 
-  const deals = portfolioQ.data ?? [];
+  const deals = useMemo(() => portfolioQ.data ?? [], [portfolioQ.data]);
   const assetTypes = useMemo(() => [...new Set(deals.map((d) => d.type))], [deals]);
 
   const filtered = useMemo(

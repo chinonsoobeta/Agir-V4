@@ -108,6 +108,10 @@ export function canRecordDecision(parent: ParentProject, viewer: RoleViewer): bo
   return canWriteDealChild(parent, viewer);
 }
 
+export function canReviewAssumptions(parent: ParentProject, viewer: RoleViewer): boolean {
+  return canWriteDealChild(parent, viewer);
+}
+
 export function canExportAuditPackage(parent: ParentProject, viewer: RoleViewer): boolean {
   return canReadDealChild(parent, viewer);
 }

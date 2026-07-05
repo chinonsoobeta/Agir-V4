@@ -88,6 +88,17 @@ export function isMissingRelation(error: CompatError) {
   );
 }
 
+export function isMissingFunction(error: CompatError) {
+  const message = error?.message ?? "";
+  return Boolean(
+    error &&
+    (error.code === "PGRST202" ||
+      error.code === "42883" ||
+      /could not find the function/i.test(message) ||
+      /function [\w.]+\(.*\) does not exist/i.test(message)),
+  );
+}
+
 // A column the code writes does not exist yet on the deployed schema (a later
 // ALTER TABLE migration has not run). PostgREST reports this as PGRST204 with a
 // "Could not find the 'x' column of 'y' in the schema cache" message. Callers

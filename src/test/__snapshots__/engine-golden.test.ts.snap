@@ -27,6 +27,7 @@ exports[`golden engine output snapshots > professional golden outputs for named 
     "readiness": {
       "conflicting": [],
       "defaultable": [],
+      "impossible": [],
       "missing": [],
       "status": "ready",
     },
@@ -89,6 +90,7 @@ exports[`golden engine output snapshots > professional golden outputs for named 
     "readiness": {
       "conflicting": [],
       "defaultable": [],
+      "impossible": [],
       "missing": [],
       "status": "ready",
     },

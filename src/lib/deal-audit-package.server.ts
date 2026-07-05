@@ -16,6 +16,97 @@ type Ctx = { supabase: SupabaseClient<Database>; userId: string };
 
 const INPUT_STATUSES = ["approved", "default_accepted", "calculated"] as const;
 
+const SNAPSHOT_SCALAR_KEYS: Array<[string, string]> = [
+  ["construction_months", "constructionMonths"],
+  ["lease_up_months", "leaseUpMonths"],
+  ["stabilized_occupancy_pct", "stabilizedOccupancyPct"],
+  ["expense_ratio_pct", "expenseRatioPct"],
+  ["other_income_annual", "otherIncomeAnnual"],
+  ["exit_cap_rate_pct", "exitCapRatePct"],
+  ["loan_amount", "loanAmount"],
+  ["interest_rate_pct", "interestRatePct"],
+  ["amort_years", "amortYears"],
+  ["io_months", "ioMonths"],
+  ["avg_outstanding_factor", "avgOutstandingFactor"],
+  ["selling_costs_pct", "sellingCostsPct"],
+  ["hold_years", "holdYears"],
+  ["equity_amount", "equityAmount"],
+  ["rent_growth_pct", "rentGrowthPct"],
+  ["expense_growth_pct", "expenseGrowthPct"],
+  ["equity_draw_months", "equityDrawMonths"],
+];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value != null && !Array.isArray(value);
+}
+
+export function snapshotRowsFromRun(runRow: {
+  input_snapshot?: unknown;
+  accepted_defaults_used?: unknown;
+}) {
+  if (!isRecord(runRow.input_snapshot)) return [];
+  const acceptedDefaultKeys = new Set(
+    Array.isArray(runRow.accepted_defaults_used)
+      ? runRow.accepted_defaults_used
+          .map((row) => (isRecord(row) && typeof row.key === "string" ? row.key : null))
+          .filter((key): key is string => key != null)
+      : [],
+  );
+  const statusFor = (key: string) =>
+    acceptedDefaultKeys.has(key) ? "default_accepted" : "run_snapshot";
+  const rows: Record<string, unknown>[] = [];
+
+  const budget = runRow.input_snapshot.budget;
+  if (isRecord(budget)) {
+    for (const [category, value] of Object.entries(budget)) {
+      if (value == null) continue;
+      const key = `budget:${category === "financingInterest" ? "financing_interest" : category}`;
+      rows.push({
+        scope: "budget",
+        key,
+        category,
+        amount: value,
+        status: statusFor(key),
+        source: "underwriting_runs.input_snapshot",
+      });
+    }
+  }
+
+  const revenueProgram = runRow.input_snapshot.revenueProgram;
+  if (Array.isArray(revenueProgram)) {
+    for (const component of revenueProgram) {
+      if (!isRecord(component)) continue;
+      const key = `revenue:${component.unitType ?? "component"}`;
+      rows.push({
+        scope: "revenue",
+        key,
+        unit_type: component.unitType,
+        unit_count: component.unitCount,
+        avg_sf: component.avgSf,
+        rent: component.rent,
+        rent_basis: component.rentBasis,
+        occupancy_pct: component.occupancyPct,
+        status: statusFor(key),
+        source: "underwriting_runs.input_snapshot",
+      });
+    }
+  }
+
+  for (const [key, snapshotKey] of SNAPSHOT_SCALAR_KEYS) {
+    const value = runRow.input_snapshot[snapshotKey];
+    if (value == null) continue;
+    rows.push({
+      scope: "scalar",
+      key,
+      value_numeric: value,
+      status: statusFor(key),
+      source: "underwriting_runs.input_snapshot",
+    });
+  }
+
+  return rows;
+}
+
 export async function buildDealRunAuditPackageForContext(
   context: Ctx,
   projectId: string,
@@ -125,7 +216,9 @@ export async function buildDealRunAuditPackageForContext(
     ...((budget.data ?? []) as unknown[]),
     ...((revenue.data ?? []) as unknown[]),
   ];
-  const defaultAcceptedInputs = approvedInputs.filter(
+  const snapshotInputs = snapshotRowsFromRun(runRow);
+  const packageApprovedInputs = snapshotInputs.length ? snapshotInputs : approvedInputs;
+  const defaultAcceptedInputs = packageApprovedInputs.filter(
     (row) =>
       typeof row === "object" &&
       row != null &&
@@ -148,7 +241,7 @@ export async function buildDealRunAuditPackageForContext(
       accepted_defaults_used: runRow.accepted_defaults_used,
       conflict_resolutions_used: runRow.conflict_resolutions_used,
     },
-    approvedInputs,
+    approvedInputs: packageApprovedInputs,
     defaultAcceptedInputs,
     acceptedDefaults: Array.isArray(runRow.accepted_defaults_used)
       ? runRow.accepted_defaults_used
