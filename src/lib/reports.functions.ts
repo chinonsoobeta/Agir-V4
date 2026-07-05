@@ -198,7 +198,10 @@ export const generateReport = createServerFn({ method: "POST" })
       context,
     });
     const { reportFreshnessBlockReason } = await import("./reports/report-common");
-    const freshnessBlockReason = reportFreshnessBlockReason(def, runState.freshness as RunFreshness);
+    const freshnessBlockReason = reportFreshnessBlockReason(
+      def,
+      runState.freshness as RunFreshness,
+    );
     if (freshnessBlockReason) throw new Error(freshnessBlockReason);
     const reportRun = runState.latest_completed_run as any | null;
     if (def.requiresUnderwriting && !reportRun?.id) {

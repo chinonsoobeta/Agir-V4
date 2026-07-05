@@ -546,7 +546,11 @@ describe("labeled extraction corpus", () => {
           "conflicting",
         );
       }
-      runs.push({ pattern: fixture.pattern, expectedRows: fixture.expected, predictions: extracted });
+      runs.push({
+        pattern: fixture.pattern,
+        expectedRows: fixture.expected,
+        predictions: extracted,
+      });
     }
 
     const metrics = computeMetrics(runs);

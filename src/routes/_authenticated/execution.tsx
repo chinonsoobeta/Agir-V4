@@ -268,12 +268,24 @@ function AttentionQueue({
 }) {
   const seen = new Set<string>();
   const items: { item: any; kind: "blocked" | "overdue" | "soon" }[] = [];
-  for (const item of blocked)
-    if (!seen.has(item.id)) (seen.add(item.id), items.push({ item, kind: "blocked" }));
-  for (const item of overdue)
-    if (!seen.has(item.id)) (seen.add(item.id), items.push({ item, kind: "overdue" }));
-  for (const item of dueSoon)
-    if (!seen.has(item.id)) (seen.add(item.id), items.push({ item, kind: "soon" }));
+  for (const item of blocked) {
+    if (!seen.has(item.id)) {
+      seen.add(item.id);
+      items.push({ item, kind: "blocked" });
+    }
+  }
+  for (const item of overdue) {
+    if (!seen.has(item.id)) {
+      seen.add(item.id);
+      items.push({ item, kind: "overdue" });
+    }
+  }
+  for (const item of dueSoon) {
+    if (!seen.has(item.id)) {
+      seen.add(item.id);
+      items.push({ item, kind: "soon" });
+    }
+  }
   if (!items.length) return null;
 
   const META = {

@@ -325,7 +325,9 @@ function DealWorkflowStrip({
   runState: Awaited<ReturnType<typeof getUnderwritingRunState>>;
   hasUnderwriting: boolean;
 }) {
-  const extractedDocs = documents.filter((doc) => doc.ai_summary || doc.extraction_status === "completed");
+  const extractedDocs = documents.filter(
+    (doc) => doc.ai_summary || doc.extraction_status === "completed",
+  );
   const failedDocs = documents.filter(
     (doc) => doc.status === "extraction_failed" || doc.extraction_status === "failed",
   );
@@ -337,12 +339,16 @@ function DealWorkflowStrip({
   const defaultCount = readiness.defaults.length;
   const outputsBlocked = runState.freshness === "blocked";
   const outputsStale = hasUnderwriting && runState.freshness === "stale";
-  const latestCompletedRun = runState.latest_completed_run as
-    | { run_number?: number; input_fingerprint?: string }
-    | null;
+  const latestCompletedRun = runState.latest_completed_run as {
+    run_number?: number;
+    input_fingerprint?: string;
+  } | null;
   const latestMemo = memos[0] ?? null;
-  const latestMemoRun = (latestMemo?.content as { run_version?: { input_fingerprint?: string; run_number?: number } } | null)
-    ?.run_version;
+  const latestMemoRun = (
+    latestMemo?.content as {
+      run_version?: { input_fingerprint?: string; run_number?: number };
+    } | null
+  )?.run_version;
   const memoStale =
     !!latestMemo &&
     !!latestMemoRun?.input_fingerprint &&
@@ -442,32 +448,32 @@ function DealWorkflowStrip({
           icon: Lock,
         }
       : outputsStale
-      ? {
-          key: "outputs",
-          label: "Outputs stale",
-          detail: latestCompletedRun?.run_number
-            ? `Latest completed run v${latestCompletedRun.run_number}`
-            : "Re-run underwriting",
-          tone: "warning",
-          icon: RefreshCw,
-        }
-      : hasUnderwriting
         ? {
             key: "outputs",
-            label: "Outputs current",
+            label: "Outputs stale",
             detail: latestCompletedRun?.run_number
-              ? `Run version v${latestCompletedRun.run_number}`
-              : "Underwriting complete",
-            tone: "success",
-            icon: CheckCircle2,
+              ? `Latest completed run v${latestCompletedRun.run_number}`
+              : "Re-run underwriting",
+            tone: "warning",
+            icon: RefreshCw,
           }
-        : {
-            key: "outputs",
-            label: "Pending run",
-            detail: "No metrics persisted",
-            tone: readiness.status === "blocked" ? "neutral" : "info",
-            icon: CircleDot,
-          },
+        : hasUnderwriting
+          ? {
+              key: "outputs",
+              label: "Outputs current",
+              detail: latestCompletedRun?.run_number
+                ? `Run version v${latestCompletedRun.run_number}`
+                : "Underwriting complete",
+              tone: "success",
+              icon: CheckCircle2,
+            }
+          : {
+              key: "outputs",
+              label: "Pending run",
+              detail: "No metrics persisted",
+              tone: readiness.status === "blocked" ? "neutral" : "info",
+              icon: CircleDot,
+            },
     terminalDecision
       ? {
           key: "committee",
@@ -484,7 +490,7 @@ function DealWorkflowStrip({
               ? "Inputs changed after memo run"
               : latestMemoRun?.run_number
                 ? `Run version v${latestMemoRun.run_number}`
-                : latestMemo.status ?? "generated",
+                : (latestMemo.status ?? "generated"),
             tone: memoStale || latestMemo.status === "needs_review" ? "warning" : "success",
             icon: FileText,
           }

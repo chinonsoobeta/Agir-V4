@@ -108,6 +108,14 @@ const checks = [
     skip: quick ? "skipped by --quick" : null,
   },
   {
+    name: "bundle audit",
+    command: "npm",
+    args: ["run", "bundle:audit"],
+    required: true,
+    scope: "pilot-blocking",
+    skip: quick ? "skipped by --quick" : null,
+  },
+  {
     name: "rls workspace policies",
     command: "npm",
     args: ["run", "test:rls"],

@@ -92,7 +92,11 @@ function aggregateRentRollRows(rows: ParsedRentRollRow[]): ParsedRentRollRow[] {
     };
     out.push({
       unitType: first.unitType,
-      tenant: group.map((row) => row.tenant).filter(Boolean).join(", ") || null,
+      tenant:
+        group
+          .map((row) => row.tenant)
+          .filter(Boolean)
+          .join(", ") || null,
       unitCount: unitTotal || first.unitCount,
       avgSf: sfTotal || first.avgSf,
       rent: weighted((row) => row.rent) ?? first.rent,
@@ -158,15 +162,14 @@ function parseRentRollSheet(
         ? occupancyRaw * 100
         : occupancyRaw;
     const basisText = rentBasisIndex >= 0 ? String(row[rentBasisIndex] ?? "").toLowerCase() : "";
-    const rentBasis: ParsedRentRollRow["rentBasis"] = /per[_\s-]*sf|psf|\$?\s*\/\s*sf|sf\s*\/\s*yr|square/.test(
-      basisText,
-    )
-      ? "per_sf"
-      : /per[_\s-]*unit|unit|month|mo/.test(basisText)
-        ? "per_unit"
-        : perSfRent && avgSf
-          ? "per_sf"
-          : "per_unit";
+    const rentBasis: ParsedRentRollRow["rentBasis"] =
+      /per[_\s-]*sf|psf|\$?\s*\/\s*sf|sf\s*\/\s*yr|square/.test(basisText)
+        ? "per_sf"
+        : /per[_\s-]*unit|unit|month|mo/.test(basisText)
+          ? "per_unit"
+          : perSfRent && avgSf
+            ? "per_sf"
+            : "per_unit";
     const annualOtherIncome =
       /other income|ancillary|parking|solar/.test(unitType.toLowerCase()) &&
       /annual|year|yr/.test(basisText);
@@ -177,9 +180,9 @@ function parseRentRollSheet(
         ? rawUnitCount
         : annualOtherIncome
           ? 1
-        : rentBasis === "per_sf"
-          ? 1
-          : NaN;
+          : rentBasis === "per_sf"
+            ? 1
+            : NaN;
     if (!Number.isFinite(unitCount) || !Number.isFinite(rent) || rent <= 0) {
       rejected.push({ row: rowNumber, reason: "Missing unit type, count, or rent.", values: row });
       return;
