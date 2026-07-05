@@ -1,0 +1,241 @@
+{
+  "fixture_kind": "representative_excel_validation_package",
+  "limitation": "Representative validation package for harness development only. Not external institutional parity.",
+  "project_deal_name": "Maple Heights Representative",
+  "scenario": "base",
+  "source_model_version": "agir-representative-validation-v1.0",
+  "source_workbook": "Agir_Representative_Excel_Validation_Package_v1.xlsx",
+  "expected_outputs": [
+    {
+      "metric_key": "total_development_cost",
+      "expected_value": 114000000,
+      "unit": "$",
+      "tolerance_abs": 100,
+      "tolerance_pct": 0.001,
+      "source_model_version": "agir-representative-validation-v1.0",
+      "source_cell": "Inputs!B18",
+      "source_type": "representative_excel_package",
+      "notes": "Use for harness development only"
+    },
+    {
+      "metric_key": "exit_value",
+      "expected_value": 94356780.77319066,
+      "unit": "$",
+      "tolerance_abs": 100,
+      "tolerance_pct": 0.001,
+      "source_model_version": "agir-representative-validation-v1.0",
+      "source_cell": "Outputs!B5",
+      "source_type": "representative_excel_package",
+      "notes": "Use for harness development only"
+    },
+    {
+      "metric_key": "stabilized_noi",
+      "expected_value": 4953730.9905925095,
+      "unit": "$",
+      "tolerance_abs": 100,
+      "tolerance_pct": 0.001,
+      "source_model_version": "agir-representative-validation-v1.0",
+      "source_cell": "Model!G11",
+      "source_type": "representative_excel_package",
+      "notes": "Use for harness development only"
+    },
+    {
+      "metric_key": "yield_on_cost",
+      "expected_value": 0.04345378061923254,
+      "unit": "%",
+      "tolerance_abs": 0.0001,
+      "tolerance_pct": 0.001,
+      "source_model_version": "agir-representative-validation-v1.0",
+      "source_cell": "Outputs!B7",
+      "source_type": "representative_excel_package",
+      "notes": "Use for harness development only"
+    },
+    {
+      "metric_key": "development_spread_bps",
+      "expected_value": -90.46219380767461,
+      "unit": "bps",
+      "tolerance_abs": 0.0001,
+      "tolerance_pct": 0.001,
+      "source_model_version": "agir-representative-validation-v1.0",
+      "source_cell": "Outputs!B8",
+      "source_type": "representative_excel_package",
+      "notes": "Use for harness development only"
+    },
+    {
+      "metric_key": "ltc",
+      "expected_value": 0.6,
+      "unit": "%",
+      "tolerance_abs": 0.0001,
+      "tolerance_pct": 0.001,
+      "source_model_version": "agir-representative-validation-v1.0",
+      "source_cell": "Outputs!B9",
+      "source_type": "representative_excel_package",
+      "notes": "Use for harness development only"
+    },
+    {
+      "metric_key": "annual_debt_service",
+      "expected_value": 5075989.930330891,
+      "unit": "$",
+      "tolerance_abs": 100,
+      "tolerance_pct": 0.001,
+      "source_model_version": "agir-representative-validation-v1.0",
+      "source_cell": "Model!D18",
+      "source_type": "representative_excel_package",
+      "notes": "Use for harness development only"
+    },
+    {
+      "metric_key": "dscr",
+      "expected_value": 0.8670871858315701,
+      "unit": "x",
+      "tolerance_abs": 0.0001,
+      "tolerance_pct": 0.001,
+      "source_model_version": "agir-representative-validation-v1.0",
+      "source_cell": "Outputs!B11",
+      "source_type": "representative_excel_package",
+      "notes": "Use for harness development only"
+    },
+    {
+      "metric_key": "debt_yield",
+      "expected_value": 0.06434686877192983,
+      "unit": "%",
+      "tolerance_abs": 0.0001,
+      "tolerance_pct": 0.001,
+      "source_model_version": "agir-representative-validation-v1.0",
+      "source_cell": "Outputs!B12",
+      "source_type": "representative_excel_package",
+      "notes": "Use for harness development only"
+    },
+    {
+      "metric_key": "required_equity",
+      "expected_value": 45600000,
+      "unit": "$",
+      "tolerance_abs": 100,
+      "tolerance_pct": 0.001,
+      "source_model_version": "agir-representative-validation-v1.0",
+      "source_cell": "Inputs!B40",
+      "source_type": "representative_excel_package",
+      "notes": "Use for harness development only"
+    },
+    {
+      "metric_key": "net_sale_proceeds",
+      "expected_value": 92469645.15772685,
+      "unit": "$",
+      "tolerance_abs": 100,
+      "tolerance_pct": 0.001,
+      "source_model_version": "agir-representative-validation-v1.0",
+      "source_cell": "Outputs!B14",
+      "source_type": "representative_excel_package",
+      "notes": "Use for harness development only"
+    },
+    {
+      "metric_key": "development_profit",
+      "expected_value": -21530354.842273146,
+      "unit": "$",
+      "tolerance_abs": 100,
+      "tolerance_pct": 0.001,
+      "source_model_version": "agir-representative-validation-v1.0",
+      "source_cell": "Outputs!B15",
+      "source_type": "representative_excel_package",
+      "notes": "Use for harness development only"
+    },
+    {
+      "metric_key": "profit_on_cost",
+      "expected_value": -0.18886276177432584,
+      "unit": "%",
+      "tolerance_abs": 0.0001,
+      "tolerance_pct": 0.001,
+      "source_model_version": "agir-representative-validation-v1.0",
+      "source_cell": "Outputs!B16",
+      "source_type": "representative_excel_package",
+      "notes": "Use for harness development only"
+    },
+    {
+      "metric_key": "equity_multiple",
+      "expected_value": 0.5667474187370192,
+      "unit": "x",
+      "tolerance_abs": 0.0001,
+      "tolerance_pct": 0.001,
+      "source_model_version": "agir-representative-validation-v1.0",
+      "source_cell": "Outputs!B17",
+      "source_type": "representative_excel_package",
+      "notes": "Use for harness development only"
+    },
+    {
+      "metric_key": "recommendation_code",
+      "expected_value": "REJECT",
+      "unit": "text",
+      "tolerance_abs": 0,
+      "tolerance_pct": 0,
+      "source_model_version": "agir-representative-validation-v1.0",
+      "source_cell": "Outputs!B18",
+      "source_type": "representative_excel_package",
+      "notes": "Use for harness development only"
+    }
+  ],
+  "workbook_checks": [
+    {
+      "check": "TDC equals budget sum",
+      "actual": 114000000,
+      "expected": 114000000,
+      "difference": 0,
+      "tolerance": 0,
+      "status": "OK"
+    },
+    {
+      "check": "Required equity equals TDC less loan",
+      "actual": 45600000,
+      "expected": 45600000,
+      "difference": 0,
+      "tolerance": 0,
+      "status": "OK"
+    },
+    {
+      "check": "Fixture rows populated",
+      "actual": 15,
+      "expected": 15,
+      "difference": 0,
+      "tolerance": 0,
+      "status": "OK"
+    },
+    {
+      "check": "Recommendation populated",
+      "actual": "REJECT",
+      "expected": "REJECT",
+      "difference": 0,
+      "tolerance": 0,
+      "status": "OK"
+    },
+    {
+      "check": "Formula error placeholder",
+      "actual": 0,
+      "expected": 0,
+      "difference": 0,
+      "tolerance": 0,
+      "status": "OK"
+    },
+    {
+      "check": "NOI growth copy-across check",
+      "actual": 0,
+      "expected": 0,
+      "difference": 0,
+      "tolerance": 1,
+      "status": "OK"
+    },
+    {
+      "check": "Debt yield positive",
+      "actual": 1,
+      "expected": 1,
+      "difference": 0,
+      "tolerance": 0,
+      "status": "OK"
+    },
+    {
+      "check": "Model status",
+      "actual": null,
+      "expected": "OK",
+      "difference": null,
+      "tolerance": 0,
+      "status": "OK"
+    }
+  ]
+}

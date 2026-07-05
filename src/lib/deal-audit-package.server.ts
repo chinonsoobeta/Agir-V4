@@ -2,7 +2,7 @@ import "@tanstack/react-start/server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
-import { buildDealRunAuditPackage } from "./customer-audit-package";
+import { assertDealRunAuditPackageValid, buildDealRunAuditPackage } from "./customer-audit-package";
 import {
   getLatestCompletedRunForContext,
   listCashFlowsForRunForContext,
@@ -135,7 +135,7 @@ export async function buildDealRunAuditPackageForContext(
     ? runRow.accepted_defaults_used
     : [];
 
-  return buildDealRunAuditPackage({
+  const pkg = buildDealRunAuditPackage({
     generatedAt: new Date().toISOString(),
     project: project.data as Record<string, unknown>,
     run: {
@@ -176,4 +176,6 @@ export async function buildDealRunAuditPackageForContext(
       payload: event.payload,
     })),
   });
+  assertDealRunAuditPackageValid(pkg);
+  return pkg;
 }

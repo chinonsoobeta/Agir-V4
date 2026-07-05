@@ -198,7 +198,7 @@ function AuditPackageButton({ projectId }: { projectId: string }) {
       a.download = name;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success("Audit package downloaded");
+      toast.success("Audit package downloaded. Validation passed.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Audit package export failed");
     } finally {
