@@ -26,6 +26,11 @@ ALTER TABLE public.decision_logs
   FOREIGN KEY (owner_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
 -- Transactional delete RPC for compatibility-path deletes (fixes N-M2)
+--
+-- MIGRATION_SAFETY_REVIEW: these DELETE statements are scoped to one project
+-- after an authenticated owner/workspace-member authorization check. The RPC
+-- only refreshes latest compatibility tables; immutable run history remains
+-- append-only.
 CREATE OR REPLACE FUNCTION public.delete_underwriting_outputs(p_project_id UUID)
 RETURNS void
 LANGUAGE plpgsql
@@ -33,6 +38,24 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'delete_underwriting_outputs requires the authenticated caller'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.projects p
+    WHERE p.id = p_project_id
+      AND (
+        (p.workspace_id IS NULL AND p.owner_id = auth.uid())
+        OR public.workspace_role(p.workspace_id) IN ('owner', 'admin', 'member')
+      )
+  ) THEN
+    RAISE EXCEPTION 'permission denied for underwriting output delete'
+      USING ERRCODE = '42501';
+  END IF;
+
   DELETE FROM public.financial_outputs WHERE project_id = p_project_id;
   DELETE FROM public.cash_flows WHERE project_id = p_project_id;
   DELETE FROM public.reconciliation_flags WHERE project_id = p_project_id;
@@ -40,4 +63,5 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION public.delete_underwriting_outputs(UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.delete_underwriting_outputs TO authenticated;

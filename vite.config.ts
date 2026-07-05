@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
   // SUPABASE_URL / NEXT_PUBLIC_SUPABASE_URL / SUPABASE_ANON_KEY: it does NOT provide
   // the VITE_* vars that a Vite browser bundle needs. We inject only the public URL +
   // anon key below. The service-role key is intentionally never exposed to the client.
-  const env = loadEnv(mode, process.cwd(), "VITE_");
+  const env = loadEnv(mode, process.cwd(), "");
   const SUPABASE_URL =
     env.SUPABASE_URL ||
     env.NEXT_PUBLIC_SUPABASE_URL ||

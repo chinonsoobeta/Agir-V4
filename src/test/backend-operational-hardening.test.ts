@@ -114,6 +114,38 @@ describe("backend operational hardening contract", () => {
     expect(sql).toContain("rate_limit_events");
   });
 
+  test("destructive underwriting compatibility RPC is tenant-authorized", () => {
+    const sql = read(
+      "supabase/migrations/20260706000100_add_profiles_policies_and_fk_constraints.sql",
+    );
+    expect(sql).toContain("MIGRATION_SAFETY_REVIEW:");
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION public.delete_underwriting_outputs");
+    expect(sql).toContain("auth.uid() IS NULL");
+    expect(sql).toContain("p.id = p_project_id");
+    expect(sql).toContain("p.owner_id = auth.uid()");
+    expect(sql).toContain("public.workspace_role(p.workspace_id)");
+    expect(sql).toContain(
+      "REVOKE ALL ON FUNCTION public.delete_underwriting_outputs(UUID) FROM PUBLIC",
+    );
+  });
+
+  test("new rollback docs faithfully narrow restored permissions", () => {
+    const runHistoryRollback = read(
+      "docs/migration-rollbacks/20260704000200_lock_run_history_insert_integrity.down.sql",
+    );
+    const rpcRollback = read(
+      "docs/migration-rollbacks/20260705000100_underwriting_run_transaction_rpc.down.sql",
+    );
+    expect(runHistoryRollback).toContain("run_financial_outputs_validate_insert");
+    expect(runHistoryRollback).toContain('CREATE POLICY "run_financial_outputs_insert_allowed"');
+    expect(runHistoryRollback).not.toContain("FOR ALL TO authenticated");
+    expect(rpcRollback).toContain(
+      "DROP FUNCTION IF EXISTS public.persist_underwriting_run_transaction",
+    );
+    expect(rpcRollback).not.toContain("GRANT UPDATE ON public.underwriting_runs");
+    expect(rpcRollback).not.toContain('CREATE POLICY "underwriting_runs_all"');
+  });
+
   test("operational metrics have a stable structured event shape", () => {
     const metric = buildMetricEvent("job.completed", 1, { jobId: "job-1" });
     expect(metric.level).toBe("metric");

@@ -284,6 +284,32 @@ async function persistUnderwritingRunTransaction(
   return data;
 }
 
+async function deleteLatestUnderwritingOutputs(ctx: ServerContext, projectId: string) {
+  const { error } = await ctx.supabase.rpc("delete_underwriting_outputs", {
+    p_project_id: projectId,
+  });
+  if (!isMissingFunction(error) && !isMissingRelation(error)) {
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  handleSchemaCompatibilityFallback(error, {
+    featureName: "transactional underwriting output deletes",
+    table: "delete_underwriting_outputs",
+    operation: "delete latest underwriting compatibility rows",
+    fallback: null,
+  });
+
+  const deletes = await Promise.all([
+    ctx.supabase.from("financial_outputs").delete().eq("project_id", projectId),
+    ctx.supabase.from("cash_flows").delete().eq("project_id", projectId),
+    ctx.supabase.from("reconciliation_flags").delete().eq("project_id", projectId),
+    ctx.supabase.from("risk_register").delete().eq("project_id", projectId),
+  ]);
+  const deleteError = deletes.find((res) => res.error)?.error;
+  if (deleteError) throw new Error(deleteError.message);
+}
+
 async function copyLatestCompatibilityRowsToRun(
   supabase: SupabaseFacade,
   projectId: string,
@@ -1481,11 +1507,7 @@ export async function runFullUnderwritingForContext(
 
   // Compatibility path for explicitly supported older schemas where the RPC
   // has not landed yet.
-  const { error: deleteErr } = await context.supabase.rpc(
-    "delete_underwriting_outputs",
-    { p_project_id: data.project_id },
-  );
-  if (deleteErr) throw new Error(deleteErr.message);
+  await deleteLatestUnderwritingOutputs(context, data.project_id);
 
   const completedRun = await insertUnderwritingRun(context, {
     projectId: data.project_id,

@@ -109,7 +109,8 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   // Equity requirement is funded by TOTAL debt (senior + mezz). Equal to
   // TDC - senior loan when there is no mezzanine.
   const impliedEquity = tdc - totalDebt;
-  const equity = input.equityAmount != null && input.equityAmount > 0 ? input.equityAmount : impliedEquity;
+  const equity =
+    input.equityAmount != null && input.equityAmount > 0 ? input.equityAmount : impliedEquity;
   const ltcPct = pct(totalDebt, tdc);
 
   // Debt service follows extracted terms: amortizing payment is the headline
