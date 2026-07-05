@@ -28,11 +28,14 @@ describe("backend operational hardening contract", () => {
 
   test("rate limits cover expensive backend surfaces", () => {
     expect(Object.keys(RATE_LIMIT_POLICY).sort()).toEqual([
+      "chat_completion",
       "document_analysis",
       "document_upload",
       "report_generation",
+      "scim_operation",
       "signed_document_url",
       "underwriting_run",
+      "workspace_invitation",
     ]);
     for (const policy of Object.values(RATE_LIMIT_POLICY)) {
       expect(policy.maxEvents).toBeGreaterThan(0);

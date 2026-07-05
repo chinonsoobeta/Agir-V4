@@ -695,10 +695,8 @@ export const extractAssumptions = createServerFn({ method: "POST" })
           aiMapped.push(...classified);
           classifiedCount += classified.length;
         }
-      } catch (error) {
-        // The deterministic mapping already ran and stands on its own: an AI
-        // failure degrades gracefully to it instead of failing the run.
-        aiFailureReason = `AI classification failed; fell back to the deterministic engine (${error instanceof Error ? error.message : "unavailable"}).`;
+      } catch {
+        aiFailureReason = "AI classification failed; fell back to the deterministic engine.";
         warnings.push(aiFailureReason);
         await recordAiFallback(context, data.project_id, "assumption_extraction", aiFailureReason);
       }

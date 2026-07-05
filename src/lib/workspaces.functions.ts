@@ -199,6 +199,11 @@ export const inviteWorkspaceMember = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ data, context }): Promise<WorkspaceInvitation> => {
     const supabase = context.supabase as any;
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit(context, "workspace_invitation", {
+      workspaceId: data.workspace_id,
+      metadata: { email: data.email },
+    });
     const { data: governance, error: governanceError } = await supabase
       .from("workspace_settings")
       .select("allowed_email_domains")

@@ -1128,10 +1128,13 @@ export async function runFullUnderwritingForContext(
     message: "Running underwriting",
   });
   if (runExisted && runJob.status === "completed" && runJob.result_json) {
-    const { data: cachedOutputs, error } = await context.supabase
+    const prevRunId = (runJob.result_json as any)?.run_version?.id as string | undefined;
+    let query = context.supabase
       .from("financial_outputs")
       .select("scenario_key,metric_key,metric_label,value_numeric,unit,formula_text")
       .eq("project_id", data.project_id);
+    if (prevRunId) query = query.eq("run_id", prevRunId);
+    const { data: cachedOutputs, error } = await query;
     if (error) throw new Error(error.message);
     if ((cachedOutputs ?? []).length > 0) {
       const cachedOutputSnapshot = outputSnapshot(
@@ -1233,13 +1236,28 @@ export async function runFullUnderwritingForContext(
 
   // ---- Deterministic Insight Layer (context, benchmarks, attribution, NLG) ----
   // Portfolio-derived norms (the firm's own deals) blend with curated defaults
-  // for context-aware judgment. Pure read of other projects' base metrics.
-  const { data: portfolioRows } = await context.supabase
-    .from("financial_outputs")
-    .select("project_id, metric_key, value_numeric")
-    .eq("owner_id", context.userId)
-    .eq("scenario_key", "base")
-    .neq("project_id", data.project_id);
+  // for context-aware judgment. Scoped to the project's workspace so team-wide
+  // norms are consistent across analysts.
+  const { data: projectWs } = await context.supabase
+    .from("projects")
+    .select("workspace_id")
+    .eq("id", data.project_id)
+    .maybeSingle();
+  const peerProjectIds = projectWs?.workspace_id
+    ? await context.supabase
+        .from("projects")
+        .select("id")
+        .eq("workspace_id", projectWs.workspace_id)
+        .neq("id", data.project_id)
+        .then((r: { data: Array<{ id: string }> | null }) => r.data?.map((p) => p.id) ?? [])
+    : [];
+  const { data: portfolioRows } = peerProjectIds.length
+    ? await context.supabase
+        .from("financial_outputs")
+        .select("project_id, metric_key, value_numeric")
+        .in("project_id", peerProjectIds)
+        .eq("scenario_key", "base")
+    : { data: [] };
   const portfolioNorms = computePortfolioNorms((portfolioRows ?? []) as any);
   const { data: projectRow } = await context.supabase
     .from("projects")
@@ -1430,6 +1448,27 @@ export async function runFullUnderwritingForContext(
     jobResult: resultBase,
   });
   if (transactionalRun) {
+    const runVersionInfo = {
+      id: transactionalRun.id,
+      run_number: transactionalRun.run_number,
+      status: transactionalRun.status,
+    };
+    // Ensure idempotency and audit even on the RPC path.
+    await completeJob(context, runJob.id, { ...resultBase, run_version: runVersionInfo });
+    const { writeAuditEvent } = await import("./audit.server");
+    await writeAuditEvent(context, {
+      projectId: data.project_id,
+      entityType: "project",
+      entityId: data.project_id,
+      action: "run_full_underwriting",
+      payload: {
+        ...runAuditPayload,
+        run_id: transactionalRun.id,
+        run_number: transactionalRun.run_number,
+        input_fingerprint: inputFingerprint,
+        output_fingerprint: outputFingerprint,
+      },
+    });
     return {
       ...resultBase,
       run_version: {
@@ -1442,12 +1481,11 @@ export async function runFullUnderwritingForContext(
 
   // Compatibility path for explicitly supported older schemas where the RPC
   // has not landed yet.
-  await Promise.all([
-    context.supabase.from("financial_outputs").delete().eq("project_id", data.project_id),
-    context.supabase.from("cash_flows").delete().eq("project_id", data.project_id),
-    context.supabase.from("reconciliation_flags").delete().eq("project_id", data.project_id),
-    context.supabase.from("risk_register").delete().eq("project_id", data.project_id),
-  ]);
+  const { error: deleteErr } = await context.supabase.rpc(
+    "delete_underwriting_outputs",
+    { p_project_id: data.project_id },
+  );
+  if (deleteErr) throw new Error(deleteErr.message);
 
   const completedRun = await insertUnderwritingRun(context, {
     projectId: data.project_id,

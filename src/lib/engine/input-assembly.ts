@@ -290,7 +290,7 @@ export function computeReadiness(rows: ProjectInputRows): Readiness {
   // or an approved project-level stabilized_occupancy_pct fallback).
   const projectOcc = readableScalar(rows.scalars, "stabilized_occupancy_pct");
   for (const component of readableComponents) {
-    if (component.occupancy_pct == null && !projectOcc) {
+    if (component.occupancy_pct == null && projectOcc == null) {
       pushMissing(`occupancy:${component.unit_type}`);
     }
   }

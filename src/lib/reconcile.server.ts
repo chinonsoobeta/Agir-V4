@@ -49,7 +49,7 @@ export function reconcileDevelopmentInputs(input: {
     expected?: number | null,
     actual?: number | null,
   ) => {
-    if (!expected || !actual) return;
+    if (expected == null || actual == null) return;
     const deltaPct = (Math.abs(actual - expected) / Math.abs(expected)) * 100;
     if (deltaPct <= 5) return;
     flags.push({

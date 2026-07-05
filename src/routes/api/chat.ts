@@ -30,6 +30,11 @@ export const Route = createFileRoute("/api/chat")({
         const { data: user } = await supabase.auth.getUser(token);
         if (!user.user) return new Response("Unauthorized", { status: 401 });
 
+        // Deal-aware focus: when the copilot is opened from a deal, the client
+        // sends X-Agir-Deal so the copilot reasons over that deal's findings,
+        // scores and recommendation first.
+        const focusId = request.headers.get("x-agir-deal");
+
         const { data: projects } = await supabase.from("projects").select("*");
         const { data: assumptions } = await supabase
           .from("assumptions")
@@ -37,6 +42,11 @@ export const Route = createFileRoute("/api/chat")({
             "project_id,field_key,field_label,category,value_numeric,value_text,unit,status,confidence_score,source_location,source_text,source_document_id,conflict_values",
           )
           .in("status", ["approved", "modified"]);
+        const { enforceRateLimit } = await import("@/lib/rate-limit.server");
+        await enforceRateLimit({ supabase, userId: user.user.id }, "chat_completion", {
+          metadata: { focus_id: focusId ?? null },
+        });
+
         const { data: outputs } = await supabase
           .from("financial_outputs")
           .select(
@@ -46,10 +56,6 @@ export const Route = createFileRoute("/api/chat")({
           .from("decision_logs")
           .select("project_id,decision,rationale,conditions,created_at");
 
-        // Deal-aware focus: when the copilot is opened from a deal, the client
-        // sends X-Agir-Deal so the copilot reasons over that deal's findings,
-        // scores and recommendation first.
-        const focusId = request.headers.get("x-agir-deal");
         let focus = "";
         if (focusId) {
           try {

@@ -288,14 +288,8 @@ export const analyzeDocument = createServerFn({ method: "POST" })
       await completeJob(context, job.id, extractionResult);
       return extractionResult;
     } catch (err) {
-      // The executor has already persisted the failure to the document row.
-      const message =
-        err instanceof ExtractionFailure
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Document analysis failed.";
-      await failJob(context, job.id, message);
-      throw err instanceof Error ? err : new Error(message);
+      const message = "Document analysis failed. Please try again.";
+      await failJob(context, job.id, err instanceof Error ? err.message : message);
+      throw new Error(message);
     }
   });

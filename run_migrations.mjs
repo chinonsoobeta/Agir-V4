@@ -174,7 +174,7 @@ async function runMigrations() {
 
   const client = new Client({
     connectionString,
-    ssl: shouldUseSsl(connectionString) ? { rejectUnauthorized: false } : false,
+    ssl: shouldUseSsl(connectionString) ? { rejectUnauthorized: true } : false,
   });
 
   await client.connect();

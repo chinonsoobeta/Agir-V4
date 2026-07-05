@@ -127,6 +127,6 @@ export async function handleScim(
     return json(405, scimError(405, `Method ${method} not allowed on /Users/:id.`));
   } catch (e) {
     if (e instanceof ScimParseError) return json(400, scimError(400, e.message));
-    return json(500, scimError(500, e instanceof Error ? e.message : "SCIM request failed."));
+    return json(500, scimError(500, "SCIM request failed."));
   }
 }

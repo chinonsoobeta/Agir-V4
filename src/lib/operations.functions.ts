@@ -14,7 +14,14 @@ const milestoneSchema = z.object({
   project_id: z.string().uuid(),
   title: z.string().min(1).max(240),
   category: z.string().min(1).max(80).default("execution"),
-  due_date: z.string().nullable().optional(),
+  due_date: z
+    .string()
+    .regex(
+      /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?)?$/,
+      "Must be a valid ISO date (YYYY-MM-DD or ISO 8601 datetime)",
+    )
+    .nullable()
+    .optional(),
   status: z.enum(["not_started", "in_progress", "blocked", "complete"]).default("not_started"),
   priority: z.enum(["low", "medium", "high", "critical"]).default("medium"),
   notes: z.string().max(4000).nullable().optional(),
@@ -52,7 +59,14 @@ export const updateMilestone = createServerFn({ method: "POST" })
       .object({
         id: z.string().uuid(),
         status: z.enum(["not_started", "in_progress", "blocked", "complete"]).optional(),
-        due_date: z.string().nullable().optional(),
+        due_date: z
+          .string()
+          .regex(
+            /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?)?$/,
+            "Must be a valid ISO date (YYYY-MM-DD or ISO 8601 datetime)",
+          )
+          .nullable()
+          .optional(),
         priority: z.enum(["low", "medium", "high", "critical"]).optional(),
         notes: z.string().max(4000).nullable().optional(),
       })
@@ -114,6 +128,7 @@ export const listIntegrations = createServerFn({ method: "GET" })
     const { data, error } = await context.supabase
       .from("integration_connections")
       .select("*")
+      .eq("owner_id", context.userId)
       .order("created_at", { ascending: true });
     if (isMissingRelation(error)) {
       const { data: events, error: activityError } = await context.supabase

@@ -47,7 +47,7 @@ export function computeInvestmentVerdict(metrics: VerdictMetricMap) {
     },
   ];
   const failures = gates.filter((gate) => !gate.pass);
-  const hardFail = metrics.equity_wipeout === true || (metrics.error_flag_count ?? 0) > 0;
+  const hardFail = metrics.equity_wipeout === true;
   const code: VerdictCode =
     hardFail || failures.length > 2
       ? "REJECT"

@@ -6,7 +6,10 @@ export type RateLimitBucket =
   | "document_analysis"
   | "underwriting_run"
   | "report_generation"
-  | "signed_document_url";
+  | "signed_document_url"
+  | "chat_completion"
+  | "scim_operation"
+  | "workspace_invitation";
 
 export const RATE_LIMIT_POLICY: Record<
   RateLimitBucket,
@@ -36,6 +39,21 @@ export const RATE_LIMIT_POLICY: Record<
     maxEvents: 180,
     windowSeconds: 60 * 60,
     description: "Signed document URL requests per user per hour.",
+  },
+  chat_completion: {
+    maxEvents: 120,
+    windowSeconds: 60 * 60,
+    description: "Chat completion requests per user per hour.",
+  },
+  scim_operation: {
+    maxEvents: 200,
+    windowSeconds: 60 * 60,
+    description: "SCIM provisioning operations per workspace per hour.",
+  },
+  workspace_invitation: {
+    maxEvents: 50,
+    windowSeconds: 24 * 60 * 60,
+    description: "Workspace invitations per user per 24 hours.",
   },
 };
 

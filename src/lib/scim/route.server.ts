@@ -11,6 +11,25 @@ import { createSupabaseScimStore } from "./supabase-store.server";
 
 const SCIM_CONTENT_TYPE = "application/scim+json";
 
+const SCIM_WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const SCIM_WINDOW_MS = 60 * 60 * 1000;
+const SCIM_MAX_WRITES = 200;
+const scimRateMap = new Map<string, { count: number; windowStart: number }>();
+
+function enforceScimRateLimit(workspaceId: string, method: string): void {
+  if (!SCIM_WRITE_METHODS.has(method)) return;
+  const now = Date.now();
+  const entry = scimRateMap.get(workspaceId);
+  if (!entry || now - entry.windowStart > SCIM_WINDOW_MS) {
+    scimRateMap.set(workspaceId, { count: 1, windowStart: now });
+    return;
+  }
+  if (entry.count >= SCIM_MAX_WRITES) {
+    throw new Error("SCIM rate limit reached. Try again later.");
+  }
+  entry.count++;
+}
+
 export async function handleScimRoute(request: Request, segments: string[]): Promise<Response> {
   const expectedToken = process.env.SCIM_BEARER_TOKEN;
   const workspaceId = process.env.SCIM_WORKSPACE_ID;
@@ -37,6 +56,8 @@ export async function handleScimRoute(request: Request, segments: string[]): Pro
       body = undefined;
     }
   }
+
+  await enforceScimRateLimit(workspaceId, method);
 
   const res = await handleScim(
     {

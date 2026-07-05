@@ -222,7 +222,8 @@ class Parser {
       const next = this.peek();
       if (next && next.type === "lparen") {
         // Function call. Only whitelisted names are callable.
-        if (!(t.name in WHITELIST_FNS)) throw new ExpressionError(`Unknown function '${t.name}'.`);
+        if (!Object.hasOwn(WHITELIST_FNS, t.name))
+          throw new ExpressionError(`Unknown function '${t.name}'.`);
         const fn = t.name as WhitelistFn;
         this.pos += 1; // consume '('
         const args: ExprNode[] = [];

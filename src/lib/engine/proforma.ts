@@ -109,7 +109,7 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
   // Equity requirement is funded by TOTAL debt (senior + mezz). Equal to
   // TDC - senior loan when there is no mezzanine.
   const impliedEquity = tdc - totalDebt;
-  const equity = input.equityAmount && input.equityAmount > 0 ? input.equityAmount : impliedEquity;
+  const equity = input.equityAmount != null && input.equityAmount > 0 ? input.equityAmount : impliedEquity;
   const ltcPct = pct(totalDebt, tdc);
 
   // Debt service follows extracted terms: amortizing payment is the headline
@@ -272,7 +272,7 @@ export function runUnderwriting(input: UnderwritingInput): EngineOutput {
       actual: violation.value,
     });
   }
-  if (input.equityAmount && Math.abs(input.equityAmount - impliedEquity) > 1) {
+  if (input.equityAmount != null && Math.abs(input.equityAmount - impliedEquity) > 1) {
     warnings.push({
       key: "equity_mismatch",
       message: "Analyst equity differs from TDC minus loan amount.",
