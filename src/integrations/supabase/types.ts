@@ -2882,6 +2882,10 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      delete_underwriting_outputs: {
+        Args: { p_project_id: string };
+        Returns: undefined;
+      };
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"];

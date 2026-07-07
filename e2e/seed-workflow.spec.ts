@@ -1,18 +1,27 @@
 import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { seedPackageAndOpen } from "./seed-helpers";
 import { runFullUnderwritingForContext } from "../src/lib/underwriting.server";
 import { buildDealRunAuditPackageForContext } from "../src/lib/deal-audit-package.server";
 
 function localSupabaseAdmin() {
-  const env = Object.fromEntries(
-    readFileSync(".env.local", "utf8")
-      .trim()
-      .split(/\n/)
-      .map((line) => line.split("=")),
-  );
-  return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+  const fileEnv = existsSync(".env.local")
+    ? Object.fromEntries(
+        readFileSync(".env.local", "utf8")
+          .trim()
+          .split(/\n/)
+          .filter(Boolean)
+          .map((line) => line.split("=", 2)),
+      )
+    : {};
+  const SUPABASE_URL = process.env.SUPABASE_URL ?? fileEnv.SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ?? fileEnv.SUPABASE_SERVICE_ROLE_KEY;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY for E2E admin client.");
+  }
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }

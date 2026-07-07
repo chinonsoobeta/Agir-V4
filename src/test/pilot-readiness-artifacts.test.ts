@@ -73,4 +73,18 @@ describe("pilot readiness artifacts", () => {
     expect(gate).toContain("SCHEMA_DRIFT_DATABASE_URL");
     expect(gate).toContain('scope: "pilot-blocking"');
   });
+
+  test("push-gate artifacts cover generated types and CI E2E auth", () => {
+    const types = read("src/integrations/supabase/types.ts");
+    const authSetup = read("e2e/auth.setup.ts");
+    const seedWorkflow = read("e2e/seed-workflow.spec.ts");
+
+    expect(types).toContain("delete_underwriting_outputs");
+    expect(types).toContain("Args: { p_project_id: string }");
+    expect(authSetup).toContain("process.env.SUPABASE_URL");
+    expect(authSetup).toContain("process.env.SUPABASE_ANON_KEY");
+    expect(authSetup).toContain("writeFile(");
+    expect(seedWorkflow).toContain("process.env.SUPABASE_SERVICE_ROLE_KEY");
+    expect(seedWorkflow).not.toContain('readFileSync(".env.local", "utf8")\n      .trim()');
+  });
 });
