@@ -9,6 +9,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
+import { getSchemaCompatMode } from "./db-compat";
 
 export const UPLOAD_LIMITS = {
   // Authoritative per-file size cap (also enforced client-side for UX).
@@ -24,6 +25,19 @@ export const UPLOAD_LIMITS = {
 
 export type ScanResult = { ok: boolean; detail: string };
 
+const ALLOWED_EXTENSIONS = new Set([
+  "pdf",
+  "xlsx",
+  "xls",
+  "docx",
+  "doc",
+  "csv",
+  "txt",
+  "png",
+  "jpg",
+  "jpeg",
+]);
+
 const SIGNATURES: Record<string, (b: Uint8Array) => boolean> = {
   pdf: (b) => b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46, // %PDF
   png: (b) => b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47,
@@ -38,6 +52,47 @@ const SIGNATURES: Record<string, (b: Uint8Array) => boolean> = {
 function extOf(name: string): string {
   const m = /\.([a-z0-9]+)$/i.exec(name);
   return m ? m[1].toLowerCase() : "";
+}
+
+/** Validate the browser's upload *intent*, never the uploaded bytes. The
+ * server validates bytes and computes the authoritative hash at finalize. */
+export function validateUploadIntent(name: string, expectedSize: number): ScanResult {
+  if (!Number.isSafeInteger(expectedSize) || expectedSize < 1) {
+    return { ok: false, detail: "Expected file size is invalid." };
+  }
+  if (expectedSize > UPLOAD_LIMITS.maxFileBytes) {
+    return {
+      ok: false,
+      detail: `File exceeds the ${Math.round(UPLOAD_LIMITS.maxFileBytes / (1024 * 1024))} MB limit.`,
+    };
+  }
+  if (!name || name.length > 255 || /[\\/]/.test(name) || name.includes("..")) {
+    return { ok: false, detail: "File name is invalid." };
+  }
+  if (!ALLOWED_EXTENSIONS.has(extOf(name))) {
+    return { ok: false, detail: `Unsupported file type: .${extOf(name) || "(none)"}` };
+  }
+  return { ok: true, detail: "valid upload intent" };
+}
+
+export function isCompatibleVerifiedMime(name: string, mime: string | null | undefined): boolean {
+  if (!mime) return true; // Storage does not always preserve a MIME value.
+  const normalized = mime.split(";", 1)[0]?.trim().toLowerCase();
+  if (!normalized || normalized === "application/octet-stream") return true;
+  const ext = extOf(name);
+  const allowed: Record<string, RegExp> = {
+    pdf: /^application\/pdf$/,
+    png: /^image\/png$/,
+    jpg: /^image\/jpeg$/,
+    jpeg: /^image\/jpeg$/,
+    csv: /^(text\/csv|application\/csv|text\/plain)$/,
+    txt: /^text\/plain$/,
+    xlsx: /^(application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|application\/zip)$/,
+    docx: /^(application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document|application\/zip)$/,
+    xls: /^(application\/vnd\.ms-excel|application\/octet-stream)$/,
+    doc: /^(application\/msword|application\/octet-stream)$/,
+  };
+  return allowed[ext]?.test(normalized) ?? false;
 }
 
 /**
@@ -169,7 +224,11 @@ export async function scanDocument(name: string, buf: ArrayBuffer): Promise<Full
   const url = process.env.DOCUMENT_SCAN_URL?.trim();
   if (!url) return { ...structural, engine: "structural" };
 
-  const failOpen = process.env.DOCUMENT_SCAN_FAIL_OPEN === "1";
+  // A scanner outage must never authorize production/staging ingestion. The
+  // escape hatch exists solely for isolated demo/test fixtures where no AV
+  // service is intentionally provisioned.
+  const failOpen =
+    process.env.DOCUMENT_SCAN_FAIL_OPEN === "1" && getSchemaCompatMode() !== "strict";
   const multipart = process.env.DOCUMENT_SCAN_FORMAT?.trim().toLowerCase() === "multipart";
   try {
     const controller = new AbortController();

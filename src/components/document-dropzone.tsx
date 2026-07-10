@@ -3,14 +3,19 @@ import { useServerFn } from "@tanstack/react-start";
 import { UploadCloud, FileText, Loader2, CheckCircle2, XCircle, CopyX } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { createDocument, analyzeDocument } from "@/lib/documents.functions";
+import {
+  analyzeDocument,
+  createDocument,
+  finalizeDocumentUpload,
+  requestDocumentUpload,
+} from "@/lib/documents.functions";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
 
 type CreatedDocument = Tables<"documents"> & { deduped?: boolean };
 
-const ACCEPT = ".pdf,.xlsx,.xls,.doc,.docx,.csv,.png,.jpg,.jpeg";
-const ACCEPT_RE = /\.(pdf|xlsx|xls|docx?|csv|png|jpe?g)$/i;
+const ACCEPT = ".pdf,.xlsx,.xls,.doc,.docx,.csv,.txt,.png,.jpg,.jpeg";
+const ACCEPT_RE = /\.(pdf|xlsx|xls|docx?|csv|txt|png|jpe?g)$/i;
 // Mirror of UPLOAD_LIMITS.maxFileBytes (server is authoritative); enforced here
 // for immediate, graceful feedback before bytes are sent.
 const MAX_FILE_BYTES = 75 * 1024 * 1024;
@@ -58,6 +63,8 @@ export function DocumentDropzone({
   autoAnalyze?: boolean;
 }) {
   const createFn = useServerFn(createDocument);
+  const requestUploadFn = useServerFn(requestDocumentUpload);
+  const finalizeUploadFn = useServerFn(finalizeDocumentUpload);
   const analyzeFn = useServerFn(analyzeDocument);
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -87,29 +94,50 @@ export function DocumentDropzone({
     }
     try {
       setItem(id, { status: "uploading" });
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) throw new Error("Not authenticated");
-      const contentHash = await sha256Hex(file);
-      const path = `${u.user.id}/${id}-${file.name}`;
-      const { error: upErr } = await supabase.storage.from("documents").upload(path, file);
-      if (upErr) throw upErr;
-      const doc: CreatedDocument = await createFn({
+      const authorization = await requestUploadFn({
         data: {
           project_id: projectId,
           name: file.name,
-          file_type: file.type,
+          file_type: file.type || null,
           category,
-          storage_path: path,
           size_bytes: file.size,
-          content_hash: contentHash,
         },
       });
+      let doc: CreatedDocument;
+      if (authorization.mode === "signed") {
+        const { error: upErr } = await supabase.storage
+          .from("documents")
+          .uploadToSignedUrl(authorization.path, authorization.token, file, {
+            contentType: file.type || undefined,
+          });
+        if (upErr) throw upErr;
+        doc = (await finalizeUploadFn({
+          data: { upload_id: authorization.upload_id },
+        })) as CreatedDocument;
+      } else {
+        // Only an explicitly non-strict demo/test schema can return legacy.
+        // Production/staging always use the signed, server-finalized branch.
+        const contentHash = await sha256Hex(file);
+        const { error: upErr } = await supabase.storage
+          .from("documents")
+          .upload(authorization.path, file);
+        if (upErr) throw upErr;
+        doc = await createFn({
+          data: {
+            project_id: projectId,
+            name: file.name,
+            file_type: file.type,
+            category,
+            storage_path: authorization.path,
+            size_bytes: file.size,
+            content_hash: contentHash,
+          },
+        });
+      }
       // Server treated this as a duplicate of already-uploaded content.
       if (doc?.deduped) {
-        // The duplicate check occurs after direct-to-storage upload. Remove the
-        // just-uploaded object so retries do not leave orphaned bucket data.
-        const { error: removeError } = await supabase.storage.from("documents").remove([path]);
-        if (removeError) console.warn("Unable to remove duplicate document upload", removeError);
+        // Staged finalization removes signed-flow duplicates server-side. The
+        // legacy bridge remains responsible for its own temporary object.
         setItem(id, { status: "duplicate" });
         onChanged();
         return;

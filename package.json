@@ -29,6 +29,7 @@
     "types:check": "node scripts/check-generated-types.mjs",
     "drift:check": "node scripts/check-schema-drift.mjs",
     "deploy:gate": "node scripts/deploy-gate.mjs",
+    "confidence:full": "node scripts/full-environment-gate.mjs",
     "schema:refresh-cache": "node scripts/refresh-schema-cache.mjs",
     "audit:verify-chains": "node scripts/verify-audit-chains.mjs",
     "audit:service-role": "node scripts/audit-service-role-usage.mjs",
@@ -48,6 +49,7 @@
     "load:tenant-scale": "node scripts/tenant-scale-load.mjs",
     "load:tenant-db": "node scripts/tenant-db-concurrency-smoke.mjs",
     "worker:extraction": "node scripts/extraction-worker.mjs",
+    "uploads:cleanup": "node scripts/cleanup-pending-document-uploads.mjs",
     "sla:probe": "node scripts/sla-probe.mjs",
     "readiness:deployed": "node scripts/deployed-readiness-check.mjs"
   },

@@ -146,6 +146,20 @@ spec exercises document visibility, assumption provenance/confidence, explicit
 conflict resolution, fail-closed blocked underwriting controls, memo readiness,
 and audit signals without external AI credentials.
 
+### Upload security and full confidence gate
+
+Document uploads use a short-lived server-authorized pending record. The
+browser can upload only to the signed path bound to that record; Agir then
+downloads, measures, scans, and hashes the object on the server before it
+creates a usable document. Client metadata and client hashes are never
+authoritative. Run `npm run uploads:cleanup` on a trusted scheduler every 15
+minutes to remove expired reservations.
+
+For the non-skipping local release-equivalent gate, start Supabase, export its
+URL/anon/service/database values, seed the demo user, install Chromium, then
+run `npm run confidence:full`. It fails rather than skipping RLS, audit-chain,
+or browser proof when the environment is absent.
+
 ---
 
 ## Project layout

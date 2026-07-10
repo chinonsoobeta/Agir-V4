@@ -1658,6 +1658,85 @@ export type Database = {
           },
         ];
       };
+      pending_document_uploads: {
+        Row: {
+          category: string | null;
+          created_at: string;
+          document_id: string | null;
+          expected_content_type: string | null;
+          expected_size_bytes: number;
+          expires_at: string;
+          failure_reason: string | null;
+          file_name: string;
+          finalized_at: string | null;
+          id: string;
+          object_path: string;
+          owner_id: string;
+          project_id: string | null;
+          status: string;
+          updated_at: string;
+          workspace_id: string | null;
+        };
+        Insert: {
+          category?: string | null;
+          created_at?: string;
+          document_id?: string | null;
+          expected_content_type?: string | null;
+          expected_size_bytes: number;
+          expires_at: string;
+          failure_reason?: string | null;
+          file_name: string;
+          finalized_at?: string | null;
+          id?: string;
+          object_path: string;
+          owner_id: string;
+          project_id?: string | null;
+          status?: string;
+          updated_at?: string;
+          workspace_id?: string | null;
+        };
+        Update: {
+          category?: string | null;
+          created_at?: string;
+          document_id?: string | null;
+          expected_content_type?: string | null;
+          expected_size_bytes?: number;
+          expires_at?: string;
+          failure_reason?: string | null;
+          file_name?: string;
+          finalized_at?: string | null;
+          id?: string;
+          object_path?: string;
+          owner_id?: string;
+          project_id?: string | null;
+          status?: string;
+          updated_at?: string;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "pending_document_uploads_document_id_fkey";
+            columns: ["document_id"];
+            isOneToOne: false;
+            referencedRelation: "documents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "pending_document_uploads_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "pending_document_uploads_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       profiles: {
         Row: {
           avatar_url: string | null;
@@ -2866,6 +2945,17 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      consume_rate_limit: {
+        Args: {
+          p_bucket: string;
+          p_cost: number;
+          p_max_events: number;
+          p_metadata?: Json;
+          p_window_seconds: number;
+          p_workspace_id?: string;
+        };
+        Returns: boolean;
+      };
       create_workspace: {
         Args: { p_name: string };
         Returns: {
@@ -2881,6 +2971,21 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      finalize_document_upload: {
+        Args: {
+          p_actual_size_bytes: number;
+          p_content_hash: string;
+          p_owner_id: string;
+          p_scan_detail: string;
+          p_upload_id: string;
+          p_verified_content_type: string;
+        };
+        Returns: {
+          deduped: boolean;
+          document_id: string;
+          object_path: string;
+        }[];
       };
       delete_underwriting_outputs: {
         Args: { p_project_id: string };
@@ -2902,6 +3007,20 @@ export type Database = {
         Returns: boolean;
       };
       is_workspace_member: { Args: { ws: string }; Returns: boolean };
+      prepare_document_upload: {
+        Args: {
+          p_category?: string;
+          p_expected_content_type: string;
+          p_expected_size_bytes: number;
+          p_file_name: string;
+          p_project_id: string;
+        };
+        Returns: { expires_at: string; object_path: string; upload_id: string }[];
+      };
+      reject_document_upload: {
+        Args: { p_owner_id: string; p_reason: string; p_upload_id: string };
+        Returns: boolean;
+      };
       request_extraction_job_cancellation: {
         Args: { p_job_id: string };
         Returns: boolean;

@@ -60,9 +60,10 @@ function isDeniedError(error: unknown) {
   );
 }
 
+const connectionString = resolveDatabaseUrl();
 const client = new Client({
-  connectionString: resolveDatabaseUrl(),
-  ssl: shouldUseSsl(resolveDatabaseUrl()) ? { rejectUnauthorized: false } : false,
+  connectionString,
+  ssl: shouldUseSsl(connectionString) ? { rejectUnauthorized: false } : false,
 });
 
 async function asUser<T = Record<string, unknown>>(
@@ -95,8 +96,38 @@ async function expectDenied(work: Promise<unknown>) {
   throw new Error("Expected database operation to be denied");
 }
 
+async function asConcurrentUser<T = Record<string, unknown>>(
+  userId: string,
+  sql: string,
+  values: unknown[] = [],
+) {
+  const isolated = new Client({
+    connectionString,
+    ssl: shouldUseSsl(connectionString) ? { rejectUnauthorized: false } : false,
+  });
+  await isolated.connect();
+  try {
+    await isolated.query("BEGIN");
+    await isolated.query("SET LOCAL ROLE authenticated");
+    await isolated.query("SELECT set_config('request.jwt.claims', $1, true)", [
+      JSON.stringify({ sub: userId, role: "authenticated" }),
+    ]);
+    const result = await isolated.query<T>(sql, values);
+    await isolated.query("COMMIT");
+    return result;
+  } catch (error) {
+    await isolated.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    await isolated.end();
+  }
+}
+
 async function resetFixture() {
   await client.query("TRUNCATE auth.users CASCADE");
+  await client.query(
+    "INSERT INTO storage.buckets (id, name, public) VALUES ('documents', 'documents', false) ON CONFLICT (id) DO NOTHING",
+  );
   await client.query(
     `
     INSERT INTO auth.users (id, email, raw_user_meta_data)
@@ -413,5 +444,72 @@ describe("workspace RLS policies", () => {
         [ids.project, ids.member],
       ),
     ).rejects.toThrow();
+  });
+
+  test("only a server-created pending record can authorize a storage object and document finalization", async () => {
+    await expectDenied(
+      asUser(
+        ids.member,
+        `INSERT INTO public.documents (project_id, owner_id, name, storage_path)
+         VALUES ($1, $2, 'forged.pdf', $2 || '/forged.pdf')`,
+        [ids.project, ids.member],
+      ),
+    );
+
+    const prepared = await asUser<{ upload_id: string; object_path: string }>(
+      ids.member,
+      "SELECT * FROM public.prepare_document_upload($1, 'Budget.pdf', 'application/pdf', 1024, 'budget')",
+      [ids.project],
+    );
+    expect(prepared.rowCount).toBe(1);
+    const pending = prepared.rows[0];
+    expect(pending.object_path).toContain(`${ids.member}/pending/${pending.upload_id}/`);
+
+    await expectDenied(
+      asUser(ids.member, "INSERT INTO storage.objects(bucket_id, name) VALUES ('documents', $1)", [
+        `${ids.member}/arbitrary.pdf`,
+      ]),
+    );
+    const permitted = await asUser(
+      ids.member,
+      "INSERT INTO storage.objects(bucket_id, name) VALUES ('documents', $1) RETURNING id",
+      [pending.object_path],
+    );
+    expect(permitted.rowCount).toBe(1);
+
+    // The finalization RPC is service-role only. An authenticated browser can
+    // reserve/upload its object, but cannot forge a scan/hash verdict.
+    await expectDenied(
+      asUser(
+        ids.member,
+        "SELECT * FROM public.finalize_document_upload($1, $2, $3, 1024, 'application/pdf', '[structural] clean')",
+        [pending.upload_id, ids.member, "a".repeat(64)],
+      ),
+    );
+
+    await expectDenied(
+      asUser(
+        ids.viewer,
+        "SELECT * FROM public.prepare_document_upload($1, 'Viewer.pdf', 'application/pdf', 1024, 'budget')",
+        [ids.project],
+      ),
+    );
+  });
+
+  test("concurrent upload reservations cannot exceed the per-user file quota", async () => {
+    await client.query(
+      `INSERT INTO public.documents (project_id, owner_id, name, storage_path, size_bytes)
+       SELECT $1, $2, 'prior-' || g || '.pdf', $2::text || '/seed-' || g || '.pdf', 1
+       FROM generate_series(1, 199) AS g`,
+      [ids.project, ids.member],
+    );
+    const sql =
+      "SELECT * FROM public.prepare_document_upload($1, 'Concurrent.pdf', 'application/pdf', 1, 'budget')";
+    const results = await Promise.allSettled([
+      asConcurrentUser(ids.member, sql, [ids.project]),
+      asConcurrentUser(ids.member, sql, [ids.project]),
+    ]);
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
   });
 });

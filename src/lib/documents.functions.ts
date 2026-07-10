@@ -1,9 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
-import { handleSchemaCompatibilityFallback, isMissingRelation } from "./db-compat";
+import { randomUUID } from "node:crypto";
+import {
+  getSchemaCompatMode,
+  handleSchemaCompatibilityFallback,
+  isMissingFunction,
+  isMissingRelation,
+} from "./db-compat";
 
 const EXTRACTION_JOBS_FEATURE = "extraction_jobs queue";
+const ATOMIC_UPLOAD_FEATURE = "atomic staged document uploads";
 
 export const listDocuments = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -118,10 +125,196 @@ const CreateDocSchema = z.object({
     .nullable(),
 });
 
+const UploadIntentSchema = z.object({
+  project_id: z.string().uuid().optional().nullable(),
+  name: z.string().min(1).max(255),
+  file_type: z.string().max(255).optional().nullable(),
+  category: z.string().max(255).optional().nullable(),
+  size_bytes: z.number().int().positive(),
+});
+
+const FinalizeUploadSchema = z.object({ upload_id: z.string().uuid() });
+
+/**
+ * Creates a database-bound, short-lived upload authorization. The browser gets
+ * only a signed URL/token for the one path returned here; it cannot choose a
+ * document path or create a usable document row itself.
+ */
+export const requestDocumentUpload = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => UploadIntentSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { validateUploadIntent } = await import("./upload-guards.server");
+    const intent = validateUploadIntent(data.name, data.size_bytes);
+    if (!intent.ok) throw new Error(intent.detail);
+
+    const prepared = await context.supabase.rpc("prepare_document_upload", {
+      p_project_id: data.project_id ?? null,
+      p_file_name: data.name,
+      p_expected_content_type: data.file_type ?? null,
+      p_expected_size_bytes: data.size_bytes,
+      p_category: data.category ?? null,
+    } as never);
+    if (isMissingFunction(prepared.error) || isMissingRelation(prepared.error)) {
+      // The direct browser path is a deliberately narrow demo/test bridge for
+      // an unmigrated local fixture. Strict environments fail closed below.
+      if (getSchemaCompatMode() === "strict") {
+        handleSchemaCompatibilityFallback(prepared.error, {
+          featureName: ATOMIC_UPLOAD_FEATURE,
+          table: "pending_document_uploads",
+          operation: "authorize upload",
+          fallback: undefined,
+        });
+        throw new Error("Required upload schema is unavailable.");
+      }
+      const path = `${context.userId}/${randomUUID()}-${data.name.replace(/[^A-Za-z0-9._-]/g, "_")}`;
+      return { mode: "legacy" as const, path };
+    }
+    if (prepared.error) throw new Error(`Unable to authorize upload: ${prepared.error.message}`);
+    const row = prepared.data?.[0];
+    if (!row?.upload_id || !row.object_path)
+      throw new Error("Upload authorization was not created.");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const signed = await supabaseAdmin.storage
+      .from("documents")
+      .createSignedUploadUrl(row.object_path);
+    if (signed.error || !signed.data?.token) {
+      // The pending row will expire and be safely collected; do not fall back
+      // to arbitrary direct upload after a server authorization failure.
+      throw new Error(`Unable to create upload URL: ${signed.error?.message ?? "unknown error"}`);
+    }
+    return {
+      mode: "signed" as const,
+      upload_id: row.upload_id,
+      path: row.object_path,
+      token: signed.data.token,
+      expires_at: row.expires_at,
+    };
+  });
+
+/** Finalizes only after an authenticated server download has verified the
+ * object path/owner, actual byte length, MIME (when Storage exposes one),
+ * structural signature, AV verdict, and SHA-256 content hash. */
+export const finalizeDocumentUpload = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => FinalizeUploadSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: pending, error: pendingError } = await context.supabase
+      .from("pending_document_uploads")
+      .select("id, owner_id, project_id, object_path, file_name, expected_size_bytes, status")
+      .eq("id", data.upload_id)
+      .single();
+    if (isMissingRelation(pendingError)) {
+      return handleSchemaCompatibilityFallback(pendingError, {
+        featureName: ATOMIC_UPLOAD_FEATURE,
+        table: "pending_document_uploads",
+        operation: "finalize upload",
+        fallback: { id: "", deduped: false, legacy: true as const },
+      });
+    }
+    if (pendingError || !pending) throw new Error("Pending upload was not found.");
+    if (
+      pending.owner_id !== context.userId ||
+      !pending.object_path.startsWith(`${context.userId}/pending/${pending.id}/`)
+    ) {
+      throw new Error("Pending upload ownership or path verification failed.");
+    }
+    if (pending.status !== "pending") {
+      if (pending.status === "finalized" || pending.status === "duplicate") {
+        const { data: completed } = await context.supabase
+          .from("pending_document_uploads")
+          .select("document_id, status")
+          .eq("id", data.upload_id)
+          .single();
+        if (completed?.document_id)
+          return { id: completed.document_id, deduped: completed.status === "duplicate" };
+      }
+      throw new Error("This upload is no longer pending.");
+    }
+
+    const { downloadDocumentBlob } = await import("./storage-download.server");
+    const downloaded = await downloadDocumentBlob(context.supabase, pending.object_path);
+    if (downloaded.error || !downloaded.data)
+      throw new Error("Uploaded object could not be verified.");
+    const blob = downloaded.data;
+    if (blob.size !== pending.expected_size_bytes) {
+      const { getServiceRoleClient } = await import("@/integrations/supabase/service-role.server");
+      await getServiceRoleClient("document_upload_finalization").rpc("reject_document_upload", {
+        p_upload_id: data.upload_id,
+        p_owner_id: context.userId,
+        p_reason: "Object size did not match authorized size",
+      });
+      throw new Error("Uploaded object size did not match the authorized size.");
+    }
+    const { isCompatibleVerifiedMime, scanDocument } = await import("./upload-guards.server");
+    if (!isCompatibleVerifiedMime(pending.file_name, blob.type)) {
+      const { getServiceRoleClient } = await import("@/integrations/supabase/service-role.server");
+      await getServiceRoleClient("document_upload_finalization").rpc("reject_document_upload", {
+        p_upload_id: data.upload_id,
+        p_owner_id: context.userId,
+        p_reason: `Storage MIME mismatch: ${blob.type || "unknown"}`,
+      });
+      throw new Error("Uploaded object type did not match the authorized file type.");
+    }
+    const buffer = await blob.arrayBuffer();
+    const scan = await scanDocument(pending.file_name, buffer);
+    if (!scan.ok) {
+      const { getServiceRoleClient } = await import("@/integrations/supabase/service-role.server");
+      await getServiceRoleClient("document_upload_finalization").rpc("reject_document_upload", {
+        p_upload_id: data.upload_id,
+        p_owner_id: context.userId,
+        p_reason: `[${scan.engine}] ${scan.detail}`,
+      });
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      await supabaseAdmin.storage.from("documents").remove([pending.object_path]);
+      throw new Error(`File rejected by safety scan: ${scan.detail}`);
+    }
+    const { sha256Hex } = await import("./hash.server");
+    const { getServiceRoleClient } = await import("@/integrations/supabase/service-role.server");
+    const finalized = await getServiceRoleClient("document_upload_finalization").rpc(
+      "finalize_document_upload",
+      {
+        p_upload_id: data.upload_id,
+        p_owner_id: context.userId,
+        p_content_hash: await sha256Hex(buffer),
+        p_actual_size_bytes: blob.size,
+        p_verified_content_type: blob.type || null,
+        p_scan_detail: `[${scan.engine}] ${scan.detail}`,
+      } as never,
+    );
+    if (finalized.error) throw new Error(`Unable to finalize upload: ${finalized.error.message}`);
+    const result = finalized.data?.[0];
+    if (!result?.document_id) throw new Error("Upload finalization did not return a document.");
+    if (result.deduped) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const removal = await supabaseAdmin.storage.from("documents").remove([pending.object_path]);
+      if (removal.error) console.warn("Duplicate upload queued for cleanup", removal.error.message);
+    }
+    const { writeAuditEvent } = await import("./audit.server");
+    await writeAuditEvent(context, {
+      projectId: pending.project_id,
+      entityType: "documents",
+      entityId: result.document_id,
+      action: result.deduped ? "document_upload_duplicate" : "document_upload_finalized",
+      payload: {
+        pending_upload_id: data.upload_id,
+        content_hash_verified_server_side: true,
+        scan_engine: scan.engine,
+      },
+    });
+    return { id: result.document_id, deduped: result.deduped };
+  });
+
 export const createDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => CreateDocSchema.parse(d))
   .handler(async ({ data, context }) => {
+    if (getSchemaCompatMode() === "strict") {
+      throw new Error(
+        "Direct document registration is disabled. Request and finalize a server-authorized upload instead.",
+      );
+    }
     // Storage RLS enforces the same boundary, but validate it before persisting
     // the metadata row as well. This prevents a hand-crafted server-function
     // request from registering an arbitrary path for later privileged recovery.

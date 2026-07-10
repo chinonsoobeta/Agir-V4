@@ -97,6 +97,7 @@ describe("backend operational hardening contract", () => {
       "compliance_enforcement",
       "demo_seed",
       "document_storage_recovery",
+      "document_upload_finalization",
       "extraction_worker",
       "run_history_write",
       "schema_maintenance",

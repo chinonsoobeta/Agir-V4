@@ -1,4 +1,8 @@
-import { isMissingRelation } from "./db-compat";
+import {
+  handleSchemaCompatibilityFallback,
+  isMissingFunction,
+  isMissingRelation,
+} from "./db-compat";
 import { emitOperationalMetric } from "./observability.server";
 
 export type RateLimitBucket =
@@ -69,21 +73,33 @@ export async function enforceRateLimit(
 ): Promise<void> {
   const policy = RATE_LIMIT_POLICY[bucket];
   const cost = opts.cost ?? 1;
-  const since = new Date(Date.now() - policy.windowSeconds * 1000).toISOString();
-  const { data, error } = await ctx.supabase
-    .from("rate_limit_events")
-    .select("cost")
-    .eq("owner_id", ctx.userId)
-    .eq("bucket", bucket)
-    .gte("created_at", since);
-  if (isMissingRelation(error)) return;
-  if (error) throw new Error(error.message);
+  if (!Number.isInteger(cost) || cost < 1) throw new Error("Invalid rate-limit cost.");
 
-  const used = ((data ?? []) as Array<{ cost: number | null }>).reduce(
-    (sum: number, row: { cost: number | null }) => sum + Number(row.cost ?? 1),
-    0,
-  );
-  if (used + cost > policy.maxEvents) {
+  // Postgres serializes each (user, bucket) decision under an advisory lock,
+  // then records consumption in the same transaction. Never turn this into a
+  // client-side SELECT + INSERT: concurrent requests would both observe the
+  // same remaining capacity and oversubscribe the control.
+  const rateLimitArgs = {
+    p_bucket: bucket,
+    p_cost: cost,
+    p_max_events: policy.maxEvents,
+    p_window_seconds: policy.windowSeconds,
+    p_metadata: opts.metadata ?? {},
+    ...(opts.workspaceId ? { p_workspace_id: opts.workspaceId } : {}),
+  };
+  const { data: allowed, error } = await ctx.supabase.rpc("consume_rate_limit", rateLimitArgs);
+  if (isMissingFunction(error) || isMissingRelation(error)) {
+    return handleSchemaCompatibilityFallback(error, {
+      featureName: "atomic rate limiting",
+      table: "rate_limit_events",
+      operation: `consume ${bucket}`,
+      // Demo/test compatibility is intentionally explicit. Production and
+      // staging reject a missing RPC through db-compat's strict mode.
+      fallback: undefined,
+    });
+  }
+  if (error) throw new Error(`Unable to enforce rate limit: ${error.message}`);
+  if (!allowed) {
     emitOperationalMetric("rate_limit.blocked", 1, {
       bucket,
       userId: ctx.userId,
@@ -93,14 +109,4 @@ export async function enforceRateLimit(
       `Rate limit reached for ${bucket.replaceAll("_", " ")}. Try again later or contact your workspace administrator.`,
     );
   }
-
-  const insert = await ctx.supabase.from("rate_limit_events").insert({
-    owner_id: ctx.userId,
-    workspace_id: opts.workspaceId ?? null,
-    bucket,
-    cost,
-    metadata: opts.metadata ?? {},
-  });
-  if (isMissingRelation(insert.error)) return;
-  if (insert.error) throw new Error(insert.error.message);
 }

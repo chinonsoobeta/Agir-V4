@@ -218,3 +218,34 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run smoke:ephemeral-db
+
+  full-environment-confidence:
+    name: Mandatory Supabase + browser release confidence
+    runs-on: ubuntu-latest
+    # This is deliberately a fresh local Supabase environment, not an optional
+    # secret-armed job. It makes missing Docker/Supabase/browser infrastructure
+    # a visible CI failure on every protected-branch/PR validation run.
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: supabase/setup-cli@v2
+        with:
+          version: 2.109.0
+      - run: supabase start
+      - name: Export fresh Supabase environment
+        run: |
+          eval "$(supabase status -o env)"
+          {
+            echo "SUPABASE_URL=$API_URL"
+            echo "SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "DATABASE_URL=$DB_URL"
+          } >> "$GITHUB_ENV"
+      - run: node scripts/ensure-demo-user.mjs
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - run: npm run confidence:full

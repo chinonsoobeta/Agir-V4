@@ -36,3 +36,24 @@ supabase db dump --linked --file backups/pre-development-engine.sql
 npm run test
 npm run build
 ```
+
+## Full local Supabase confidence gate
+
+This is intentionally opt-in for local development and mandatory in CI. It
+requires a running Docker-backed Supabase stack and Chromium; it never skips
+database or browser checks.
+
+```bash
+supabase start
+eval "$(supabase status -o env)"
+export SUPABASE_URL="$API_URL"
+export SUPABASE_ANON_KEY="$ANON_KEY"
+export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+export DATABASE_URL="$DB_URL"
+node scripts/ensure-demo-user.mjs
+npx playwright install chromium
+npm run confidence:full
+```
+
+Schedule `npm run uploads:cleanup` every 15 minutes in any environment that
+accepts uploads. It needs only `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.

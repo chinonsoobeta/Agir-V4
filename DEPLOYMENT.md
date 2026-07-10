@@ -82,6 +82,12 @@ not-yet-applied columns and retry. So a staged deploy degrades gracefully: but f
 the new tables (workspaces/teams, milestones, market signals, integration persistence,
 preferences) stay inert until their migration is applied.
 
+The staged document-upload migration is stricter: production/staging fail
+closed if its pending-upload or atomic rate-limit RPCs are absent. Apply
+`20260709000100_atomic_upload_controls.sql` before code that uses it; do not
+roll it back independently of the application. Its rollback plan is in
+[the production-hardening audit](docs/security/2026-07-09-production-hardening.md).
+
 CI should gate on schema + types staying in sync:
 
 ```bash
@@ -98,7 +104,9 @@ Before testing production:
 
 1. Make sure all migrations in `supabase/migrations` have been applied to the Supabase project (see above).
 2. Make sure the `documents` storage bucket exists.
-3. Upload the shared Harbour demo files if you want the seeded Harbour demo to work for every account:
+3. Schedule `npm run uploads:cleanup` every 15 minutes with service-role
+   credentials. This removes only expired staged-upload objects.
+4. Upload the shared Harbour demo files if you want the seeded Harbour demo to work for every account:
 
 ```bash
 node scripts/upload-shared-harbour-docs.mjs

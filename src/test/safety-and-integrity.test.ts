@@ -6,7 +6,9 @@ import {
   scanDocument,
   scanDocumentBuffer,
   UPLOAD_LIMITS,
+  validateUploadIntent,
 } from "@/lib/upload-guards.server";
+import { enforceRateLimit } from "@/lib/rate-limit.server";
 import { isMaterialOverrideField, MATERIAL_OVERRIDE_KEYS } from "@/lib/dual-control";
 
 function buf(bytes: number[]): ArrayBuffer {
@@ -63,6 +65,51 @@ describe("scanDocumentBuffer", () => {
   });
   it("rejects unsupported extensions", () => {
     expect(scanDocumentBuffer("a.exe", buf([1, 2, 3, 4])).ok).toBe(false);
+  });
+});
+
+describe("validateUploadIntent", () => {
+  it("rejects traversal, unsupported names, and a zero-byte authorization", () => {
+    expect(validateUploadIntent("../budget.pdf", 10).ok).toBe(false);
+    expect(validateUploadIntent("budget.exe", 10).ok).toBe(false);
+    expect(validateUploadIntent("budget.pdf", 0).ok).toBe(false);
+  });
+  it("accepts only a bounded, supported upload intent", () => {
+    expect(validateUploadIntent("Construction Budget.xlsx", 1024)).toEqual({
+      ok: true,
+      detail: "valid upload intent",
+    });
+  });
+});
+
+describe("atomic rate limiting", () => {
+  it("delegates the whole decision to the database RPC instead of querying then inserting", async () => {
+    const rpc = vi.fn(async () => ({ data: true, error: null }));
+    await enforceRateLimit({ supabase: { rpc } as never, userId: "user-1" }, "document_upload", {
+      workspaceId: "00000000-0000-0000-0000-000000000001",
+      metadata: { file_type: "application/pdf" },
+    });
+    expect(rpc).toHaveBeenCalledWith(
+      "consume_rate_limit",
+      expect.objectContaining({
+        p_bucket: "document_upload",
+        p_cost: 1,
+        p_max_events: 200,
+        p_window_seconds: 86_400,
+      }),
+    );
+  });
+
+  it("blocks when the serialized database decision has no remaining capacity", async () => {
+    await expect(
+      enforceRateLimit(
+        {
+          supabase: { rpc: async () => ({ data: false, error: null }) } as never,
+          userId: "user-1",
+        },
+        "document_upload",
+      ),
+    ).rejects.toThrow(/Rate limit reached/i);
   });
 });
 
