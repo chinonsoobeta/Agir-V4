@@ -114,7 +114,7 @@ function recover() {
     run("extraction worker contract", "npm", ["run", "worker:extraction", "--", "--dry-run"]),
   );
   outcomes.push(
-    run("pending-upload report", "npm", ["run", "uploads:cleanup", "--", "--report-only"], {
+    run("document lifecycle recovery", "npm", ["run", "uploads:recover"], {
       blocked: !has("SUPABASE_URL", "VITE_SUPABASE_URL") || !has("SUPABASE_SERVICE_ROLE_KEY"),
     }),
   );

@@ -13,18 +13,27 @@ if (!url || !key) {
 }
 
 const supabase = createClient(url, key, { auth: { persistSession: false } });
-const { data: uploads, error } = await supabase
-  .from("pending_document_uploads")
-  .select("id, object_path")
-  .eq("status", "pending")
-  .lt("expires_at", new Date().toISOString())
-  .limit(100);
-if (error) throw new Error(`Unable to list expired pending uploads: ${error.message}`);
+const claim = reportOnly
+  ? await supabase
+      .from("pending_document_uploads")
+      .select("id, object_path")
+      .in("status", ["rejected", "duplicate", "failed", "expired", "cleanup_pending"])
+      .limit(100)
+  : await supabase.rpc("claim_document_upload_cleanup", { p_limit: 100 });
+const uploads = claim.data;
+if (claim.error)
+  throw new Error(
+    `Unable to ${reportOnly ? "report" : "claim"} safe pending-upload cleanup: ${claim.error.message}`,
+  );
 
 let removed = 0;
 let failed = 0;
+let deferred = 0;
 for (const upload of uploads ?? []) {
-  if (reportOnly) continue;
+  if (reportOnly) {
+    deferred++;
+    continue;
+  }
   const deletion = await supabase.storage.from("documents").remove([upload.object_path]);
   if (deletion.error) {
     console.error(
@@ -33,13 +42,6 @@ for (const upload of uploads ?? []) {
     failed++;
     continue;
   }
-  const update = await supabase
-    .from("pending_document_uploads")
-    .update({ status: "expired", failure_reason: "Upload authorization expired; object removed" })
-    .eq("id", upload.id)
-    .eq("status", "pending");
-  if (update.error)
-    throw new Error(`Unable to mark pending upload expired: ${update.error.message}`);
   removed++;
 }
 console.log(
@@ -50,6 +52,7 @@ console.log(
     inspected: uploads?.length ?? 0,
     removed,
     failed,
+    deferred,
     bounded: true,
   }),
 );

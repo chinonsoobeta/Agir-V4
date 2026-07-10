@@ -3,17 +3,21 @@
 Production and staging have exactly one document lifecycle:
 
 ```text
-authorize upload → signed pending object → server finalize/verify/hash/scan
-→ durable extraction job → worker extraction → analyst approval → deterministic run
+authorize upload → signed pending object → authenticated enqueue-only finalization
+→ durable verification job → worker verify/hash/scan → durable extraction job
+→ worker extraction → analyst approval → deterministic run
 ```
 
 The browser may upload only to the signed path created by
-`prepare_document_upload`. Finalization verifies the pending owner/path, actual
-size, stored MIME when available, structural signature, external AV verdict,
-and a server-computed SHA-256. The finalization RPC atomically creates the
-usable document or records a duplicate keyed by that server hash. Rejected,
-duplicate, and expired objects are removed; `ops:cleanup` is bounded to 100
-expired pending objects and never enumerates finalized paths.
+`prepare_document_upload`. The authenticated finalization request only proves
+the caller owns that pending path and idempotently attaches to one verification
+job. It never downloads bytes, hashes, scans, OCRs, parses, or calls AI. The
+worker re-reads the pending row, verifies actual size/MIME where Storage exposes
+it, computes server SHA-256, runs structural plus external AV/content scans,
+and atomically creates the usable document plus its extraction job (or records
+a duplicate/rejection). Rejected, duplicate, expired, and failed unreferenced
+objects are safely claimed for bounded cleanup; cleanup never enumerates or
+deletes finalized paths.
 
 `AGIR_ENV=production` and `staging` force asynchronous extraction. The request
 handler records/attaches to the idempotent job and returns; only the extraction
@@ -36,9 +40,14 @@ schema or queue is missing.
 
 - Worker owner: platform operations; continuous worker process or an external
   scheduler invoking `npm run worker:extraction -- --once` at least every minute.
-- Pending cleanup: every 15 minutes via `npm run ops:cleanup`.
+- Pending cleanup: every 15 minutes via `npm run ops:cleanup`. It claims at
+  most 100 unreferenced terminal pending objects, emits inspected/removed/
+  failed/deferred counts, and is safe to repeat after a storage deletion error.
 - Audit-chain/queue diagnostics: daily via `npm run ops:recover` with a page on
-  non-zero exit or any `blocked`/`failed` structured event.
+  non-zero exit or any `blocked`/`failed` structured event. It reports pending
+  uploads by status and oldest age, verification backlog, expired lease IDs,
+  dead-letter IDs, and non-destructive orphan candidates before the audit-chain
+  result.
 - Dead letters: alert on rows with `status=dead_lettered`; investigate with
   `ops:recover`, then use the existing explicit retry UI after remediation.
 

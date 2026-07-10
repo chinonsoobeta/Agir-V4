@@ -149,8 +149,9 @@ and audit signals without external AI credentials.
 ### Upload security and full confidence gate
 
 Document uploads use one canonical lifecycle: authorize → signed upload to a
-database-bound pending path → server finalization (ownership/path/size/MIME,
-server hash, structural + external AV scan) → durable extraction queue →
+database-bound pending path → authenticated enqueue-only finalization → durable
+server verification (ownership/path/size/MIME, server hash, structural +
+external AV scan) → durable extraction queue →
 analyst provenance approval → deterministic underwriting. Client metadata and
 client hashes are never authoritative. In staging/production, asynchronous
 extraction and an external scanner are mandatory; request handlers may not run

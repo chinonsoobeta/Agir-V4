@@ -61,13 +61,26 @@ async function finishJob(client, job, payload) {
   const result = await client.query(
     `
       UPDATE public.extraction_jobs
-      SET status = $2,
+      SET status = CASE
+            WHEN $2 = 'failed' AND attempts >= max_attempts THEN 'dead_lettered'
+            WHEN $2 = 'failed' THEN 'queued'
+            ELSE $2
+          END,
           progress = CASE WHEN $2 = 'completed' THEN 100 ELSE progress END,
           result_json = $3,
           error = $4,
-          finished_at = now(),
-          message = $5
+          finished_at = CASE WHEN $2 = 'failed' AND attempts < max_attempts THEN NULL ELSE now() END,
+          dead_lettered_at = CASE
+            WHEN $2 = 'failed' AND attempts >= max_attempts THEN coalesce(dead_lettered_at, now())
+            ELSE dead_lettered_at
+          END,
+          message = CASE
+            WHEN $2 = 'failed' AND attempts < max_attempts THEN 'Retry queued after worker failure'
+            WHEN $2 = 'failed' THEN 'Dead-lettered after max attempts'
+            ELSE $5
+          END
       WHERE id = $1 AND status = 'running' AND lease_owner = $6
+        AND lease_expires_at > now()
     `,
     [
       job.id,
@@ -104,7 +117,9 @@ async function handleJob(job) {
   const response = await fetch(handlerUrl, {
     method: "POST",
     headers: { "content-type": "application/json", "x-worker-token": workerToken },
-    body: JSON.stringify({ job }),
+    // The app re-reads the row and verifies this lease owner. Never transmit
+    // client/worker-controlled document metadata or a storage path.
+    body: JSON.stringify({ job_id: job.id, worker_id: workerId }),
   });
   if (!response.ok) {
     return {

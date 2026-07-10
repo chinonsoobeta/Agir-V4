@@ -50,6 +50,7 @@
     "load:tenant-db": "node scripts/tenant-db-concurrency-smoke.mjs",
     "worker:extraction": "node scripts/extraction-worker.mjs",
     "uploads:cleanup": "node scripts/cleanup-pending-document-uploads.mjs",
+    "uploads:recover": "node scripts/recover-document-lifecycle.mjs",
     "sla:probe": "node scripts/sla-probe.mjs",
     "readiness:deployed": "node scripts/deployed-readiness-check.mjs",
     "ops:check": "node scripts/ops.mjs check",

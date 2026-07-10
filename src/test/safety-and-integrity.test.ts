@@ -216,6 +216,17 @@ describe("scanDocument external AV integration (mocked scanner)", () => {
     expect(r.engine).toBe("external");
   });
 
+  it("fails closed when a successful scanner response has no recognizable verdict", async () => {
+    process.env.DOCUMENT_SCAN_URL = "https://scanner.internal/scan";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("scan complete", { status: 200 })),
+    );
+    const r = await scanDocument("a.pdf", buf(PDF_HEADER));
+    expect(r).toMatchObject({ ok: false, engine: "external" });
+    expect(r.detail).toMatch(/malformed/i);
+  });
+
   it("sends multipart form data when DOCUMENT_SCAN_FORMAT=multipart", async () => {
     process.env.DOCUMENT_SCAN_URL = "https://scanner.internal/scan";
     process.env.DOCUMENT_SCAN_FORMAT = "multipart";

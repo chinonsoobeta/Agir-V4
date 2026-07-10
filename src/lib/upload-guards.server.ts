@@ -263,6 +263,13 @@ export async function scanDocument(name: string, buf: ArrayBuffer): Promise<Full
       // A 200 may still carry a structured verdict.
       const text = await res.text().catch(() => "");
       const verdict = parseExternalScanVerdict(text);
+      if (!verdict) {
+        return {
+          ok: false,
+          detail: "external scanner returned a malformed or missing verdict",
+          engine: "external",
+        };
+      }
       if (verdict?.infected) {
         return { ok: false, detail: verdict.detail, engine: "external" };
       }

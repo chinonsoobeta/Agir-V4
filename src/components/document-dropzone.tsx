@@ -4,7 +4,6 @@ import { UploadCloud, FileText, Loader2, CheckCircle2, XCircle, CopyX } from "lu
 import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  analyzeDocument,
   createDocument,
   finalizeDocumentUpload,
   requestDocumentUpload,
@@ -30,14 +29,22 @@ async function sha256Hex(file: File): Promise<string | null> {
   }
 }
 
-type ItemStatus = "queued" | "uploading" | "analyzing" | "done" | "failed" | "duplicate";
+type ItemStatus =
+  | "queued"
+  | "uploading"
+  | "verifying"
+  | "verificationQueued"
+  | "done"
+  | "failed"
+  | "duplicate";
 type QueueItem = { id: string; name: string; status: ItemStatus; error?: string };
 
 const STATUS_META: Record<ItemStatus, { icon: LucideIcon; cls: string; label: string }> = {
   queued: { icon: FileText, cls: "text-muted-foreground", label: "Queued" },
   uploading: { icon: Loader2, cls: "text-primary animate-spin", label: "Uploading…" },
-  analyzing: { icon: Loader2, cls: "text-primary animate-spin", label: "Extracting…" },
-  done: { icon: CheckCircle2, cls: "text-success", label: "Extracted" },
+  verifying: { icon: Loader2, cls: "text-primary animate-spin", label: "Queueing verification…" },
+  verificationQueued: { icon: Loader2, cls: "text-primary", label: "Verification queued" },
+  done: { icon: CheckCircle2, cls: "text-success", label: "Verified and queued for extraction" },
   failed: { icon: XCircle, cls: "text-destructive", label: "Failed" },
   duplicate: { icon: CopyX, cls: "text-warning", label: "Duplicate: skipped" },
 };
@@ -65,7 +72,6 @@ export function DocumentDropzone({
   const createFn = useServerFn(createDocument);
   const requestUploadFn = useServerFn(requestDocumentUpload);
   const finalizeUploadFn = useServerFn(finalizeDocumentUpload);
-  const analyzeFn = useServerFn(analyzeDocument);
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -103,7 +109,7 @@ export function DocumentDropzone({
           size_bytes: file.size,
         },
       });
-      let doc: CreatedDocument;
+      let doc: CreatedDocument | null = null;
       if (authorization.mode === "signed") {
         const { error: upErr } = await supabase.storage
           .from("documents")
@@ -111,9 +117,27 @@ export function DocumentDropzone({
             contentType: file.type || undefined,
           });
         if (upErr) throw upErr;
-        doc = (await finalizeUploadFn({
+        setItem(id, { status: "verifying" });
+        const verification = await finalizeUploadFn({
           data: { upload_id: authorization.upload_id },
-        })) as CreatedDocument;
+        });
+        if ("legacy" in verification) {
+          setItem(id, { status: "failed", error: "Staged verification schema is unavailable" });
+          return;
+        }
+        if (verification.status === "duplicate") {
+          setItem(id, { status: "duplicate" });
+        } else if (verification.status === "finalized") {
+          setItem(id, { status: "done" });
+        } else if (
+          ["rejected", "failed", "expired", "cleanup_pending"].includes(verification.status)
+        ) {
+          setItem(id, { status: "failed", error: `Verification ${verification.status}` });
+        } else {
+          setItem(id, { status: "verificationQueued" });
+        }
+        onChanged();
+        return;
       } else {
         // Only an explicitly non-strict demo/test schema can return legacy.
         // Production/staging always use the signed, server-finalized branch.
@@ -134,6 +158,9 @@ export function DocumentDropzone({
           },
         });
       }
+      // Legacy mode is explicitly limited to local/demo/test compatibility.
+      // The canonical signed flow returns above before any extraction request.
+      if (!doc) throw new Error("Document was not created.");
       // Server treated this as a duplicate of already-uploaded content.
       if (doc?.deduped) {
         // Staged finalization removes signed-flow duplicates server-side. The
@@ -142,20 +169,9 @@ export function DocumentDropzone({
         onChanged();
         return;
       }
-      if (autoAnalyze) {
-        setItem(id, { status: "analyzing" });
-        try {
-          await analyzeFn({ data: { id: doc.id, name: file.name, category } });
-        } catch (e) {
-          // Extraction failure is non-fatal: the file is uploaded; surface why.
-          setItem(id, {
-            status: "failed",
-            error: e instanceof Error ? e.message : "Extraction failed",
-          });
-          onChanged();
-          return;
-        }
-      }
+      // This legacy-only compatibility path does not claim the document is
+      // extracted. Staged schemas always use the verification queue above.
+      void autoAnalyze;
       setItem(id, { status: "done" });
       onChanged();
     } catch (e) {

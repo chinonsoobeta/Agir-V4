@@ -26,6 +26,26 @@ export const listDocuments = createServerFn({ method: "GET" })
     return rows ?? [];
   });
 
+/** Pending uploads are intentionally separate from documents: no unverified
+ * object is eligible for extraction, provenance review, or underwriting. */
+export const listPendingDocumentUploads = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { project_id?: string }) => d)
+  .handler(async ({ data, context }) => {
+    let q = context.supabase
+      .from("pending_document_uploads")
+      .select(
+        "id, project_id, file_name, category, status, failure_reason, created_at, expires_at, document_id",
+      )
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (data?.project_id) q = q.eq("project_id", data.project_id);
+    const { data: rows, error } = await q;
+    if (isMissingRelation(error)) return [];
+    if (error) throw new Error(error.message);
+    return rows ?? [];
+  });
+
 export const listExtractionJobs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((d: { project_id?: string }) => d)
@@ -193,9 +213,11 @@ export const requestDocumentUpload = createServerFn({ method: "POST" })
     };
   });
 
-/** Finalizes only after an authenticated server download has verified the
- * object path/owner, actual byte length, MIME (when Storage exposes one),
- * structural signature, AV verdict, and SHA-256 content hash. */
+/**
+ * Authenticates and idempotently queues server-side verification. Deliberately
+ * no bytes are downloaded here: hashing, structural parsing, AV, OCR, and AI
+ * are exclusively worker work in every environment with the staged schema.
+ */
 export const finalizeDocumentUpload = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => FinalizeUploadSchema.parse(d))
@@ -220,90 +242,27 @@ export const finalizeDocumentUpload = createServerFn({ method: "POST" })
     ) {
       throw new Error("Pending upload ownership or path verification failed.");
     }
-    if (pending.status !== "pending") {
-      if (pending.status === "finalized" || pending.status === "duplicate") {
-        const { data: completed } = await context.supabase
-          .from("pending_document_uploads")
-          .select("document_id, status")
-          .eq("id", data.upload_id)
-          .single();
-        if (completed?.document_id)
-          return { id: completed.document_id, deduped: completed.status === "duplicate" };
-      }
-      throw new Error("This upload is no longer pending.");
-    }
-
-    const { downloadDocumentBlob } = await import("./storage-download.server");
-    const downloaded = await downloadDocumentBlob(context.supabase, pending.object_path);
-    if (downloaded.error || !downloaded.data)
-      throw new Error("Uploaded object could not be verified.");
-    const blob = downloaded.data;
-    if (blob.size !== pending.expected_size_bytes) {
-      const { getServiceRoleClient } = await import("@/integrations/supabase/service-role.server");
-      await getServiceRoleClient("document_upload_finalization").rpc("reject_document_upload", {
-        p_upload_id: data.upload_id,
-        p_owner_id: context.userId,
-        p_reason: "Object size did not match authorized size",
-      });
-      throw new Error("Uploaded object size did not match the authorized size.");
-    }
-    const { isCompatibleVerifiedMime, scanDocument } = await import("./upload-guards.server");
-    if (!isCompatibleVerifiedMime(pending.file_name, blob.type)) {
-      const { getServiceRoleClient } = await import("@/integrations/supabase/service-role.server");
-      await getServiceRoleClient("document_upload_finalization").rpc("reject_document_upload", {
-        p_upload_id: data.upload_id,
-        p_owner_id: context.userId,
-        p_reason: `Storage MIME mismatch: ${blob.type || "unknown"}`,
-      });
-      throw new Error("Uploaded object type did not match the authorized file type.");
-    }
-    const buffer = await blob.arrayBuffer();
-    const scan = await scanDocument(pending.file_name, buffer);
-    if (!scan.ok) {
-      const { getServiceRoleClient } = await import("@/integrations/supabase/service-role.server");
-      await getServiceRoleClient("document_upload_finalization").rpc("reject_document_upload", {
-        p_upload_id: data.upload_id,
-        p_owner_id: context.userId,
-        p_reason: `[${scan.engine}] ${scan.detail}`,
-      });
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      await supabaseAdmin.storage.from("documents").remove([pending.object_path]);
-      throw new Error(`File rejected by safety scan: ${scan.detail}`);
-    }
-    const { sha256Hex } = await import("./hash.server");
-    const { getServiceRoleClient } = await import("@/integrations/supabase/service-role.server");
-    const finalized = await getServiceRoleClient("document_upload_finalization").rpc(
-      "finalize_document_upload",
-      {
-        p_upload_id: data.upload_id,
-        p_owner_id: context.userId,
-        p_content_hash: await sha256Hex(buffer),
-        p_actual_size_bytes: blob.size,
-        p_verified_content_type: blob.type || null,
-        p_scan_detail: `[${scan.engine}] ${scan.detail}`,
-      } as never,
-    );
-    if (finalized.error) throw new Error(`Unable to finalize upload: ${finalized.error.message}`);
-    const result = finalized.data?.[0];
-    if (!result?.document_id) throw new Error("Upload finalization did not return a document.");
-    if (result.deduped) {
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      const removal = await supabaseAdmin.storage.from("documents").remove([pending.object_path]);
-      if (removal.error) console.warn("Duplicate upload queued for cleanup", removal.error.message);
-    }
-    const { writeAuditEvent } = await import("./audit.server");
-    await writeAuditEvent(context, {
-      projectId: pending.project_id,
-      entityType: "documents",
-      entityId: result.document_id,
-      action: result.deduped ? "document_upload_duplicate" : "document_upload_finalized",
-      payload: {
-        pending_upload_id: data.upload_id,
-        content_hash_verified_server_side: true,
-        scan_engine: scan.engine,
-      },
-    });
-    return { id: result.document_id, deduped: result.deduped };
+    const queued = await context.supabase.rpc("enqueue_document_verification", {
+      p_upload_id: data.upload_id,
+    } as never);
+    if (queued.error)
+      throw new Error(`Unable to queue upload verification: ${queued.error.message}`);
+    const result = queued.data?.[0];
+    if (!result?.status) throw new Error("Upload verification was not queued.");
+    return {
+      status: result.status as
+        | "verification_queued"
+        | "verification_running"
+        | "finalized"
+        | "duplicate"
+        | "rejected"
+        | "failed"
+        | "expired"
+        | "cleanup_pending",
+      id: result.document_id ?? null,
+      job_id: result.job_id ?? null,
+      deduped: result.status === "duplicate",
+    };
   });
 
 export const createDocument = createServerFn({ method: "POST" })

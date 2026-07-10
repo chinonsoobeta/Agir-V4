@@ -3,6 +3,7 @@ import { useSuspenseQuery, queryOptions, useMutation, useQueryClient } from "@ta
 import { useServerFn } from "@tanstack/react-start";
 import {
   listDocuments,
+  listPendingDocumentUploads,
   deleteDocument,
   analyzeDocument,
   getDocumentUrl,
@@ -45,6 +46,10 @@ const docsQ = queryOptions({
   queryKey: ["documents", "all"],
   queryFn: () => listDocuments({ data: {} }),
 });
+const pendingUploadsQ = queryOptions({
+  queryKey: ["pending-document-uploads", "all"],
+  queryFn: () => listPendingDocumentUploads({ data: {} }),
+});
 const projectsQ = queryOptions({ queryKey: ["projects"], queryFn: () => listProjects() });
 const allAssumptionsQ = queryOptions({
   queryKey: ["assumptions", "all"],
@@ -78,6 +83,7 @@ export const Route = createFileRoute("/_authenticated/documents")({
   loader: ({ context }) =>
     Promise.all([
       context.queryClient.ensureQueryData(docsQ),
+      context.queryClient.ensureQueryData(pendingUploadsQ),
       context.queryClient.ensureQueryData(projectsQ),
       context.queryClient.ensureQueryData(allAssumptionsQ),
     ]),
@@ -86,6 +92,7 @@ export const Route = createFileRoute("/_authenticated/documents")({
 
 function DocumentsPage() {
   const { data: docs } = useSuspenseQuery(docsQ);
+  const { data: pendingUploads } = useSuspenseQuery(pendingUploadsQ);
   const { data: projects } = useSuspenseQuery(projectsQ);
   const { data: allAssumptions } = useSuspenseQuery(allAssumptionsQ);
 
@@ -195,10 +202,32 @@ function DocumentsPage() {
             existingNames={docs.map((d) => d.name)}
             onChanged={() => {
               qc.invalidateQueries({ queryKey: ["documents", "all"] });
+              qc.invalidateQueries({ queryKey: ["pending-document-uploads", "all"] });
               qc.invalidateQueries({ queryKey: ["assumptions", "all"] });
             }}
           />
         </Card>
+
+        {pendingUploads.length > 0 && (
+          <Card className="p-4 space-y-2">
+            <div>
+              <div className="font-medium text-sm">Upload verification</div>
+              <p className="text-xs text-muted-foreground">
+                These objects are not documents yet and cannot feed extraction or underwriting.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              {pendingUploads.map((upload) => (
+                <div key={upload.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="truncate">{upload.file_name}</span>
+                  <Badge variant="outline" className="shrink-0 text-xs">
+                    {upload.status.replaceAll("_", " ")}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
         {docs.length === 0 ? (
           <Card className="p-12 text-center text-sm text-muted-foreground">

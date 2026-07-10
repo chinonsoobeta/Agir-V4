@@ -998,6 +998,7 @@ export type Database = {
           max_attempts: number;
           message: string | null;
           owner_id: string;
+          pending_upload_id: string | null;
           priority: number;
           progress: number;
           project_id: string | null;
@@ -1025,6 +1026,7 @@ export type Database = {
           max_attempts?: number;
           message?: string | null;
           owner_id: string;
+          pending_upload_id?: string | null;
           priority?: number;
           progress?: number;
           project_id?: string | null;
@@ -1052,6 +1054,7 @@ export type Database = {
           max_attempts?: number;
           message?: string | null;
           owner_id?: string;
+          pending_upload_id?: string | null;
           priority?: number;
           progress?: number;
           project_id?: string | null;
@@ -1068,6 +1071,13 @@ export type Database = {
             columns: ["document_id"];
             isOneToOne: false;
             referencedRelation: "documents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "extraction_jobs_pending_upload_id_fkey";
+            columns: ["pending_upload_id"];
+            isOneToOne: false;
+            referencedRelation: "pending_document_uploads";
             referencedColumns: ["id"];
           },
           {
@@ -2928,6 +2938,7 @@ export type Database = {
           max_attempts: number;
           message: string | null;
           owner_id: string;
+          pending_upload_id: string | null;
           priority: number;
           progress: number;
           project_id: string | null;
@@ -2955,6 +2966,21 @@ export type Database = {
           p_workspace_id?: string;
         };
         Returns: boolean;
+      };
+      claim_document_upload_cleanup: {
+        Args: { p_limit?: number };
+        Returns: { object_path: string; upload_id: string }[];
+      };
+      complete_document_verification: {
+        Args: {
+          p_actual_size_bytes: number;
+          p_content_hash: string;
+          p_job_id: string;
+          p_scan_detail: string;
+          p_verified_content_type: string;
+          p_worker_id: string;
+        };
+        Returns: { deduped: boolean; document_id: string; extraction_job_id: string | null }[];
       };
       create_workspace: {
         Args: { p_name: string };
@@ -2986,6 +3012,10 @@ export type Database = {
           document_id: string;
           object_path: string;
         }[];
+      };
+      enqueue_document_verification: {
+        Args: { p_upload_id: string };
+        Returns: { document_id: string | null; job_id: string | null; status: string }[];
       };
       delete_underwriting_outputs: {
         Args: { p_project_id: string };
@@ -3019,6 +3049,10 @@ export type Database = {
       };
       reject_document_upload: {
         Args: { p_owner_id: string; p_reason: string; p_upload_id: string };
+        Returns: boolean;
+      };
+      reject_document_verification: {
+        Args: { p_job_id: string; p_reason: string; p_worker_id: string };
         Returns: boolean;
       };
       request_extraction_job_cancellation: {
