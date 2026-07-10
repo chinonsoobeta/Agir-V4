@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
+import { getServerConfig } from "@/lib/config.server";
 
 export const SERVICE_ROLE_CAPABILITIES = {
   audit_chain_verification: "Verify append-only audit chains and write evidence rows.",
@@ -16,23 +17,13 @@ export const SERVICE_ROLE_CAPABILITIES = {
 export type ServiceRoleCapability = keyof typeof SERVICE_ROLE_CAPABILITIES;
 
 function createServiceRoleClient(capability: ServiceRoleCapability) {
-  const SUPABASE_URL =
-    process.env.SUPABASE_URL ||
-    process.env.VITE_SUPABASE_URL ||
-    process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const config = getServerConfig(["serviceRole"]);
+  if (!config.supabaseUrl || !config.serviceRoleKey)
+    throw new Error(
+      "Server configuration is incomplete: Supabase service-role client unavailable.",
+    );
 
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    const missing = [
-      ...(!SUPABASE_URL ? ["SUPABASE_URL"] : []),
-      ...(!SUPABASE_SERVICE_ROLE_KEY ? ["SUPABASE_SERVICE_ROLE_KEY"] : []),
-    ];
-    const message = `Missing Supabase environment variable(s): ${missing.join(", ")}.`;
-    console.error(`[Supabase:${capability}] ${message}`);
-    throw new Error(message);
-  }
-
-  return createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  return createClient<Database>(config.supabaseUrl, config.serviceRoleKey, {
     auth: {
       storage: undefined,
       persistSession: false,

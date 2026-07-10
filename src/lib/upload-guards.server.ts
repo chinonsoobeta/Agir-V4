@@ -9,7 +9,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
-import { getSchemaCompatMode } from "./db-compat";
+import { getServerConfig } from "./config.server";
 
 export const UPLOAD_LIMITS = {
   // Authoritative per-file size cap (also enforced client-side for UX).
@@ -221,15 +221,24 @@ export async function scanDocument(name: string, buf: ArrayBuffer): Promise<Full
   const structural = scanDocumentBuffer(name, buf);
   if (!structural.ok) return { ...structural, engine: "structural" };
 
-  const url = process.env.DOCUMENT_SCAN_URL?.trim();
-  if (!url) return { ...structural, engine: "structural" };
+  const config = getServerConfig();
+  const url = config.scannerUrl;
+  // Signature checks are defense-in-depth, never the only production scan.
+  if (!url) {
+    if (config.isProductionLike)
+      return {
+        ok: false,
+        detail: "External content scanner is required in staging/production but is not configured.",
+        engine: "external",
+      };
+    return { ...structural, engine: "structural" };
+  }
 
   // A scanner outage must never authorize production/staging ingestion. The
   // escape hatch exists solely for isolated demo/test fixtures where no AV
   // service is intentionally provisioned.
-  const failOpen =
-    process.env.DOCUMENT_SCAN_FAIL_OPEN === "1" && getSchemaCompatMode() !== "strict";
-  const multipart = process.env.DOCUMENT_SCAN_FORMAT?.trim().toLowerCase() === "multipart";
+  const failOpen = config.scannerFailOpen;
+  const multipart = config.scannerFormat === "multipart";
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);

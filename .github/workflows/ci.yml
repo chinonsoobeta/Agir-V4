@@ -1,24 +1,20 @@
 name: CI
 
-# Keeps `main` honest: every push and PR must pass lint, typecheck, tests, and a
-# production build. A separate job regenerates the Supabase types from the
-# migrations and fails if the committed types have drifted out of sync (the exact
-# gate prescribed in DEPLOYMENT.md). Type drift is what silently let 70+ tsc
-# errors accumulate on main before this workflow existed.
-
 on:
   push:
     branches: [main]
   pull_request:
 
-# Cancel superseded runs on the same ref to save CI minutes.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Confidence is intentionally tiered. The release gate is the protected-branch
+# proof: it provisions a new Supabase stack and does not convert absent Docker,
+# DB, browser, RLS, or migration proof into a pass.
 jobs:
-  verify:
-    name: Typecheck, test, build
+  developer-feedback:
+    name: Fast developer feedback
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -28,109 +24,19 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run pilot:audit
-      - run: npm run backend:audit
       - run: npm run typecheck
-      # lint enforces a --max-warnings ratchet (see package.json); lower the cap
-      # as the no-explicit-any backlog is paid down so it can only shrink.
       - run: npm run lint
       - run: npm run test
-      # vite.config.ts defaults missing Supabase env to "" so the build needs no
-      # secrets; runtime config is injected by the host (Vercel) at deploy time.
-      - run: npm run build
 
-  schema-types:
-    name: Supabase types in sync with migrations
+  static-operations:
+    name: Static operational confidence
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - uses: supabase/setup-cli@v2
-        with:
-          # Pinned: "latest" made this job's behavior change under our feet
-          # (generated-types format and local-stack behavior can shift between
-          # CLI releases). Bump deliberately, together with a local regen.
-          version: 2.109.0
-      # Boots the local stack and applies every migration in supabase/migrations.
-      - run: supabase start
-      - run: npm run types:check
-
-  e2e:
-    name: Playwright browser E2E
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - uses: supabase/setup-cli@v2
-        with:
-          # Pinned: "latest" made this job's behavior change under our feet
-          # (generated-types format and local-stack behavior can shift between
-          # CLI releases). Bump deliberately, together with a local regen.
-          version: 2.109.0
-      # Boots the local stack and applies every migration in supabase/migrations.
-      - run: supabase start
-      # Bridge the local stack's generated keys into the env names the app and
-      # seed scripts read (vite.config.ts + scripts/*.mjs).
-      - name: Export Supabase env
-        run: |
-          eval "$(supabase status -o env)"
-          {
-            echo "SUPABASE_URL=$API_URL"
-            echo "SUPABASE_ANON_KEY=$ANON_KEY"
-            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
-          } >> "$GITHUB_ENV"
-      - name: Seed the demo login user
-        run: node scripts/ensure-demo-user.mjs
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
-      - name: Run E2E (boots dev server via Playwright webServer)
-        run: npm run test:e2e
-      - uses: actions/upload-artifact@v5
-        if: ${{ !cancelled() }}
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 7
-      # Surface the E2E outcome in the job summary so a failure is impossible
-      # to miss from the run page (the auth-setup failure that silently skipped
-      # 16 specs for several commits motivated this).
-      - name: Publish E2E summary
-        if: ${{ !cancelled() }}
-        run: |
-          {
-            echo "## Playwright E2E"
-            echo "Full HTML report: the **playwright-report** artifact on this run."
-            echo ""
-            echo '> A failure in the `[setup] authenticate` project skips every other spec -'
-            echo '> treat "N did not run" as failures, not passes.'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  rls:
-    name: Postgres RLS policy proof
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: agir_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d agir_test"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    # These inert values exercise configuration shape/alias validation only;
+    # no command here claims a live database check.
     env:
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/agir_test
-      PGSSLMODE: disable
+      AGIR_ENV: test
+      SUPABASE_URL: https://ci.invalid
+      SUPABASE_ANON_KEY: ci-static-only-not-a-secret
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -138,93 +44,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run rls:bootstrap
-      - run: npm run migrate
-      - run: npm run migrate:dry-run
-      - run: npm run test:rls
+      - run: npm run ops:check
 
-  schema-drift-gate:
-    name: Schema drift deploy gate
+  release-confidence:
+    name: Mandatory Supabase release confidence
     runs-on: ubuntu-latest
-    # Hard gate: fails the build if the live DB has pending/extra migrations
-    # relative to this commit. It is a no-op (passes) when no DB secret is
-    # configured, so fork PRs are unaffected; arm it by setting the
-    # SCHEMA_DRIFT_DATABASE_URL secret (a read-capable URL to prod/staging).
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run drift:check
-        env:
-          SCHEMA_DRIFT_DATABASE_URL: ${{ secrets.SCHEMA_DRIFT_DATABASE_URL }}
-
-  live-db-confidence:
-    name: Armed live Supabase confidence
-    runs-on: ubuntu-latest
-    # Optional but fail-hard when armed: configure the secrets below to make CI
-    # prove live schema drift, migration dry-run, audit-chain verification,
-    # governance dry-run, tenant DB concurrency, and RLS policy behavior.
-    env:
-      SCHEMA_DRIFT_DATABASE_URL: ${{ secrets.SCHEMA_DRIFT_DATABASE_URL }}
-      DATABASE_URL: ${{ secrets.LIVE_SUPABASE_DATABASE_URL }}
-      AUDIT_CHAIN_DATABASE_URL: ${{ secrets.AUDIT_CHAIN_DATABASE_URL }}
-      DATA_GOVERNANCE_DATABASE_URL: ${{ secrets.DATA_GOVERNANCE_DATABASE_URL }}
-      TENANT_DB_LOAD_DATABASE_URL: ${{ secrets.TENANT_DB_LOAD_DATABASE_URL }}
-      SUPABASE_TEST_DATABASE_URL: ${{ secrets.SUPABASE_TEST_DATABASE_URL }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Run armed pilot gate checks
-        run: npm run pilot:gate -- --quick
-
-  ephemeral-db-smoke:
-    name: Ephemeral DB migration + RLS smoke
-    runs-on: ubuntu-latest
-    # A GitHub Actions service container is created fresh for every job run, so
-    # each push/PR gets a brand-new, disposable Postgres. The smoke script
-    # bootstraps the Supabase-compatible auth/storage schema, applies all
-    # migrations against the empty DB, and runs the live RLS suite -- proving a
-    # clean-room deploy from zero (not just an incremental migration on an
-    # already-migrated DB). The DB name contains "test" to satisfy the
-    # destructive-RLS guard in src/test/rls/assert-test-db.mjs.
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: agir_ephemeral_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d agir_ephemeral_test"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      EPHEMERAL_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agir_ephemeral_test
-      PGSSLMODE: disable
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run smoke:ephemeral-db
-
-  full-environment-confidence:
-    name: Mandatory Supabase + browser release confidence
-    runs-on: ubuntu-latest
-    # This is deliberately a fresh local Supabase environment, not an optional
-    # secret-armed job. It makes missing Docker/Supabase/browser infrastructure
-    # a visible CI failure on every protected-branch/PR validation run.
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -240,6 +64,7 @@ jobs:
         run: |
           eval "$(supabase status -o env)"
           {
+            echo "AGIR_ENV=test"
             echo "SUPABASE_URL=$API_URL"
             echo "SUPABASE_ANON_KEY=$ANON_KEY"
             echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
@@ -248,4 +73,10 @@ jobs:
       - run: node scripts/ensure-demo-user.mjs
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
-      - run: npm run confidence:full
+      - run: npm run ops:release
+      - uses: actions/upload-artifact@v5
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

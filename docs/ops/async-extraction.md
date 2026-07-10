@@ -1,10 +1,11 @@
 # Async document extraction (worker mode)
 
-By default, document analysis (`analyzeDocument`) runs the whole pipeline -
-storage download, AV scan, OCR/text extraction, AI summarization - inside the
-HTTP request. That is simple and works everywhere, but a slow OCR or model
-call pins a request for its full duration, which reads as a hang during an
-unsupervised demo and risks serverless timeouts.
+In production and staging, document analysis (`analyzeDocument`) always queues
+the whole pipeline: storage download, AV scan, OCR/text extraction, and AI
+summarization outside the HTTP request. A slow OCR or model call must never
+pin a production request. Development/demo/test can explicitly set
+`EXTRACTION_ASYNC=1` to exercise the same queue; their inline path exists only
+for local fixtures and is never a production fallback.
 
 Worker mode moves execution off the request path using infrastructure that is
 already in the schema: the `extraction_jobs` queue (leases, heartbeats,
@@ -21,15 +22,15 @@ analyzeDocument (server fn)          worker process                the app
 ```
 
 - The **same pipeline code** (`src/lib/extraction-executor.server.ts`) runs in
-  both modes, so results are identical; only *where* it executes changes.
+  both modes, so results are identical; only _where_ it executes changes.
 - Idempotency is unchanged: one job per (owner, content hash); a re-click
   re-attaches to the existing job.
 - The UI needs no polling changes: every pipeline step persists to the
   `documents` row (`extraction_status`: queued -> running -> completed/failed)
   and realtime refresh picks the transitions up; the Documents page shows
   "queued" / "extracting…" badges.
-- On a database without the `extraction_jobs` table, the app silently falls
-  back to in-request execution (a queued job could never be claimed there).
+- On a database without the `extraction_jobs` table, production/staging fail
+  closed. Only explicitly local/demo/test compatibility can run inline.
 
 ## Enabling it
 
@@ -68,5 +69,5 @@ analyzeDocument (server fn)          worker process                the app
   executor, so a hung provider fails the job (retryable) instead of pinning
   the worker.
 - `EXTRACTION_ASYNC=1` with no worker running: jobs sit visibly "queued" -
-  the badge makes the misconfiguration observable. Don't enable the flag
-  before the worker is deployed.
+  the badge makes the misconfiguration observable. Production deployment gates
+  require the token and worker contract; alert on queue age and dead letters.

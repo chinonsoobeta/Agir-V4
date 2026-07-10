@@ -3,6 +3,7 @@ import { convertToModelMessages, streamText, type UIMessage } from "ai";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import type { OutputRow, AssumptionRow } from "@/lib/decision";
+import { getServerConfig } from "@/lib/config.server";
 
 export const Route = createFileRoute("/api/chat")({
   server: {
@@ -12,25 +13,15 @@ export const Route = createFileRoute("/api/chat")({
         if (!auth?.startsWith("Bearer ")) return new Response("Unauthorized", { status: 401 });
         const token = auth.replace("Bearer ", "");
 
-        const SUPABASE_URL =
-          process.env.SUPABASE_URL ||
-          process.env.VITE_SUPABASE_URL ||
-          process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const SUPABASE_ANON_KEY =
-          process.env.SUPABASE_ANON_KEY ||
-          process.env.SUPABASE_PUBLISHABLE_KEY ||
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-          process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-          process.env.VITE_SUPABASE_ANON_KEY ||
-          process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        const config = getServerConfig(["supabase"]);
         const { hasAnthropicKey } = await import("@/lib/ai-gateway.server");
         if (!hasAnthropicKey())
           return new Response("Missing or malformed ANTHROPIC_API_KEY", { status: 500 });
-        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        if (!config.supabaseUrl || !config.supabaseAnonKey) {
           return new Response("Missing Supabase configuration", { status: 500 });
         }
 
-        const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        const supabase = createClient<Database>(config.supabaseUrl, config.supabaseAnonKey, {
           global: { headers: { Authorization: `Bearer ${token}` } },
           auth: { persistSession: false, autoRefreshToken: false },
         });

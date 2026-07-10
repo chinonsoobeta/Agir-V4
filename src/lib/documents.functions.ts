@@ -449,7 +449,9 @@ export const analyzeDocument = createServerFn({ method: "POST" })
     // immediately; a worker (scripts/extraction-worker.mjs -> the token-guarded
     // /api/extraction/worker endpoint) executes it. Default remains in-request
     // so environments without a worker keep working unchanged.
-    let asyncMode = process.env.EXTRACTION_ASYNC === "1";
+    const { getServerConfig } = await import("./config.server");
+    const config = getServerConfig();
+    let asyncMode = config.asyncExtraction;
 
     // Idempotent + observable: one job per (owner, document content). A retry or
     // double-click re-attaches to the existing job instead of re-running OCR/AI.
@@ -473,7 +475,11 @@ export const analyzeDocument = createServerFn({ method: "POST" })
     }
     // A pre-migration DB has no extraction_jobs table, so no worker could ever
     // claim the job -- fall back to in-request execution rather than strand it.
-    if (isInlineJob(job)) asyncMode = false;
+    if (isInlineJob(job)) {
+      if (config.isProductionLike)
+        throw new Error("The durable extraction queue is required in staging/production.");
+      asyncMode = false;
+    }
 
     if (asyncMode) {
       // Freshly enqueued, or re-attached to a job that is already queued or

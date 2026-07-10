@@ -56,6 +56,8 @@ describe("backend hardening controls", () => {
         SUPABASE_SERVICE_ROLE_KEY: "service",
         DATABASE_URL: "postgres://example",
         METRICS_WEBHOOK_URL: "https://metrics.example/ingest",
+        DOCUMENT_SCAN_URL: "https://scanner.example/scan",
+        EXTRACTION_WORKER_TOKEN: "worker-token",
       } as NodeJS.ProcessEnv,
       "production",
     );

@@ -1,26 +1,149 @@
 import process from "node:process";
 
-// Server-only config. The .server.ts suffix prevents Vite from bundling
-// this file into the client: values here never reach the browser.
-//
-// On Cloudflare Workers, env binds at REQUEST time. Module-scope reads
-// (e.g. `const x = process.env.X`) resolve to undefined: always read
-// process.env INSIDE a function or handler.
-//
-// When to use which env-access pattern:
-//   - .server.ts module (this file): server-only helpers reused across
-//     handlers. Wrap reads in a function so they run per-request.
-//   - inline process.env inside a createServerFn handler: one-off reads
-//     not reused elsewhere.
-//   - import.meta.env.VITE_FOO: PUBLIC config readable from both client
-//     and server (analytics IDs, public URLs). Define in .env with the
-//     VITE_ prefix. Never put secrets here: they ship to the browser.
+/** The only server-side environment boundary. Never import this from browser code. */
+export type AgirEnvironment = "development" | "demo" | "test" | "staging" | "production";
 
-export function getServerConfig() {
+export type ServerConfig = Readonly<{
+  nodeEnv?: string;
+  environment: AgirEnvironment;
+  isProductionLike: boolean;
+  supabaseUrl?: string;
+  supabaseAnonKey?: string;
+  serviceRoleKey?: string;
+  databaseUrl?: string;
+  scannerUrl?: string;
+  scannerFormat: "raw" | "multipart";
+  scannerFailOpen: boolean;
+  asyncExtraction: boolean;
+  workerToken?: string;
+  errorWebhookUrl?: string;
+  metricsWebhookUrl?: string;
+  aiModel: string;
+}>;
+
+export type ConfigRequirement =
+  | "supabase"
+  | "serviceRole"
+  | "database"
+  | "scanner"
+  | "worker"
+  | "observability";
+
+const value = (env: NodeJS.ProcessEnv, ...names: string[]) => {
+  for (const name of names) {
+    const candidate = env[name]?.trim();
+    if (candidate) return candidate;
+  }
+  return undefined;
+};
+
+export function resolveAgirEnvironment(
+  raw = process.env.AGIR_ENV ?? process.env.NODE_ENV,
+): AgirEnvironment {
+  switch (raw?.trim().toLowerCase()) {
+    case "production":
+    case "staging":
+    case "test":
+    case "demo":
+    case "development":
+      return raw.trim().toLowerCase() as AgirEnvironment;
+    default:
+      return "development";
+  }
+}
+
+/**
+ * Resolves aliases once. Preferred names are SUPABASE_URL,
+ * SUPABASE_ANON_KEY, DATABASE_URL, and DOCUMENT_SCAN_URL. VITE/NEXT aliases
+ * remain supported only for backwards-compatible host integration.
+ */
+export function readServerConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
+  const environment = resolveAgirEnvironment(env.AGIR_ENV ?? env.NODE_ENV);
+  const isProductionLike = environment === "production" || environment === "staging";
+  const scannerFormat =
+    value(env, "DOCUMENT_SCAN_FORMAT")?.toLowerCase() === "multipart" ? "multipart" : "raw";
   return {
-    nodeEnv: process.env.NODE_ENV,
-    // Add server-only values here, e.g.:
-    //   databaseUrl: process.env.DATABASE_URL,
-    //   stripeSecretKey: process.env.STRIPE_SECRET_KEY,
+    nodeEnv: value(env, "NODE_ENV"),
+    environment,
+    isProductionLike,
+    supabaseUrl: value(env, "SUPABASE_URL", "VITE_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"),
+    supabaseAnonKey: value(
+      env,
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_PUBLISHABLE_KEY",
+      "VITE_SUPABASE_ANON_KEY",
+      "VITE_SUPABASE_PUBLISHABLE_KEY",
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    ),
+    serviceRoleKey: value(env, "SUPABASE_SERVICE_ROLE_KEY"),
+    databaseUrl: value(
+      env,
+      "DATABASE_URL",
+      "POSTGRES_URL",
+      "SUPABASE_DB_URL",
+      "SUPABASE_DATABASE_URL",
+      "SUPABASE_POSTGRES_URL",
+      "SUPABASE_SERVICE_DATABASE_URL",
+    ),
+    scannerUrl: value(env, "DOCUMENT_SCAN_URL"),
+    scannerFormat,
+    // This escape hatch is deliberately impossible in staging/production.
+    scannerFailOpen: !isProductionLike && value(env, "DOCUMENT_SCAN_FAIL_OPEN") === "1",
+    // Production/staging are always asynchronous; a false flag cannot weaken it.
+    asyncExtraction: isProductionLike || value(env, "EXTRACTION_ASYNC") === "1",
+    workerToken: value(env, "EXTRACTION_WORKER_TOKEN"),
+    errorWebhookUrl: value(env, "ERROR_WEBHOOK_URL"),
+    metricsWebhookUrl: value(env, "METRICS_WEBHOOK_URL"),
+    aiModel: value(env, "AGIR_AI_MODEL") ?? "claude-sonnet-4-6",
+  };
+}
+
+function missingRequirements(config: ServerConfig, requirements: readonly ConfigRequirement[]) {
+  const missing: string[] = [];
+  for (const requirement of requirements) {
+    if (requirement === "supabase" && (!config.supabaseUrl || !config.supabaseAnonKey))
+      missing.push("Supabase URL and anon/publishable key");
+    if (requirement === "serviceRole" && !config.serviceRoleKey)
+      missing.push("SUPABASE_SERVICE_ROLE_KEY");
+    if (requirement === "database" && !config.databaseUrl) missing.push("DATABASE_URL");
+    if (requirement === "scanner" && !config.scannerUrl) missing.push("DOCUMENT_SCAN_URL");
+    if (requirement === "worker" && (!config.workerToken || !config.asyncExtraction))
+      missing.push("EXTRACTION_WORKER_TOKEN with asynchronous extraction");
+    if (requirement === "observability" && !config.errorWebhookUrl && !config.metricsWebhookUrl)
+      missing.push("ERROR_WEBHOOK_URL or METRICS_WEBHOOK_URL");
+  }
+  return missing;
+}
+
+/** Fails without echoing values, secrets, URLs, or tokens. */
+export function getServerConfig(
+  requirements: readonly ConfigRequirement[] = [],
+  env: NodeJS.ProcessEnv = process.env,
+): ServerConfig {
+  const config = readServerConfig(env);
+  const productionRequirements: ConfigRequirement[] = config.isProductionLike
+    ? ["supabase", "scanner", "worker", "observability"]
+    : [];
+  const missing = missingRequirements(config, [
+    ...new Set([...productionRequirements, ...requirements]),
+  ]);
+  if (missing.length) throw new Error(`Server configuration is incomplete: ${missing.join("; ")}.`);
+  return config;
+}
+
+/** Safe for health endpoints and diagnostics; deliberately contains no values. */
+export function getRedactedConfigDiagnostics(env: NodeJS.ProcessEnv = process.env) {
+  const config = readServerConfig(env);
+  return {
+    environment: config.environment,
+    productionLike: config.isProductionLike,
+    supabaseConfigured: Boolean(config.supabaseUrl && config.supabaseAnonKey),
+    serviceRoleConfigured: Boolean(config.serviceRoleKey),
+    databaseConfigured: Boolean(config.databaseUrl),
+    scannerConfigured: Boolean(config.scannerUrl),
+    asyncExtraction: config.asyncExtraction,
+    workerConfigured: Boolean(config.workerToken),
+    observabilityConfigured: Boolean(config.errorWebhookUrl || config.metricsWebhookUrl),
   };
 }

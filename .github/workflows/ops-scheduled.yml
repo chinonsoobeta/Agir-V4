@@ -11,6 +11,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  pending-upload-cleanup:
+    name: Expired pending upload cleanup
+    runs-on: ubuntu-latest
+    # This scheduled production task is intentionally fail-loud: a missing
+    # credential or cleanup error pages through the failed workflow run.
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run ops:cleanup
+
   backend-controls:
     name: Backend control audit
     runs-on: ubuntu-latest

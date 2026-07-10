@@ -52,8 +52,10 @@ export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
 export DATABASE_URL="$DB_URL"
 node scripts/ensure-demo-user.mjs
 npx playwright install chromium
-npm run confidence:full
+npm run ops:release
 ```
 
-Schedule `npm run uploads:cleanup` every 15 minutes in any environment that
-accepts uploads. It needs only `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
+Use `npm run ops:check` for the fast static/operator gate, `npm run ops:cleanup`
+for bounded expired pending-upload cleanup, and `npm run ops:recover` for
+non-destructive queue/migration/audit diagnostics. See
+[docs/ops/operator-interface.md](docs/ops/operator-interface.md).

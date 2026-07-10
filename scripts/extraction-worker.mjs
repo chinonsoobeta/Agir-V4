@@ -12,6 +12,7 @@ const databaseUrl =
   process.env.DATABASE_URL;
 const handlerUrl = process.env.EXTRACTION_WORKER_HANDLER_URL;
 const handlerMode = process.env.EXTRACTION_WORKER_HANDLER_MODE ?? (handlerUrl ? "http" : "local");
+const workerToken = process.env.EXTRACTION_WORKER_TOKEN;
 const pollMs = Number(process.env.EXTRACTION_WORKER_POLL_MS ?? 5000);
 const workerId =
   process.env.EXTRACTION_WORKER_ID ??
@@ -57,7 +58,7 @@ async function shouldCancel(client, job) {
 }
 
 async function finishJob(client, job, payload) {
-  await client.query(
+  const result = await client.query(
     `
       UPDATE public.extraction_jobs
       SET status = $2,
@@ -66,7 +67,7 @@ async function finishJob(client, job, payload) {
           error = $4,
           finished_at = now(),
           message = $5
-      WHERE id = $1
+      WHERE id = $1 AND status = 'running' AND lease_owner = $6
     `,
     [
       job.id,
@@ -74,8 +75,11 @@ async function finishJob(client, job, payload) {
       payload.result ?? null,
       payload.error ?? null,
       payload.message ?? null,
+      workerId,
     ],
   );
+  if (result.rowCount !== 1)
+    throw new Error(`Lost lease for job ${job.id}; refusing to overwrite it.`);
 }
 
 async function handleJob(job) {
@@ -90,9 +94,16 @@ async function handleJob(job) {
       message: "Worker claimed job but no handler is configured.",
     };
   }
+  if (!workerToken) {
+    return {
+      status: "failed",
+      error: "EXTRACTION_WORKER_TOKEN is not configured.",
+      message: "Worker refused to call the protected extraction handler.",
+    };
+  }
   const response = await fetch(handlerUrl, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "x-worker-token": workerToken },
     body: JSON.stringify({ job }),
   });
   if (!response.ok) {
@@ -129,7 +140,31 @@ async function tick() {
       console.log(`[extraction-worker] ${job.id} -> canceled`);
       return true;
     }
-    const result = await handleJob(job);
+    // Keep the lease alive while bounded OCR/AV/AI work runs. An abandoned
+    // worker stops heartbeating and is safely recovered by the claim RPC.
+    const heartbeat = setInterval(
+      () => {
+        void heartbeatJob(client, job).catch((error) =>
+          console.error(`[extraction-worker] heartbeat failed for ${job.id}: ${error.message}`),
+        );
+      },
+      Math.max(10_000, Math.floor((leaseSeconds * 1000) / 3)),
+    );
+    let result;
+    try {
+      result = await handleJob(job);
+    } finally {
+      clearInterval(heartbeat);
+    }
+    if (await shouldCancel(client, job)) {
+      await finishJob(client, job, {
+        status: "canceled",
+        error: null,
+        message: "Job canceled during handler execution.",
+      });
+      console.log(`[extraction-worker] ${job.id} -> canceled`);
+      return true;
+    }
     await finishJob(client, job, result);
     console.log(`[extraction-worker] ${job.id} -> ${result.status}`);
     return true;

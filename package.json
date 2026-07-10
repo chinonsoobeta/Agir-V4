@@ -51,7 +51,11 @@
     "worker:extraction": "node scripts/extraction-worker.mjs",
     "uploads:cleanup": "node scripts/cleanup-pending-document-uploads.mjs",
     "sla:probe": "node scripts/sla-probe.mjs",
-    "readiness:deployed": "node scripts/deployed-readiness-check.mjs"
+    "readiness:deployed": "node scripts/deployed-readiness-check.mjs",
+    "ops:check": "node scripts/ops.mjs check",
+    "ops:release": "node scripts/ops.mjs release",
+    "ops:cleanup": "node scripts/ops.mjs cleanup",
+    "ops:recover": "node scripts/ops.mjs recover"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.199",

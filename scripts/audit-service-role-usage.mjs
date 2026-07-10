@@ -8,6 +8,9 @@ const allowed = new Set([
   "src/integrations/supabase/service-role.server.ts",
   "src/lib/documents.functions.ts",
   "src/lib/env.server.ts",
+  // The typed server configuration boundary resolves only the presence of the
+  // service-role credential. It never creates a client or exposes its value.
+  "src/lib/config.server.ts",
   "src/lib/health.server.ts",
   "src/lib/scim/supabase-store.server.ts",
   "src/lib/storage-download.server.ts",

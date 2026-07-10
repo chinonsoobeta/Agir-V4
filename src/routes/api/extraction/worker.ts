@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { timingSafeEqual } from "node:crypto";
+import { getServerConfig } from "@/lib/config.server";
 
 // Execution endpoint for the external extraction worker
 // (scripts/extraction-worker.mjs in HTTP handler mode). The worker claims a
@@ -27,7 +28,8 @@ export const Route = createFileRoute("/api/extraction/worker")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const expected = process.env.EXTRACTION_WORKER_TOKEN?.trim();
+        const config = getServerConfig();
+        const expected = config.workerToken;
         if (!expected) return new Response("Not found", { status: 404 });
         if (!tokenMatches(request.headers.get("x-worker-token"), expected)) {
           return new Response("Unauthorized", { status: 401 });

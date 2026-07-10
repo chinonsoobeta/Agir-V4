@@ -25,12 +25,25 @@ VITE_SUPABASE_PUBLISHABLE_KEY=
 ANTHROPIC_API_KEY=
 AGIR_AI_MODEL=claude-sonnet-4-6
 ERROR_WEBHOOK_URL=
+METRICS_WEBHOOK_URL=
+DOCUMENT_SCAN_URL=
+DOCUMENT_SCAN_FORMAT=raw
+EXTRACTION_WORKER_TOKEN=
+AGIR_ENV=production
 ```
 
 `VITE_SUPABASE_URL` should equal `SUPABASE_URL`.
 `VITE_SUPABASE_PUBLISHABLE_KEY` should equal `SUPABASE_PUBLISHABLE_KEY`.
 
 Never expose `SUPABASE_SERVICE_ROLE_KEY` with a `VITE_` prefix.
+
+`AGIR_ENV=production` (or `staging`) requires a configured external scanner,
+worker token, observability sink, server URL/key, and the database URL for
+release operations. It forces asynchronous extraction and rejects scanner
+outage, timeout, malformed verdict, or missing scanner configuration. The
+worker runs separately with `WORKER_DATABASE_URL`, `EXTRACTION_WORKER_TOKEN`,
+and `EXTRACTION_WORKER_HANDLER_URL`; use only a narrow queue-worker database
+credential where your deployment platform supports it.
 
 `POSTGRES_URL` is the direct Supabase Postgres connection string used by migrations and schema
 drift checks. If your host provides a different name, the app also accepts `DATABASE_URL`,
@@ -104,8 +117,11 @@ Before testing production:
 
 1. Make sure all migrations in `supabase/migrations` have been applied to the Supabase project (see above).
 2. Make sure the `documents` storage bucket exists.
-3. Schedule `npm run uploads:cleanup` every 15 minutes with service-role
-   credentials. This removes only expired staged-upload objects.
+3. Schedule `npm run ops:cleanup` every 15 minutes with service-role
+   credentials. This removes only expired staged-upload objects. Schedule the
+   queue worker continuously (or with a bounded external scheduler), and run
+   `npm run ops:recover` daily with database credentials for audit-chain and
+   queue diagnostics.
 4. Upload the shared Harbour demo files if you want the seeded Harbour demo to work for every account:
 
 ```bash
