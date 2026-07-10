@@ -106,6 +106,10 @@ export function DocumentDropzone({
       });
       // Server treated this as a duplicate of already-uploaded content.
       if (doc?.deduped) {
+        // The duplicate check occurs after direct-to-storage upload. Remove the
+        // just-uploaded object so retries do not leave orphaned bucket data.
+        const { error: removeError } = await supabase.storage.from("documents").remove([path]);
+        if (removeError) console.warn("Unable to remove duplicate document upload", removeError);
         setItem(id, { status: "duplicate" });
         onChanged();
         return;

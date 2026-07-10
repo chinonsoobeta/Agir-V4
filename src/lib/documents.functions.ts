@@ -122,6 +122,33 @@ export const createDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => CreateDocSchema.parse(d))
   .handler(async ({ data, context }) => {
+    // Storage RLS enforces the same boundary, but validate it before persisting
+    // the metadata row as well. This prevents a hand-crafted server-function
+    // request from registering an arbitrary path for later privileged recovery.
+    if (
+      !data.storage_path.startsWith(`${context.userId}/`) ||
+      data.storage_path.includes("..") ||
+      data.storage_path.includes("\\")
+    ) {
+      throw new Error("Document storage path is invalid.");
+    }
+
+    // Idempotency / dedup: an identical file already in this project is reused
+    // rather than re-inserted (a double-click or retry is a no-op). Do this
+    // before consuming an upload-rate token or checking aggregate quota: a
+    // harmless retry must not exhaust either resource-control limit.
+    if (data.content_hash) {
+      let dq = context.supabase
+        .from("documents")
+        .select("*")
+        .eq("owner_id", context.userId)
+        .eq("content_hash", data.content_hash);
+      dq = data.project_id ? dq.eq("project_id", data.project_id) : dq.is("project_id", null);
+      const { data: existing, error: existingError } = await dq.maybeSingle();
+      if (existingError) throw new Error(existingError.message);
+      if (existing) return { ...existing, deduped: true };
+    }
+
     const { enforceRateLimit } = await import("./rate-limit.server");
     await enforceRateLimit(context, "document_upload", {
       metadata: { file_type: data.file_type ?? null, size_bytes: data.size_bytes ?? 0 },
@@ -134,19 +161,6 @@ export const createDocument = createServerFn({ method: "POST" })
       );
     }
     await enforceUploadQuota(context, size);
-
-    // Idempotency / dedup: an identical file already in this project is reused
-    // rather than re-inserted (a double-click or retry is a no-op).
-    if (data.content_hash) {
-      let dq = context.supabase
-        .from("documents")
-        .select("*")
-        .eq("owner_id", context.userId)
-        .eq("content_hash", data.content_hash);
-      dq = data.project_id ? dq.eq("project_id", data.project_id) : dq.is("project_id", null);
-      const { data: existing } = await dq.maybeSingle();
-      if (existing) return { ...existing, deduped: true };
-    }
 
     const { data: row, error } = await context.supabase
       .from("documents")

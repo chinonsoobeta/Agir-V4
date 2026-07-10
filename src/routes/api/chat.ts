@@ -12,16 +12,23 @@ export const Route = createFileRoute("/api/chat")({
         if (!auth?.startsWith("Bearer ")) return new Response("Unauthorized", { status: 401 });
         const token = auth.replace("Bearer ", "");
 
-        const SUPABASE_URL = process.env.SUPABASE_URL!;
+        const SUPABASE_URL =
+          process.env.SUPABASE_URL ||
+          process.env.VITE_SUPABASE_URL ||
+          process.env.NEXT_PUBLIC_SUPABASE_URL;
         const SUPABASE_ANON_KEY =
           process.env.SUPABASE_ANON_KEY ||
           process.env.SUPABASE_PUBLISHABLE_KEY ||
           process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-          process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+          process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+          process.env.VITE_SUPABASE_ANON_KEY ||
+          process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         const { hasAnthropicKey } = await import("@/lib/ai-gateway.server");
         if (!hasAnthropicKey())
           return new Response("Missing or malformed ANTHROPIC_API_KEY", { status: 500 });
-        if (!SUPABASE_ANON_KEY) return new Response("Missing SUPABASE_ANON_KEY", { status: 500 });
+        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+          return new Response("Missing Supabase configuration", { status: 500 });
+        }
 
         const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
           global: { headers: { Authorization: `Bearer ${token}` } },

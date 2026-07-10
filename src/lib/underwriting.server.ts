@@ -199,7 +199,12 @@ const RUN_HISTORY_TABLES = {
 } as const;
 
 async function runHistoryWriteClient(fallback: SupabaseFacade) {
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return fallback;
+  const hasSupabaseUrl = Boolean(
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+  );
+  if (!hasSupabaseUrl || !process.env.SUPABASE_SERVICE_ROLE_KEY) return fallback;
   const { getServiceRoleClient } = await import("@/integrations/supabase/service-role.server");
   return getServiceRoleClient("run_history_write");
 }

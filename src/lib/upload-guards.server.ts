@@ -229,7 +229,10 @@ export async function enforceUploadQuota(
     .select("size_bytes, upload_date")
     .eq("owner_id", ctx.userId)
     .gte("upload_date", since);
-  if (error) return; // never block uploads on a quota read failure
+  // This is a resource-protection boundary. Allowing uploads when its read
+  // fails would let an outage (or a transient RLS/schema error) bypass both
+  // the per-user file-count and byte quotas.
+  if (error) throw new Error(`Unable to verify upload quota. Please retry: ${error.message}`);
   const rows = (data ?? []) as { size_bytes: number | null }[];
   if (rows.length >= UPLOAD_LIMITS.maxFilesPerDay) {
     throw new Error(

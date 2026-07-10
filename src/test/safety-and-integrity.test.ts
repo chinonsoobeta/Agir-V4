@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sha256Hex, stableJsonHash } from "@/lib/hash.server";
 import {
+  enforceUploadQuota,
   parseExternalScanVerdict,
   scanDocument,
   scanDocumentBuffer,
@@ -62,6 +63,25 @@ describe("scanDocumentBuffer", () => {
   });
   it("rejects unsupported extensions", () => {
     expect(scanDocumentBuffer("a.exe", buf([1, 2, 3, 4])).ok).toBe(false);
+  });
+});
+
+describe("enforceUploadQuota", () => {
+  it("fails closed when quota usage cannot be read", async () => {
+    const query = {
+      eq() {
+        return this;
+      },
+      gte() {
+        return Promise.resolve({ data: null, error: { message: "database unavailable" } });
+      },
+    };
+    const supabase = {
+      from: () => ({ select: () => query }),
+    };
+    await expect(
+      enforceUploadQuota({ supabase: supabase as never, userId: "user-1" }, 100),
+    ).rejects.toThrow("Unable to verify upload quota");
   });
 });
 

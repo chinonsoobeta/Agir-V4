@@ -7,6 +7,11 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import { nitro } from "nitro/vite";
 
 export default defineConfig(({ mode }) => {
+  // Vitest loads this shared Vite config.  The production TanStack Start/Nitro
+  // plugins create a server lifecycle which keeps the test process alive after
+  // every assertion has completed.  Unit tests execute source modules directly
+  // and only need path resolution and React's JSX transform.
+  const isTest = mode === "test" || process.env.VITEST === "true";
   // Load every env var (no prefix filter) from .env files AND process.env so we can
   // bridge them to the browser. The Vercel Supabase integration only provides
   // SUPABASE_URL / NEXT_PUBLIC_SUPABASE_URL / SUPABASE_ANON_KEY: it does NOT provide
@@ -15,8 +20,10 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const SUPABASE_URL =
     env.SUPABASE_URL ||
+    env.VITE_SUPABASE_URL ||
     env.NEXT_PUBLIC_SUPABASE_URL ||
     process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     "";
   const SUPABASE_ANON_KEY =
@@ -24,11 +31,14 @@ export default defineConfig(({ mode }) => {
     env.SUPABASE_PUBLISHABLE_KEY ||
     env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    env.VITE_SUPABASE_ANON_KEY ||
     env.VITE_SUPABASE_PUBLISHABLE_KEY ||
     process.env.SUPABASE_ANON_KEY ||
     process.env.SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
     "";
 
   // Server functions read process.env at runtime. Mirror the values loaded from
@@ -47,15 +57,19 @@ export default defineConfig(({ mode }) => {
     plugins: [
       // tsconfigPaths must run first so the "@/..." alias resolves for every other plugin.
       tsconfigPaths(),
-      tailwindcss(),
-      // tanstackStart() already includes the TanStack Router code-splitting plugin internally.
-      // Do NOT also add TanStackRouterVite(): registering both runs the route transform twice,
-      // which produces duplicate declarations and a broken client entry module.
-      tanstackStart(),
-      // nitro() builds the deployable server output. It auto-detects the Vercel build
-      // environment and emits .vercel/output so SSR routes work in production. Without it,
-      // only a static client is produced and deep routes 404 on Vercel.
-      nitro(),
+      ...(isTest
+        ? []
+        : [
+            tailwindcss(),
+            // tanstackStart() already includes the TanStack Router code-splitting plugin internally.
+            // Do NOT also add TanStackRouterVite(): registering both runs the route transform twice,
+            // which produces duplicate declarations and a broken client entry module.
+            tanstackStart(),
+            // nitro() builds the deployable server output. It auto-detects the Vercel build
+            // environment and emits .vercel/output so SSR routes work in production. Without it,
+            // only a static client is produced and deep routes 404 on Vercel.
+            nitro(),
+          ]),
       react(),
     ],
     server: {

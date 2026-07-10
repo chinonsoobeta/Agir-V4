@@ -15,7 +15,10 @@ export const SERVICE_ROLE_CAPABILITIES = {
 export type ServiceRoleCapability = keyof typeof SERVICE_ROLE_CAPABILITIES;
 
 function createServiceRoleClient(capability: ServiceRoleCapability) {
-  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_URL =
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL;
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
