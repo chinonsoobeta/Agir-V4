@@ -35,7 +35,8 @@ function shouldUseSsl(connectionString) {
 }
 
 const bootstrapSql = `
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
 
 DO $$ BEGIN
   CREATE ROLE anon NOLOGIN;
@@ -97,6 +98,7 @@ CREATE TABLE IF NOT EXISTS storage.objects (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
 
 CREATE OR REPLACE FUNCTION storage.foldername(name TEXT)
 RETURNS TEXT[]
@@ -111,11 +113,11 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
-GRANT USAGE ON SCHEMA auth, public, storage TO anon, authenticated, service_role;
+GRANT USAGE ON SCHEMA auth, extensions, public, storage TO anon, authenticated, service_role;
 GRANT SELECT ON auth.users TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON storage.buckets, storage.objects TO authenticated;
 GRANT ALL ON ALL TABLES IN SCHEMA auth, public, storage TO service_role;
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth, storage TO anon, authenticated, service_role;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth, extensions, storage TO anon, authenticated, service_role;
 `;
 
 const { connectionString, envVar } = resolveDatabaseUrl();

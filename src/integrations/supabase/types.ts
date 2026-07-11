@@ -410,6 +410,62 @@ export type Database = {
           },
         ];
       };
+      authoritative_land_data_sources: {
+        Row: {
+          boundary_notes: string | null;
+          created_at: string;
+          id: string;
+          integration_status: string;
+          jurisdiction_id: string;
+          last_verified_at: string | null;
+          licensing_status: string;
+          reviewed_by: string | null;
+          source_name: string;
+          source_type: string;
+          source_url: string;
+          update_frequency: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          boundary_notes?: string | null;
+          created_at?: string;
+          id?: string;
+          integration_status?: string;
+          jurisdiction_id: string;
+          last_verified_at?: string | null;
+          licensing_status?: string;
+          reviewed_by?: string | null;
+          source_name: string;
+          source_type: string;
+          source_url: string;
+          update_frequency?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          boundary_notes?: string | null;
+          created_at?: string;
+          id?: string;
+          integration_status?: string;
+          jurisdiction_id?: string;
+          last_verified_at?: string | null;
+          licensing_status?: string;
+          reviewed_by?: string | null;
+          source_name?: string;
+          source_type?: string;
+          source_url?: string;
+          update_frequency?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "authoritative_land_data_sources_jurisdiction_id_fkey";
+            columns: ["jurisdiction_id"];
+            isOneToOne: false;
+            referencedRelation: "jurisdictions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       cash_flows: {
         Row: {
           amount: number;
@@ -1461,6 +1517,48 @@ export type Database = {
           },
         ];
       };
+      jurisdictions: {
+        Row: {
+          active: boolean;
+          created_at: string;
+          id: string;
+          jurisdiction_type: string;
+          last_verified_at: string | null;
+          name: string;
+          official_url: string;
+          permit_portal_url: string | null;
+          province: string;
+          regional_area: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          active?: boolean;
+          created_at?: string;
+          id?: string;
+          jurisdiction_type: string;
+          last_verified_at?: string | null;
+          name: string;
+          official_url: string;
+          permit_portal_url?: string | null;
+          province: string;
+          regional_area?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          active?: boolean;
+          created_at?: string;
+          id?: string;
+          jurisdiction_type?: string;
+          last_verified_at?: string | null;
+          name?: string;
+          official_url?: string;
+          permit_portal_url?: string | null;
+          province?: string;
+          regional_area?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       market_signals: {
         Row: {
           created_at: string;
@@ -1747,6 +1845,467 @@ export type Database = {
           },
         ];
       };
+      permit_documents: {
+        Row: {
+          created_at: string;
+          document_id: string;
+          document_role: string;
+          is_received: boolean;
+          is_required: boolean;
+          notes: string | null;
+          permit_id: string;
+          received_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          document_id: string;
+          document_role?: string;
+          is_received?: boolean;
+          is_required?: boolean;
+          notes?: string | null;
+          permit_id: string;
+          received_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          document_id?: string;
+          document_role?: string;
+          is_received?: boolean;
+          is_required?: boolean;
+          notes?: string | null;
+          permit_id?: string;
+          received_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "permit_documents_document_id_fkey";
+            columns: ["document_id"];
+            isOneToOne: false;
+            referencedRelation: "documents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_documents_permit_id_fkey";
+            columns: ["permit_id"];
+            isOneToOne: false;
+            referencedRelation: "project_permits";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      permit_extraction_candidates: {
+        Row: {
+          authority_name: string | null;
+          candidate_name: string;
+          confidence_score: number | null;
+          created_at: string;
+          description: string | null;
+          document_id: string;
+          extraction_version: string;
+          id: string;
+          jurisdiction_id: string | null;
+          owner_id: string;
+          permit_type: string | null;
+          processing_duration_days: number | null;
+          processing_duration_text: string | null;
+          project_id: string;
+          project_permit_id: string | null;
+          review_reason: string | null;
+          review_status: string;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
+          source_location: string;
+          source_text: string;
+          updated_at: string;
+        };
+        Insert: {
+          authority_name?: string | null;
+          candidate_name: string;
+          confidence_score?: number | null;
+          created_at?: string;
+          description?: string | null;
+          document_id: string;
+          extraction_version: string;
+          id?: string;
+          jurisdiction_id?: string | null;
+          owner_id: string;
+          permit_type?: string | null;
+          processing_duration_days?: number | null;
+          processing_duration_text?: string | null;
+          project_id: string;
+          project_permit_id?: string | null;
+          review_reason?: string | null;
+          review_status?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          source_location: string;
+          source_text: string;
+          updated_at?: string;
+        };
+        Update: {
+          authority_name?: string | null;
+          candidate_name?: string;
+          confidence_score?: number | null;
+          created_at?: string;
+          description?: string | null;
+          document_id?: string;
+          extraction_version?: string;
+          id?: string;
+          jurisdiction_id?: string | null;
+          owner_id?: string;
+          permit_type?: string | null;
+          processing_duration_days?: number | null;
+          processing_duration_text?: string | null;
+          project_id?: string;
+          project_permit_id?: string | null;
+          review_reason?: string | null;
+          review_status?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          source_location?: string;
+          source_text?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "permit_extraction_candidates_document_id_fkey";
+            columns: ["document_id"];
+            isOneToOne: false;
+            referencedRelation: "documents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_extraction_candidates_jurisdiction_id_fkey";
+            columns: ["jurisdiction_id"];
+            isOneToOne: false;
+            referencedRelation: "jurisdictions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_extraction_candidates_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_extraction_candidates_project_permit_id_fkey";
+            columns: ["project_permit_id"];
+            isOneToOne: false;
+            referencedRelation: "project_permits";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      permit_history: {
+        Row: {
+          change_reason: string | null;
+          changed_at: string;
+          changed_by: string;
+          id: string;
+          new_applicability_status: string | null;
+          new_status: string | null;
+          previous_applicability_status: string | null;
+          previous_status: string | null;
+          project_permit_id: string;
+          source_document_id: string | null;
+          source_text: string | null;
+        };
+        Insert: {
+          change_reason?: string | null;
+          changed_at?: string;
+          changed_by: string;
+          id?: string;
+          new_applicability_status?: string | null;
+          new_status?: string | null;
+          previous_applicability_status?: string | null;
+          previous_status?: string | null;
+          project_permit_id: string;
+          source_document_id?: string | null;
+          source_text?: string | null;
+        };
+        Update: {
+          change_reason?: string | null;
+          changed_at?: string;
+          changed_by?: string;
+          id?: string;
+          new_applicability_status?: string | null;
+          new_status?: string | null;
+          previous_applicability_status?: string | null;
+          previous_status?: string | null;
+          project_permit_id?: string;
+          source_document_id?: string | null;
+          source_text?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "permit_history_project_permit_id_fkey";
+            columns: ["project_permit_id"];
+            isOneToOne: false;
+            referencedRelation: "project_permits";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_history_source_document_id_fkey";
+            columns: ["source_document_id"];
+            isOneToOne: false;
+            referencedRelation: "documents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      permit_requirements: {
+        Row: {
+          created_at: string;
+          description: string | null;
+          document_id: string | null;
+          due_date: string | null;
+          id: string;
+          is_required: boolean;
+          name: string;
+          notes: string | null;
+          project_permit_id: string;
+          requirement_type: string;
+          source_document_id: string | null;
+          source_text: string | null;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          description?: string | null;
+          document_id?: string | null;
+          due_date?: string | null;
+          id?: string;
+          is_required?: boolean;
+          name: string;
+          notes?: string | null;
+          project_permit_id: string;
+          requirement_type?: string;
+          source_document_id?: string | null;
+          source_text?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          description?: string | null;
+          document_id?: string | null;
+          due_date?: string | null;
+          id?: string;
+          is_required?: boolean;
+          name?: string;
+          notes?: string | null;
+          project_permit_id?: string;
+          requirement_type?: string;
+          source_document_id?: string | null;
+          source_text?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "permit_requirements_document_id_fkey";
+            columns: ["document_id"];
+            isOneToOne: false;
+            referencedRelation: "documents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_requirements_project_permit_id_fkey";
+            columns: ["project_permit_id"];
+            isOneToOne: false;
+            referencedRelation: "project_permits";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_requirements_source_document_id_fkey";
+            columns: ["source_document_id"];
+            isOneToOne: false;
+            referencedRelation: "documents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      permit_rule_reviews: {
+        Row: {
+          created_at: string;
+          id: string;
+          next_review_at: string | null;
+          notes: string | null;
+          permit_rule_id: string;
+          review_status: string;
+          reviewed_at: string;
+          reviewer_id: string | null;
+          source_content_hash: string | null;
+          source_text: string | null;
+          source_title: string | null;
+          source_url: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          next_review_at?: string | null;
+          notes?: string | null;
+          permit_rule_id: string;
+          review_status: string;
+          reviewed_at?: string;
+          reviewer_id?: string | null;
+          source_content_hash?: string | null;
+          source_text?: string | null;
+          source_title?: string | null;
+          source_url: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          next_review_at?: string | null;
+          notes?: string | null;
+          permit_rule_id?: string;
+          review_status?: string;
+          reviewed_at?: string;
+          reviewer_id?: string | null;
+          source_content_hash?: string | null;
+          source_text?: string | null;
+          source_title?: string | null;
+          source_url?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "permit_rule_reviews_permit_rule_id_fkey";
+            columns: ["permit_rule_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_rule_review_queue";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_rule_reviews_permit_rule_id_fkey";
+            columns: ["permit_rule_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_rules";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      permit_rules: {
+        Row: {
+          applicability_conditions: string | null;
+          application_url: string | null;
+          authority_scope: string;
+          created_at: string;
+          description: string | null;
+          effective_date: string | null;
+          id: string;
+          jurisdiction_id: string;
+          name: string;
+          next_review_at: string | null;
+          official_source_url: string | null;
+          permit_type: string;
+          published_duration_days: number | null;
+          published_duration_text: string | null;
+          required_documents: Json;
+          review_date: string | null;
+          reviewed_by: string | null;
+          rule_version: string;
+          source_content_hash: string | null;
+          source_document_id: string | null;
+          source_text: string | null;
+          source_title: string | null;
+          superseded_at: string | null;
+          supersedes_rule_id: string | null;
+          updated_at: string;
+          verification_status: string;
+        };
+        Insert: {
+          applicability_conditions?: string | null;
+          application_url?: string | null;
+          authority_scope?: string;
+          created_at?: string;
+          description?: string | null;
+          effective_date?: string | null;
+          id?: string;
+          jurisdiction_id: string;
+          name: string;
+          next_review_at?: string | null;
+          official_source_url?: string | null;
+          permit_type: string;
+          published_duration_days?: number | null;
+          published_duration_text?: string | null;
+          required_documents?: Json;
+          review_date?: string | null;
+          reviewed_by?: string | null;
+          rule_version: string;
+          source_content_hash?: string | null;
+          source_document_id?: string | null;
+          source_text?: string | null;
+          source_title?: string | null;
+          superseded_at?: string | null;
+          supersedes_rule_id?: string | null;
+          updated_at?: string;
+          verification_status: string;
+        };
+        Update: {
+          applicability_conditions?: string | null;
+          application_url?: string | null;
+          authority_scope?: string;
+          created_at?: string;
+          description?: string | null;
+          effective_date?: string | null;
+          id?: string;
+          jurisdiction_id?: string;
+          name?: string;
+          next_review_at?: string | null;
+          official_source_url?: string | null;
+          permit_type?: string;
+          published_duration_days?: number | null;
+          published_duration_text?: string | null;
+          required_documents?: Json;
+          review_date?: string | null;
+          reviewed_by?: string | null;
+          rule_version?: string;
+          source_content_hash?: string | null;
+          source_document_id?: string | null;
+          source_text?: string | null;
+          source_title?: string | null;
+          superseded_at?: string | null;
+          supersedes_rule_id?: string | null;
+          updated_at?: string;
+          verification_status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "permit_rules_jurisdiction_id_fkey";
+            columns: ["jurisdiction_id"];
+            isOneToOne: false;
+            referencedRelation: "jurisdictions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_rules_source_document_id_fkey";
+            columns: ["source_document_id"];
+            isOneToOne: false;
+            referencedRelation: "documents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_rules_supersedes_rule_id_fkey";
+            columns: ["supersedes_rule_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_rule_review_queue";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_rules_supersedes_rule_id_fkey";
+            columns: ["supersedes_rule_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_rules";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       profiles: {
         Row: {
           avatar_url: string | null;
@@ -1774,17 +2333,143 @@ export type Database = {
         };
         Relationships: [];
       };
+      project_permits: {
+        Row: {
+          applicability_status: string;
+          application_date: string | null;
+          application_url: string | null;
+          confidence_band: string | null;
+          confidence_score: number | null;
+          created_at: string;
+          description: string | null;
+          duration_source: string | null;
+          expiration_date: string | null;
+          id: string;
+          is_required: boolean | null;
+          issued_date: string | null;
+          jurisdiction_id: string | null;
+          name: string;
+          notes: string | null;
+          owner_id: string;
+          permit_rule_id: string | null;
+          permit_type: string;
+          processing_duration_days: number | null;
+          processing_duration_text: string | null;
+          project_id: string;
+          required_reason: string | null;
+          responsible_party: string | null;
+          source_document_id: string | null;
+          source_kind: string;
+          source_location: string | null;
+          source_text: string | null;
+          target_date: string | null;
+          updated_at: string;
+          workflow_status: string;
+        };
+        Insert: {
+          applicability_status?: string;
+          application_date?: string | null;
+          application_url?: string | null;
+          confidence_band?: string | null;
+          confidence_score?: number | null;
+          created_at?: string;
+          description?: string | null;
+          duration_source?: string | null;
+          expiration_date?: string | null;
+          id?: string;
+          is_required?: boolean | null;
+          issued_date?: string | null;
+          jurisdiction_id?: string | null;
+          name: string;
+          notes?: string | null;
+          owner_id: string;
+          permit_rule_id?: string | null;
+          permit_type: string;
+          processing_duration_days?: number | null;
+          processing_duration_text?: string | null;
+          project_id: string;
+          required_reason?: string | null;
+          responsible_party?: string | null;
+          source_document_id?: string | null;
+          source_kind?: string;
+          source_location?: string | null;
+          source_text?: string | null;
+          target_date?: string | null;
+          updated_at?: string;
+          workflow_status?: string;
+        };
+        Update: {
+          applicability_status?: string;
+          application_date?: string | null;
+          application_url?: string | null;
+          confidence_band?: string | null;
+          confidence_score?: number | null;
+          created_at?: string;
+          description?: string | null;
+          duration_source?: string | null;
+          expiration_date?: string | null;
+          id?: string;
+          is_required?: boolean | null;
+          issued_date?: string | null;
+          jurisdiction_id?: string | null;
+          name?: string;
+          notes?: string | null;
+          owner_id?: string;
+          permit_rule_id?: string | null;
+          permit_type?: string;
+          processing_duration_days?: number | null;
+          processing_duration_text?: string | null;
+          project_id?: string;
+          required_reason?: string | null;
+          responsible_party?: string | null;
+          source_document_id?: string | null;
+          source_kind?: string;
+          source_location?: string | null;
+          source_text?: string | null;
+          target_date?: string | null;
+          updated_at?: string;
+          workflow_status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_permits_jurisdiction_id_fkey";
+            columns: ["jurisdiction_id"];
+            isOneToOne: false;
+            referencedRelation: "jurisdictions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_permits_permit_rule_id_fkey";
+            columns: ["permit_rule_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_rule_review_queue";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_permits_permit_rule_id_fkey";
+            columns: ["permit_rule_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_rules";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_permits_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_permits_source_document_id_fkey";
+            columns: ["source_document_id"];
+            isOneToOne: false;
+            referencedRelation: "documents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       projects: {
         Row: {
-          property_address: string | null;
-          municipality: string | null;
-          permit_project_type: string | null;
-          property_type: string | null;
-          project_description: string | null;
-          work_categories: string[];
-          zoning_designation: string | null;
-          zoning_source: string | null;
-          zoning_verified_at: string | null;
           acquisition_cost: number | null;
           completion_date: string | null;
           construction_cost: number | null;
@@ -1796,10 +2481,15 @@ export type Database = {
           interest_rate: number | null;
           lead_owner: string | null;
           location: string | null;
+          municipality: string | null;
           name: string;
           notes: string | null;
           owner_id: string;
+          permit_project_type: string | null;
           probability: number;
+          project_description: string | null;
+          property_address: string | null;
+          property_type: string | null;
           revenue_forecast: number | null;
           source: string | null;
           start_date: string | null;
@@ -1807,18 +2497,13 @@ export type Database = {
           target_close_date: string | null;
           type: Database["public"]["Enums"]["project_type"];
           updated_at: string;
+          work_categories: string[];
           workspace_id: string | null;
+          zoning_designation: string | null;
+          zoning_source: string | null;
+          zoning_verified_at: string | null;
         };
         Insert: {
-          property_address?: string | null;
-          municipality?: string | null;
-          permit_project_type?: string | null;
-          property_type?: string | null;
-          project_description?: string | null;
-          work_categories?: string[];
-          zoning_designation?: string | null;
-          zoning_source?: string | null;
-          zoning_verified_at?: string | null;
           acquisition_cost?: number | null;
           completion_date?: string | null;
           construction_cost?: number | null;
@@ -1830,10 +2515,15 @@ export type Database = {
           interest_rate?: number | null;
           lead_owner?: string | null;
           location?: string | null;
+          municipality?: string | null;
           name: string;
           notes?: string | null;
           owner_id: string;
+          permit_project_type?: string | null;
           probability?: number;
+          project_description?: string | null;
+          property_address?: string | null;
+          property_type?: string | null;
           revenue_forecast?: number | null;
           source?: string | null;
           start_date?: string | null;
@@ -1841,18 +2531,13 @@ export type Database = {
           target_close_date?: string | null;
           type?: Database["public"]["Enums"]["project_type"];
           updated_at?: string;
-          workspace_id?: string | null;
-        };
-        Update: {
-          property_address?: string | null;
-          municipality?: string | null;
-          permit_project_type?: string | null;
-          property_type?: string | null;
-          project_description?: string | null;
           work_categories?: string[];
+          workspace_id?: string | null;
           zoning_designation?: string | null;
           zoning_source?: string | null;
           zoning_verified_at?: string | null;
+        };
+        Update: {
           acquisition_cost?: number | null;
           completion_date?: string | null;
           construction_cost?: number | null;
@@ -1864,10 +2549,15 @@ export type Database = {
           interest_rate?: number | null;
           lead_owner?: string | null;
           location?: string | null;
+          municipality?: string | null;
           name?: string;
           notes?: string | null;
           owner_id?: string;
+          permit_project_type?: string | null;
           probability?: number;
+          project_description?: string | null;
+          property_address?: string | null;
+          property_type?: string | null;
           revenue_forecast?: number | null;
           source?: string | null;
           start_date?: string | null;
@@ -1875,7 +2565,11 @@ export type Database = {
           target_close_date?: string | null;
           type?: Database["public"]["Enums"]["project_type"];
           updated_at?: string;
+          work_categories?: string[];
           workspace_id?: string | null;
+          zoning_designation?: string | null;
+          zoning_source?: string | null;
+          zoning_verified_at?: string | null;
         };
         Relationships: [
           {
@@ -2909,7 +3603,29 @@ export type Database = {
       };
     };
     Views: {
-      [_ in never]: never;
+      permit_rule_review_queue: {
+        Row: {
+          id: string | null;
+          jurisdiction_id: string | null;
+          jurisdiction_name: string | null;
+          name: string | null;
+          next_review_at: string | null;
+          official_source_url: string | null;
+          permit_type: string | null;
+          review_state: string | null;
+          rule_version: string | null;
+          verification_status: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "permit_rules_jurisdiction_id_fkey";
+            columns: ["jurisdiction_id"];
+            isOneToOne: false;
+            referencedRelation: "jurisdictions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Functions: {
       accept_workspace_invitation: {
@@ -3075,6 +3791,10 @@ export type Database = {
         Returns: boolean;
       };
       is_workspace_member: { Args: { ws: string }; Returns: boolean };
+      permit_project_access: {
+        Args: { p_project_id: string };
+        Returns: boolean;
+      };
       persist_underwriting_run_transaction: {
         Args: {
           p_accepted_defaults_used?: Json;

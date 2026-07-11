@@ -51,7 +51,10 @@ async function countRows(
   return count ?? 0;
 }
 
-export const getReportReadiness = createServerFn({ method: "GET" })
+// POST avoids parallel GET server-function hydration races observed when the
+// reports grid requests several readiness variants at once. This operation is
+// still read-only and remains safely cacheable at the React Query layer.
+export const getReportReadiness = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: { project_id: string; report_type: ReportType }) =>
     z.object({ project_id: z.string().uuid(), report_type: ReportTypeSchema }).parse(d),

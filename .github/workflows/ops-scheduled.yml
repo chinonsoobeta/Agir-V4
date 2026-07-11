@@ -49,6 +49,27 @@ jobs:
         if: ${{ env.SUPABASE_URL == '' || env.SUPABASE_ANON_KEY == '' }}
         run: echo "::notice::SUPABASE_URL/SUPABASE_ANON_KEY are not configured; env validation skipped."
 
+  permit-source-review:
+    name: Permit source freshness review
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '17 10 * * 1' }}
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Review and record official permit source freshness
+        if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
+        run: npm run permits:sources:update
+      - name: Report missing permit source review secrets
+        if: ${{ env.SUPABASE_URL == '' || env.SUPABASE_SERVICE_ROLE_KEY == '' }}
+        run: echo "::error::Permit source review requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY."
+
   restore-drill:
     name: Backup restore drill
     runs-on: ubuntu-latest

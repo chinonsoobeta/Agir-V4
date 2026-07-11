@@ -53,3 +53,37 @@ export function ruleMatchesMunicipality(
 ) {
   return !!project.jurisdiction_id && rule.jurisdiction_id === project.jurisdiction_id;
 }
+
+export type PermitMentionCandidate = {
+  candidateName: string;
+  sourceLocation: string;
+  sourceText: string;
+};
+
+/** Conservative document classifier: returns exact, review-only mentions of
+ * permits/approvals/certificates. It does not infer applicability, authority,
+ * duration, or permit type. */
+export function extractExplicitPermitMentions(text: string): PermitMentionCandidate[] {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line, index) => ({ line: line.replace(/\s+/g, " ").trim(), index: index + 1 }))
+    .filter(({ line }) => line.length >= 8 && line.length <= 1_500)
+    .filter(({ line }) => /\b(permit|approval|certificate|licen[cs]e)\b/i.test(line));
+  const seen = new Set<string>();
+  const candidates: PermitMentionCandidate[] = [];
+  for (const { line, index } of lines) {
+    const normalized = line.toLowerCase();
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    const match = line.match(
+      /(?:[A-Za-z][A-Za-z/&()' -]{0,70}\s)?(?:permit|approval|certificate|licen[cs]e)/i,
+    );
+    candidates.push({
+      candidateName: (match?.[0] ?? "Permit or approval mention").trim().slice(0, 250),
+      sourceLocation: `line ${index}`,
+      sourceText: line.slice(0, 10_000),
+    });
+    if (candidates.length >= 50) break;
+  }
+  return candidates;
+}

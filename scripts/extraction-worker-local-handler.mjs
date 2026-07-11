@@ -20,11 +20,20 @@ export async function handleLocalJob(job) {
       message: "Configure the shared worker token before running jobs.",
     };
   }
-  const response = await fetch(`${origin}/api/extraction/worker`, {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-worker-token": token },
-    body: JSON.stringify({ job }),
-  });
+  let response;
+  try {
+    response = await fetch(`${origin}/api/extraction/worker`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-worker-token": token },
+      body: JSON.stringify({ job_id: job.id, worker_id: job.lease_owner }),
+    });
+  } catch (cause) {
+    return {
+      status: "failed",
+      error: cause instanceof Error ? cause.message : String(cause),
+      message: `POST ${origin}/api/extraction/worker was unavailable.`,
+    };
+  }
   if (!response.ok) {
     return {
       status: "failed",

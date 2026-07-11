@@ -175,7 +175,6 @@ function ProjectSelector({
           ))}
         </SelectContent>
       </Select>
-      {projectId && <ProjectStatusLine projectId={projectId} />}
       {projectId && <AuditPackageButton projectId={projectId} />}
     </Card>
   );
@@ -224,51 +223,11 @@ function AuditPackageButton({ projectId }: { projectId: string }) {
   );
 }
 
-// One readiness call drives the header status line (counts are project-wide).
-function ProjectStatusLine({ projectId }: { projectId: string }) {
-  const fn = useServerFn(getReportReadiness);
-  const { data } = useQuery({
-    queryKey: ["report-readiness", projectId, "investor_report"],
-    queryFn: () => fn({ data: { project_id: projectId, report_type: "investor_report" } }),
-  });
-  if (!data) return null;
-  const c = data.counts;
-  const uw =
-    data.outputs_freshness === "current"
-      ? "Outputs current"
-      : data.outputs_freshness === "stale"
-        ? "Outputs stale"
-        : c.base_outputs > 0
-          ? "Underwriting generated"
-          : "Underwriting not run";
-  const memo = c.memos > 0 ? "Memo generated" : "No memo";
-  return (
-    <div className="text-xs text-muted-foreground sm:ml-auto">
-      <span className="font-medium text-foreground">
-        {"project_name" in data ? (data.project_name ?? "Project") : "Project"}
-      </span>
-      {" · "}
-      {uw}
-      {" · "}
-      {memo}
-      {" · "}
-      <span className={c.reconciliation_errors > 0 ? "text-destructive" : ""}>
-        {c.reconciliation_errors} errors
-      </span>
-      {" / "}
-      <span className={c.reconciliation_warnings > 0 ? "text-warning" : ""}>
-        {c.reconciliation_warnings} warnings
-      </span>
-    </div>
-  );
-}
-
 function ReportGrid({ projectId }: { projectId: string }) {
-  const fn = useServerFn(getReportReadiness);
   const readiness = useQueries({
     queries: REPORT_DEFINITIONS.map((def) => ({
       queryKey: ["report-readiness", projectId, def.type],
-      queryFn: () => fn({ data: { project_id: projectId, report_type: def.type } }),
+      queryFn: () => getReportReadiness({ data: { project_id: projectId, report_type: def.type } }),
     })),
   });
   const [preview, setPreview] = useState<{

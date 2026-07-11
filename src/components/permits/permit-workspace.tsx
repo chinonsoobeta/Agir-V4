@@ -36,15 +36,20 @@ import {
   createPermit,
   addPermitRequirement,
   deletePermitRequirement,
+  extractPermitCandidatesFromDocument,
   generatePermitCandidates,
   linkPermitDocument,
   listJurisdictions,
   listProjectPermits,
+  listPermitExtractionCandidates,
+  listPermitRules,
+  reviewPermitExtractionCandidate,
   unlinkPermitDocument,
   updatePermit,
   updatePermitRequirement,
 } from "@/lib/permits.functions";
 import { getDocumentUrl, listDocuments } from "@/lib/documents.functions";
+import { getProject } from "@/lib/projects.functions";
 
 type Permit = any;
 const label = (v: string) => v.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -525,6 +530,154 @@ export function PermitCreateDialog({ projectId }: { projectId: string }) {
     </Dialog>
   );
 }
+
+function PermitExtractionReview({ projectId }: { projectId: string }) {
+  const qc = useQueryClient();
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+  const { data = [] } = useQuery({
+    queryKey: ["permit-extraction-candidates", projectId],
+    queryFn: () => listPermitExtractionCandidates({ data: { project_id: projectId } }),
+  });
+  const review = useMutation({
+    mutationFn: ({ id, decision }: { id: string; decision: "accepted" | "rejected" }) =>
+      reviewPermitExtractionCandidate({ data: { id, decision, reason: reasons[id] } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["permit-extraction-candidates", projectId] });
+      qc.invalidateQueries({ queryKey: ["permits", projectId] });
+    },
+  });
+  const pending = data.filter((row: any) => row.review_status === "needs_review");
+  if (!pending.length) return null;
+  return (
+    <Card className="p-4 space-y-3">
+      <div>
+        <h3 className="font-medium">Document-extracted candidates</h3>
+        <p className="text-xs text-muted-foreground">
+          Extraction preserves the source text but cannot establish applicability. Acceptance
+          creates a needs-review permit candidate.
+        </p>
+      </div>
+      {pending.map((candidate: any) => (
+        <div key={candidate.id} className="rounded-md border p-3 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">{candidate.candidate_name}</span>
+            <PermitSourceBadge kind="extracted" />
+            <span className="text-xs text-muted-foreground">
+              {candidate.documents?.name} · {candidate.source_location}
+            </span>
+          </div>
+          <p className="text-sm text-muted-foreground">{candidate.source_text}</p>
+          <Input
+            value={reasons[candidate.id] ?? ""}
+            onChange={(event) =>
+              setReasons((current) => ({ ...current, [candidate.id]: event.target.value }))
+            }
+            placeholder="Required analyst review reason"
+          />
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              disabled={!reasons[candidate.id] || review.isPending}
+              onClick={() => review.mutate({ id: candidate.id, decision: "accepted" })}
+            >
+              Accept as needs review
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!reasons[candidate.id] || review.isPending}
+              onClick={() => review.mutate({ id: candidate.id, decision: "rejected" })}
+            >
+              Reject
+            </Button>
+          </div>
+        </div>
+      ))}
+    </Card>
+  );
+}
+
+function PermitDocumentExtraction({ projectId }: { projectId: string }) {
+  const qc = useQueryClient();
+  const [result, setResult] = useState<string | null>(null);
+  const { data: documents = [] } = useQuery({
+    queryKey: ["docs", projectId],
+    queryFn: () => listDocuments({ data: { project_id: projectId } }),
+  });
+  const extraction = useMutation({
+    mutationFn: (documentId: string) =>
+      extractPermitCandidatesFromDocument({
+        data: { project_id: projectId, document_id: documentId },
+      }),
+    onSuccess: (data) => {
+      setResult(
+        data.created
+          ? `Created ${data.created} review candidate${data.created === 1 ? "" : "s"}.`
+          : "No explicit permit or approval mentions were found.",
+      );
+      qc.invalidateQueries({ queryKey: ["permit-extraction-candidates", projectId] });
+    },
+  });
+  if (!documents.length) return null;
+  return (
+    <Card className="p-4 space-y-3">
+      <div>
+        <h3 className="font-medium">Extract permit mentions from documents</h3>
+        <p className="text-xs text-muted-foreground">
+          Finds explicit mentions only. Results always enter analyst review and never become
+          verified requirements automatically.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {documents.map((document: any) => (
+          <Button
+            key={document.id}
+            size="sm"
+            variant="outline"
+            disabled={extraction.isPending}
+            onClick={() => extraction.mutate(document.id)}
+          >
+            <FileText className="mr-2 size-4" />
+            Review {document.name}
+          </Button>
+        ))}
+      </div>
+      {result && <p className="text-sm text-muted-foreground">{result}</p>}
+      {extraction.error && <p className="text-sm text-destructive">{extraction.error.message}</p>}
+    </Card>
+  );
+}
+
+function ExternalAuthorityDirectory() {
+  const { data = [] } = useQuery({
+    queryKey: ["permit-rules", "external"],
+    queryFn: () => listPermitRules({ data: {} }),
+  });
+  const external = data.filter((rule: any) => rule.authority_scope === "external");
+  if (!external.length) return null;
+  return (
+    <Card className="p-4">
+      <h3 className="font-medium">Possible external authorities</h3>
+      <p className="text-xs text-muted-foreground mb-3">
+        Directory only. These entries are not automatically applied and do not assert a requirement.
+      </p>
+      <div className="grid gap-2 md:grid-cols-2">
+        {external.map((rule: any) => (
+          <a
+            key={rule.id}
+            href={rule.official_source_url}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-md border p-3 hover:bg-muted/30"
+          >
+            <p className="text-sm font-medium">{rule.name}</p>
+            <p className="text-xs text-muted-foreground">{rule.jurisdictions?.name}</p>
+          </a>
+        ))}
+      </div>
+    </Card>
+  );
+}
 export function PermitRegister({ projectId }: { projectId: string }) {
   const { data = [], isLoading } = useQuery({
     queryKey: ["permits", projectId],
@@ -632,6 +785,10 @@ export function PermitRegister({ projectId }: { projectId: string }) {
 }
 export function PermitWorkspace({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
+  const { data: project } = useQuery({
+    queryKey: ["project", projectId],
+    queryFn: () => getProject({ data: { id: projectId } }),
+  });
   const generate = useMutation({
     mutationFn: () => generatePermitCandidates({ data: { project_id: projectId } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["permits", projectId] }),
@@ -660,7 +817,27 @@ export function PermitWorkspace({ projectId }: { projectId: string }) {
         </p>
       )}
       {generate.error && <p className="text-sm text-destructive">{generate.error.message}</p>}
+      <Card className="p-4">
+        <div className="flex flex-wrap justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium">Zoning designation</p>
+            <p className="text-sm text-muted-foreground">
+              {project?.zoning_designation || "Not supplied or verified"}
+            </p>
+          </div>
+          <div className="max-w-md text-right">
+            <p className="text-sm font-medium">Source</p>
+            <p className="text-sm text-muted-foreground">
+              {project?.zoning_source || "No authoritative source recorded"}
+            </p>
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-warning">Zoning change analysis not yet available</p>
+      </Card>
+      <PermitExtractionReview projectId={projectId} />
+      <PermitDocumentExtraction projectId={projectId} />
       <PermitRegister projectId={projectId} />
+      <ExternalAuthorityDirectory />
       <div className="flex gap-2 text-xs text-muted-foreground">
         <CheckCircle2 className="size-4 text-success" />
         Verified facts show their source. Unknown or analyst-provided facts remain visibly labelled.

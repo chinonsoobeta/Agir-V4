@@ -3,6 +3,7 @@ import fs from "node:fs";
 import {
   displayDuration,
   displayRequirement,
+  extractExplicitPermitMentions,
   PERMIT_UNKNOWN_DURATION,
   PERMIT_UNKNOWN_REQUIREMENT,
   ruleMatchesMunicipality,
@@ -26,6 +27,13 @@ const permitFunctions = fs.readFileSync(
 );
 const permitUi = fs.readFileSync(
   new URL("../components/permits/permit-workspace.tsx", import.meta.url),
+  "utf8",
+);
+const governanceMigration = fs.readFileSync(
+  new URL(
+    "../../supabase/migrations/20260711000300_permit_governance_and_review.sql",
+    import.meta.url,
+  ),
   "utf8",
 );
 describe("permit register deterministic domain", () => {
@@ -68,6 +76,21 @@ describe("permit register deterministic domain", () => {
       ruleMatchesMunicipality({ jurisdiction_id: "vancouver" }, { jurisdiction_id: "burnaby" }),
     ).toBe(false);
     expect(ruleMatchesMunicipality({ jurisdiction_id: "vancouver" }, {})).toBe(false);
+  });
+
+  it("extracts only explicit document mentions without inventing facts", () => {
+    const candidates = extractExplicitPermitMentions(
+      "General construction discussion\nA plumbing permit is listed on page 4.\nNo timing is stated.",
+    );
+    expect(candidates).toEqual([
+      {
+        candidateName: "A plumbing permit",
+        sourceLocation: "line 2",
+        sourceText: "A plumbing permit is listed on page 4.",
+      },
+    ]);
+    expect(candidates[0]).not.toHaveProperty("duration");
+    expect(extractExplicitPermitMentions("Renovation work is planned.")).toEqual([]);
   });
 });
 describe("permit migration contract", () => {
@@ -172,5 +195,22 @@ describe("complete pilot matrix and workflow contract", () => {
     }
     expect(permitUi).toContain("Choose project document");
     expect(permitUi).toContain("Add required paperwork");
+  });
+
+  it("adds source governance, external authorities, review-only extraction, and disabled zoning sources", () => {
+    for (const table of [
+      "permit_rule_reviews",
+      "permit_extraction_candidates",
+      "authoritative_land_data_sources",
+    ]) {
+      expect(governanceMigration).toContain(`CREATE TABLE public.${table}`);
+      expect(governanceMigration).toContain(
+        `ALTER TABLE public.${table} ENABLE ROW LEVEL SECURITY`,
+      );
+    }
+    expect(governanceMigration).toContain("'Metro Vancouver','British Columbia'");
+    expect(governanceMigration).toContain("'regional_district'");
+    expect(governanceMigration).toContain("'disabled'");
+    expect(governanceMigration).toContain("permit_rule_review_queue");
   });
 });

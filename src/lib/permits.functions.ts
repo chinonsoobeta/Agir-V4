@@ -381,3 +381,198 @@ export const generatePermitCandidates = createServerFn({ method: "POST" })
     }
     return { created: rows.length, jurisdiction: jurisdictionResult.data.name };
   });
+
+const extractionCandidateSchema = z
+  .object({
+    project_id: z.string().uuid(),
+    document_id: z.string().uuid(),
+    jurisdiction_id: z.string().uuid().nullable().optional(),
+    candidate_name: z.string().min(1).max(250),
+    permit_type: z.string().max(100).nullable().optional(),
+    description: z.string().max(5000).nullable().optional(),
+    processing_duration_text: z.string().max(500).nullable().optional(),
+    processing_duration_days: z.number().nonnegative().nullable().optional(),
+    authority_name: z.string().max(250).nullable().optional(),
+    source_location: z.string().min(1).max(500),
+    source_text: z.string().min(1).max(10000),
+    confidence_score: z.number().min(0).max(1).nullable().optional(),
+    extraction_version: z.string().min(1).max(100),
+  })
+  .superRefine((row, ctx) => {
+    if (row.processing_duration_days != null && !row.processing_duration_text) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["processing_duration_text"],
+        message: "Extracted numeric durations require verbatim source text.",
+      });
+    }
+  });
+
+/** LLM/extractor boundary: stores a candidate only. This cannot create a
+ * verified rule or project permit until an analyst explicitly accepts it. */
+export const createPermitExtractionCandidate = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => extractionCandidateSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const result = await (context.supabase as any)
+      .from("permit_extraction_candidates")
+      .upsert(
+        { ...data, owner_id: context.userId, review_status: "needs_review" },
+        { onConflict: "document_id,candidate_name,source_location,extraction_version" },
+      )
+      .select()
+      .single();
+    if (result.error) throw new Error(result.error.message);
+    return result.data;
+  });
+
+export const listPermitExtractionCandidates = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => z.object({ project_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const result = await (context.supabase as any)
+      .from("permit_extraction_candidates")
+      .select("*, documents(name), jurisdictions(name)")
+      .eq("project_id", data.project_id)
+      .order("created_at", { ascending: false });
+    if (result.error) throw new Error(result.error.message);
+    return result.data ?? [];
+  });
+
+export const reviewPermitExtractionCandidate = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        decision: z.enum(["accepted", "rejected"]),
+        reason: z.string().min(1).max(5000),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const db = context.supabase as any;
+    const current = await db
+      .from("permit_extraction_candidates")
+      .select("*")
+      .eq("id", data.id)
+      .eq("review_status", "needs_review")
+      .single();
+    if (current.error) throw new Error(current.error.message);
+    let projectPermitId: string | null = null;
+    if (data.decision === "accepted") {
+      const permit = await db
+        .from("project_permits")
+        .insert({
+          project_id: current.data.project_id,
+          owner_id: context.userId,
+          jurisdiction_id: current.data.jurisdiction_id,
+          name: current.data.candidate_name,
+          permit_type: current.data.permit_type ?? "other",
+          description: current.data.description,
+          applicability_status: "needs_review",
+          workflow_status: "not_started",
+          is_required: null,
+          processing_duration_text: current.data.processing_duration_text,
+          processing_duration_days: current.data.processing_duration_days,
+          duration_source: current.data.processing_duration_text
+            ? `Project document: ${current.data.document_id}`
+            : null,
+          source_document_id: current.data.document_id,
+          source_location: current.data.source_location,
+          source_text: current.data.source_text,
+          source_kind: "extracted",
+          confidence_score: current.data.confidence_score,
+          confidence_band: "extracted_analyst_accepted_needs_applicability_review",
+          required_reason: data.reason,
+          notes:
+            "Accepted from document extraction. Acceptance preserves evidence but does not establish that the permit is required.",
+        })
+        .select("id")
+        .single();
+      if (permit.error) throw new Error(permit.error.message);
+      projectPermitId = permit.data.id;
+    }
+    const reviewed = await db
+      .from("permit_extraction_candidates")
+      .update({
+        review_status: data.decision,
+        reviewed_by: context.userId,
+        reviewed_at: new Date().toISOString(),
+        review_reason: data.reason,
+        project_permit_id: projectPermitId,
+      })
+      .eq("id", data.id)
+      .select()
+      .single();
+    if (reviewed.error) throw new Error(reviewed.error.message);
+    return reviewed.data;
+  });
+
+export const listAuthoritativeLandDataSources = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => z.object({ jurisdiction_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const result = await (context.supabase as any)
+      .from("authoritative_land_data_sources")
+      .select("*")
+      .eq("jurisdiction_id", data.jurisdiction_id)
+      .order("source_name");
+    if (result.error) throw new Error(result.error.message);
+    return result.data ?? [];
+  });
+
+export const extractPermitCandidatesFromDocument = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) =>
+    z.object({ project_id: z.string().uuid(), document_id: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const db = context.supabase as any;
+    const documentResult = await db
+      .from("documents")
+      .select("id,project_id,name,file_type,storage_path")
+      .eq("id", data.document_id)
+      .eq("project_id", data.project_id)
+      .single();
+    if (documentResult.error) throw new Error(documentResult.error.message);
+    const { downloadDocumentBlob } = await import("./storage-download.server");
+    const download = await downloadDocumentBlob(context.supabase, documentResult.data.storage_path);
+    if (download.error || !download.data) {
+      throw new Error(
+        `Unable to read source document: ${download.error?.message ?? "unknown error"}`,
+      );
+    }
+    const { extractFileTextWithMeta } = await import("./document-text.server");
+    const extracted = await extractFileTextWithMeta(
+      documentResult.data.name,
+      documentResult.data.file_type,
+      await download.data.arrayBuffer(),
+    );
+    const { extractExplicitPermitMentions } = await import("./permit-domain");
+    const mentions = extractExplicitPermitMentions(extracted.text);
+    if (!mentions.length) return { created: 0, candidates: [] };
+    const rows = mentions.map((mention) => ({
+      project_id: data.project_id,
+      owner_id: context.userId,
+      document_id: data.document_id,
+      candidate_name: mention.candidateName,
+      permit_type: null,
+      source_location: mention.sourceLocation,
+      source_text: mention.sourceText,
+      confidence_score: extracted.recoveredViaOcr
+        ? Math.min(0.6, (extracted.ocrConfidence ?? 0) / 100)
+        : 0.7,
+      review_status: "needs_review",
+      extraction_version: "explicit-mention-v1",
+    }));
+    const inserted = await db
+      .from("permit_extraction_candidates")
+      .upsert(rows, {
+        onConflict: "document_id,candidate_name,source_location,extraction_version",
+        ignoreDuplicates: true,
+      })
+      .select();
+    if (inserted.error) throw new Error(inserted.error.message);
+    return { created: inserted.data?.length ?? 0, candidates: inserted.data ?? [] };
+  });

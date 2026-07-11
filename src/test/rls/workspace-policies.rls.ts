@@ -55,7 +55,7 @@ function shouldUseSsl(connectionString: string) {
 }
 
 function isDeniedError(error: unknown) {
-  return /row-level security|permission denied|does not exist|project access denied|Only a workspace owner|A workspace must always have at least one owner|append-only/i.test(
+  return /row-level security|permission denied|does not exist|project access denied|Permit documents must belong to the same project|Only a workspace owner|A workspace must always have at least one owner|append-only/i.test(
     error instanceof Error ? error.message : String(error),
   );
 }
@@ -563,5 +563,78 @@ describe("workspace RLS policies", () => {
     ]);
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+  });
+
+  test("permit register isolates outsiders and rejects cross-project document links", async () => {
+    const jurisdiction = await client.query<{ id: string }>(
+      "SELECT id FROM public.jurisdictions WHERE name='City of Vancouver'",
+    );
+    const permit = await asUser<{ id: string }>(
+      ids.owner,
+      `INSERT INTO public.project_permits
+       (project_id,owner_id,jurisdiction_id,name,permit_type,source_kind,notes)
+       VALUES ($1,$2,$3,'Building permit','building','analyst','RLS fixture') RETURNING id`,
+      [ids.project, ids.owner, jurisdiction.rows[0].id],
+    );
+    const permitId = permit.rows[0].id;
+    const memberVisible = await asUser(
+      ids.member,
+      "SELECT id FROM public.project_permits WHERE id=$1",
+      [permitId],
+    );
+    expect(memberVisible.rowCount).toBe(1);
+    const outsiderVisible = await asUser(
+      ids.outsider,
+      "SELECT id FROM public.project_permits WHERE id=$1",
+      [permitId],
+    );
+    expect(outsiderVisible.rowCount).toBe(0);
+
+    const ownDocument = await client.query<{ id: string }>(
+      `INSERT INTO public.documents(project_id,owner_id,name,storage_path)
+       VALUES ($1::uuid,$2::uuid,'permit.pdf',($2::uuid)::text || '/permit.pdf') RETURNING id`,
+      [ids.project, ids.owner],
+    );
+    const otherDocument = await client.query<{ id: string }>(
+      `INSERT INTO public.documents(project_id,owner_id,name,storage_path)
+       VALUES ($1::uuid,$2::uuid,'other.pdf',($2::uuid)::text || '/other.pdf') RETURNING id`,
+      [ids.otherProject, ids.outsider],
+    );
+    const linked = await asUser(
+      ids.owner,
+      "INSERT INTO public.permit_documents(permit_id,document_id) VALUES ($1,$2) RETURNING permit_id",
+      [permitId, ownDocument.rows[0].id],
+    );
+    expect(linked.rowCount).toBe(1);
+    await expectDenied(
+      asUser(
+        ids.owner,
+        "INSERT INTO public.permit_documents(permit_id,document_id) VALUES ($1,$2)",
+        [permitId, otherDocument.rows[0].id],
+      ),
+    );
+  });
+
+  test("document permit candidates remain review-only and owner-scoped", async () => {
+    const document = await client.query<{ id: string }>(
+      `INSERT INTO public.documents(project_id,owner_id,name,storage_path)
+       VALUES ($1::uuid,$2::uuid,'source.pdf',($2::uuid)::text || '/source.pdf') RETURNING id`,
+      [ids.project, ids.owner],
+    );
+    const candidate = await asUser<{ id: string; review_status: string }>(
+      ids.owner,
+      `INSERT INTO public.permit_extraction_candidates
+       (project_id,owner_id,document_id,candidate_name,source_location,source_text,extraction_version)
+       VALUES ($1,$2,$3,'Candidate permit','page 2','Permit candidate text','test-v1')
+       RETURNING id,review_status`,
+      [ids.project, ids.owner, document.rows[0].id],
+    );
+    expect(candidate.rows[0].review_status).toBe("needs_review");
+    const outsider = await asUser(
+      ids.outsider,
+      "SELECT id FROM public.permit_extraction_candidates WHERE id=$1",
+      [candidate.rows[0].id],
+    );
+    expect(outsider.rowCount).toBe(0);
   });
 });

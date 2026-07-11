@@ -94,7 +94,11 @@ export function computeOnboardingProgress(counts: Partial<OnboardingCounts>): On
 const REVIEWED_ASSUMPTION_STATUSES = ["approved", "modified", "default_accepted", "calculated"];
 
 type TableName = keyof Database["public"]["Tables"];
-type CountQuery = ReturnType<ReturnType<Supabase["from"]>["select"]>;
+// Supabase's generated `from()` overload becomes a union across every table
+// and view; a generic reusable query-builder callback cannot preserve that
+// table-specific union after views are added. Keep this narrow helper dynamic
+// at the fluent boundary and return a concrete count immediately.
+type CountQuery = any;
 
 async function headCount(
   supabase: Supabase,
