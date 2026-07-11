@@ -775,6 +775,12 @@ function NewDealDialog({ onClose, createFn }: { onClose: () => void; createFn: a
     probability: 25,
     target_close_date: "",
     lead_owner: "",
+    property_address: "",
+    municipality: "",
+    permit_project_type: "other",
+    property_type: "industrial",
+    project_description: "",
+    work_categories: [] as string[],
   });
   const create = useMutation({
     mutationFn: (data: any) =>
@@ -914,6 +920,101 @@ function NewDealDialog({ onClose, createFn }: { onClose: () => void; createFn: a
                 value={form.target_close_date}
                 onChange={(e) => setForm({ ...form, target_close_date: e.target.value })}
               />
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border p-4 space-y-3">
+            <div>
+              <p className="text-sm font-medium">Permit profile</p>
+              <p className="text-xs text-muted-foreground">
+                Confirmed project facts only. Agir will not infer requirements or zoning.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <Label>Property address</Label>
+                <Input
+                  value={form.property_address}
+                  onChange={(e) => setForm({ ...form, property_address: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Municipality</Label>
+                <Select
+                  value={form.municipality}
+                  onValueChange={(v) => setForm({ ...form, municipality: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Confirm municipality" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[
+                      "City of Vancouver",
+                      "City of Burnaby",
+                      "City of Richmond",
+                      "City of Surrey",
+                      "City of New Westminster",
+                      "City of Kelowna",
+                    ].map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {v}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Project type</Label>
+                <Select
+                  value={form.permit_project_type}
+                  onValueChange={(v) => setForm({ ...form, permit_project_type: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[
+                      "new_construction",
+                      "renovation",
+                      "tenant_improvement",
+                      "demolition",
+                      "addition",
+                      "change_of_use",
+                      "other",
+                    ].map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {v.replaceAll("_", " ")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Property type</Label>
+                <Select
+                  value={form.property_type}
+                  onValueChange={(v) => setForm({ ...form, property_type: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["residential", "commercial", "industrial", "mixed_use"].map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {v.replaceAll("_", " ")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-2">
+                <Label>Brief project description</Label>
+                <Textarea
+                  rows={2}
+                  value={form.project_description}
+                  onChange={(e) => setForm({ ...form, project_description: e.target.value })}
+                />
+              </div>
             </div>
           </div>
 

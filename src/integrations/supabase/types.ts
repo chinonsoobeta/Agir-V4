@@ -1776,6 +1776,15 @@ export type Database = {
       };
       projects: {
         Row: {
+          property_address: string | null;
+          municipality: string | null;
+          permit_project_type: string | null;
+          property_type: string | null;
+          project_description: string | null;
+          work_categories: string[];
+          zoning_designation: string | null;
+          zoning_source: string | null;
+          zoning_verified_at: string | null;
           acquisition_cost: number | null;
           completion_date: string | null;
           construction_cost: number | null;
@@ -1801,6 +1810,15 @@ export type Database = {
           workspace_id: string | null;
         };
         Insert: {
+          property_address?: string | null;
+          municipality?: string | null;
+          permit_project_type?: string | null;
+          property_type?: string | null;
+          project_description?: string | null;
+          work_categories?: string[];
+          zoning_designation?: string | null;
+          zoning_source?: string | null;
+          zoning_verified_at?: string | null;
           acquisition_cost?: number | null;
           completion_date?: string | null;
           construction_cost?: number | null;
@@ -1826,6 +1844,15 @@ export type Database = {
           workspace_id?: string | null;
         };
         Update: {
+          property_address?: string | null;
+          municipality?: string | null;
+          permit_project_type?: string | null;
+          property_type?: string | null;
+          project_description?: string | null;
+          work_categories?: string[];
+          zoning_designation?: string | null;
+          zoning_source?: string | null;
+          zoning_verified_at?: string | null;
           acquisition_cost?: number | null;
           completion_date?: string | null;
           construction_cost?: number | null;

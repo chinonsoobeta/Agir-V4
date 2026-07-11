@@ -64,6 +64,14 @@ const ProjectSchema = z.object({
   lead_owner: z.string().max(200).optional().nullable(),
   notes: z.string().max(5000).optional().nullable(),
   workspace_id: z.string().uuid().optional().nullable(),
+  property_address: z.string().max(500).optional().nullable(),
+  municipality: z.string().max(200).optional().nullable(),
+  permit_project_type: z.enum(["new_construction","renovation","tenant_improvement","demolition","addition","change_of_use","other"]).optional().nullable(),
+  property_type: z.enum(["residential","commercial","industrial","mixed_use"]).optional().nullable(),
+  project_description: z.string().max(5000).optional().nullable(),
+  work_categories: z.array(z.string()).optional().default([]),
+  zoning_designation: z.string().max(200).optional().nullable(),
+  zoning_source: z.string().max(1000).optional().nullable(),
 });
 
 export const listProjects = createServerFn({ method: "GET" })

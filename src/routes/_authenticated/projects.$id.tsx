@@ -47,6 +47,7 @@ import {
 import type { Tables } from "@/integrations/supabase/types";
 import { assetTypeLabel } from "@/lib/asset-types";
 import { ScoreDial, RecommendationPill, RiskPill } from "@/components/decision-ui";
+import { PermitWorkspace } from "@/components/permits/permit-workspace";
 
 const projectQ = (id: string) =>
   queryOptions({ queryKey: ["project", id], queryFn: () => getProject({ data: { id } }) });
@@ -92,6 +93,7 @@ const TABS = [
   { value: "analysis", label: "Analysis" },
   { value: "committee", label: "Investment Committee" },
   { value: "documents", label: "Documents" },
+  { value: "permits", label: "Permits" },
   { value: "collaboration", label: "Collaboration" },
   { value: "timeline", label: "Timeline" },
   { value: "audit", label: "Audit" },
@@ -259,6 +261,9 @@ function DealDetail() {
                 }}
               />
             )}
+          </TabsContent>
+          <TabsContent value="permits" className="mt-6">
+            {visited.has("permits") && <PermitWorkspace projectId={id} />}
           </TabsContent>
           <TabsContent value="collaboration" className="mt-6">
             {visited.has("collaboration") && <DealCollaboration projectId={id} />}
