@@ -17,7 +17,7 @@ jobs:
     name: Fast developer feedback
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -38,7 +38,7 @@ jobs:
       SUPABASE_URL: https://ci.invalid
       SUPABASE_ANON_KEY: ci-static-only-not-a-secret
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -50,7 +50,7 @@ jobs:
     name: Mandatory Supabase release confidence
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: 22
