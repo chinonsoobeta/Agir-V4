@@ -74,7 +74,7 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run ops:release
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
