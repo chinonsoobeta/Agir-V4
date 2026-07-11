@@ -8,6 +8,7 @@
 // lacks a provenance row.
 
 import "@tanstack/react-start/server-only";
+import { readServerConfig } from "./config.server";
 import {
   assembleEngineInput,
   applyStress,
@@ -199,12 +200,8 @@ const RUN_HISTORY_TABLES = {
 } as const;
 
 async function runHistoryWriteClient(fallback: SupabaseFacade) {
-  const hasSupabaseUrl = Boolean(
-    process.env.SUPABASE_URL ||
-    process.env.VITE_SUPABASE_URL ||
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-  );
-  if (!hasSupabaseUrl || !process.env.SUPABASE_SERVICE_ROLE_KEY) return fallback;
+  const config = readServerConfig();
+  if (!config.supabaseUrl || !config.serviceRoleKey) return fallback;
   const { getServiceRoleClient } = await import("@/integrations/supabase/service-role.server");
   return getServiceRoleClient("run_history_write");
 }

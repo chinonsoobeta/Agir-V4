@@ -14,6 +14,7 @@
 // `tesseract.js` (and `@napi-rs/canvas` for server-side rasterization) to
 // activate real OCR. The boundary is injectable so tests exercise the
 // empty-text-layer -> OCR -> candidates path without the heavy dependencies.
+import { readServerConfig } from "./config.server";
 
 export type OcrResult = {
   text: string;
@@ -62,8 +63,7 @@ async function optionalImport<T = unknown>(spec: string): Promise<T | null> {
 // scanned doc the caller surfaces a "first N of M pages" warning rather than
 // failing silently. Override via env for batch/background contexts.
 function resolveMaxOcrPages(): number {
-  const raw = Number(process.env.MAX_OCR_PAGES);
-  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 10;
+  return readServerConfig().maxOcrPages;
 }
 export const MAX_OCR_PAGES = resolveMaxOcrPages();
 

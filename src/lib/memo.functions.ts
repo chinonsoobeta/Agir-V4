@@ -251,7 +251,8 @@ export const generateMemo = createServerFn({ method: "POST" })
     let parse_warning: string | null = null;
 
     if (aiAvailable) {
-      const model = process.env.AGIR_AI_MODEL || DEFAULT_AI_MODEL;
+      const { readServerConfig } = await import("./config.server");
+      const model = readServerConfig().aiModel || DEFAULT_AI_MODEL;
       const contextBlock = {
         project: {
           name: project.name,
@@ -543,7 +544,7 @@ export const debugMemoReadiness = createServerFn({ method: "GET" })
       blocking_reasons,
       env: {
         has_anthropic_key,
-        model: process.env.AGIR_AI_MODEL || DEFAULT_AI_MODEL,
+        model: (await import("./config.server")).readServerConfig().aiModel || DEFAULT_AI_MODEL,
       },
     };
   });

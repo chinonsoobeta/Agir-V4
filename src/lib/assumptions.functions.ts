@@ -211,6 +211,9 @@ async function recordVersion(ctx: any, a: any, changeReason: string, by: string)
 // hundred-MB text blob exhausting memory. Override via env for ops tuning.
 const DEFAULT_EXTRACTION_TEXT_SCAN_CHAR_LIMIT = 5_000_000;
 function resolveScanCharLimit(): number {
+  // This module is imported by route components as well as server handlers;
+  // keeping this bounded public tuning read here avoids importing the
+  // server-only configuration boundary into the browser bundle.
   const raw = Number(process.env.EXTRACTION_TEXT_SCAN_CHAR_LIMIT);
   return Number.isFinite(raw) && raw > 0
     ? Math.floor(raw)

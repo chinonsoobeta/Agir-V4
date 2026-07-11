@@ -29,7 +29,7 @@ test("browser upload is server-authorized, scanned, and finalized before it is u
 
   await page.getByRole("tab", { name: /documents/i }).click();
   const name = `staged-upload-${Date.now()}.pdf`;
-  await page.getByLabel("Upload documents").setInputFiles({
+  await page.getByLabel("Upload documents", { exact: true }).setInputFiles({
     name,
     mimeType: "application/pdf",
     // A structurally valid-enough PDF for Agir's signature gate. The optional

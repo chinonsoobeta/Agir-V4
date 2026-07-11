@@ -1,4 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
+import { readServerConfig } from "./config.server";
 import type { CustomerAuditPackage } from "./customer-audit-package";
 
 export type CustomerAuditArchive = {
@@ -135,7 +136,7 @@ export function buildCustomerAuditArchive(pkg: CustomerAuditPackage): CustomerAu
   );
   const signedAt = new Date().toISOString();
   const packageSha = sha256(JSON.stringify({ manifest: pkg.manifest, checksums }));
-  const secret = process.env.AUDIT_PACKAGE_SIGNING_SECRET;
+  const secret = readServerConfig().auditPackageSigningSecret;
   const signatureValue = secret
     ? createHmac("sha256", secret).update(packageSha).digest("hex")
     : packageSha;

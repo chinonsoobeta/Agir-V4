@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Stable, intentionally small operator interface. Granular scripts remain the
 // implementation detail and can still be used for diagnosis.
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 const operation = process.argv[2];
 const destructive = process.argv.includes("--confirm-remediation");
@@ -20,6 +20,36 @@ function run(label, command, args, options = {}) {
     env: options.env ?? process.env,
   });
   const outcome = classifyResult(label, result, options.blocked === true);
+  json({ event: "check.finished", ...outcome });
+  return outcome;
+}
+
+function runBrowserReleaseWithWorker(env) {
+  const label = "browser workflows with verification worker";
+  json({ event: "check.started", label });
+  const worker = spawn("npm", ["run", "worker:extraction"], {
+    stdio: "inherit",
+    shell: process.platform === "win32",
+    env: {
+      ...env,
+      WORKER_DATABASE_URL: env.DATABASE_URL,
+      EXTRACTION_WORKER_HANDLER_URL: "http://127.0.0.1:8081/api/extraction/worker",
+      EXTRACTION_WORKER_POLL_MS: "1000",
+    },
+  });
+  let result;
+  try {
+    // A release proof always executes the complete browser suite. Focused
+    // specs are developer diagnostics and never alter this command.
+    result = spawnSync("npm", ["run", "test:e2e"], {
+      stdio: "inherit",
+      shell: process.platform === "win32",
+      env,
+    });
+  } finally {
+    worker.kill("SIGTERM");
+  }
+  const outcome = classifyResult(label, result);
   json({ event: "check.finished", ...outcome });
   return outcome;
 }
@@ -81,6 +111,15 @@ function release() {
     AGIR_ENV: process.env.AGIR_ENV ?? "test",
     SCHEMA_DRIFT_DATABASE_URL: process.env.SCHEMA_DRIFT_DATABASE_URL ?? process.env.DATABASE_URL,
     AUDIT_CHAIN_DATABASE_URL: process.env.AUDIT_CHAIN_DATABASE_URL ?? process.env.DATABASE_URL,
+    // Explicit test-only token: production/staging must be configured through
+    // deployment secrets, while the release gate must exercise the protected
+    // handler and worker rather than silently running inline verification.
+    EXTRACTION_WORKER_TOKEN: process.env.EXTRACTION_WORKER_TOKEN ?? "release-test-worker-token",
+    EXTRACTION_ASYNC: "1",
+    E2E_REUSE_EXISTING_SERVER: "0",
+    // The release database is freshly provisioned by CI/local Supabase and is
+    // therefore the explicit disposable target for the RLS suite.
+    RLS_ALLOW_DESTRUCTIVE: "1",
   };
   const outcomes = [];
   for (const [label, args] of [
@@ -88,12 +127,16 @@ function release() {
     ["migration safety", ["run", "audit:migrations"]],
     ["generated database types", ["run", "types:check"]],
     ["schema drift", ["run", "drift:check"]],
-    ["live RLS and concurrency", ["run", "test:rls"]],
-    ["audit-chain verification", ["run", "audit:verify-chains"]],
+    ["fresh browser demo identity", ["run", "demo:user"]],
     ["extraction worker contract", ["run", "worker:extraction", "--", "--dry-run"]],
-    ["browser workflows", ["run", "test:e2e"]],
   ])
     outcomes.push(run(label, "npm", args, { env }));
+  outcomes.push(runBrowserReleaseWithWorker(env));
+  // RLS deliberately truncates auth fixtures and changes function-resolution
+  // scaffolding, so it runs after browser proof. Audit-chain validation is
+  // last, against the final post-test database state.
+  outcomes.push(run("live RLS and concurrency", "npm", ["run", "test:rls"], { env }));
+  outcomes.push(run("audit-chain verification", "npm", ["run", "audit:verify-chains"], { env }));
   finish("release", outcomes);
 }
 

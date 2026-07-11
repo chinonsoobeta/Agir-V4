@@ -6,6 +6,7 @@
 // to it, fire-and-forget. Reporting must never throw and never block the
 // request path (a failure to report is swallowed, since the stderr line is the
 // durable record).
+import { readServerConfig } from "./config.server";
 
 type ErrorContext = Record<string, unknown>;
 type MetricContext = Record<string, unknown>;
@@ -65,7 +66,7 @@ function serializeError(error: unknown): CapturedEvent["error"] {
 }
 
 function errorSinkUrl(): string | null {
-  const url = process.env.ERROR_WEBHOOK_URL?.trim();
+  const url = readServerConfig().errorWebhookUrl;
   return url ? url : null;
 }
 
@@ -115,7 +116,8 @@ export function captureServerError(error: unknown, context: ErrorContext = {}): 
 }
 
 function metricSinkUrl(): string | null {
-  const url = process.env.METRICS_WEBHOOK_URL?.trim() || process.env.ERROR_WEBHOOK_URL?.trim();
+  const config = readServerConfig();
+  const url = config.metricsWebhookUrl || config.errorWebhookUrl;
   return url ? url : null;
 }
 

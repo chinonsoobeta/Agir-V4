@@ -19,11 +19,12 @@ export const getAiReadiness = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async (): Promise<AiReadiness> => {
     const configured = hasAnthropicKey();
+    const { readServerConfig } = await import("./config.server");
 
     return {
       enabledByDefault: true,
       configured,
-      model: process.env.AGIR_AI_MODEL || DEFAULT_AI_MODEL,
+      model: readServerConfig().aiModel || DEFAULT_AI_MODEL,
       keyEnv: "API_KEY or ANTHROPIC_API_KEY",
       features: {
         extraction: true,

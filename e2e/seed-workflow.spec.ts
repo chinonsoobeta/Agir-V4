@@ -26,6 +26,34 @@ function localSupabaseAdmin() {
   });
 }
 
+async function localSupabaseUser() {
+  const fileEnv = existsSync(".env.local")
+    ? Object.fromEntries(
+        readFileSync(".env.local", "utf8")
+          .trim()
+          .split(/\n/)
+          .filter(Boolean)
+          .map((line) => line.split("=", 2)),
+      )
+    : {};
+  const url = process.env.SUPABASE_URL ?? fileEnv.SUPABASE_URL;
+  const key =
+    process.env.SUPABASE_ANON_KEY ??
+    process.env.SUPABASE_PUBLISHABLE_KEY ??
+    fileEnv.SUPABASE_ANON_KEY ??
+    fileEnv.SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) throw new Error("Missing Supabase browser credentials for underwriting E2E.");
+  const supabase = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { error } = await supabase.auth.signInWithPassword({
+    email: process.env.E2E_EMAIL ?? "maple.heights@example.com",
+    password: process.env.E2E_PASSWORD ?? "password123",
+  });
+  if (error) throw new Error(`E2E user sign-in failed: ${error.message}`);
+  return supabase;
+}
+
 async function runDeterministicUnderwritingForProject(projectId: string) {
   const supabase = localSupabaseAdmin();
   const { data: project, error } = await supabase
@@ -34,9 +62,12 @@ async function runDeterministicUnderwritingForProject(projectId: string) {
     .eq("id", projectId)
     .single();
   if (error) throw new Error(error.message);
+  // Run this protected mutation as the browser identity. Admin access is only
+  // used above to locate the fixture owner; using it for the mutation would
+  // bypass the authenticated rate-limit/RLS path the browser actually uses.
   const result = await runFullUnderwritingForContext(
     { project_id: projectId, mode: "deterministic" },
-    { supabase, userId: project.owner_id },
+    { supabase: await localSupabaseUser(), userId: project.owner_id },
   );
   expect(result.blocked).toBe(false);
 }

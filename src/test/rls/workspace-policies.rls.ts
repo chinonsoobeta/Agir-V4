@@ -55,7 +55,7 @@ function shouldUseSsl(connectionString: string) {
 }
 
 function isDeniedError(error: unknown) {
-  return /row-level security|permission denied|Only a workspace owner|A workspace must always have at least one owner|append-only/i.test(
+  return /row-level security|permission denied|does not exist|project access denied|Only a workspace owner|A workspace must always have at least one owner|append-only/i.test(
     error instanceof Error ? error.message : String(error),
   );
 }
@@ -451,7 +451,7 @@ describe("workspace RLS policies", () => {
       asUser(
         ids.member,
         `INSERT INTO public.documents (project_id, owner_id, name, storage_path)
-         VALUES ($1, $2, 'forged.pdf', $2 || '/forged.pdf')`,
+         VALUES ($1::uuid, $2::uuid, 'forged.pdf', $2::text || '/forged.pdf')`,
         [ids.project, ids.member],
       ),
     );
@@ -487,6 +487,58 @@ describe("workspace RLS policies", () => {
       ),
     );
 
+    // Finalization is enqueue-only for browsers. Repeated calls attach to one
+    // pending-upload-bound verification job; browser callers cannot invent a
+    // hash, scanner result, worker id, or completion transition.
+    const queued = await asUser<{ status: string; job_id: string | null }>(
+      ids.member,
+      "SELECT * FROM public.enqueue_document_verification($1)",
+      [pending.upload_id],
+    );
+    expect(queued.rows[0]).toMatchObject({ status: "verification_queued" });
+    expect(queued.rows[0].job_id).toBeTruthy();
+    const repeated = await Promise.all([
+      asConcurrentUser<{ status: string; job_id: string | null }>(
+        ids.member,
+        "SELECT * FROM public.enqueue_document_verification($1)",
+        [pending.upload_id],
+      ),
+      asConcurrentUser<{ status: string; job_id: string | null }>(
+        ids.member,
+        "SELECT * FROM public.enqueue_document_verification($1)",
+        [pending.upload_id],
+      ),
+    ]);
+    expect(new Set(repeated.map((result) => result.rows[0].job_id))).toEqual(
+      new Set([queued.rows[0].job_id]),
+    );
+    const jobs = await client.query(
+      "SELECT count(*)::int AS count FROM public.extraction_jobs WHERE pending_upload_id = $1 AND kind = 'document_verification'",
+      [pending.upload_id],
+    );
+    expect(jobs.rows[0].count).toBe(1);
+    await expectDenied(
+      asUser(
+        ids.member,
+        "SELECT * FROM public.complete_document_verification($1, 'forged-worker', $2, 1024, 'application/pdf', 'clean')",
+        [queued.rows[0].job_id, "b".repeat(64)],
+      ),
+    );
+    await expectDenied(
+      asUser(
+        ids.member,
+        "SELECT public.reject_document_verification($1, 'forged-worker', 'forged scanner verdict')",
+        [queued.rows[0].job_id],
+      ),
+    );
+    await expectDenied(
+      asUser(
+        ids.member,
+        "UPDATE public.pending_document_uploads SET status = 'finalized', document_id = $2 WHERE id = $1",
+        [pending.upload_id, ids.project],
+      ),
+    );
+
     await expectDenied(
       asUser(
         ids.viewer,
@@ -499,7 +551,7 @@ describe("workspace RLS policies", () => {
   test("concurrent upload reservations cannot exceed the per-user file quota", async () => {
     await client.query(
       `INSERT INTO public.documents (project_id, owner_id, name, storage_path, size_bytes)
-       SELECT $1, $2, 'prior-' || g || '.pdf', $2::text || '/seed-' || g || '.pdf', 1
+       SELECT $1::uuid, $2::uuid, 'prior-' || g || '.pdf', $2::text || '/seed-' || g || '.pdf', 1
        FROM generate_series(1, 199) AS g`,
       [ids.project, ids.member],
     );

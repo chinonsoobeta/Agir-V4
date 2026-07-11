@@ -2919,6 +2919,13 @@ export type Database = {
         Args: { p_canonical: string; p_prev_hash: string };
         Returns: string;
       };
+      claim_document_upload_cleanup: {
+        Args: { p_limit?: number };
+        Returns: {
+          object_path: string;
+          upload_id: string;
+        }[];
+      };
       claim_next_extraction_job: {
         Args: { p_lease_seconds?: number; p_worker_id: string };
         Returns: {
@@ -2956,6 +2963,21 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      complete_document_verification: {
+        Args: {
+          p_actual_size_bytes: number;
+          p_content_hash: string;
+          p_job_id: string;
+          p_scan_detail: string;
+          p_verified_content_type: string;
+          p_worker_id: string;
+        };
+        Returns: {
+          deduped: boolean;
+          document_id: string;
+          extraction_job_id: string;
+        }[];
+      };
       consume_rate_limit: {
         Args: {
           p_bucket: string;
@@ -2966,21 +2988,6 @@ export type Database = {
           p_workspace_id?: string;
         };
         Returns: boolean;
-      };
-      claim_document_upload_cleanup: {
-        Args: { p_limit?: number };
-        Returns: { object_path: string; upload_id: string }[];
-      };
-      complete_document_verification: {
-        Args: {
-          p_actual_size_bytes: number;
-          p_content_hash: string;
-          p_job_id: string;
-          p_scan_detail: string;
-          p_verified_content_type: string;
-          p_worker_id: string;
-        };
-        Returns: { deduped: boolean; document_id: string; extraction_job_id: string | null }[];
       };
       create_workspace: {
         Args: { p_name: string };
@@ -2998,6 +3005,18 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      delete_underwriting_outputs: {
+        Args: { p_project_id: string };
+        Returns: undefined;
+      };
+      enqueue_document_verification: {
+        Args: { p_upload_id: string };
+        Returns: {
+          document_id: string;
+          job_id: string;
+          status: string;
+        }[];
+      };
       finalize_document_upload: {
         Args: {
           p_actual_size_bytes: number;
@@ -3012,14 +3031,6 @@ export type Database = {
           document_id: string;
           object_path: string;
         }[];
-      };
-      enqueue_document_verification: {
-        Args: { p_upload_id: string };
-        Returns: { document_id: string | null; job_id: string | null; status: string }[];
-      };
-      delete_underwriting_outputs: {
-        Args: { p_project_id: string };
-        Returns: undefined;
       };
       has_role: {
         Args: {
@@ -3037,6 +3048,55 @@ export type Database = {
         Returns: boolean;
       };
       is_workspace_member: { Args: { ws: string }; Returns: boolean };
+      persist_underwriting_run_transaction: {
+        Args: {
+          p_accepted_defaults_used?: Json;
+          p_audit_payload?: Json;
+          p_blocked_reasons?: Json;
+          p_cash_flows?: Json;
+          p_conflict_resolutions_used?: Json;
+          p_created_by: string;
+          p_financial_outputs?: Json;
+          p_input_fingerprint: string;
+          p_input_snapshot?: Json;
+          p_job_id?: string;
+          p_job_result?: Json;
+          p_output_fingerprint?: string;
+          p_output_snapshot?: Json;
+          p_owner_id: string;
+          p_project_id: string;
+          p_reconciliation_flags?: Json;
+          p_risk_register?: Json;
+          p_run_mode: string;
+          p_status: string;
+          p_verdict_code?: string;
+        };
+        Returns: {
+          accepted_defaults_used: Json;
+          blocked_reasons: Json;
+          computed_at: string;
+          conflict_resolutions_used: Json;
+          created_at: string;
+          created_by: string;
+          id: string;
+          input_fingerprint: string;
+          input_snapshot: Json;
+          output_fingerprint: string | null;
+          output_snapshot: Json;
+          owner_id: string;
+          project_id: string;
+          run_mode: string;
+          run_number: number;
+          status: string;
+          verdict_code: string | null;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "underwriting_runs";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       prepare_document_upload: {
         Args: {
           p_category?: string;
@@ -3045,7 +3105,11 @@ export type Database = {
           p_file_name: string;
           p_project_id: string;
         };
-        Returns: { expires_at: string; object_path: string; upload_id: string }[];
+        Returns: {
+          expires_at: string;
+          object_path: string;
+          upload_id: string;
+        }[];
       };
       reject_document_upload: {
         Args: { p_owner_id: string; p_reason: string; p_upload_id: string };

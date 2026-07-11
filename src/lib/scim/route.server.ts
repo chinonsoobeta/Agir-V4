@@ -8,6 +8,7 @@
 // table migration; see docs/compliance/enabler-status.md.
 import { handleScim } from "./handler";
 import { createSupabaseScimStore } from "./supabase-store.server";
+import { readServerConfig } from "../config.server";
 
 const SCIM_CONTENT_TYPE = "application/scim+json";
 
@@ -31,8 +32,9 @@ function enforceScimRateLimit(workspaceId: string, method: string): void {
 }
 
 export async function handleScimRoute(request: Request, segments: string[]): Promise<Response> {
-  const expectedToken = process.env.SCIM_BEARER_TOKEN;
-  const workspaceId = process.env.SCIM_WORKSPACE_ID;
+  const config = readServerConfig();
+  const expectedToken = config.scimBearerToken;
+  const workspaceId = config.scimWorkspaceId;
 
   if (!workspaceId) {
     return Response.json(

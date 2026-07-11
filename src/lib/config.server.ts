@@ -13,12 +13,20 @@ export type ServerConfig = Readonly<{
   databaseUrl?: string;
   scannerUrl?: string;
   scannerFormat: "raw" | "multipart";
+  scannerTimeoutMs: number;
   scannerFailOpen: boolean;
   asyncExtraction: boolean;
   workerToken?: string;
   errorWebhookUrl?: string;
   metricsWebhookUrl?: string;
   aiModel: string;
+  anthropicApiKey?: string;
+  anthropicApiKeyCandidates: readonly string[];
+  scimBearerToken?: string;
+  scimWorkspaceId?: string;
+  maxOcrPages: number;
+  extractionTextScanCharLimit: number;
+  auditPackageSigningSecret?: string;
 }>;
 
 export type ConfigRequirement =
@@ -36,6 +44,11 @@ const value = (env: NodeJS.ProcessEnv, ...names: string[]) => {
   }
   return undefined;
 };
+
+function positiveInteger(raw: string | undefined, fallback: number): number {
+  const parsed = Number(raw);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 export function resolveAgirEnvironment(
   raw = process.env.AGIR_ENV ?? process.env.NODE_ENV,
@@ -88,6 +101,7 @@ export function readServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCo
     ),
     scannerUrl: value(env, "DOCUMENT_SCAN_URL"),
     scannerFormat,
+    scannerTimeoutMs: positiveInteger(value(env, "DOCUMENT_SCAN_TIMEOUT_MS"), 30_000),
     // This escape hatch is deliberately impossible in staging/production.
     scannerFailOpen: !isProductionLike && value(env, "DOCUMENT_SCAN_FAIL_OPEN") === "1",
     // Production/staging are always asynchronous; a false flag cannot weaken it.
@@ -96,6 +110,22 @@ export function readServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCo
     errorWebhookUrl: value(env, "ERROR_WEBHOOK_URL"),
     metricsWebhookUrl: value(env, "METRICS_WEBHOOK_URL"),
     aiModel: value(env, "AGIR_AI_MODEL") ?? "claude-sonnet-4-6",
+    // API_KEY remains the preferred local alias; diagnostics never expose it.
+    // Preserve both aliases so the AI boundary can skip a malformed preferred
+    // value and safely use a valid compatibility alias. Never expose either
+    // candidate through diagnostics.
+    anthropicApiKey: value(env, "API_KEY", "ANTHROPIC_API_KEY"),
+    anthropicApiKeyCandidates: [value(env, "API_KEY"), value(env, "ANTHROPIC_API_KEY")].filter(
+      (candidate): candidate is string => Boolean(candidate),
+    ),
+    scimBearerToken: value(env, "SCIM_BEARER_TOKEN"),
+    scimWorkspaceId: value(env, "SCIM_WORKSPACE_ID"),
+    maxOcrPages: positiveInteger(value(env, "MAX_OCR_PAGES"), 10),
+    extractionTextScanCharLimit: positiveInteger(
+      value(env, "EXTRACTION_TEXT_SCAN_CHAR_LIMIT"),
+      5_000_000,
+    ),
+    auditPackageSigningSecret: value(env, "AUDIT_PACKAGE_SIGNING_SECRET"),
   };
 }
 

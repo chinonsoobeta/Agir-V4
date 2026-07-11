@@ -241,7 +241,7 @@ export async function scanDocument(name: string, buf: ArrayBuffer): Promise<Full
   const multipart = config.scannerFormat === "multipart";
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30_000);
+    const timeout = setTimeout(() => controller.abort(), config.scannerTimeoutMs);
     let res: Response;
     try {
       let body: BodyInit;

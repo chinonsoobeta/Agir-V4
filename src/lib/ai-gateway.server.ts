@@ -1,4 +1,5 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
+import { readServerConfig } from "./config.server";
 
 export const DEFAULT_AI_MODEL = "claude-sonnet-4-6";
 
@@ -10,8 +11,7 @@ export const DEFAULT_AI_MODEL = "claude-sonnet-4-6";
 // start with "sk-", so we validate shape here and treat anything else as
 // "no key" → clean deterministic fallback instead of a runtime error.
 export function getValidatedAnthropicKey(): string | null {
-  // Try API_KEY first (user-provided), then fall back to ANTHROPIC_API_KEY (integration).
-  for (const raw of [process.env.API_KEY, process.env.ANTHROPIC_API_KEY]) {
+  for (const raw of readServerConfig().anthropicApiKeyCandidates) {
     if (!raw) continue;
     const key = raw.trim();
     if (!key) continue;
@@ -30,7 +30,7 @@ export function hasAnthropicKey(): boolean {
   return getValidatedAnthropicKey() !== null;
 }
 
-export function getAgirModel(modelName = process.env.AGIR_AI_MODEL || DEFAULT_AI_MODEL) {
+export function getAgirModel(modelName = readServerConfig().aiModel || DEFAULT_AI_MODEL) {
   const apiKey = getValidatedAnthropicKey();
   if (!apiKey)
     throw new Error(

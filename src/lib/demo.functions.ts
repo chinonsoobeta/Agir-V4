@@ -230,6 +230,11 @@ function buildSeedAssumptions(): SeedAssumption[] {
 export const seedHarbourCentre = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { getServiceRoleClient } = await import("@/integrations/supabase/service-role.server");
+    // Demo fixtures are repository-defined and the authenticated user ID is
+    // written into every row/path. This reviewed capability is the only
+    // compatibility bridge around the production staged-upload policy.
+    const demoAdmin = getServiceRoleClient("demo_seed");
     // ===== Generate + upload the synthetic demo documents =====
     const { buildHarbourDemoFiles } = await import("./harbour-demo-files.server");
     const files = await buildHarbourDemoFiles();
@@ -239,7 +244,7 @@ export const seedHarbourCentre = createServerFn({ method: "POST" })
     > = {};
     for (const f of files) {
       const path = `${context.userId}/${DEMO_STORAGE_PREFIX}/${f.storage_file}`;
-      const { error: upErr } = await context.supabase.storage
+      const { error: upErr } = await demoAdmin.storage
         .from("documents")
         .upload(path, f.bytes, { upsert: true, contentType: f.file_type });
       if (upErr) throw new Error(`Failed to upload demo file ${f.name}: ${upErr.message}`);
@@ -254,7 +259,7 @@ export const seedHarbourCentre = createServerFn({ method: "POST" })
     // Verify every file is actually present before wiring documents to them.
     const missing: string[] = [];
     for (const [name, info] of Object.entries(uploadedPaths)) {
-      const probe = await context.supabase.storage.from("documents").download(info.path);
+      const probe = await demoAdmin.storage.from("documents").download(info.path);
       if (probe.error || !probe.data) missing.push(name);
     }
     if (missing.length) {
@@ -264,7 +269,7 @@ export const seedHarbourCentre = createServerFn({ method: "POST" })
     }
 
     // ===== Create the project =====
-    const { data: project, error } = await context.supabase
+    const { data: project, error } = await demoAdmin
       .from("projects")
       .insert({
         owner_id: context.userId,
@@ -300,7 +305,7 @@ export const seedHarbourCentre = createServerFn({ method: "POST" })
         status: "uploaded",
       };
     });
-    const { data: insertedDocs, error: docErr } = await context.supabase
+    const { data: insertedDocs, error: docErr } = await demoAdmin
       .from("documents")
       .insert(docRows)
       .select("id,name");
@@ -308,7 +313,7 @@ export const seedHarbourCentre = createServerFn({ method: "POST" })
     const docIdByName = new Map((insertedDocs ?? []).map((d) => [d.name, d.id]));
 
     // ===== Engine-readable rows (the underwriting tables the engine loads) =====
-    await context.supabase.from("development_budget").insert(
+    await demoAdmin.from("development_budget").insert(
       HARBOUR_BUDGET_LINES.map((row) => ({
         project_id: project.id,
         owner_id: context.userId,
@@ -320,7 +325,7 @@ export const seedHarbourCentre = createServerFn({ method: "POST" })
       })),
     );
 
-    await context.supabase.from("revenue_program").insert(
+    await demoAdmin.from("revenue_program").insert(
       HARBOUR_REVENUE_COMPONENTS.map((row) => ({
         project_id: project.id,
         owner_id: context.userId,
@@ -335,7 +340,7 @@ export const seedHarbourCentre = createServerFn({ method: "POST" })
       })),
     );
 
-    await context.supabase.from("underwriting_inputs").insert(
+    await demoAdmin.from("underwriting_inputs").insert(
       HARBOUR_SCALARS.map((row) => ({
         project_id: project.id,
         owner_id: context.userId,
@@ -387,11 +392,11 @@ export const seedHarbourCentre = createServerFn({ method: "POST" })
       };
     });
     if (assumptionRows.length) {
-      const { error: aErr } = await context.supabase.from("assumptions").insert(assumptionRows);
+      const { error: aErr } = await demoAdmin.from("assumptions").insert(assumptionRows);
       if (aErr) throw new Error(`Failed to seed assumptions: ${aErr.message}`);
     }
 
-    await context.supabase.from("activities").insert({
+    await demoAdmin.from("activities").insert({
       project_id: project.id,
       user_id: context.userId,
       activity_type: "project_created",
@@ -410,6 +415,8 @@ export const seedDemoPackage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: { slug: string }) => z.object({ slug: z.string().min(1) }).parse(d))
   .handler(async ({ data, context }) => {
+    const { getServiceRoleClient } = await import("@/integrations/supabase/service-role.server");
+    const demoAdmin = getServiceRoleClient("demo_seed");
     const pkg = DEMO_PACKAGE_BY_SLUG[data.slug];
     if (!pkg) throw new Error(`Unknown demo package: ${data.slug}`);
     if (pkg.mode !== "workflow" || !pkg.project) {
@@ -417,7 +424,7 @@ export const seedDemoPackage = createServerFn({ method: "POST" })
     }
 
     // Fresh project each run, so repeated demos don't pile up duplicates.
-    await context.supabase
+    await demoAdmin
       .from("projects")
       .delete()
       .eq("owner_id", context.userId)
@@ -428,7 +435,7 @@ export const seedDemoPackage = createServerFn({ method: "POST" })
     for (const f of pkg.files) {
       const bytes = Uint8Array.from(Buffer.from(f.base64, "base64"));
       const path = `${context.userId}/${pkg.storagePrefix}/${f.name}`;
-      const { error: upErr } = await context.supabase.storage
+      const { error: upErr } = await demoAdmin.storage
         .from("documents")
         .upload(path, bytes, { upsert: true, contentType: f.fileType });
       if (upErr) throw new Error(`Failed to upload demo file ${f.name}: ${upErr.message}`);
@@ -438,7 +445,7 @@ export const seedDemoPackage = createServerFn({ method: "POST" })
     // Verify presence before wiring document rows to the paths.
     const missing: string[] = [];
     for (const u of uploaded) {
-      const probe = await context.supabase.storage.from("documents").download(u.path);
+      const probe = await demoAdmin.storage.from("documents").download(u.path);
       if (probe.error || !probe.data) missing.push(u.name);
     }
     if (missing.length) {
@@ -446,7 +453,7 @@ export const seedDemoPackage = createServerFn({ method: "POST" })
     }
 
     // ===== Create the project =====
-    const { data: project, error } = await context.supabase
+    const { data: project, error } = await demoAdmin
       .from("projects")
       .insert({
         owner_id: context.userId,
@@ -461,7 +468,7 @@ export const seedDemoPackage = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
 
     // ===== Link uploaded files as documents =====
-    const { error: docErr } = await context.supabase.from("documents").insert(
+    const { error: docErr } = await demoAdmin.from("documents").insert(
       uploaded.map((u) => ({
         owner_id: context.userId,
         project_id: project.id,
@@ -475,7 +482,7 @@ export const seedDemoPackage = createServerFn({ method: "POST" })
     );
     if (docErr) throw new Error(docErr.message);
 
-    await context.supabase.from("activities").insert({
+    await demoAdmin.from("activities").insert({
       project_id: project.id,
       user_id: context.userId,
       activity_type: "project_created",

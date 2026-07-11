@@ -38,7 +38,9 @@ async function claimQueuedJob(client) {
     workerId,
     leaseSeconds,
   ]);
-  return result.rows[0] ?? null;
+  // A SETOF composite function may return one null-shaped row rather than no
+  // row at all when no job is claimable. Never treat that as a claimed job.
+  return result.rows[0]?.id ? result.rows[0] : null;
 }
 
 async function heartbeatJob(client, job) {
@@ -141,7 +143,9 @@ async function tick() {
   return withClient(async (client) => {
     const job = await claimQueuedJob(client);
     if (!job) {
-      console.log("[extraction-worker] no queued jobs");
+      // Idle polling is expected; log it only for a deliberate one-shot run
+      // so production scheduler logs remain useful during real incidents.
+      if (once) console.log("[extraction-worker] no queued jobs");
       return false;
     }
     console.log(`[extraction-worker] claimed ${job.id} (${job.kind})`);

@@ -20,6 +20,22 @@ function redactedVerificationReason(reason: string): string {
   return "Document verification failed closed";
 }
 
+// The protected endpoint never returns implementation errors, scanner output,
+// paths, or object metadata. A stable class is enough for the durable worker
+// record and lets operators distinguish retryable infrastructure failures from
+// bad uploads without disclosing sensitive details.
+function verificationFailureCode(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  if (/lease|cancell/i.test(message)) return "lease_lost";
+  if (/download/i.test(message)) return "object_download_failed";
+  if (/size/i.test(message)) return "object_size_mismatch";
+  if (/mime/i.test(message)) return "object_mime_mismatch";
+  if (/scanner|scan/i.test(message)) return "scanner_rejected_or_unavailable";
+  if (/finalization/i.test(message)) return "atomic_finalization_failed";
+  if (/reject/i.test(message)) return "atomic_rejection_failed";
+  return "verification_failed_closed";
+}
+
 async function stillOwnsLiveLease(supabase: any, jobId: string, workerId: string) {
   const { data } = await supabase
     .from("extraction_jobs")
@@ -171,10 +187,11 @@ export const Route = createFileRoute("/api/extraction/worker")({
         if (job.kind === "document_verification") {
           try {
             return Response.json(await executeDocumentVerification({ jobId, workerId }));
-          } catch {
+          } catch (error) {
             return Response.json({
               status: "failed",
               error: "Document verification could not complete safely.",
+              code: verificationFailureCode(error),
             });
           }
         }

@@ -9,6 +9,10 @@ import { defineConfig, devices } from "@playwright/test";
 //
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:8081";
 const WORKERS = process.env.E2E_WORKERS ? Number(process.env.E2E_WORKERS) : 1;
+const REUSE_EXISTING_SERVER =
+  process.env.E2E_REUSE_EXISTING_SERVER === undefined
+    ? !process.env.CI
+    : process.env.E2E_REUSE_EXISTING_SERVER === "1";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -42,7 +46,10 @@ export default defineConfig({
       process.env.E2E_WEB_SERVER_CMD ??
       (process.env.CI ? "npm run dev" : "bash .claude/dev-node22.sh"),
     url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
+    // Release verification must own the app process so its worker token,
+    // scanner mode, and configuration contract are known. Local exploratory
+    // runs retain the convenient reuse default unless explicitly disabled.
+    reuseExistingServer: REUSE_EXISTING_SERVER,
     timeout: 120_000,
   },
 });

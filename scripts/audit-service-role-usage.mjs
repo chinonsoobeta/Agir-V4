@@ -7,6 +7,9 @@ const allowed = new Set([
   "src/integrations/supabase/client.server.ts",
   "src/integrations/supabase/service-role.server.ts",
   "src/lib/documents.functions.ts",
+  // Reviewed demo-only bridge: repository-defined fixtures are written through
+  // the named demo_seed capability after authenticated user binding.
+  "src/lib/demo.functions.ts",
   "src/lib/env.server.ts",
   // The typed server configuration boundary resolves only the presence of the
   // service-role credential. It never creates a client or exposes its value.

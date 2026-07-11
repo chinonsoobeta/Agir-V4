@@ -8,7 +8,15 @@ const requirements = [
   },
   {
     file: "src/lib/documents.functions.ts",
-    phrases: ["content_hash", "idempotencyKey", "claimJob"],
+    phrases: ["content_hash", "idempotencyKey", "claimJob", "enqueue_document_verification"],
+  },
+  {
+    file: "supabase/migrations/20260710000100_async_document_verification.sql",
+    phrases: [
+      "uq_extraction_jobs_pending_upload_verification",
+      "pg_advisory_xact_lock",
+      "lease_owner <> p_worker_id",
+    ],
   },
   {
     file: "src/lib/underwriting.server.ts",
