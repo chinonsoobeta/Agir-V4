@@ -72,7 +72,7 @@ jobs:
           } >> "$GITHUB_ENV"
       - run: node scripts/ensure-demo-user.mjs
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run ops:release
       - uses: actions/upload-artifact@v5
         if: ${{ !cancelled() }}

@@ -919,6 +919,7 @@ export type Database = {
           category: string | null;
           content_hash: string | null;
           extraction_error: string | null;
+          extraction_review_status: string;
           extraction_status: string;
           file_type: string | null;
           id: string;
@@ -926,13 +927,16 @@ export type Database = {
           ocr_confidence: number | null;
           owner_id: string;
           page_count: number | null;
+          permit_case_id: string | null;
           project_id: string | null;
+          replaces_document_id: string | null;
           scan_detail: string | null;
           scan_status: string;
           size_bytes: number | null;
           status: string;
           storage_path: string;
           upload_date: string;
+          version_number: number;
         };
         Insert: {
           ai_assumptions?: string | null;
@@ -941,6 +945,7 @@ export type Database = {
           category?: string | null;
           content_hash?: string | null;
           extraction_error?: string | null;
+          extraction_review_status?: string;
           extraction_status?: string;
           file_type?: string | null;
           id?: string;
@@ -948,13 +953,16 @@ export type Database = {
           ocr_confidence?: number | null;
           owner_id: string;
           page_count?: number | null;
+          permit_case_id?: string | null;
           project_id?: string | null;
+          replaces_document_id?: string | null;
           scan_detail?: string | null;
           scan_status?: string;
           size_bytes?: number | null;
           status?: string;
           storage_path: string;
           upload_date?: string;
+          version_number?: number;
         };
         Update: {
           ai_assumptions?: string | null;
@@ -963,6 +971,7 @@ export type Database = {
           category?: string | null;
           content_hash?: string | null;
           extraction_error?: string | null;
+          extraction_review_status?: string;
           extraction_status?: string;
           file_type?: string | null;
           id?: string;
@@ -970,20 +979,37 @@ export type Database = {
           ocr_confidence?: number | null;
           owner_id?: string;
           page_count?: number | null;
+          permit_case_id?: string | null;
           project_id?: string | null;
+          replaces_document_id?: string | null;
           scan_detail?: string | null;
           scan_status?: string;
           size_bytes?: number | null;
           status?: string;
           storage_path?: string;
           upload_date?: string;
+          version_number?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "documents_permit_case_id_fkey";
+            columns: ["permit_case_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_cases";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "documents_project_id_fkey";
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "documents_replaces_document_id_fkey";
+            columns: ["replaces_document_id"];
+            isOneToOne: false;
+            referencedRelation: "documents";
             referencedColumns: ["id"];
           },
         ];
@@ -1055,6 +1081,7 @@ export type Database = {
           message: string | null;
           owner_id: string;
           pending_upload_id: string | null;
+          permit_case_id: string | null;
           priority: number;
           progress: number;
           project_id: string | null;
@@ -1083,6 +1110,7 @@ export type Database = {
           message?: string | null;
           owner_id: string;
           pending_upload_id?: string | null;
+          permit_case_id?: string | null;
           priority?: number;
           progress?: number;
           project_id?: string | null;
@@ -1111,6 +1139,7 @@ export type Database = {
           message?: string | null;
           owner_id?: string;
           pending_upload_id?: string | null;
+          permit_case_id?: string | null;
           priority?: number;
           progress?: number;
           project_id?: string | null;
@@ -1134,6 +1163,13 @@ export type Database = {
             columns: ["pending_upload_id"];
             isOneToOne: false;
             referencedRelation: "pending_document_uploads";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "extraction_jobs_permit_case_id_fkey";
+            columns: ["permit_case_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_cases";
             referencedColumns: ["id"];
           },
           {
@@ -1780,6 +1816,7 @@ export type Database = {
           id: string;
           object_path: string;
           owner_id: string;
+          permit_case_id: string | null;
           project_id: string | null;
           status: string;
           updated_at: string;
@@ -1798,6 +1835,7 @@ export type Database = {
           id?: string;
           object_path: string;
           owner_id: string;
+          permit_case_id?: string | null;
           project_id?: string | null;
           status?: string;
           updated_at?: string;
@@ -1816,6 +1854,7 @@ export type Database = {
           id?: string;
           object_path?: string;
           owner_id?: string;
+          permit_case_id?: string | null;
           project_id?: string | null;
           status?: string;
           updated_at?: string;
@@ -1830,6 +1869,13 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "pending_document_uploads_permit_case_id_fkey";
+            columns: ["permit_case_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_cases";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "pending_document_uploads_project_id_fkey";
             columns: ["project_id"];
             isOneToOne: false;
@@ -1838,6 +1884,155 @@ export type Database = {
           },
           {
             foreignKeyName: "pending_document_uploads_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      permit_case_history: {
+        Row: {
+          action: string;
+          case_id: string;
+          changed_at: string;
+          changed_by: string;
+          id: string;
+          new_data: Json | null;
+          previous_data: Json | null;
+          reason: string | null;
+        };
+        Insert: {
+          action: string;
+          case_id: string;
+          changed_at?: string;
+          changed_by: string;
+          id?: string;
+          new_data?: Json | null;
+          previous_data?: Json | null;
+          reason?: string | null;
+        };
+        Update: {
+          action?: string;
+          case_id?: string;
+          changed_at?: string;
+          changed_by?: string;
+          id?: string;
+          new_data?: Json | null;
+          previous_data?: Json | null;
+          reason?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "permit_case_history_case_id_fkey";
+            columns: ["case_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_cases";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      permit_cases: {
+        Row: {
+          created_at: string;
+          description: string | null;
+          existing_use: string | null;
+          expiration_date: string | null;
+          id: string;
+          issue_date: string | null;
+          known_conditions: string | null;
+          municipality: string | null;
+          municipality_confirmed: boolean;
+          name: string;
+          notes: string | null;
+          owner_id: string;
+          project_context: string | null;
+          project_id: string | null;
+          property_address: string | null;
+          property_type: string | null;
+          proposed_use: string | null;
+          province: string;
+          row_version: number;
+          target_date: string | null;
+          updated_at: string;
+          work_categories: string[];
+          work_type: string | null;
+          workspace_id: string | null;
+          zoning_designation: string | null;
+          zoning_source: string | null;
+          zoning_source_kind: string;
+          zoning_verified_at: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          description?: string | null;
+          existing_use?: string | null;
+          expiration_date?: string | null;
+          id?: string;
+          issue_date?: string | null;
+          known_conditions?: string | null;
+          municipality?: string | null;
+          municipality_confirmed?: boolean;
+          name: string;
+          notes?: string | null;
+          owner_id: string;
+          project_context?: string | null;
+          project_id?: string | null;
+          property_address?: string | null;
+          property_type?: string | null;
+          proposed_use?: string | null;
+          province?: string;
+          row_version?: number;
+          target_date?: string | null;
+          updated_at?: string;
+          work_categories?: string[];
+          work_type?: string | null;
+          workspace_id?: string | null;
+          zoning_designation?: string | null;
+          zoning_source?: string | null;
+          zoning_source_kind?: string;
+          zoning_verified_at?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          description?: string | null;
+          existing_use?: string | null;
+          expiration_date?: string | null;
+          id?: string;
+          issue_date?: string | null;
+          known_conditions?: string | null;
+          municipality?: string | null;
+          municipality_confirmed?: boolean;
+          name?: string;
+          notes?: string | null;
+          owner_id?: string;
+          project_context?: string | null;
+          project_id?: string | null;
+          property_address?: string | null;
+          property_type?: string | null;
+          proposed_use?: string | null;
+          province?: string;
+          row_version?: number;
+          target_date?: string | null;
+          updated_at?: string;
+          work_categories?: string[];
+          work_type?: string | null;
+          workspace_id?: string | null;
+          zoning_designation?: string | null;
+          zoning_source?: string | null;
+          zoning_source_kind?: string;
+          zoning_verified_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "permit_cases_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: true;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_cases_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -2059,6 +2254,7 @@ export type Database = {
       };
       permit_requirements: {
         Row: {
+          applicability_state: string;
           created_at: string;
           description: string | null;
           document_id: string | null;
@@ -2069,12 +2265,17 @@ export type Database = {
           notes: string | null;
           project_permit_id: string;
           requirement_type: string;
+          responsible_party: string | null;
           source_document_id: string | null;
+          source_kind: string;
           source_text: string | null;
+          source_url: string | null;
           status: string;
+          status_reason: string | null;
           updated_at: string;
         };
         Insert: {
+          applicability_state?: string;
           created_at?: string;
           description?: string | null;
           document_id?: string | null;
@@ -2085,12 +2286,17 @@ export type Database = {
           notes?: string | null;
           project_permit_id: string;
           requirement_type?: string;
+          responsible_party?: string | null;
           source_document_id?: string | null;
+          source_kind?: string;
           source_text?: string | null;
+          source_url?: string | null;
           status?: string;
+          status_reason?: string | null;
           updated_at?: string;
         };
         Update: {
+          applicability_state?: string;
           created_at?: string;
           description?: string | null;
           document_id?: string | null;
@@ -2101,9 +2307,13 @@ export type Database = {
           notes?: string | null;
           project_permit_id?: string;
           requirement_type?: string;
+          responsible_party?: string | null;
           source_document_id?: string | null;
+          source_kind?: string;
           source_text?: string | null;
+          source_url?: string | null;
           status?: string;
+          status_reason?: string | null;
           updated_at?: string;
         };
         Relationships: [
@@ -2338,6 +2548,7 @@ export type Database = {
           applicability_status: string;
           application_date: string | null;
           application_url: string | null;
+          case_id: string | null;
           confidence_band: string | null;
           confidence_score: number | null;
           created_at: string;
@@ -2355,9 +2566,10 @@ export type Database = {
           permit_type: string;
           processing_duration_days: number | null;
           processing_duration_text: string | null;
-          project_id: string;
+          project_id: string | null;
           required_reason: string | null;
           responsible_party: string | null;
+          row_version: number;
           source_document_id: string | null;
           source_kind: string;
           source_location: string | null;
@@ -2370,6 +2582,7 @@ export type Database = {
           applicability_status?: string;
           application_date?: string | null;
           application_url?: string | null;
+          case_id?: string | null;
           confidence_band?: string | null;
           confidence_score?: number | null;
           created_at?: string;
@@ -2387,9 +2600,10 @@ export type Database = {
           permit_type: string;
           processing_duration_days?: number | null;
           processing_duration_text?: string | null;
-          project_id: string;
+          project_id?: string | null;
           required_reason?: string | null;
           responsible_party?: string | null;
+          row_version?: number;
           source_document_id?: string | null;
           source_kind?: string;
           source_location?: string | null;
@@ -2402,6 +2616,7 @@ export type Database = {
           applicability_status?: string;
           application_date?: string | null;
           application_url?: string | null;
+          case_id?: string | null;
           confidence_band?: string | null;
           confidence_score?: number | null;
           created_at?: string;
@@ -2419,9 +2634,10 @@ export type Database = {
           permit_type?: string;
           processing_duration_days?: number | null;
           processing_duration_text?: string | null;
-          project_id?: string;
+          project_id?: string | null;
           required_reason?: string | null;
           responsible_party?: string | null;
+          row_version?: number;
           source_document_id?: string | null;
           source_kind?: string;
           source_location?: string | null;
@@ -2431,6 +2647,13 @@ export type Database = {
           workflow_status?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "project_permits_case_id_fkey";
+            columns: ["case_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_cases";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "project_permits_jurisdiction_id_fkey";
             columns: ["jurisdiction_id"];
@@ -3689,6 +3912,7 @@ export type Database = {
           message: string | null;
           owner_id: string;
           pending_upload_id: string | null;
+          permit_case_id: string | null;
           priority: number;
           progress: number;
           project_id: string | null;
@@ -3791,6 +4015,11 @@ export type Database = {
         Returns: boolean;
       };
       is_workspace_member: { Args: { ws: string }; Returns: boolean };
+      permit_case_access: { Args: { p_case_id: string }; Returns: boolean };
+      permit_case_write_access: {
+        Args: { p_case_id: string };
+        Returns: boolean;
+      };
       permit_project_access: {
         Args: { p_project_id: string };
         Returns: boolean;
@@ -3858,6 +4087,20 @@ export type Database = {
           upload_id: string;
         }[];
       };
+      prepare_permit_document_upload: {
+        Args: {
+          p_category?: string;
+          p_expected_content_type: string;
+          p_expected_size_bytes: number;
+          p_file_name: string;
+          p_permit_case_id: string;
+        };
+        Returns: {
+          expires_at: string;
+          object_path: string;
+          upload_id: string;
+        }[];
+      };
       reject_document_upload: {
         Args: { p_owner_id: string; p_reason: string; p_upload_id: string };
         Returns: boolean;
@@ -3869,6 +4112,50 @@ export type Database = {
       request_extraction_job_cancellation: {
         Args: { p_job_id: string };
         Returns: boolean;
+      };
+      set_permit_case_project: {
+        Args: {
+          p_case_id: string;
+          p_expected_version: number;
+          p_project_id?: string;
+          p_reason: string;
+        };
+        Returns: {
+          created_at: string;
+          description: string | null;
+          existing_use: string | null;
+          expiration_date: string | null;
+          id: string;
+          issue_date: string | null;
+          known_conditions: string | null;
+          municipality: string | null;
+          municipality_confirmed: boolean;
+          name: string;
+          notes: string | null;
+          owner_id: string;
+          project_context: string | null;
+          project_id: string | null;
+          property_address: string | null;
+          property_type: string | null;
+          proposed_use: string | null;
+          province: string;
+          row_version: number;
+          target_date: string | null;
+          updated_at: string;
+          work_categories: string[];
+          work_type: string | null;
+          workspace_id: string | null;
+          zoning_designation: string | null;
+          zoning_source: string | null;
+          zoning_source_kind: string;
+          zoning_verified_at: string | null;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "permit_cases";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
       };
       verify_audit_chain: { Args: { p_project: string }; Returns: Json };
       workspace_role: { Args: { ws: string }; Returns: string };

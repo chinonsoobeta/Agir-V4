@@ -58,16 +58,20 @@ const STATUS_META: Record<ItemStatus, { icon: LucideIcon; cls: string; label: st
  */
 export function DocumentDropzone({
   projectId,
+  permitCaseId,
   category,
   existingNames,
   onChanged,
   autoAnalyze = true,
+  helperText = "Multiple files supported · PDF, Excel, Word, CSV, images · assumptions are extracted automatically",
 }: {
   projectId: string | null;
+  permitCaseId?: string | null;
   category: string;
   existingNames: string[];
   onChanged: () => void;
   autoAnalyze?: boolean;
+  helperText?: string;
 }) {
   const createFn = useServerFn(createDocument);
   const requestUploadFn = useServerFn(requestDocumentUpload);
@@ -103,6 +107,7 @@ export function DocumentDropzone({
       const authorization = await requestUploadFn({
         data: {
           project_id: projectId,
+          permit_case_id: permitCaseId ?? null,
           name: file.name,
           file_type: file.type || null,
           category,
@@ -230,10 +235,7 @@ export function DocumentDropzone({
           className={cn("size-7", dragging ? "text-primary" : "text-muted-foreground")}
         />
         <div className="text-sm font-medium">Drop files here or click to upload</div>
-        <div className="text-xs text-muted-foreground">
-          Multiple files supported · PDF, Excel, Word, CSV, images · assumptions are extracted
-          automatically
-        </div>
+        <div className="text-xs text-muted-foreground">{helperText}</div>
         <input
           ref={inputRef}
           type="file"

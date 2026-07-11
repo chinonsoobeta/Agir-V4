@@ -28,6 +28,9 @@ const ids = {
   project: "20000000-0000-4000-8000-000000000001",
   otherProject: "20000000-0000-4000-8000-000000000002",
   contact: "30000000-0000-4000-8000-000000000001",
+  permitCase: "40000000-0000-4000-8000-000000000001",
+  permit: "40000000-0000-4000-8000-000000000002",
+  document: "40000000-0000-4000-8000-000000000003",
 };
 
 function resolveDatabaseUrl() {
@@ -193,6 +196,21 @@ async function resetFixture() {
     `,
     [ids.contact, ids.owner, ids.workspace],
   );
+  await client.query(
+    `INSERT INTO public.permit_cases(id,owner_id,workspace_id,name,municipality,municipality_confirmed)
+     VALUES($1,$2,$3,'Shared permit case','City of Vancouver',true)`,
+    [ids.permitCase, ids.owner, ids.workspace],
+  );
+  await client.query(
+    `INSERT INTO public.project_permits(id,case_id,owner_id,name,permit_type)
+     VALUES($1,$2,$3,'Building permit','building')`,
+    [ids.permit, ids.permitCase, ids.owner],
+  );
+  await client.query(
+    `INSERT INTO public.documents(id,owner_id,permit_case_id,name,storage_path)
+     VALUES($1::uuid,$2::uuid,$3::uuid,'permit.pdf',($2::uuid)::text||'/pending/40000000-0000-4000-8000-000000000004/permit.pdf')`,
+    [ids.document, ids.owner, ids.permitCase],
+  );
 }
 
 beforeAll(async () => {
@@ -208,6 +226,126 @@ afterAll(async () => {
 });
 
 describe("workspace RLS policies", () => {
+  test("permit case roles are isolated and viewers remain read-only", async () => {
+    for (const user of [ids.owner, ids.admin, ids.member, ids.viewer]) {
+      const visible = await asUser(user, "SELECT id FROM public.permit_cases WHERE id=$1", [
+        ids.permitCase,
+      ]);
+      expect(visible.rowCount).toBe(1);
+    }
+    expect(
+      (
+        await asUser(ids.outsider, "SELECT id FROM public.permit_cases WHERE id=$1", [
+          ids.permitCase,
+        ])
+      ).rowCount,
+    ).toBe(0);
+    expect(
+      (
+        await asUser(
+          ids.member,
+          "UPDATE public.permit_cases SET notes='member review' WHERE id=$1 RETURNING id",
+          [ids.permitCase],
+        )
+      ).rowCount,
+    ).toBe(1);
+    expect(
+      (
+        await asUser(
+          ids.viewer,
+          "UPDATE public.permit_cases SET notes='forged' WHERE id=$1 RETURNING id",
+          [ids.permitCase],
+        )
+      ).rowCount,
+    ).toBe(0);
+  });
+
+  test("personal permit cases are private and owner-managed", async () => {
+    const personal = await asUser<{ id: string }>(
+      ids.owner,
+      "INSERT INTO public.permit_cases(owner_id,name) VALUES($1,'Personal case') RETURNING id",
+      [ids.owner],
+    );
+    const id = personal.rows[0].id;
+    expect(
+      (await asUser(ids.owner, "SELECT id FROM public.permit_cases WHERE id=$1", [id])).rowCount,
+    ).toBe(1);
+    expect(
+      (await asUser(ids.outsider, "SELECT id FROM public.permit_cases WHERE id=$1", [id])).rowCount,
+    ).toBe(0);
+    expect(
+      (
+        await asUser(
+          ids.owner,
+          "UPDATE public.permit_cases SET notes='updated' WHERE id=$1 RETURNING id",
+          [id],
+        )
+      ).rowCount,
+    ).toBe(1);
+    expect(
+      (await asUser(ids.owner, "DELETE FROM public.permit_cases WHERE id=$1 RETURNING id", [id]))
+        .rowCount,
+    ).toBe(1);
+  });
+
+  test("removed members immediately lose permit-case access", async () => {
+    expect(
+      (await asUser(ids.member, "SELECT id FROM public.permit_cases WHERE id=$1", [ids.permitCase]))
+        .rowCount,
+    ).toBe(1);
+    await client.query(
+      "DELETE FROM public.workspace_members WHERE workspace_id=$1 AND user_id=$2",
+      [ids.workspace, ids.member],
+    );
+    expect(
+      (await asUser(ids.member, "SELECT id FROM public.permit_cases WHERE id=$1", [ids.permitCase]))
+        .rowCount,
+    ).toBe(0);
+  });
+
+  test("permit children, history, and document links enforce the case boundary", async () => {
+    expect(
+      (await asUser(ids.viewer, "SELECT id FROM public.project_permits WHERE id=$1", [ids.permit]))
+        .rowCount,
+    ).toBe(1);
+    expect(
+      (
+        await asUser(ids.outsider, "SELECT id FROM public.project_permits WHERE id=$1", [
+          ids.permit,
+        ])
+      ).rowCount,
+    ).toBe(0);
+    await expectDenied(
+      asUser(
+        ids.outsider,
+        "INSERT INTO public.permit_requirements(project_permit_id,name) VALUES($1,'forged')",
+        [ids.permit],
+      ),
+    );
+    await expectDenied(
+      asUser(
+        ids.member,
+        "INSERT INTO public.permit_history(project_permit_id,changed_by) VALUES($1,$2)",
+        [ids.permit, ids.member],
+      ),
+    );
+    expect(
+      (
+        await asUser(
+          ids.owner,
+          "INSERT INTO public.permit_documents(permit_id,document_id) VALUES($1,$2) RETURNING permit_id",
+          [ids.permit, ids.document],
+        )
+      ).rowCount,
+    ).toBe(1);
+    await expectDenied(
+      asUser(
+        ids.outsider,
+        "INSERT INTO public.permit_documents(permit_id,document_id) VALUES($1,$2)",
+        [ids.permit, ids.document],
+      ),
+    );
+  });
   test("viewer can read but cannot write deal-child rows, IC votes, or IC conditions", async () => {
     const visible = await asUser(ids.viewer, "SELECT id FROM public.projects WHERE id = $1", [
       ids.project,

@@ -21,6 +21,7 @@ import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedRelationshipsRouteImport } from './routes/_authenticated/relationships'
 import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated/projects'
 import { Route as AuthenticatedPortfolioRouteImport } from './routes/_authenticated/portfolio'
+import { Route as AuthenticatedPermitsRouteImport } from './routes/_authenticated/permits'
 import { Route as AuthenticatedMarketsRouteImport } from './routes/_authenticated/markets'
 import { Route as AuthenticatedIntegrationsRouteImport } from './routes/_authenticated/integrations'
 import { Route as AuthenticatedExecutionRouteImport } from './routes/_authenticated/execution'
@@ -34,8 +35,11 @@ import { Route as AuthenticatedAssumptionsRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAnalysisRouteImport } from './routes/_authenticated/analysis'
 import { Route as AuthenticatedAcceptInviteRouteImport } from './routes/_authenticated/accept-invite'
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects.index'
+import { Route as AuthenticatedPermitsIndexRouteImport } from './routes/_authenticated/permits.index'
 import { Route as ApiExtractionWorkerRouteImport } from './routes/api/extraction/worker'
 import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects.$id'
+import { Route as AuthenticatedPermitsNewRouteImport } from './routes/_authenticated/permits.new'
+import { Route as AuthenticatedPermitsCaseIdRouteImport } from './routes/_authenticated/permits.$caseId'
 import { Route as ApiScimV2UsersRouteImport } from './routes/api/scim/v2/Users'
 import { Route as ApiScimV2UsersIdRouteImport } from './routes/api/scim/v2/Users.$id'
 
@@ -97,6 +101,11 @@ const AuthenticatedProjectsRoute = AuthenticatedProjectsRouteImport.update({
 const AuthenticatedPortfolioRoute = AuthenticatedPortfolioRouteImport.update({
   id: '/portfolio',
   path: '/portfolio',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPermitsRoute = AuthenticatedPermitsRouteImport.update({
+  id: '/permits',
+  path: '/permits',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedMarketsRoute = AuthenticatedMarketsRouteImport.update({
@@ -168,6 +177,12 @@ const AuthenticatedProjectsIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedProjectsRoute,
   } as any)
+const AuthenticatedPermitsIndexRoute =
+  AuthenticatedPermitsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedPermitsRoute,
+  } as any)
 const ApiExtractionWorkerRoute = ApiExtractionWorkerRouteImport.update({
   id: '/api/extraction/worker',
   path: '/api/extraction/worker',
@@ -178,6 +193,17 @@ const AuthenticatedProjectsIdRoute = AuthenticatedProjectsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AuthenticatedProjectsRoute,
 } as any)
+const AuthenticatedPermitsNewRoute = AuthenticatedPermitsNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AuthenticatedPermitsRoute,
+} as any)
+const AuthenticatedPermitsCaseIdRoute =
+  AuthenticatedPermitsCaseIdRouteImport.update({
+    id: '/$caseId',
+    path: '/$caseId',
+    getParentRoute: () => AuthenticatedPermitsRoute,
+  } as any)
 const ApiScimV2UsersRoute = ApiScimV2UsersRouteImport.update({
   id: '/api/scim/v2/Users',
   path: '/api/scim/v2/Users',
@@ -205,6 +231,7 @@ export interface FileRoutesByFullPath {
   '/execution': typeof AuthenticatedExecutionRoute
   '/integrations': typeof AuthenticatedIntegrationsRoute
   '/markets': typeof AuthenticatedMarketsRoute
+  '/permits': typeof AuthenticatedPermitsRouteWithChildren
   '/portfolio': typeof AuthenticatedPortfolioRoute
   '/projects': typeof AuthenticatedProjectsRouteWithChildren
   '/relationships': typeof AuthenticatedRelationshipsRoute
@@ -213,8 +240,11 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/api/chat': typeof ApiChatRoute
   '/api/health': typeof ApiHealthRoute
+  '/permits/$caseId': typeof AuthenticatedPermitsCaseIdRoute
+  '/permits/new': typeof AuthenticatedPermitsNewRoute
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/api/extraction/worker': typeof ApiExtractionWorkerRoute
+  '/permits/': typeof AuthenticatedPermitsIndexRoute
   '/projects/': typeof AuthenticatedProjectsIndexRoute
   '/api/scim/v2/Users': typeof ApiScimV2UsersRouteWithChildren
   '/api/scim/v2/Users/$id': typeof ApiScimV2UsersIdRoute
@@ -242,8 +272,11 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/api/chat': typeof ApiChatRoute
   '/api/health': typeof ApiHealthRoute
+  '/permits/$caseId': typeof AuthenticatedPermitsCaseIdRoute
+  '/permits/new': typeof AuthenticatedPermitsNewRoute
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/api/extraction/worker': typeof ApiExtractionWorkerRoute
+  '/permits': typeof AuthenticatedPermitsIndexRoute
   '/projects': typeof AuthenticatedProjectsIndexRoute
   '/api/scim/v2/Users': typeof ApiScimV2UsersRouteWithChildren
   '/api/scim/v2/Users/$id': typeof ApiScimV2UsersIdRoute
@@ -266,6 +299,7 @@ export interface FileRoutesById {
   '/_authenticated/execution': typeof AuthenticatedExecutionRoute
   '/_authenticated/integrations': typeof AuthenticatedIntegrationsRoute
   '/_authenticated/markets': typeof AuthenticatedMarketsRoute
+  '/_authenticated/permits': typeof AuthenticatedPermitsRouteWithChildren
   '/_authenticated/portfolio': typeof AuthenticatedPortfolioRoute
   '/_authenticated/projects': typeof AuthenticatedProjectsRouteWithChildren
   '/_authenticated/relationships': typeof AuthenticatedRelationshipsRoute
@@ -274,8 +308,11 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/api/chat': typeof ApiChatRoute
   '/api/health': typeof ApiHealthRoute
+  '/_authenticated/permits/$caseId': typeof AuthenticatedPermitsCaseIdRoute
+  '/_authenticated/permits/new': typeof AuthenticatedPermitsNewRoute
   '/_authenticated/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/api/extraction/worker': typeof ApiExtractionWorkerRoute
+  '/_authenticated/permits/': typeof AuthenticatedPermitsIndexRoute
   '/_authenticated/projects/': typeof AuthenticatedProjectsIndexRoute
   '/api/scim/v2/Users': typeof ApiScimV2UsersRouteWithChildren
   '/api/scim/v2/Users/$id': typeof ApiScimV2UsersIdRoute
@@ -298,6 +335,7 @@ export interface FileRouteTypes {
     | '/execution'
     | '/integrations'
     | '/markets'
+    | '/permits'
     | '/portfolio'
     | '/projects'
     | '/relationships'
@@ -306,8 +344,11 @@ export interface FileRouteTypes {
     | '/settings'
     | '/api/chat'
     | '/api/health'
+    | '/permits/$caseId'
+    | '/permits/new'
     | '/projects/$id'
     | '/api/extraction/worker'
+    | '/permits/'
     | '/projects/'
     | '/api/scim/v2/Users'
     | '/api/scim/v2/Users/$id'
@@ -335,8 +376,11 @@ export interface FileRouteTypes {
     | '/settings'
     | '/api/chat'
     | '/api/health'
+    | '/permits/$caseId'
+    | '/permits/new'
     | '/projects/$id'
     | '/api/extraction/worker'
+    | '/permits'
     | '/projects'
     | '/api/scim/v2/Users'
     | '/api/scim/v2/Users/$id'
@@ -358,6 +402,7 @@ export interface FileRouteTypes {
     | '/_authenticated/execution'
     | '/_authenticated/integrations'
     | '/_authenticated/markets'
+    | '/_authenticated/permits'
     | '/_authenticated/portfolio'
     | '/_authenticated/projects'
     | '/_authenticated/relationships'
@@ -366,8 +411,11 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/api/chat'
     | '/api/health'
+    | '/_authenticated/permits/$caseId'
+    | '/_authenticated/permits/new'
     | '/_authenticated/projects/$id'
     | '/api/extraction/worker'
+    | '/_authenticated/permits/'
     | '/_authenticated/projects/'
     | '/api/scim/v2/Users'
     | '/api/scim/v2/Users/$id'
@@ -470,6 +518,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortfolioRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/permits': {
+      id: '/_authenticated/permits'
+      path: '/permits'
+      fullPath: '/permits'
+      preLoaderRoute: typeof AuthenticatedPermitsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/markets': {
       id: '/_authenticated/markets'
       path: '/markets'
@@ -561,6 +616,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProjectsIndexRouteImport
       parentRoute: typeof AuthenticatedProjectsRoute
     }
+    '/_authenticated/permits/': {
+      id: '/_authenticated/permits/'
+      path: '/'
+      fullPath: '/permits/'
+      preLoaderRoute: typeof AuthenticatedPermitsIndexRouteImport
+      parentRoute: typeof AuthenticatedPermitsRoute
+    }
     '/api/extraction/worker': {
       id: '/api/extraction/worker'
       path: '/api/extraction/worker'
@@ -574,6 +636,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/projects/$id'
       preLoaderRoute: typeof AuthenticatedProjectsIdRouteImport
       parentRoute: typeof AuthenticatedProjectsRoute
+    }
+    '/_authenticated/permits/new': {
+      id: '/_authenticated/permits/new'
+      path: '/new'
+      fullPath: '/permits/new'
+      preLoaderRoute: typeof AuthenticatedPermitsNewRouteImport
+      parentRoute: typeof AuthenticatedPermitsRoute
+    }
+    '/_authenticated/permits/$caseId': {
+      id: '/_authenticated/permits/$caseId'
+      path: '/$caseId'
+      fullPath: '/permits/$caseId'
+      preLoaderRoute: typeof AuthenticatedPermitsCaseIdRouteImport
+      parentRoute: typeof AuthenticatedPermitsRoute
     }
     '/api/scim/v2/Users': {
       id: '/api/scim/v2/Users'
@@ -591,6 +667,21 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface AuthenticatedPermitsRouteChildren {
+  AuthenticatedPermitsCaseIdRoute: typeof AuthenticatedPermitsCaseIdRoute
+  AuthenticatedPermitsNewRoute: typeof AuthenticatedPermitsNewRoute
+  AuthenticatedPermitsIndexRoute: typeof AuthenticatedPermitsIndexRoute
+}
+
+const AuthenticatedPermitsRouteChildren: AuthenticatedPermitsRouteChildren = {
+  AuthenticatedPermitsCaseIdRoute: AuthenticatedPermitsCaseIdRoute,
+  AuthenticatedPermitsNewRoute: AuthenticatedPermitsNewRoute,
+  AuthenticatedPermitsIndexRoute: AuthenticatedPermitsIndexRoute,
+}
+
+const AuthenticatedPermitsRouteWithChildren =
+  AuthenticatedPermitsRoute._addFileChildren(AuthenticatedPermitsRouteChildren)
 
 interface AuthenticatedProjectsRouteChildren {
   AuthenticatedProjectsIdRoute: typeof AuthenticatedProjectsIdRoute
@@ -620,6 +711,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedExecutionRoute: typeof AuthenticatedExecutionRoute
   AuthenticatedIntegrationsRoute: typeof AuthenticatedIntegrationsRoute
   AuthenticatedMarketsRoute: typeof AuthenticatedMarketsRoute
+  AuthenticatedPermitsRoute: typeof AuthenticatedPermitsRouteWithChildren
   AuthenticatedPortfolioRoute: typeof AuthenticatedPortfolioRoute
   AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRouteWithChildren
   AuthenticatedRelationshipsRoute: typeof AuthenticatedRelationshipsRoute
@@ -641,6 +733,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedExecutionRoute: AuthenticatedExecutionRoute,
   AuthenticatedIntegrationsRoute: AuthenticatedIntegrationsRoute,
   AuthenticatedMarketsRoute: AuthenticatedMarketsRoute,
+  AuthenticatedPermitsRoute: AuthenticatedPermitsRouteWithChildren,
   AuthenticatedPortfolioRoute: AuthenticatedPortfolioRoute,
   AuthenticatedProjectsRoute: AuthenticatedProjectsRouteWithChildren,
   AuthenticatedRelationshipsRoute: AuthenticatedRelationshipsRoute,

@@ -36,6 +36,21 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/user.json" },
       dependencies: ["setup"],
     },
+    {
+      name: "firefox",
+      use: { ...devices["Desktop Firefox"], storageState: "e2e/.auth/user.json" },
+      dependencies: ["setup"],
+    },
+    {
+      name: "webkit",
+      use: { ...devices["Desktop Safari"], storageState: "e2e/.auth/user.json" },
+      dependencies: ["setup"],
+    },
+    {
+      name: "mobile-chromium",
+      use: { ...devices["Pixel 7"], storageState: "e2e/.auth/user.json" },
+      dependencies: ["setup"],
+    },
   ],
   // Reuse an already-running dev server (the common local case); otherwise boot
   // one. Locally the launch script pins Node 22 via nvm (the Supabase realtime

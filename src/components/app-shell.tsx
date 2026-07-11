@@ -24,11 +24,12 @@ import {
   ContactRound,
   Sun,
   Moon,
+  ClipboardCheck,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +55,7 @@ import {
 import { useWorkspace } from "@/lib/workspace-context";
 import { createWorkspace, type Workspace } from "@/lib/workspaces.functions";
 import { NotificationCenter } from "@/components/notification-center";
+import { savePreferenceData } from "@/lib/preferences.functions";
 
 const nav = [
   { to: "/dashboard", label: "nav.home", icon: LayoutDashboard },
@@ -170,6 +172,46 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { t, theme, setTheme } = usePreferences();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const savePreference = useServerFn(savePreferenceData);
+  const routeMode = pathname.startsWith("/permits") ? "permits" : "underwriting";
+  const [productMode, setProductMode] = useState<"underwriting" | "permits">(routeMode);
+
+  useEffect(() => setProductMode(routeMode), [routeMode]);
+
+  const switchMode = (mode: "underwriting" | "permits") => {
+    setProductMode(mode);
+    window.localStorage.setItem("agir-product-mode", mode);
+    Promise.resolve(savePreference({ data: { key: "productMode", value: mode } })).catch(() => {});
+    router.navigate({ to: mode === "permits" ? "/permits" : "/dashboard" });
+  };
+
+  const modeSwitch = (
+    <div
+      className="mt-4 grid grid-cols-2 rounded-lg border border-sidebar-border p-1"
+      role="radiogroup"
+      aria-label="Agir product mode"
+    >
+      {(["underwriting", "permits"] as const).map((mode) => (
+        <button
+          key={mode}
+          role="radio"
+          aria-checked={productMode === mode}
+          onClick={() => switchMode(mode)}
+          className={cn(
+            "min-h-11 rounded-md px-2 text-xs font-medium capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+            productMode === mode
+              ? "bg-sidebar-accent text-sidebar-accent-foreground"
+              : "text-sidebar-foreground/65 hover:text-sidebar-foreground",
+          )}
+        >
+          {mode}
+        </button>
+      ))}
+      <span className="sr-only" aria-live="polite">
+        {productMode === "permits" ? "Permits mode active" : "Underwriting mode active"}
+      </span>
+    </div>
+  );
 
   async function signOut() {
     await qc.cancelQueries();
@@ -186,7 +228,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const navigation = (onNavigate?: () => void) => (
     <>
       <nav aria-label="Primary" className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-        {nav.map((item) => {
+        {(productMode === "permits"
+          ? [{ to: "/permits", label: "Permit cases", icon: ClipboardCheck }]
+          : nav
+        ).map((item) => {
           const active = isActive(item.to);
           const Icon = item.icon;
           return (
@@ -203,7 +248,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
             >
               <Icon className={cn("size-4 shrink-0", active ? "text-sidebar-primary" : "")} />
-              {t(item.label as TranslationKey)}
+              {item.label === "Permit cases" ? item.label : t(item.label as TranslationKey)}
             </Link>
           );
         })}
@@ -278,6 +323,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <NotificationCenter />
           </div>
           <WorkspaceSwitcher />
+          {modeSwitch}
         </div>
         {navigation()}
       </aside>
@@ -294,7 +340,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
             <SheetTrigger asChild>
-              <Button variant="outline" size="icon" aria-label="Open navigation menu">
+              <Button
+                variant="outline"
+                size="icon"
+                className="min-h-11 min-w-11"
+                aria-label="Open navigation menu"
+              >
                 <Menu className="size-4" />
               </Button>
             </SheetTrigger>
@@ -315,6 +366,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </div>
                 </div>
                 <WorkspaceSwitcher />
+                {modeSwitch}
               </div>
               {navigation(() => setMobileNavOpen(false))}
             </SheetContent>

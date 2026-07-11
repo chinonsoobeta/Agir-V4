@@ -26,6 +26,19 @@ export const listDocuments = createServerFn({ method: "GET" })
     return rows ?? [];
   });
 
+export const listPermitCaseDocuments = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => z.object({ permit_case_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const result = await context.supabase
+      .from("documents")
+      .select("*, permit_documents(permit_id,document_role), permit_requirements(id,name)")
+      .eq("permit_case_id", data.permit_case_id)
+      .order("upload_date", { ascending: false });
+    if (result.error) throw new Error(result.error.message);
+    return result.data ?? [];
+  });
+
 /** Pending uploads are intentionally separate from documents: no unverified
  * object is eligible for extraction, provenance review, or underwriting. */
 export const listPendingDocumentUploads = createServerFn({ method: "GET" })
@@ -147,6 +160,7 @@ const CreateDocSchema = z.object({
 
 const UploadIntentSchema = z.object({
   project_id: z.string().uuid().optional().nullable(),
+  permit_case_id: z.string().uuid().optional().nullable(),
   name: z.string().min(1).max(255),
   file_type: z.string().max(255).optional().nullable(),
   category: z.string().max(255).optional().nullable(),
@@ -168,13 +182,23 @@ export const requestDocumentUpload = createServerFn({ method: "POST" })
     const intent = validateUploadIntent(data.name, data.size_bytes);
     if (!intent.ok) throw new Error(intent.detail);
 
-    const prepared = await context.supabase.rpc("prepare_document_upload", {
-      p_project_id: data.project_id ?? null,
-      p_file_name: data.name,
-      p_expected_content_type: data.file_type ?? null,
-      p_expected_size_bytes: data.size_bytes,
-      p_category: data.category ?? null,
-    } as never);
+    if (!data.project_id && !data.permit_case_id)
+      throw new Error("An underwriting project or permit case is required for upload.");
+    const prepared = data.permit_case_id
+      ? await context.supabase.rpc("prepare_permit_document_upload", {
+          p_permit_case_id: data.permit_case_id,
+          p_file_name: data.name,
+          p_expected_content_type: data.file_type ?? null,
+          p_expected_size_bytes: data.size_bytes,
+          p_category: data.category ?? null,
+        } as never)
+      : await context.supabase.rpc("prepare_document_upload", {
+          p_project_id: data.project_id ?? null,
+          p_file_name: data.name,
+          p_expected_content_type: data.file_type ?? null,
+          p_expected_size_bytes: data.size_bytes,
+          p_category: data.category ?? null,
+        } as never);
     if (isMissingFunction(prepared.error) || isMissingRelation(prepared.error)) {
       // The direct browser path is a deliberately narrow demo/test bridge for
       // an unmigrated local fixture. Strict environments fail closed below.
@@ -224,7 +248,9 @@ export const finalizeDocumentUpload = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: pending, error: pendingError } = await context.supabase
       .from("pending_document_uploads")
-      .select("id, owner_id, project_id, object_path, file_name, expected_size_bytes, status")
+      .select(
+        "id, owner_id, project_id, permit_case_id, object_path, file_name, expected_size_bytes, status",
+      )
       .eq("id", data.upload_id)
       .single();
     if (isMissingRelation(pendingError)) {

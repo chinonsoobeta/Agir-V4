@@ -27,7 +27,8 @@ export const UNKNOWN_REQUIREMENT =
   "Requirement status: Cannot be determined from the available project information.";
 
 const permitShape = z.object({
-  project_id: z.string().uuid(),
+  project_id: z.string().uuid().nullable().optional(),
+  case_id: z.string().uuid().nullable().optional(),
   jurisdiction_id: z.string().uuid().nullable().optional(),
   permit_rule_id: z.string().uuid().nullable().optional(),
   name: z.string().min(1).max(250),
@@ -61,6 +62,12 @@ const permitShape = z.object({
   notes: z.string().max(10000).nullable().optional(),
 });
 const validatePermit = <T extends z.infer<typeof permitShape>>(v: T, ctx: z.RefinementCtx) => {
+  if (!v.project_id && !v.case_id)
+    ctx.addIssue({
+      code: "custom",
+      message: "A permit case or project is required.",
+      path: ["case_id"],
+    });
   if (v.processing_duration_days != null && !v.duration_source)
     ctx.addIssue({
       code: "custom",
@@ -138,26 +145,27 @@ export const updatePermit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) =>
     z
-      .object({ id: z.string().uuid(), patch: permitShape.omit({ project_id: true }).partial() })
+      .object({
+        id: z.string().uuid(),
+        expected_version: z.number().int().positive().optional(),
+        patch: permitShape.omit({ project_id: true, case_id: true }).partial(),
+      })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
     const { data: current, error: readError } = await (context.supabase as any)
       .from("project_permits")
       .select(
-        "project_id,applicability_status,workflow_status,is_required,source_kind,required_reason,notes",
+        "project_id,case_id,row_version,applicability_status,workflow_status,is_required,source_kind,required_reason,notes",
       )
       .eq("id", data.id)
       .single();
     if (readError) throw new Error(readError.message);
     const merged = permitInput.parse({ ...current, ...data.patch });
-    const { project_id, ...patch } = merged;
-    const { data: row, error } = await (context.supabase as any)
-      .from("project_permits")
-      .update(patch)
-      .eq("id", data.id)
-      .select()
-      .single();
+    const { project_id, case_id, ...patch } = merged;
+    let query = (context.supabase as any).from("project_permits").update(patch).eq("id", data.id);
+    if (data.expected_version) query = query.eq("row_version", data.expected_version);
+    const { data: row, error } = await query.select().single();
     if (error) throw new Error(error.message);
     return row;
   });
@@ -172,6 +180,22 @@ export const addPermitRequirement = createServerFn({ method: "POST" })
         requirement_type: z.string().default("paperwork"),
         is_required: z.boolean().default(true),
         notes: z.string().nullable().optional(),
+        source_kind: z
+          .enum([
+            "verified_source",
+            "analyst",
+            "extracted",
+            "reported",
+            "unknown",
+            "needs_review",
+            "not_applicable",
+          ])
+          .default("unknown"),
+        source_url: z.string().url().nullable().optional(),
+        responsible_party: z.string().max(250).nullable().optional(),
+        applicability_state: z
+          .enum(["required", "potentially_required", "unresolved", "not_applicable"])
+          .default("unresolved"),
       })
       .parse(d),
   )
@@ -192,6 +216,15 @@ export const updatePermitRequirement = createServerFn({ method: "POST" })
         id: z.string().uuid(),
         status: z.enum(["missing", "received", "not_applicable"]),
         document_id: z.string().uuid().nullable().optional(),
+        status_reason: z.string().max(5000).nullable().optional(),
+      })
+      .superRefine((v, ctx) => {
+        if (v.status === "not_applicable" && !v.status_reason?.trim())
+          ctx.addIssue({
+            code: "custom",
+            path: ["status_reason"],
+            message: "A reason is required when paperwork is not applicable.",
+          });
       })
       .parse(d),
   )
