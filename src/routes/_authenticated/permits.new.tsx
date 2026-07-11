@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AddressAutocomplete } from "@/components/permits/address-autocomplete";
 export const Route = createFileRoute("/_authenticated/permits/new")({ component: NewPermitCase });
 const cats = [
   "Structural work",
@@ -91,10 +92,18 @@ function NewPermitCase() {
                 <Input value={form.name} onChange={(e) => set("name", e.target.value)} />
               </Field>
               <Field label="Property address">
-                <Input
+                <AddressAutocomplete
                   value={form.property_address}
-                  onChange={(e) => set("property_address", e.target.value)}
-                  placeholder="May be incomplete"
+                  onChange={(v) => set("property_address", v)}
+                  onSelect={(s) =>
+                    setForm((f: any) => ({
+                      ...f,
+                      property_address: s.address,
+                      municipality: s.municipality ?? f.municipality,
+                      province: s.province ?? f.province,
+                    }))
+                  }
+                  placeholder="Start typing to see suggestions…"
                 />
               </Field>
               <div className="grid gap-4 sm:grid-cols-2">
