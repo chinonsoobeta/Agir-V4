@@ -33,7 +33,7 @@ type PhotonFeature = {
   };
 };
 
-function formatSuggestion(p: PhotonFeature["properties"]) {
+export function formatAddressSuggestion(p: PhotonFeature["properties"]) {
   const line1 = [p.housenumber && p.street ? `${p.housenumber} ${p.street}` : (p.street ?? p.name)]
     .filter(Boolean)
     .join("");
@@ -42,10 +42,10 @@ function formatSuggestion(p: PhotonFeature["properties"]) {
   return parts.join(", ");
 }
 
-function resolveMunicipality(p: PhotonFeature["properties"]): string | null {
+export function resolveSuggestedMunicipality(p: PhotonFeature["properties"]): string | null {
   const city = (p.city ?? p.district ?? p.county ?? "").toLowerCase().trim();
   if (!city) return null;
-  return PILOT_MUNICIPALITY_MAP[city] ?? (p.city ?? p.district ?? p.county ?? null);
+  return PILOT_MUNICIPALITY_MAP[city] ?? p.city ?? p.district ?? p.county ?? null;
 }
 
 /** Free-text address input with Photon (OpenStreetMap) suggestions, biased to
@@ -69,6 +69,7 @@ export function AddressAutocomplete({
   const skipNextFetch = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
+  const statusId = useId();
 
   useEffect(() => {
     if (skipNextFetch.current) {
@@ -81,9 +82,10 @@ export function AddressAutocomplete({
       setOpen(false);
       return;
     }
+    let controller: AbortController | null = null;
     const t = setTimeout(async () => {
       abortRef.current?.abort();
-      const controller = new AbortController();
+      controller = new AbortController();
       abortRef.current = controller;
       setLoading(true);
       try {
@@ -98,7 +100,11 @@ export function AddressAutocomplete({
             lon: "-123.1",
             bbox: "-139.06,48.2,-114.03,60.0",
           });
-        const res = await fetch(url, { signal: controller.signal });
+        const res = await fetch(url, {
+          signal: controller.signal,
+          credentials: "omit",
+          referrerPolicy: "no-referrer",
+        });
         if (!res.ok) throw new Error(`Photon ${res.status}`);
         const json = await res.json();
         const features: PhotonFeature[] = (json.features ?? []).filter(
@@ -113,10 +119,13 @@ export function AddressAutocomplete({
           setOpen(false);
         }
       } finally {
-        setLoading(false);
+        if (abortRef.current === controller) setLoading(false);
       }
     }, 300);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      controller?.abort();
+    };
   }, [value]);
 
   useEffect(() => {
@@ -128,12 +137,12 @@ export function AddressAutocomplete({
   }, []);
 
   const choose = (f: PhotonFeature) => {
-    const label = formatSuggestion(f.properties);
+    const label = formatAddressSuggestion(f.properties);
     skipNextFetch.current = true;
     onChange(label);
     onSelect({
       address: label,
-      municipality: resolveMunicipality(f.properties),
+      municipality: resolveSuggestedMunicipality(f.properties),
       province: f.properties.state ?? null,
     });
     setOpen(false);
@@ -170,6 +179,8 @@ export function AddressAutocomplete({
         role="combobox"
         aria-expanded={open}
         aria-controls={listboxId}
+        aria-activedescendant={active >= 0 ? `${listboxId}-option-${active}` : undefined}
+        aria-describedby={statusId}
         aria-autocomplete="list"
         autoComplete="off"
       />
@@ -179,6 +190,13 @@ export function AddressAutocomplete({
           className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
         />
       )}
+      <span id={statusId} className="sr-only" role="status" aria-live="polite">
+        {loading
+          ? "Loading address suggestions"
+          : open
+            ? `${suggestions.length} address suggestions available`
+            : ""}
+      </span>
       {open && (
         <ul
           id={listboxId}
@@ -187,10 +205,11 @@ export function AddressAutocomplete({
           className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
         >
           {suggestions.map((f, i) => {
-            const label = formatSuggestion(f.properties);
+            const label = formatAddressSuggestion(f.properties);
             return (
               <li
                 key={`${label}-${i}`}
+                id={`${listboxId}-option-${i}`}
                 role="option"
                 aria-selected={i === active}
                 className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm ${

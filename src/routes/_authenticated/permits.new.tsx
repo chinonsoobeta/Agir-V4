@@ -94,17 +94,29 @@ function NewPermitCase() {
               <Field label="Property address">
                 <AddressAutocomplete
                   value={form.property_address}
-                  onChange={(v) => set("property_address", v)}
+                  onChange={(v) =>
+                    setForm((f: any) => ({
+                      ...f,
+                      property_address: v,
+                      municipality_confirmed: false,
+                    }))
+                  }
                   onSelect={(s) =>
                     setForm((f: any) => ({
                       ...f,
                       property_address: s.address,
                       municipality: s.municipality ?? f.municipality,
                       province: s.province ?? f.province,
+                      municipality_confirmed: false,
                     }))
                   }
                   placeholder="Start typing to see suggestions…"
                 />
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Suggestions are provided by OpenStreetMap through Photon. Your typed address is
+                  sent to that service. Suggested municipalities remain unconfirmed and provide no
+                  zoning evidence.
+                </p>
               </Field>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Municipality">

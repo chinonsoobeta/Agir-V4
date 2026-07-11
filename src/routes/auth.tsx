@@ -212,7 +212,7 @@ function AuthPage() {
             <Button
               onClick={handleGoogle}
               variant="outline"
-              className="w-full mb-4 border-[#183046]/15"
+              className="w-full mb-4 border-[#183046]/15 text-white"
             >
               <svg className="size-4 mr-2" viewBox="0 0 24 24">
                 <path
