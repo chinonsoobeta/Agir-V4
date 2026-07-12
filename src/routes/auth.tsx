@@ -11,10 +11,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ArrowLeft, Building2, Check, Eye, EyeOff, ShieldCheck } from "lucide-react";
 
 const TAB_COPY: Record<"signin" | "signup" | "reset", { heading: string; subcopy: string }> = {
-  signin: { heading: "Welcome back", subcopy: "Sign in to open your investment workspace." },
+  signin: { heading: "Welcome back", subcopy: "Sign in to open your property project workspace." },
   signup: {
     heading: "Create your account",
-    subcopy: "Get started with your investment workspace.",
+    subcopy: "Get started with your property project workspace.",
   },
   reset: { heading: "Reset password", subcopy: "We'll email you a link to set a new password." },
 };
@@ -72,7 +72,7 @@ function AuthPage() {
   useEffect(() => {
     let cancelled = false;
     supabase.auth.getSession().then(({ data }) => {
-      if (!cancelled && data.session) navigate({ to: "/dashboard", replace: true });
+      if (!cancelled && data.session) navigate({ to: "/permits", replace: true });
     });
     return () => {
       cancelled = true;
@@ -96,7 +96,7 @@ function AuthPage() {
       return;
     }
     await router.invalidate();
-    navigate({ to: "/dashboard" });
+    navigate({ to: "/permits" });
   }
 
   async function handleSignUp(e: React.FormEvent) {
@@ -120,7 +120,7 @@ function AuthPage() {
       return;
     }
     await router.invalidate();
-    navigate({ to: "/dashboard" });
+    navigate({ to: "/permits" });
   }
 
   async function handleReset(e: React.FormEvent) {
@@ -142,7 +142,7 @@ function AuthPage() {
   async function handleGoogle() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/dashboard` },
+      options: { redirectTo: `${window.location.origin}/permits` },
     });
     if (error) toast.error(error.message);
   }
@@ -158,20 +158,20 @@ function AuthPage() {
         </Link>
         <div className="max-w-xl">
           <div className="text-xs uppercase tracking-[0.2em] text-[#8ec5e0] font-semibold">
-            One record from source to close
+            Permit research and workflow
           </div>
           <h2 className="mt-5 text-4xl xl:text-5xl font-semibold leading-tight">
-            Your team should know what to do next.
+            Keep permit evidence, decisions, and responsibility together.
           </h2>
           <p className="mt-6 text-lg leading-8 text-[#b6c6d6] max-w-lg">
-            Open the pipeline, review the evidence, make the decision, and keep the closing work
-            moving.
+            Assemble available sources, review potential permits, track unresolved questions, and
+            hand work to authorized collaborators.
           </p>
           <div className="mt-9 space-y-4">
             {[
-              "Financial outputs stay linked to approved inputs",
-              "Every decision has a clear rationale and audit trail",
-              "Deadlines, blockers, and owners remain visible",
+              "Official sources and review dates stay visible",
+              "Unknown information remains explicitly unknown",
+              "Assignments, documents, and history stay with the case",
             ].map((item) => (
               <div key={item} className="flex items-center gap-3 text-sm text-[#cdd9e4]">
                 <span className="flex size-6 items-center justify-center rounded-full bg-white/10 text-[#8ec5e0]">
@@ -184,7 +184,7 @@ function AuthPage() {
         </div>
         <div className="flex items-center gap-2 text-xs text-[#8294a4]">
           <ShieldCheck className="size-4" />
-          Deterministic underwriting with source-level traceability
+          Underwriting is available separately as a limited Preview
         </div>
       </div>
 

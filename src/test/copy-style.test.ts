@@ -33,9 +33,12 @@ describe("product copy", () => {
   it("keeps the public landing page focused on concrete product outcomes", () => {
     const source = readFileSync(resolve(ROOT, "src/routes/index.tsx"), "utf8");
 
-    expect(source).toContain("Make the call with better evidence.");
-    expect(source).toContain("Every financial output comes from approved inputs");
-    expect(source).toContain("The numbers must be exact.");
+    expect(source).toContain("Keep permit research reviewable.");
+    expect(source).toContain(
+      "Candidate review never establishes that a permit is legally required.",
+    );
+    expect(source).toMatch(/Underwriting is a\s+limited Preview for explicitly approved users/);
+    expect(source).toContain("Reviewed coverage does not mean the catalogue is complete.");
     expect(source).not.toContain("AI-powered");
   });
 });

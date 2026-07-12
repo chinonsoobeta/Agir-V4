@@ -953,7 +953,7 @@ function NewDealDialog({ onClose, createFn }: { onClose: () => void; createFn: a
                       "City of Burnaby",
                       "City of Richmond",
                       "City of Surrey",
-                      "City of New Westminster",
+                      "City of Coquitlam",
                       "City of Kelowna",
                     ].map((v) => (
                       <SelectItem key={v} value={v}>

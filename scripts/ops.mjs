@@ -25,7 +25,7 @@ function run(label, command, args, options = {}) {
 }
 
 function runBrowserReleaseWithWorker(env) {
-  const label = "browser workflows with verification worker";
+  const label = "browser and accessibility workflows with verification worker";
   json({ event: "check.started", label });
   const worker = spawn("npm", ["run", "worker:extraction"], {
     stdio: "inherit",
@@ -79,6 +79,7 @@ function check() {
     }),
   );
   for (const [label, args] of [
+    ["format", ["run", "format:check"]],
     ["migration safety", ["run", "audit:migrations"]],
     ["server-auth audit", ["run", "audit:server-auth"]],
     ["service-role audit", ["run", "audit:service-role"]],
@@ -88,6 +89,8 @@ function check() {
     ["unit tests", ["run", "test"]],
     ["production build", ["run", "build"]],
     ["bundle audit", ["run", "bundle:audit"]],
+    ["secret scan", ["run", "scan:secrets"]],
+    ["dependency scan", ["run", "scan:dependencies"]],
   ])
     outcomes.push(run(label, "npm", args));
   finish("check", outcomes);
@@ -123,6 +126,15 @@ function release() {
   };
   const outcomes = [];
   for (const [label, args] of [
+    ["format", ["run", "format:check"]],
+    ["lint", ["run", "lint"]],
+    ["typecheck", ["run", "typecheck"]],
+    ["permit and underwriting unit regression", ["run", "test"]],
+    ["production build", ["run", "build"]],
+    ["bundle audit", ["run", "bundle:audit"]],
+    ["pilot readiness artifacts", ["run", "pilot:audit"]],
+    ["secret scan", ["run", "scan:secrets"]],
+    ["dependency scan", ["run", "scan:dependencies"]],
     ["migrations", ["run", "migrate"]],
     ["migration safety", ["run", "audit:migrations"]],
     ["generated database types", ["run", "types:check"]],

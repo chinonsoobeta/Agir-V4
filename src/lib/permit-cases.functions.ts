@@ -272,6 +272,10 @@ export const generateCasePermitCandidates = createServerFn({ method: "POST" })
         application_url: x.application_url ?? x.official_source_url,
         source_location: x.source_title,
         source_text: x.source_text,
+        source_url: x.official_source_url,
+        source_reviewed_at: x.review_date,
+        source_freshness_status: x.freshness_status,
+        source_official_status: x.official_source_status,
         source_kind: x.verification_status === "verified" ? "verified_source" : "needs_review",
         confidence_band: "catalogue_candidate_scope_unconfirmed",
         notes: `Candidate generated from ${j.data.name} rule ${x.rule_version}. Applicability requires review against verified case facts.`,
@@ -280,4 +284,90 @@ export const generateCasePermitCandidates = createServerFn({ method: "POST" })
     const ins = await db.from("project_permits").insert(rows);
     if (ins.error) throw new Error(ins.error.message);
     return { created: rows.length, jurisdiction: j.data.name };
+  });
+
+export const getPermitCaseCollaboration = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => z.object({ case_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const db = context.supabase as any;
+    const [assignments, handoffs] = await Promise.all([
+      db
+        .from("permit_case_assignments")
+        .select("*")
+        .eq("case_id", data.case_id)
+        .order("created_at", { ascending: false }),
+      db
+        .from("permit_case_handoffs")
+        .select("*")
+        .eq("case_id", data.case_id)
+        .order("created_at", { ascending: false }),
+    ]);
+    if (assignments.error) throw new Error(assignments.error.message);
+    if (handoffs.error) throw new Error(handoffs.error.message);
+    return { assignments: assignments.data ?? [], handoffs: handoffs.data ?? [] };
+  });
+
+export const assignPermitCase = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) =>
+    z
+      .object({
+        case_id: z.string().uuid(),
+        assignee_id: z.string().uuid(),
+        responsibility: z.string().trim().min(1).max(250),
+        due_at: z.string().datetime().nullable().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const result = await (context.supabase as any)
+      .from("permit_case_assignments")
+      .insert({ ...data, assigned_by: context.userId })
+      .select()
+      .single();
+    if (result.error) throw new Error(result.error.message);
+    return result.data;
+  });
+
+export const startPermitCaseHandoff = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) =>
+    z
+      .object({
+        case_id: z.string().uuid(),
+        to_user_id: z.string().uuid(),
+        note: z.string().trim().min(1).max(5000),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const result = await (context.supabase as any)
+      .from("permit_case_handoffs")
+      .insert({
+        ...data,
+        from_user_id: context.userId,
+        initiated_by: context.userId,
+      })
+      .select()
+      .single();
+    if (result.error) throw new Error(result.error.message);
+    return result.data;
+  });
+
+export const respondPermitCaseHandoff = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) =>
+    z.object({ handoff_id: z.string().uuid(), status: z.enum(["accepted", "rejected"]) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const result = await context.supabase.rpc(
+      "respond_permit_case_handoff" as never,
+      {
+        p_handoff_id: data.handoff_id,
+        p_status: data.status,
+      } as never,
+    );
+    if (result.error) throw new Error(result.error.message);
+    return result.data;
   });

@@ -2,11 +2,16 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
+  assignPermitCase,
   generateCasePermitCandidates,
   getPermitCase,
+  getPermitCaseCollaboration,
   listAttachableProjects,
+  respondPermitCaseHandoff,
   setPermitCaseProject,
+  startPermitCaseHandoff,
 } from "@/lib/permit-cases.functions";
+import { listWorkspaceMembers } from "@/lib/workspaces.functions";
 import { getDocumentUrl, listPermitCaseDocuments } from "@/lib/documents.functions";
 import { DocumentDropzone } from "@/components/document-dropzone";
 import { PERMIT_LIMITATIONS_TEXT } from "@/lib/permit-limitations";
@@ -40,6 +45,8 @@ import {
   History,
   Link2,
   Plus,
+  Send,
+  UserRoundCheck,
 } from "lucide-react";
 export const Route = createFileRoute("/_authenticated/permits/$caseId")({
   component: PermitCaseWorkspace,
@@ -47,6 +54,7 @@ export const Route = createFileRoute("/_authenticated/permits/$caseId")({
 const label = (s: string) => s.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
 function PermitCaseWorkspace() {
   const { caseId } = Route.useParams();
+  const { user } = Route.useRouteContext();
   const qc = useQueryClient();
   const { data: c, isLoading } = useQuery({
     queryKey: ["permit-case", caseId],
@@ -61,9 +69,21 @@ function PermitCaseWorkspace() {
     queryFn: () => listAttachableProjects({ data: { workspace_id: c?.workspace_id ?? null } }),
     enabled: Boolean(c),
   });
+  const { data: collaboration } = useQuery({
+    queryKey: ["permit-case-collaboration", caseId],
+    queryFn: () => getPermitCaseCollaboration({ data: { case_id: caseId } }),
+  });
+  const { data: members = [] } = useQuery({
+    queryKey: ["permit-case-members", c?.workspace_id],
+    queryFn: () => listWorkspaceMembers({ data: { workspace_id: c!.workspace_id } }),
+    enabled: Boolean(c?.workspace_id),
+  });
   const [linkOpen, setLinkOpen] = useState(false);
   const [projectId, setProjectId] = useState("");
   const [linkReason, setLinkReason] = useState("");
+  const [collaboratorId, setCollaboratorId] = useState("");
+  const [responsibility, setResponsibility] = useState("");
+  const [handoffNote, setHandoffNote] = useState("");
   const linkProject = useMutation({
     mutationFn: () =>
       setPermitCaseProject({
@@ -89,6 +109,37 @@ function PermitCaseWorkspace() {
       qc.invalidateQueries({ queryKey: ["permit-case", caseId] });
       alert(`${r.created} review candidates added for ${r.jurisdiction}.`);
     },
+  });
+  const refreshCollaboration = () =>
+    qc.invalidateQueries({ queryKey: ["permit-case-collaboration", caseId] });
+  const assign = useMutation({
+    mutationFn: () =>
+      assignPermitCase({
+        data: {
+          case_id: caseId,
+          assignee_id: collaboratorId,
+          responsibility,
+        },
+      }),
+    onSuccess: () => {
+      setResponsibility("");
+      refreshCollaboration();
+    },
+  });
+  const handoff = useMutation({
+    mutationFn: () =>
+      startPermitCaseHandoff({
+        data: { case_id: caseId, to_user_id: collaboratorId, note: handoffNote },
+      }),
+    onSuccess: () => {
+      setHandoffNote("");
+      refreshCollaboration();
+    },
+  });
+  const respondHandoff = useMutation({
+    mutationFn: (data: { handoff_id: string; status: "accepted" | "rejected" }) =>
+      respondPermitCaseHandoff({ data }),
+    onSuccess: refreshCollaboration,
   });
   if (isLoading || !c)
     return (
@@ -172,11 +223,13 @@ function PermitCaseWorkspace() {
             className="h-auto w-full justify-start overflow-x-auto"
             aria-label="Permit case sections"
           >
-            {["overview", "permits", "paperwork", "documents", "history"].map((x) => (
-              <TabsTrigger key={x} value={x} className="min-h-11 sm:min-h-8">
-                {label(x)}
-              </TabsTrigger>
-            ))}
+            {["overview", "permits", "paperwork", "documents", "collaboration", "history"].map(
+              (x) => (
+                <TabsTrigger key={x} value={x} className="min-h-11 sm:min-h-8">
+                  {label(x)}
+                </TabsTrigger>
+              ),
+            )}
           </TabsList>
           <TabsContent value="overview" className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -246,6 +299,7 @@ function PermitCaseWorkspace() {
                         <Th>Applicability</Th>
                         <Th>Workflow</Th>
                         <Th>Provenance</Th>
+                        <Th>Source review</Th>
                         <Th>Duration</Th>
                       </tr>
                     </thead>
@@ -267,6 +321,15 @@ function PermitCaseWorkspace() {
                             {label(p.source_kind)}
                             <small className="block text-muted-foreground">
                               {p.confidence_band || "Confidence unknown"}
+                            </small>
+                          </Td>
+                          <Td>
+                            {p.source_reviewed_at
+                              ? new Date(p.source_reviewed_at).toLocaleDateString()
+                              : "Not reviewed"}
+                            <small className="block text-muted-foreground">
+                              {label(p.source_freshness_status || "not_reviewed")} ·{" "}
+                              {label(p.source_official_status || "unknown")}
                             </small>
                           </Td>
                           <Td>{p.processing_duration_text || UNKNOWN_DURATION}</Td>
@@ -307,6 +370,14 @@ function PermitCaseWorkspace() {
                           Official source <ExternalLink className="size-3" />
                         </a>
                       )}
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Source review:{" "}
+                        {p.source_reviewed_at
+                          ? new Date(p.source_reviewed_at).toLocaleDateString()
+                          : "Not reviewed"}{" "}
+                        · {label(p.source_freshness_status || "not_reviewed")} ·{" "}
+                        {label(p.source_official_status || "unknown")}
+                      </p>
                     </Card>
                   ))}
                 </div>
@@ -381,6 +452,139 @@ function PermitCaseWorkspace() {
               </div>
             ) : (
               <Empty text="No documents have been uploaded to this permit case." />
+            )}
+          </TabsContent>
+          <TabsContent value="collaboration" className="space-y-4">
+            {!c.workspace_id ? (
+              <Warning text="Personal permit cases are private. Move the case into an authorized property project workspace before assigning or handing off work." />
+            ) : (
+              <>
+                <Card className="p-5">
+                  <h2 className="font-semibold">Assign or hand off work</h2>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Access comes from workspace membership. A handoff does not grant new access.
+                  </p>
+                  <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                    <div>
+                      <Label>Authorized collaborator</Label>
+                      <Select value={collaboratorId} onValueChange={setCollaboratorId}>
+                        <SelectTrigger className="mt-2">
+                          <SelectValue placeholder="Select a workspace member" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {members.map((member) => (
+                            <SelectItem key={member.user_id} value={member.user_id}>
+                              {member.full_name || member.email || "Workspace member"} (
+                              {member.role})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="permit-responsibility">Responsibility</Label>
+                      <Input
+                        id="permit-responsibility"
+                        className="mt-2"
+                        value={responsibility}
+                        onChange={(event) => setResponsibility(event.target.value)}
+                        placeholder="Review building permit candidate"
+                      />
+                      <Button
+                        className="mt-3"
+                        variant="outline"
+                        disabled={!collaboratorId || !responsibility.trim() || assign.isPending}
+                        onClick={() => assign.mutate()}
+                      >
+                        <UserRoundCheck className="mr-2 size-4" />
+                        Assign work
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="mt-5 border-t pt-5">
+                    <Label htmlFor="permit-handoff-note">Handoff note</Label>
+                    <Input
+                      id="permit-handoff-note"
+                      className="mt-2"
+                      value={handoffNote}
+                      onChange={(event) => setHandoffNote(event.target.value)}
+                      placeholder="State what is ready and what remains unresolved"
+                    />
+                    <Button
+                      className="mt-3"
+                      disabled={!collaboratorId || !handoffNote.trim() || handoff.isPending}
+                      onClick={() => handoff.mutate()}
+                    >
+                      <Send className="mr-2 size-4" />
+                      Request handoff
+                    </Button>
+                  </div>
+                  {(assign.error || handoff.error) && (
+                    <p role="alert" className="mt-3 text-sm text-destructive">
+                      {((assign.error || handoff.error) as Error).message}
+                    </p>
+                  )}
+                </Card>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <Card className="p-5">
+                    <h2 className="font-semibold">Assignments</h2>
+                    <div className="mt-4 space-y-3">
+                      {(collaboration?.assignments ?? []).map((item: any) => (
+                        <div key={item.id} className="rounded-md border p-3 text-sm">
+                          <p className="font-medium">{item.responsibility}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Assignee: {memberName(members, item.assignee_id)} · {label(item.status)}
+                          </p>
+                        </div>
+                      ))}
+                      {!collaboration?.assignments?.length && (
+                        <p className="text-sm text-muted-foreground">No case assignments yet.</p>
+                      )}
+                    </div>
+                  </Card>
+                  <Card className="p-5">
+                    <h2 className="font-semibold">Handoffs</h2>
+                    <div className="mt-4 space-y-3">
+                      {(collaboration?.handoffs ?? []).map((item: any) => (
+                        <div key={item.id} className="rounded-md border p-3 text-sm">
+                          <div className="flex items-start justify-between gap-3">
+                            <p>{item.note}</p>
+                            <State v={item.status} />
+                          </div>
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            From {memberName(members, item.from_user_id)} to{" "}
+                            {memberName(members, item.to_user_id)}
+                          </p>
+                          {item.status === "pending" && item.to_user_id === user.id && (
+                            <div className="mt-3 flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() =>
+                                  respondHandoff.mutate({ handoff_id: item.id, status: "accepted" })
+                                }
+                              >
+                                Accept
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  respondHandoff.mutate({ handoff_id: item.id, status: "rejected" })
+                                }
+                              >
+                                Reject
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {!collaboration?.handoffs?.length && (
+                        <p className="text-sm text-muted-foreground">No handoffs yet.</p>
+                      )}
+                    </div>
+                  </Card>
+                </div>
+              </>
             )}
           </TabsContent>
           <TabsContent value="history" className="space-y-3">
@@ -461,6 +665,13 @@ function PermitCaseWorkspace() {
       </Dialog>
     </>
   );
+}
+function memberName(
+  members: { user_id: string; full_name: string | null; email: string | null }[],
+  userId: string,
+) {
+  const member = members.find((item) => item.user_id === userId);
+  return member?.full_name || member?.email || "Authorized user";
 }
 function Metric({ k, v }: { k: string; v: number }) {
   return (

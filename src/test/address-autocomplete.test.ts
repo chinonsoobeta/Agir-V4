@@ -23,7 +23,7 @@ describe("permit address autocomplete", () => {
     ["Burnaby", "City of Burnaby"],
     ["Richmond", "City of Richmond"],
     ["Surrey", "City of Surrey"],
-    ["New Westminster", "City of New Westminster"],
+    ["Coquitlam", "City of Coquitlam"],
     ["Kelowna", "City of Kelowna"],
   ])("maps pilot city %s to the catalogue name", (city, expected) => {
     expect(resolveSuggestedMunicipality({ city })).toBe(expected);

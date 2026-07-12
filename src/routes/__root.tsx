@@ -60,17 +60,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Agir | Real estate investment decisions, made clear" },
+      { title: "Agir | Property research and workflow system" },
       {
         name: "description",
         content:
-          "Agir brings deal flow, deterministic underwriting, investment decisions, execution, and portfolio reporting into one clear workspace.",
+          "Agir helps professionals assemble, review, source, share, and track permit information.",
       },
-      { property: "og:title", content: "Agir | Real estate investment decisions, made clear" },
+      { property: "og:title", content: "Agir | Property research and workflow system" },
       {
         property: "og:description",
         content:
-          "Move from source to close with traceable numbers, a live pipeline, and a shared record of every decision.",
+          "Keep permit sources, review dates, documents, unresolved questions, and responsibility together.",
       },
     ],
     links: [

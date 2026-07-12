@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input";
  * Values match `jurisdictions.name` exactly so candidate generation works. */
 const PILOT_MUNICIPALITY_MAP: Record<string, string> = {
   burnaby: "City of Burnaby",
+  coquitlam: "City of Coquitlam",
   kelowna: "City of Kelowna",
-  "new westminster": "City of New Westminster",
   richmond: "City of Richmond",
   surrey: "City of Surrey",
   vancouver: "City of Vancouver",

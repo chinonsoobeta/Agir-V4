@@ -6,7 +6,7 @@ The software catalogue is ready for controlled internal review. It is **not a su
 municipal or legal advice**, and it must not be labelled professionally reviewed until the sign-off
 table below is completed by qualified reviewers independent of the implementation team.
 
-The pilot contains 84 municipal category rows (six municipalities × fourteen categories) plus an
+The active pilot target contains 84 municipal category rows (six municipalities × fourteen categories) plus an
 external-authority directory. An `unknown` row means the reviewed official source set did not
 support a category-specific conclusion. `Potentially applicable` describes the source catalogue,
 not the project: generated project candidates still begin with unknown applicability and no
@@ -29,14 +29,14 @@ rule with the linked official source, and record a `permit_rule_reviews` row.
 - Confirm unknown fields remain unknown.
 - Record reviewer identity, date, notes, next review date, and source-content hash.
 
-| Municipality | Reviewer | Organization/qualification | Review date | Result |
-| --- | --- | --- | --- | --- |
-| City of Vancouver | Pending | Pending | Pending | Not signed off |
-| City of Burnaby | Pending | Pending | Pending | Not signed off |
-| City of Richmond | Pending | Pending | Pending | Not signed off |
-| City of Surrey | Pending | Pending | Pending | Not signed off |
-| City of New Westminster | Pending | Pending | Pending | Not signed off |
-| City of Kelowna | Pending | Pending | Pending | Not signed off |
+| Municipality      | Reviewer | Organization/qualification | Review date | Result         |
+| ----------------- | -------- | -------------------------- | ----------- | -------------- |
+| City of Vancouver | Pending  | Pending                    | Pending     | Not signed off |
+| City of Burnaby   | Pending  | Pending                    | Pending     | Not signed off |
+| City of Richmond  | Pending  | Pending                    | Pending     | Not signed off |
+| City of Surrey    | Pending  | Pending                    | Pending     | Not signed off |
+| City of Coquitlam | Pending  | Pending                    | Pending     | Not signed off |
+| City of Kelowna   | Pending  | Pending                    | Pending     | Not signed off |
 
 ## Source monitoring
 
@@ -45,9 +45,11 @@ content, stores SHA-256 hashes, records unavailable/changed sources, and moves a
 `needs_review`. It never accepts changed content as verified automatically. The weekly scheduled
 workflow fails loudly when credentials are missing or any source changes/becomes unavailable.
 
-An initial local baseline on July 10, 2026 checked 103 rule/source pairs. Some Vancouver, Kelowna,
+An initial local baseline on July 10, 2026 checked the earlier rule and source set. Some Vancouver, Kelowna,
 provincial, and health-authority pages rejected or did not complete automated retrieval. Those are
 review alerts, not evidence that the source or permit does not exist, and require manual review.
+
+New Westminster rows remain historical evidence from the earlier catalogue version and are inactive for the approved pilot cohort. Coquitlam rows begin as pending review. No municipality is professionally reviewed until a qualified reviewer records the result above and in `permit_rule_reviews`.
 
 ## Zoning boundary
 

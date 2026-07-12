@@ -2,19 +2,14 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
-  BarChart3,
-  BriefcaseBusiness,
   Building2,
-  Check,
-  CircleCheck,
-  FileCheck2,
-  Gauge,
+  CheckCircle2,
+  ClipboardCheck,
+  FileClock,
+  FileText,
   Menu,
-  Network,
-  Radar,
   ShieldCheck,
-  Sparkles,
-  Workflow,
+  Users,
   X,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,62 +19,46 @@ import { Card } from "@/components/ui/card";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Agir | Real estate investment decisions, made clear" },
+      { title: "Agir | Permit research and workflow" },
       {
         name: "description",
         content:
-          "Agir brings deal flow, deterministic underwriting, investment decisions, execution, and portfolio reporting into one clear workspace.",
+          "Agir is a property research and workflow system for assembling, reviewing, sharing, and tracking permit information.",
       },
-      { property: "og:title", content: "Agir | Real estate investment decisions, made clear" },
+      { property: "og:title", content: "Agir | Permit research and workflow" },
       {
         property: "og:description",
         content:
-          "Move from source to close with traceable numbers, a live pipeline, and a shared record of every decision.",
+          "Keep permit sources, review dates, documents, unresolved questions, and responsibility together.",
       },
     ],
   }),
   component: LandingPage,
 });
 
-const platformFeatures = [
-  {
-    icon: BriefcaseBusiness,
-    title: "See the full deal pipeline",
-    body: "Track every opportunity, owner, deadline, and next step from first look through closing.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Trust the underwriting",
-    body: "Every financial output comes from approved inputs and deterministic calculations. Source evidence stays attached.",
-  },
-  {
-    icon: Workflow,
-    title: "Keep execution moving",
-    body: "Give diligence, financing, legal, and closing work a clear owner. Blockers and overdue items stay visible.",
-  },
-  {
-    icon: BarChart3,
-    title: "Report without rebuilding",
-    body: "Turn current deal data into committee packages, portfolio reports, and clean exports without another spreadsheet pass.",
-  },
-  {
-    icon: Radar,
-    title: "Watch markets and risk",
-    body: "Follow market signals, concentration, confidence gaps, downside cases, and portfolio exposure in the same place.",
-  },
-  {
-    icon: Network,
-    title: "Connect the tools you use",
-    body: "Bring documents, models, CRM records, and internal data into a governed workflow with a visible audit trail.",
-  },
-] as const;
+const municipalities = ["Vancouver", "Surrey", "Richmond", "Burnaby", "Coquitlam", "Kelowna"];
 
-const lifecycle = [
-  ["01", "Source", "Capture the opportunity, relationship, market, and timing."],
-  ["02", "Review", "Upload documents and approve the assumptions that matter."],
-  ["03", "Underwrite", "Run the base case and stress cases with traceable formulas."],
-  ["04", "Decide", "Bring one recommendation and its supporting evidence to committee."],
-  ["05", "Close", "Manage milestones, blockers, conditions, and final deliverables."],
+const permitCapabilities = [
+  {
+    icon: ClipboardCheck,
+    title: "Review potential permits",
+    body: "Assemble the available evidence without turning candidates into confirmed requirements.",
+  },
+  {
+    icon: FileClock,
+    title: "Keep sources and dates visible",
+    body: "Retain official URLs, review dates, freshness, known gaps, and explicit unknowns.",
+  },
+  {
+    icon: FileText,
+    title: "Track paperwork and documents",
+    body: "Keep applications, checklist items, dates, files, and review status with the permit case.",
+  },
+  {
+    icon: Users,
+    title: "Share responsibility",
+    body: "Work with authorized collaborators, assign responsibility, and preserve handoff history.",
+  },
 ] as const;
 
 function LandingPage() {
@@ -96,42 +75,27 @@ function LandingPage() {
     };
   }, []);
 
-  const primaryTo = hasSession ? "/dashboard" : "/auth";
-  const primaryLabel = hasSession ? "Open workspace" : "Start with Agir";
+  const primaryTo = hasSession ? "/permits" : "/auth";
+  const primaryLabel = hasSession ? "Open permit workspace" : "Request pilot access";
 
   return (
     <main className="landing min-h-screen overflow-hidden bg-[#f6f7fc] text-[#0d2436]">
-      <header className="relative z-50 border-b border-[#183046]/10 bg-[#f6f7fc]/90 backdrop-blur-xl">
+      <header className="relative z-50 border-b border-[#183046]/10 bg-[#f6f7fc]/95 backdrop-blur-xl">
         <div className="mx-auto flex h-20 max-w-[1440px] items-center justify-between px-5 sm:px-8 lg:px-12">
           <Link to="/" className="flex items-center gap-3" aria-label="Agir home">
             <BrandMark />
             <span className="text-xl font-semibold">Agir</span>
           </Link>
-
           <nav className="hidden items-center gap-8 text-sm font-medium text-[#3b456e] lg:flex">
-            <a href="#platform" className="transition-colors hover:text-[#00628e]">
-              Platform
-            </a>
-            <a href="#how-it-works" className="transition-colors hover:text-[#00628e]">
-              How it works
-            </a>
-            <a href="#why-agir" className="transition-colors hover:text-[#00628e]">
-              Why Agir
-            </a>
-            <a href="#security" className="transition-colors hover:text-[#00628e]">
-              Data integrity
-            </a>
+            <a href="#permits">Permit workflow</a>
+            <a href="#coverage">Coverage</a>
+            <a href="#underwriting">Underwriting Preview</a>
+            <a href="#trust">Limitations and data</a>
           </nav>
-
           <div className="hidden items-center gap-3 lg:flex">
             {!hasSession && (
               <Link to="/auth">
-                <Button
-                  variant="ghost"
-                  className="text-[#183046] hover:bg-[#e4f0fa] hover:text-[#00628e]"
-                >
-                  Sign in
-                </Button>
+                <Button variant="ghost">Sign in</Button>
               </Link>
             )}
             <Link to={primaryTo}>
@@ -141,258 +105,215 @@ function LandingPage() {
               </Button>
             </Link>
           </div>
-
           <button
             type="button"
-            className="flex size-10 items-center justify-center rounded-full border border-[#183046]/15 lg:hidden"
+            className="flex size-11 items-center justify-center rounded-full border border-[#183046]/15 lg:hidden"
             onClick={() => setMenuOpen((open) => !open)}
+            aria-expanded={menuOpen}
+            aria-controls="mobile-landing-navigation"
             aria-label="Toggle navigation"
           >
             {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
           </button>
         </div>
-
         {menuOpen && (
-          <div className="border-t border-[#183046]/10 bg-[#f6f7fc] px-5 py-5 lg:hidden">
-            <nav className="flex flex-col gap-4 text-sm font-medium">
-              <a href="#platform" onClick={() => setMenuOpen(false)}>
-                Platform
+          <div
+            id="mobile-landing-navigation"
+            className="border-t border-[#183046]/10 px-5 py-5 lg:hidden"
+          >
+            <nav className="flex flex-col gap-4 text-sm font-medium" aria-label="Landing page">
+              <a href="#permits" onClick={() => setMenuOpen(false)}>
+                Permit workflow
               </a>
-              <a href="#how-it-works" onClick={() => setMenuOpen(false)}>
-                How it works
+              <a href="#coverage" onClick={() => setMenuOpen(false)}>
+                Coverage
               </a>
-              <a href="#why-agir" onClick={() => setMenuOpen(false)}>
-                Why Agir
+              <a href="#underwriting" onClick={() => setMenuOpen(false)}>
+                Underwriting Preview
               </a>
-              <a href="#security" onClick={() => setMenuOpen(false)}>
-                Data integrity
+              <a href="#trust" onClick={() => setMenuOpen(false)}>
+                Limitations and data
               </a>
             </nav>
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              {!hasSession && (
-                <Link to="/auth">
-                  <Button variant="outline" className="w-full rounded-full">
-                    Sign in
-                  </Button>
-                </Link>
-              )}
-              <Link to={primaryTo} className={hasSession ? "col-span-2" : ""}>
-                <Button className="w-full rounded-full bg-[#00628e] text-white">
-                  {primaryLabel}
-                </Button>
-              </Link>
-            </div>
+            <Link to={primaryTo}>
+              <Button className="mt-5 w-full rounded-full bg-[#00628e] text-white">
+                {primaryLabel}
+              </Button>
+            </Link>
           </div>
         )}
       </header>
 
-      <section className="relative">
-        <div className="landing-grid absolute inset-0 opacity-60" />
-        <div className="absolute -left-40 top-28 size-[34rem] rounded-full bg-[#dbe9f6] blur-3xl" />
-        <div className="absolute -right-52 top-8 size-[38rem] rounded-full bg-[#cde1f0] blur-3xl" />
-
-        <div className="relative mx-auto grid max-w-[1440px] gap-12 px-5 pb-20 pt-16 sm:px-8 sm:pt-24 lg:grid-cols-[0.86fr_1.14fr] lg:items-center lg:px-12 lg:pb-28 lg:pt-28">
-          <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#00628e]/20 bg-white/70 px-3 py-1.5 text-xs font-semibold text-[#00628e] shadow-sm">
-              <Sparkles className="size-3.5" />
-              Built for real estate investment teams
-            </div>
-            <h1 className="mt-7 text-balance text-[3.4rem] font-semibold leading-[0.98] sm:text-[4.6rem] lg:text-[5.2rem]">
-              Make the call with better evidence.
+      <section className="relative border-b border-[#183046]/10">
+        <div className="landing-grid absolute inset-0 opacity-50" />
+        <div className="relative mx-auto grid max-w-[1440px] gap-12 px-5 py-20 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-12 lg:py-28">
+          <div className="max-w-3xl">
+            <p className="inline-flex rounded-full border border-[#00628e]/20 bg-white/75 px-3 py-1.5 text-xs font-semibold text-[#00628e]">
+              Property research and workflow system
+            </p>
+            <h1 className="mt-7 text-balance text-5xl font-semibold leading-[1.02] sm:text-6xl lg:text-7xl">
+              Keep permit research reviewable.
             </h1>
-            <p className="mt-7 max-w-xl text-lg leading-8 text-[#505c80] sm:text-xl">
-              Agir gives your team one place to find the best opportunities, underwrite them with
-              traceable numbers, and move approved deals to close.
+            <p className="mt-7 max-w-2xl text-lg leading-8 text-[#505c80] sm:text-xl">
+              Agir helps professionals assemble, review, source, share, hand off, and track permit
+              information by property or project.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Link to={primaryTo}>
-                <Button className="h-12 w-full rounded-full bg-[#00628e] px-6 text-base text-white shadow-[0_10px_30px_-12px_rgba(0,98,142,0.5)] hover:bg-[#00537f] sm:w-auto">
+                <Button className="h-12 w-full rounded-full bg-[#00628e] px-6 text-base text-white hover:bg-[#00537f] sm:w-auto">
                   {primaryLabel}
                   <ArrowRight className="ml-2 size-4" />
                 </Button>
               </Link>
-              <a href="#platform">
+              <a href="#permits">
                 <Button
                   variant="outline"
-                  className="h-12 w-full rounded-full border-[#183046]/20 bg-white/60 px-6 text-base text-[#183046] hover:bg-white sm:w-auto"
+                  className="h-12 w-full rounded-full px-6 text-base sm:w-auto"
                 >
-                  See the platform
+                  See the permit workflow
                 </Button>
               </a>
             </div>
-            <div className="mt-9 flex flex-wrap gap-x-6 gap-y-3 text-sm text-[#505c80]">
-              {["No invented numbers", "Source-linked assumptions", "Setup in minutes"].map(
+            <div className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-sm text-[#505c80]">
+              {["Professional pilot", "Explicit unknowns", "Source and review history"].map(
                 (item) => (
                   <span key={item} className="flex items-center gap-2">
-                    <CircleCheck className="size-4 text-[#00628e]" />
+                    <CheckCircle2 className="size-4 text-[#00628e]" />
                     {item}
                   </span>
                 ),
               )}
             </div>
           </div>
-
-          <ProductPreview />
+          <Card className="border-[#183046]/10 bg-[#0d2436] p-7 text-white shadow-2xl sm:p-9">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8ec5e0]">
+              Permit case
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold">Renovation review</h2>
+            <dl className="mt-7 space-y-3 text-sm">
+              <CaseState label="Municipality" value="Confirmed by user" />
+              <CaseState label="Zoning" value="Unknown" />
+              <CaseState label="Permit candidates" value="Potential, not confirmed" />
+              <CaseState label="Source freshness" value="Review date shown" />
+              <CaseState label="Responsibility" value="Assigned to project team" />
+            </dl>
+            <p className="mt-7 border-t border-white/10 pt-5 text-sm leading-6 text-[#b6c6d6]">
+              Candidate review never establishes that a permit is legally required. Confirm material
+              requirements with the appropriate authority or professional.
+            </p>
+          </Card>
         </div>
       </section>
 
-      <section className="border-y border-[#183046]/10 bg-[#0d2436] text-white">
-        <div className="mx-auto grid max-w-[1440px] gap-8 px-5 py-8 sm:grid-cols-3 sm:px-8 lg:px-12">
-          <ProofPoint value="One view" label="Pipeline, underwriting, decisions, and execution" />
-          <ProofPoint
-            value="Every figure"
-            label="Linked to an input, formula, or source document"
-          />
-          <ProofPoint value="Every handoff" label="Owned, dated, and visible to the team" />
-        </div>
-      </section>
-
-      <section
-        id="platform"
-        className="mx-auto max-w-[1440px] px-5 py-24 sm:px-8 lg:px-12 lg:py-32"
-      >
+      <section id="permits" className="mx-auto max-w-[1440px] px-5 py-24 sm:px-8 lg:px-12">
         <SectionIntro
-          eyebrow="A practical operating system"
-          title="The work stays connected from first look to final close."
-          body="Agir replaces status hunting and duplicate spreadsheets with a shared record of the deal, the decision, and the work still ahead."
+          eyebrow="Permit research and workflow"
+          title="Keep the evidence and the work in one case."
+          body="Agir is designed for builders, permit consultants, architects, contractors, engineers, experienced property owners, and professional project teams."
         />
-        <div className="mt-14 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {platformFeatures.map(({ icon: Icon, title, body }, index) => (
-            <Card
-              key={title}
-              className="group border-[#183046]/10 bg-white/75 p-6 shadow-[0_18px_50px_-38px_rgba(16,36,30,0.45)] transition-all hover:-translate-y-1 hover:border-[#00628e]/30 hover:bg-white"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex size-11 items-center justify-center rounded-xl bg-[#daebf7] text-[#00628e]">
-                  <Icon className="size-5" />
-                </div>
-                <span className="font-mono text-xs text-[#8a93b4]">0{index + 1}</span>
+        <div className="mt-12 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {permitCapabilities.map(({ icon: Icon, title, body }) => (
+            <Card key={title} className="border-[#183046]/10 bg-white/80 p-6">
+              <div className="flex size-11 items-center justify-center rounded-xl bg-[#daebf7] text-[#00628e]">
+                <Icon className="size-5" />
               </div>
-              <h3 className="mt-8 text-xl font-semibold">{title}</h3>
-              <p className="mt-3 leading-7 text-[#646d92]">{body}</p>
+              <h3 className="mt-7 text-xl font-semibold">{title}</h3>
+              <p className="mt-3 text-sm leading-6 text-[#646d92]">{body}</p>
             </Card>
           ))}
         </div>
       </section>
 
-      <section id="how-it-works" className="bg-[#e4f0fa]">
-        <div className="mx-auto max-w-[1440px] px-5 py-24 sm:px-8 lg:px-12 lg:py-32">
+      <section id="coverage" className="bg-[#e4f0fa]">
+        <div className="mx-auto max-w-[1440px] px-5 py-24 sm:px-8 lg:px-12">
           <SectionIntro
-            eyebrow="One continuous record"
-            title="A deal should not restart every time it changes hands."
-            body="The source documents, approved assumptions, committee rationale, and closing work remain attached to the same deal record."
+            eyebrow="Reviewed coverage boundary"
+            title="Six municipalities are prioritized for the pilot."
+            body="Catalogue coverage records official source URLs, review dates, freshness, authority scope, and known gaps. Reviewed coverage does not mean the catalogue is complete."
           />
-          <div className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-[#183046]/10 bg-[#183046]/10 lg:grid-cols-5">
-            {lifecycle.map(([number, title, body]) => (
-              <div key={number} className="bg-[#f6f7fc] p-6 lg:min-h-64">
-                <div className="font-mono text-xs text-[#00628e]">{number}</div>
-                <h3 className="mt-8 text-2xl font-semibold">{title}</h3>
-                <p className="mt-4 text-sm leading-6 text-[#646d92]">{body}</p>
-              </div>
+          <div className="mt-10 flex flex-wrap gap-3">
+            {municipalities.map((name) => (
+              <span
+                key={name}
+                className="rounded-full border border-[#183046]/15 bg-white px-4 py-2 text-sm font-medium"
+              >
+                {name}
+              </span>
             ))}
           </div>
+          <p className="mt-7 max-w-3xl text-sm leading-6 text-[#505c80]">
+            Cases outside these municipalities can retain documents, checklists, collaboration, and
+            history. Reviewed municipal candidates remain unavailable, and missing coverage never
+            means that no permit is required.
+          </p>
         </div>
       </section>
 
       <section
-        id="why-agir"
-        className="mx-auto grid max-w-[1440px] gap-14 px-5 py-24 sm:px-8 lg:grid-cols-2 lg:items-center lg:px-12 lg:py-32"
+        id="underwriting"
+        className="mx-auto grid max-w-[1440px] gap-10 px-5 py-24 sm:px-8 lg:grid-cols-2 lg:items-center lg:px-12"
       >
         <div>
-          <div className="inline-flex size-12 items-center justify-center rounded-xl bg-[#0d2436] text-white">
-            <Gauge className="size-6" />
-          </div>
-          <h2 className="mt-7 max-w-xl text-4xl font-semibold leading-tight sm:text-5xl">
-            Strong controls should make work easier, not heavier.
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#00628e]">
+            Separate product mode
+          </p>
+          <h2 className="mt-5 text-4xl font-semibold sm:text-5xl">
+            Underwriting <span className="text-[#00628e]">Preview</span>
           </h2>
-          <p className="mt-6 max-w-xl text-lg leading-8 text-[#646d92]">
-            Agir starts with a usable workflow. Teams can add structure as they grow without waiting
-            for a consultant to configure the basics.
+          <p className="mt-6 max-w-2xl text-lg leading-8 text-[#646d92]">
+            Agir also provides deterministic underwriting and decision workflows. Underwriting is a
+            limited Preview for explicitly approved users and does not block access to Permits.
           </p>
         </div>
-        <div className="grid gap-3">
-          {[
-            [
-              "Start quickly",
-              "Create a deal, upload documents, and reach a real underwriting result without a long setup project.",
-            ],
-            [
-              "Change the workflow yourself",
-              "Manage views, filters, milestones, reports, themes, and language from the product.",
-            ],
-            [
-              "Keep the interface focused",
-              "The next decision and next action appear before the supporting detail.",
-            ],
-            [
-              "Take the data with you",
-              "Export reports and structured data in formats the rest of your team can use.",
-            ],
-          ].map(([title, body]) => (
-            <div
-              key={title}
-              className="flex gap-4 rounded-xl border border-[#183046]/10 bg-white/75 p-5"
-            >
-              <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-[#daebf7] text-[#00628e]">
-                <Check className="size-3.5" />
-              </div>
-              <div>
-                <h3 className="font-semibold">{title}</h3>
-                <p className="mt-1 text-sm leading-6 text-[#646d92]">{body}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+        <Card className="border-[#183046]/10 bg-white p-7">
+          <h3 className="text-lg font-semibold">A strict product boundary</h3>
+          <ul className="mt-5 space-y-3 text-sm leading-6 text-[#505c80]">
+            <li>Financial outputs use approved inputs and deterministic calculations.</li>
+            <li>Permit information does not enter underwriting through implicit coupling.</li>
+            <li>Case-only documents are excluded from underwriting inputs.</li>
+            <li>Existing authorized bookmarks remain separate from permit cases.</li>
+          </ul>
+        </Card>
       </section>
 
-      <section id="security" className="px-5 pb-24 sm:px-8 lg:px-12 lg:pb-32">
-        <div className="mx-auto grid max-w-[1344px] overflow-hidden rounded-[2rem] bg-[#0d2436] text-white lg:grid-cols-[1.05fr_0.95fr]">
-          <div className="p-8 sm:p-12 lg:p-16">
-            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#9db8e8]">
-              Deterministic by design
-            </div>
-            <h2 className="mt-5 max-w-xl text-4xl font-semibold leading-tight sm:text-5xl">
-              The explanation can be intelligent. The numbers must be exact.
-            </h2>
-            <p className="mt-6 max-w-xl text-lg leading-8 text-[#c6cdea]">
-              Agir separates financial calculation from generated prose. The engine uses approved
-              inputs, records its formulas, and stops when required data is missing or conflicting.
-            </p>
-            <Link to={primaryTo}>
-              <Button className="mt-8 rounded-full bg-[#00628e] px-6 text-[#183046] hover:bg-[#00537f]">
-                {primaryLabel}
-                <ArrowRight className="ml-2 size-4" />
-              </Button>
-            </Link>
-          </div>
-          <div className="relative min-h-[26rem] border-t border-white/10 bg-[#183046] p-8 sm:p-12 lg:border-l lg:border-t-0">
-            <IntegrityStack />
-          </div>
-        </div>
-      </section>
-
-      <footer className="border-t border-[#183046]/10 bg-[#f1f3fd]">
-        <div className="mx-auto flex max-w-[1440px] flex-col gap-8 px-5 py-10 sm:px-8 md:flex-row md:items-end md:justify-between lg:px-12">
+      <section id="trust" className="bg-[#0d2436] text-white">
+        <div className="mx-auto grid max-w-[1440px] gap-10 px-5 py-20 sm:px-8 lg:grid-cols-2 lg:px-12">
           <div>
-            <div className="flex items-center gap-3">
-              <BrandMark />
-              <span className="text-xl font-semibold">Agir</span>
-            </div>
-            <p className="mt-4 max-w-md text-sm leading-6 text-[#646d92]">
-              A real estate investment workspace built for clear decisions and accountable
-              execution.
+            <ShieldCheck className="size-8 text-[#8ec5e0]" />
+            <h2 className="mt-5 text-4xl font-semibold">State the limits directly.</h2>
+            <p className="mt-5 text-lg leading-8 text-[#b6c6d6]">
+              Agir preserves unknowns, unavailable sources, conflicting evidence, and stale reviews.
+              It does not infer zoning from address autocomplete or turn missing evidence into a
+              conclusion.
             </p>
           </div>
-          <div className="flex flex-wrap gap-x-6 gap-y-3 text-sm text-[#505c80]">
-            <Link to="/auth" className="hover:text-[#00628e]">
-              Sign in
-            </Link>
-            <a href="#platform" className="hover:text-[#00628e]">
-              Platform
-            </a>
-            <a href="#security" className="hover:text-[#00628e]">
-              Data integrity
-            </a>
+          <div>
+            <h3 className="text-lg font-semibold">Access and data</h3>
+            <p className="mt-4 text-sm leading-7 text-[#b6c6d6]">
+              The pilot is allowlisted. Workspace roles control collaboration. Document access uses
+              authenticated, case-scoped authorization. Pilot analytics are designed to avoid
+              document contents and complete addresses.
+            </p>
+            <p className="mt-4 text-sm leading-7 text-[#b6c6d6]">
+              Legal, privacy, municipal, operational, comprehension, and security reviews must be
+              recorded before Agir can be described as pilot-ready.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-[#183046]/10 px-5 py-10 sm:px-8 lg:px-12">
+        <div className="mx-auto flex max-w-[1440px] flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <BrandMark />
+            <div>
+              <p className="font-semibold">Agir</p>
+              <p className="text-sm text-[#646d92]">Property research and workflow system</p>
+            </div>
+          </div>
+          <div className="flex gap-5 text-sm text-[#505c80]">
+            <Link to="/auth">Sign in</Link>
+            <a href="#trust">Limitations and data</a>
             <span>© {new Date().getFullYear()} Agir</span>
           </div>
         </div>
@@ -403,7 +324,7 @@ function LandingPage() {
 
 function BrandMark() {
   return (
-    <span className="flex size-9 items-center justify-center rounded-lg bg-[#00628e] text-base font-semibold text-white shadow-sm">
+    <span className="flex size-9 items-center justify-center rounded-lg bg-[#00628e] text-white">
       <Building2 className="size-[18px]" />
     </span>
   );
@@ -412,204 +333,18 @@ function BrandMark() {
 function SectionIntro({ eyebrow, title, body }: { eyebrow: string; title: string; body: string }) {
   return (
     <div className="max-w-3xl">
-      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#00628e]">
-        {eyebrow}
-      </div>
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#00628e]">{eyebrow}</p>
       <h2 className="mt-5 text-4xl font-semibold leading-tight sm:text-5xl">{title}</h2>
-      <p className="mt-5 max-w-2xl text-lg leading-8 text-[#646d92]">{body}</p>
+      <p className="mt-5 text-lg leading-8 text-[#646d92]">{body}</p>
     </div>
   );
 }
 
-function ProofPoint({ value, label }: { value: string; label: string }) {
+function CaseState({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border-white/10 sm:border-r sm:pr-8 last:border-r-0">
-      <div className="text-xl font-semibold">{value}</div>
-      <div className="mt-1 text-sm leading-6 text-[#b6bedf]">{label}</div>
-    </div>
-  );
-}
-
-function ProductPreview() {
-  const stages = [
-    ["Screening", "6", "$148M"],
-    ["Underwriting", "4", "$93M"],
-    ["Committee", "2", "$61M"],
-  ] as const;
-
-  return (
-    <div className="relative mx-auto w-full max-w-3xl lg:ml-auto">
-      <div className="relative overflow-hidden rounded-2xl border border-[#183046]/15 bg-[#fbfcff] shadow-[0_35px_80px_-32px_rgba(16,36,30,0.55)]">
-        <div className="flex h-12 items-center justify-between border-b border-[#183046]/10 bg-white px-4">
-          <div className="flex items-center gap-2">
-            <span className="size-2.5 rounded-full bg-[#d2dae1]" />
-            <span className="size-2.5 rounded-full bg-[#c7d0d8]" />
-            <span className="size-2.5 rounded-full bg-[#bcc7cf]" />
-          </div>
-          <div className="rounded-full bg-[#e4f0fa] px-3 py-1 font-mono text-[11px] uppercase tracking-widest text-[#646d92]">
-            Live investment overview
-          </div>
-          <div className="size-7 rounded-full bg-[#183046] text-center text-[11px] leading-7 text-white">
-            MH
-          </div>
-        </div>
-
-        <div className="grid min-h-[31rem] sm:grid-cols-[8rem_1fr]">
-          <div className="hidden border-r border-[#183046]/10 bg-[#f1f3fd] p-3 sm:block">
-            <div className="mb-5 flex items-center gap-2 px-2 py-2">
-              <BrandMark />
-              <span className="font-semibold">Agir</span>
-            </div>
-            {["Dashboard", "Portfolio", "Deal flow", "Execution", "Reports"].map((item, index) => (
-              <div
-                key={item}
-                className={`mb-1 rounded-md px-2.5 py-2 text-[11px] ${index === 0 ? "bg-white font-semibold text-[#00628e] shadow-sm" : "text-[#6e7799]"}`}
-              >
-                {item}
-              </div>
-            ))}
-          </div>
-
-          <div className="min-w-0 p-4 sm:p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-widest text-[#8a93b4]">
-                  Dashboard
-                </div>
-                <div className="mt-1 text-xl font-semibold">Good morning</div>
-              </div>
-              <div className="flex items-center gap-1.5 rounded-full bg-[#daebf7] px-2 py-1 text-[11px] font-semibold text-[#00628e]">
-                <span className="size-1.5 rounded-full bg-[#2b79a8]" />
-                Live
-              </div>
-            </div>
-
-            <div className="mt-5 grid grid-cols-3 gap-2">
-              <PreviewMetric label="Active deals" value="12" />
-              <PreviewMetric label="Gross pipeline" value="$302M" />
-              <PreviewMetric label="Avg score" value="74" />
-            </div>
-
-            <div className="mt-3 grid gap-3 lg:grid-cols-[1.15fr_0.85fr]">
-              <div className="rounded-xl border border-[#183046]/10 bg-white p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold">Pipeline flow</span>
-                  <span className="text-[11px] text-[#8a93b4]">Manage</span>
-                </div>
-                <div className="mt-4 space-y-4">
-                  {stages.map(([stage, count, capital], index) => (
-                    <div key={stage}>
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="font-medium">
-                          {stage} <span className="text-[#9199b8]">{count}</span>
-                        </span>
-                        <span className="font-mono">{capital}</span>
-                      </div>
-                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#e4f0fa]">
-                        <div
-                          className="h-full rounded-full bg-[#00628e]"
-                          style={{ width: `${82 - index * 21}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-[#183046]/10 bg-[#183046] p-3 text-white">
-                <div className="text-[11px] uppercase tracking-widest text-[#b6bedf]">
-                  Decision ready
-                </div>
-                <div className="mt-3 text-sm font-semibold">Harbour Centre</div>
-                <div className="mt-3 flex items-end justify-between">
-                  <div>
-                    <div className="font-mono text-3xl">82</div>
-                    <div className="text-[11px] text-[#b6bedf]">Investment score</div>
-                  </div>
-                  <div className="rounded-full bg-[#1f9d6b] px-2 py-1 text-[11px] font-semibold text-white">
-                    PROCEED
-                  </div>
-                </div>
-                <div className="mt-4 border-t border-white/10 pt-3 text-[11px] leading-5 text-[#ccd2ee]">
-                  Returns clear the base hurdles. Resolve two closing conditions before funding.
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-3 rounded-xl border border-[#183046]/10 bg-white p-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold">Priority deals</span>
-                <span className="text-[11px] text-[#8a93b4]">Confidence</span>
-              </div>
-              <div className="mt-2 divide-y divide-[#183046]/8">
-                {[
-                  ["Harbour Centre", "Vancouver industrial", "82"],
-                  ["King Street", "Toronto mixed use", "76"],
-                  ["Northgate", "Calgary multifamily", "69"],
-                ].map(([name, detail, score]) => (
-                  <div key={name} className="grid grid-cols-[1fr_auto] items-center gap-3 py-2">
-                    <div>
-                      <div className="text-[11px] font-semibold">{name}</div>
-                      <div className="text-[11px] text-[#8a93b4]">{detail}</div>
-                    </div>
-                    <div className="font-mono text-xs text-[#00628e]">{score}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PreviewMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-[#183046]/10 bg-white p-3">
-      <div className="text-[11px] uppercase tracking-wider text-[#8a93b4]">{label}</div>
-      <div className="mt-1 font-mono text-sm font-semibold">{value}</div>
-    </div>
-  );
-}
-
-function IntegrityStack() {
-  return (
-    <div className="relative mx-auto flex h-full max-w-sm flex-col justify-center">
-      {[
-        {
-          icon: FileCheck2,
-          title: "Approved input",
-          detail: "Exit cap rate · 5.25%",
-          accent: "bg-[#00628e] text-white",
-        },
-        {
-          icon: Building2,
-          title: "Source evidence",
-          detail: "Lender term sheet · page 4",
-          accent: "bg-[#b9d8ff] text-[#183046]",
-        },
-        {
-          icon: ShieldCheck,
-          title: "Engine output",
-          detail: "DSCR · 1.42x · formula recorded",
-          accent: "bg-[#9db8e8] text-[#183046]",
-        },
-      ].map(({ icon: Icon, title, detail, accent }, index) => (
-        <div
-          key={title}
-          className="relative mb-3 flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.07] p-4 backdrop-blur"
-          style={{ marginLeft: `${index * 1.5}rem` }}
-        >
-          <div className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${accent}`}>
-            <Icon className="size-5" />
-          </div>
-          <div>
-            <div className="text-sm font-semibold">{title}</div>
-            <div className="mt-1 font-mono text-[11px] text-[#c2c9e8]">{detail}</div>
-          </div>
-        </div>
-      ))}
+    <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-3">
+      <dt className="text-[#b6c6d6]">{label}</dt>
+      <dd className="text-right font-medium">{value}</dd>
     </div>
   );
 }

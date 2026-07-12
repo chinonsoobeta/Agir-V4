@@ -27,11 +27,12 @@ import {
   ClipboardCheck,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,7 @@ import { useWorkspace } from "@/lib/workspace-context";
 import { createWorkspace, type Workspace } from "@/lib/workspaces.functions";
 import { NotificationCenter } from "@/components/notification-center";
 import { savePreferenceData } from "@/lib/preferences.functions";
+import { getProductAccess } from "@/lib/product-access.functions";
 
 const nav = [
   { to: "/dashboard", label: "nav.home", icon: LayoutDashboard },
@@ -149,7 +151,8 @@ function WorkspaceSwitcher() {
               }}
             />
             <p className="text-xs text-muted-foreground mt-2">
-              Workspaces let your team share deals, assignments and decisions. You'll be the owner.
+              Property project workspaces let your team share cases, assignments, and decisions.
+              You'll be the owner.
             </p>
           </div>
           <DialogFooter>
@@ -173,12 +176,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { t, theme, setTheme } = usePreferences();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const savePreference = useServerFn(savePreferenceData);
-  const routeMode = pathname.startsWith("/permits") ? "permits" : "underwriting";
-  const [productMode, setProductMode] = useState<"underwriting" | "permits">(routeMode);
+  const getAccess = useServerFn(getProductAccess);
+  const access = useQuery({ queryKey: ["product-access"], queryFn: () => getAccess() });
+  const isPermitRoute = pathname.startsWith("/permits");
+  const isModeNeutralRoute =
+    pathname.startsWith("/settings") || pathname.startsWith("/accept-invite");
+  const routeMode = isPermitRoute ? "permits" : isModeNeutralRoute ? null : "underwriting";
+  const [productMode, setProductMode] = useState<"underwriting" | "permits">(() => {
+    if (routeMode) return routeMode;
+    if (typeof window !== "undefined") {
+      return window.localStorage.getItem("agir-product-mode") === "underwriting"
+        ? "underwriting"
+        : "permits";
+    }
+    return "permits";
+  });
+  const [underwritingAccessOpen, setUnderwritingAccessOpen] = useState(false);
 
-  useEffect(() => setProductMode(routeMode), [routeMode]);
+  useEffect(() => {
+    if (routeMode) setProductMode(routeMode);
+  }, [routeMode]);
 
   const switchMode = (mode: "underwriting" | "permits") => {
+    if (mode === "underwriting" && !access.data?.underwritingPreview) {
+      setUnderwritingAccessOpen(true);
+      return;
+    }
     setProductMode(mode);
     window.localStorage.setItem("agir-product-mode", mode);
     Promise.resolve(savePreference({ data: { key: "productMode", value: mode } })).catch(() => {});
@@ -191,7 +214,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       role="radiogroup"
       aria-label="Agir product mode"
     >
-      {(["underwriting", "permits"] as const).map((mode) => (
+      {(["permits", "underwriting"] as const).map((mode) => (
         <button
           key={mode}
           role="radio"
@@ -204,11 +227,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               : "text-sidebar-foreground/65 hover:text-sidebar-foreground",
           )}
         >
-          {mode}
+          {mode === "underwriting" ? (
+            <span>
+              Underwriting{" "}
+              <span className="block text-[10px] uppercase tracking-wide">Preview</span>
+            </span>
+          ) : (
+            "Permits"
+          )}
         </button>
       ))}
       <span className="sr-only" aria-live="polite">
-        {productMode === "permits" ? "Permits mode active" : "Underwriting mode active"}
+        {productMode === "permits" ? "Permits mode active" : "Underwriting Preview mode active"}
       </span>
     </div>
   );
@@ -372,8 +402,76 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </SheetContent>
           </Sheet>
         </div>
-        {children}
+        {isPermitRoute && !access.data?.permitsAccess ? (
+          <div className="px-5 py-10 sm:px-8">
+            <Card className="mx-auto max-w-xl p-6">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Professional pilot
+              </p>
+              <h1 className="mt-2 text-2xl font-semibold">
+                {access.isPending ? "Checking pilot access" : "Permit pilot access is required"}
+              </h1>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                {access.isPending
+                  ? "Agir is checking your professional pilot access."
+                  : "Agir is using a named professional cohort while catalogue, support, and release evidence is completed."}
+              </p>
+              <Button className={cn("mt-5", access.isPending && "hidden")} asChild>
+                <a href="mailto:support@agir.app?subject=Permit%20pilot%20access">
+                  Request pilot access
+                </a>
+              </Button>
+            </Card>
+          </div>
+        ) : !isPermitRoute && !isModeNeutralRoute && !access.data?.underwritingPreview ? (
+          <div className="px-5 py-10 sm:px-8">
+            <Card className="mx-auto max-w-xl p-6">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Underwriting Preview
+              </p>
+              <h1 className="mt-2 text-2xl font-semibold">
+                {access.isPending ? "Checking access" : "Access is limited during the pilot"}
+              </h1>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                {access.isPending
+                  ? "Agir is checking your Underwriting Preview entitlement."
+                  : "Underwriting is available only to explicitly approved users. Permit research and workflow remains available without an underwriting project."}
+              </p>
+              <div className={cn("mt-5 flex flex-wrap gap-2", access.isPending && "hidden")}>
+                <Button onClick={() => switchMode("permits")}>Open Permits</Button>
+                <Button variant="outline" asChild>
+                  <a href="mailto:support@agir.app?subject=Underwriting%20Preview%20access">
+                    Request access
+                  </a>
+                </Button>
+              </div>
+            </Card>
+          </div>
+        ) : (
+          children
+        )}
       </main>
+      <Dialog open={underwritingAccessOpen} onOpenChange={setUnderwritingAccessOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Underwriting Preview access</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm leading-6 text-muted-foreground">
+            Underwriting is visible as a Preview but is limited to approved pilot users. You can
+            continue permit work without it.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUnderwritingAccessOpen(false)}>
+              Stay in Permits
+            </Button>
+            <Button asChild>
+              <a href="mailto:support@agir.app?subject=Underwriting%20Preview%20access">
+                Request access
+              </a>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

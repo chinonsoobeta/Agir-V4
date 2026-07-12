@@ -32,7 +32,7 @@ export const en = {
   "nav.signOut": "Sign out",
 
   // ---- Shell ----
-  "shell.workspace": "Investment workspace",
+  "shell.workspace": "Property project workspace",
   "shell.live": "Live",
   "shell.offline": "Offline",
   "shell.skipToContent": "Skip to content",
@@ -127,7 +127,7 @@ export const en = {
   "mstatus.complete": "Complete",
 
   // ---- Page headers ----
-  "page.dashboard.eyebrow": "Investment workspace",
+  "page.dashboard.eyebrow": "Underwriting Preview",
   "page.dashboard.title": "Dashboard",
   "page.dashboard.subtitle": "What requires your attention right now",
   "page.deals.eyebrow": "Pipeline",
@@ -301,7 +301,7 @@ export const fr: Partial<Record<TranslationKey, string>> = {
   "nav.settings": "Paramètres",
   "nav.signOut": "Déconnexion",
 
-  "shell.workspace": "Espace d’investissement",
+  "shell.workspace": "Espace de projet immobilier",
   "shell.live": "En direct",
   "shell.offline": "Hors ligne",
   "shell.skipToContent": "Passer au contenu",
@@ -389,7 +389,7 @@ export const fr: Partial<Record<TranslationKey, string>> = {
   "mstatus.blocked": "Bloqué",
   "mstatus.complete": "Terminé",
 
-  "page.dashboard.eyebrow": "Espace d’investissement",
+  "page.dashboard.eyebrow": "Aperçu de la souscription",
   "page.dashboard.title": "Tableau de bord",
   "page.dashboard.subtitle": "Ce qui requiert votre attention maintenant",
   "page.deals.eyebrow": "Pipeline",

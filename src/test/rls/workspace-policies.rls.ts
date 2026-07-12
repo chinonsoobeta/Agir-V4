@@ -31,6 +31,9 @@ const ids = {
   permitCase: "40000000-0000-4000-8000-000000000001",
   permit: "40000000-0000-4000-8000-000000000002",
   document: "40000000-0000-4000-8000-000000000003",
+  assignment: "40000000-0000-4000-8000-000000000005",
+  handoff: "40000000-0000-4000-8000-000000000006",
+  legalCopy: "40000000-0000-4000-8000-000000000007",
 };
 
 function resolveDatabaseUrl() {
@@ -58,7 +61,7 @@ function shouldUseSsl(connectionString: string) {
 }
 
 function isDeniedError(error: unknown) {
-  return /row-level security|permission denied|does not exist|project access denied|Permit documents must belong to the same project|Only a workspace owner|A workspace must always have at least one owner|append-only/i.test(
+  return /row-level security|permission denied|does not exist|project access denied|handoff not found or response not allowed|Permit documents must belong to the same project|Only a workspace owner|A workspace must always have at least one owner|append-only/i.test(
     error instanceof Error ? error.message : String(error),
   );
 }
@@ -211,6 +214,22 @@ async function resetFixture() {
      VALUES($1::uuid,$2::uuid,$3::uuid,'permit.pdf',($2::uuid)::text||'/pending/40000000-0000-4000-8000-000000000004/permit.pdf')`,
     [ids.document, ids.owner, ids.permitCase],
   );
+  await client.query(
+    `INSERT INTO public.pilot_user_access(user_id,organization,permits_access,underwriting_preview,pilot_status)
+     VALUES
+       ($1,'RLS fixture',true,true,'active'),
+       ($2,'RLS fixture',true,false,'active'),
+       ($3,'RLS fixture',true,false,'active'),
+       ($4,'RLS fixture',true,false,'active'),
+       ($5,'RLS fixture',true,false,'active')`,
+    [ids.owner, ids.coOwner, ids.admin, ids.member, ids.viewer],
+  );
+  await client.query("DELETE FROM public.legal_copy_versions WHERE id=$1", [ids.legalCopy]);
+  await client.query(
+    `INSERT INTO public.legal_copy_versions(id,copy_key,version,content,approval_status,approver_name,approved_at,effective_at)
+     VALUES($1,'rls_fixture','1','Approved fixture','approved','Qualified reviewer',now(),now())`,
+    [ids.legalCopy],
+  );
 }
 
 beforeAll(async () => {
@@ -226,6 +245,104 @@ afterAll(async () => {
 });
 
 describe("workspace RLS policies", () => {
+  test("pilot entitlements are self-readable and service-managed", async () => {
+    expect((await asUser(ids.owner, "SELECT user_id FROM public.pilot_user_access")).rowCount).toBe(
+      1,
+    );
+    expect(
+      (await asUser(ids.outsider, "SELECT user_id FROM public.pilot_user_access")).rowCount,
+    ).toBe(0);
+    await expectDenied(
+      asUser(
+        ids.owner,
+        "INSERT INTO public.pilot_user_access(user_id,permits_access,pilot_status) VALUES($1,true,'active')",
+        [ids.outsider],
+      ),
+    );
+    const access = await asUser<{ underwriting_preview: boolean }>(
+      ids.owner,
+      "SELECT underwriting_preview FROM public.current_product_access()",
+    );
+    expect(access.rows[0].underwriting_preview).toBe(true);
+    await expectDenied(
+      asUser(
+        ids.outsider,
+        "INSERT INTO public.permit_cases(owner_id,name) VALUES($1,'Unapproved pilot case')",
+        [ids.outsider],
+      ),
+    );
+  });
+
+  test("only approved effective legal copy is visible to authenticated users", async () => {
+    const approved = await asUser(
+      ids.member,
+      "SELECT id FROM public.legal_copy_versions WHERE id=$1",
+      [ids.legalCopy],
+    );
+    expect(approved.rowCount).toBe(1);
+    const drafts = await asUser(
+      ids.member,
+      "SELECT id FROM public.legal_copy_versions WHERE approval_status='draft'",
+    );
+    expect(drafts.rowCount).toBe(0);
+  });
+
+  test("permit assignments require write access and an authorized assignee", async () => {
+    const inserted = await asUser(
+      ids.member,
+      `INSERT INTO public.permit_case_assignments(id,case_id,assignee_id,assigned_by,responsibility)
+       VALUES($1,$2,$3,$4,'Catalogue review') RETURNING id`,
+      [ids.assignment, ids.permitCase, ids.admin, ids.member],
+    );
+    expect(inserted.rowCount).toBe(1);
+    await expectDenied(
+      asUser(
+        ids.viewer,
+        `INSERT INTO public.permit_case_assignments(case_id,assignee_id,assigned_by,responsibility)
+         VALUES($1,$2,$3,'Viewer mutation')`,
+        [ids.permitCase, ids.viewer, ids.viewer],
+      ),
+    );
+    await expectDenied(
+      asUser(
+        ids.member,
+        `INSERT INTO public.permit_case_assignments(case_id,assignee_id,assigned_by,responsibility)
+         VALUES($1,$2,$3,'Outsider assignment')`,
+        [ids.permitCase, ids.outsider, ids.member],
+      ),
+    );
+  });
+
+  test("handoffs accept only through the authorized target transition", async () => {
+    const inserted = await asUser(
+      ids.member,
+      `INSERT INTO public.permit_case_handoffs(id,case_id,from_user_id,to_user_id,initiated_by,note)
+       VALUES($1,$2,$3,$4,$3,'Review remains unresolved') RETURNING id`,
+      [ids.handoff, ids.permitCase, ids.member, ids.admin],
+    );
+    expect(inserted.rowCount).toBe(1);
+    await expectDenied(
+      asUser(ids.outsider, "SELECT public.respond_permit_case_handoff($1,'accepted')", [
+        ids.handoff,
+      ]),
+    );
+    await expectDenied(
+      asUser(ids.member, "SELECT public.respond_permit_case_handoff($1,'accepted')", [ids.handoff]),
+    );
+    const accepted = await asUser<{ status: string }>(
+      ids.admin,
+      "SELECT status FROM public.respond_permit_case_handoff($1,'accepted')",
+      [ids.handoff],
+    );
+    expect(accepted.rows[0].status).toBe("accepted");
+    const responsibility = await asUser(
+      ids.admin,
+      "SELECT id FROM public.permit_case_assignments WHERE case_id=$1 AND assignee_id=$2 AND responsibility='Permit case responsibility'",
+      [ids.permitCase, ids.admin],
+    );
+    expect(responsibility.rowCount).toBe(1);
+  });
+
   test("permit case roles are isolated and viewers remain read-only", async () => {
     for (const user of [ids.owner, ids.admin, ids.member, ids.viewer]) {
       const visible = await asUser(user, "SELECT id FROM public.permit_cases WHERE id=$1", [

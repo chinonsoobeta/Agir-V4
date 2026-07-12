@@ -1595,6 +1595,59 @@ export type Database = {
         };
         Relationships: [];
       };
+      legal_copy_versions: {
+        Row: {
+          affected_routes: string[];
+          approval_status: string;
+          approved_at: string | null;
+          approver_name: string | null;
+          content: string;
+          copy_key: string;
+          created_at: string;
+          created_by: string | null;
+          effective_at: string | null;
+          id: string;
+          supersedes_id: string | null;
+          version: string;
+        };
+        Insert: {
+          affected_routes?: string[];
+          approval_status?: string;
+          approved_at?: string | null;
+          approver_name?: string | null;
+          content: string;
+          copy_key: string;
+          created_at?: string;
+          created_by?: string | null;
+          effective_at?: string | null;
+          id?: string;
+          supersedes_id?: string | null;
+          version: string;
+        };
+        Update: {
+          affected_routes?: string[];
+          approval_status?: string;
+          approved_at?: string | null;
+          approver_name?: string | null;
+          content?: string;
+          copy_key?: string;
+          created_at?: string;
+          created_by?: string | null;
+          effective_at?: string | null;
+          id?: string;
+          supersedes_id?: string | null;
+          version?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "legal_copy_versions_supersedes_id_fkey";
+            columns: ["supersedes_id"];
+            isOneToOne: false;
+            referencedRelation: "legal_copy_versions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       market_signals: {
         Row: {
           created_at: string;
@@ -1887,6 +1940,94 @@ export type Database = {
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      permit_case_assignments: {
+        Row: {
+          assigned_by: string;
+          assignee_id: string;
+          case_id: string;
+          created_at: string;
+          due_at: string | null;
+          id: string;
+          responsibility: string;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          assigned_by: string;
+          assignee_id: string;
+          case_id: string;
+          created_at?: string;
+          due_at?: string | null;
+          id?: string;
+          responsibility: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          assigned_by?: string;
+          assignee_id?: string;
+          case_id?: string;
+          created_at?: string;
+          due_at?: string | null;
+          id?: string;
+          responsibility?: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "permit_case_assignments_case_id_fkey";
+            columns: ["case_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_cases";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      permit_case_handoffs: {
+        Row: {
+          case_id: string;
+          created_at: string;
+          from_user_id: string;
+          id: string;
+          initiated_by: string;
+          note: string;
+          responded_at: string | null;
+          status: string;
+          to_user_id: string;
+        };
+        Insert: {
+          case_id: string;
+          created_at?: string;
+          from_user_id: string;
+          id?: string;
+          initiated_by: string;
+          note: string;
+          responded_at?: string | null;
+          status?: string;
+          to_user_id: string;
+        };
+        Update: {
+          case_id?: string;
+          created_at?: string;
+          from_user_id?: string;
+          id?: string;
+          initiated_by?: string;
+          note?: string;
+          responded_at?: string | null;
+          status?: string;
+          to_user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "permit_case_handoffs_case_id_fkey";
+            columns: ["case_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_cases";
             referencedColumns: ["id"];
           },
         ];
@@ -2195,6 +2336,59 @@ export type Database = {
           },
         ];
       };
+      permit_feedback: {
+        Row: {
+          case_id: string | null;
+          created_at: string;
+          evidence: Json;
+          id: string;
+          reason: string;
+          reporter_id: string;
+          resolution: string | null;
+          resolved_at: string | null;
+          resolver_id: string | null;
+          review_status: string;
+          target_id: string | null;
+          target_type: string;
+        };
+        Insert: {
+          case_id?: string | null;
+          created_at?: string;
+          evidence?: Json;
+          id?: string;
+          reason: string;
+          reporter_id: string;
+          resolution?: string | null;
+          resolved_at?: string | null;
+          resolver_id?: string | null;
+          review_status?: string;
+          target_id?: string | null;
+          target_type: string;
+        };
+        Update: {
+          case_id?: string | null;
+          created_at?: string;
+          evidence?: Json;
+          id?: string;
+          reason?: string;
+          reporter_id?: string;
+          resolution?: string | null;
+          resolved_at?: string | null;
+          resolver_id?: string | null;
+          review_status?: string;
+          target_id?: string | null;
+          target_type?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "permit_feedback_case_id_fkey";
+            columns: ["case_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_cases";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       permit_history: {
         Row: {
           change_reason: string | null;
@@ -2248,6 +2442,50 @@ export type Database = {
             columns: ["source_document_id"];
             isOneToOne: false;
             referencedRelation: "documents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      permit_pilot_events: {
+        Row: {
+          case_id: string | null;
+          case_type: string | null;
+          created_at: string;
+          dimensions: Json;
+          duration_seconds: number | null;
+          event_name: string;
+          id: number;
+          municipality: string | null;
+          user_id: string | null;
+        };
+        Insert: {
+          case_id?: string | null;
+          case_type?: string | null;
+          created_at?: string;
+          dimensions?: Json;
+          duration_seconds?: number | null;
+          event_name: string;
+          id?: never;
+          municipality?: string | null;
+          user_id?: string | null;
+        };
+        Update: {
+          case_id?: string | null;
+          case_type?: string | null;
+          created_at?: string;
+          dimensions?: Json;
+          duration_seconds?: number | null;
+          event_name?: string;
+          id?: never;
+          municipality?: string | null;
+          user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "permit_pilot_events_case_id_fkey";
+            columns: ["case_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_cases";
             referencedColumns: ["id"];
           },
         ];
@@ -2340,6 +2578,79 @@ export type Database = {
           },
         ];
       };
+      permit_review_items: {
+        Row: {
+          assigned_to: string | null;
+          case_id: string | null;
+          created_at: string;
+          created_by: string;
+          due_at: string | null;
+          id: string;
+          item_type: string;
+          permit_rule_id: string | null;
+          resolution: string | null;
+          resolved_at: string | null;
+          resolved_by: string | null;
+          status: string;
+          summary: string;
+          updated_at: string;
+        };
+        Insert: {
+          assigned_to?: string | null;
+          case_id?: string | null;
+          created_at?: string;
+          created_by: string;
+          due_at?: string | null;
+          id?: string;
+          item_type: string;
+          permit_rule_id?: string | null;
+          resolution?: string | null;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          status?: string;
+          summary: string;
+          updated_at?: string;
+        };
+        Update: {
+          assigned_to?: string | null;
+          case_id?: string | null;
+          created_at?: string;
+          created_by?: string;
+          due_at?: string | null;
+          id?: string;
+          item_type?: string;
+          permit_rule_id?: string | null;
+          resolution?: string | null;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          status?: string;
+          summary?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "permit_review_items_case_id_fkey";
+            columns: ["case_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_cases";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_review_items_permit_rule_id_fkey";
+            columns: ["permit_rule_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_rule_review_queue";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_review_items_permit_rule_id_fkey";
+            columns: ["permit_rule_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_rules";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       permit_rule_reviews: {
         Row: {
           created_at: string;
@@ -2405,23 +2716,30 @@ export type Database = {
           applicability_conditions: string | null;
           application_url: string | null;
           authority_scope: string;
+          availability_status: string;
           created_at: string;
           description: string | null;
           effective_date: string | null;
+          freshness_status: string;
+          freshness_threshold_days: number;
           id: string;
           jurisdiction_id: string;
+          known_limitations: string | null;
           name: string;
           next_review_at: string | null;
+          official_source_status: string;
           official_source_url: string | null;
           permit_type: string;
           published_duration_days: number | null;
           published_duration_text: string | null;
           required_documents: Json;
           review_date: string | null;
+          review_owner_id: string | null;
           reviewed_by: string | null;
           rule_version: string;
           source_content_hash: string | null;
           source_document_id: string | null;
+          source_owner: string | null;
           source_text: string | null;
           source_title: string | null;
           superseded_at: string | null;
@@ -2433,23 +2751,30 @@ export type Database = {
           applicability_conditions?: string | null;
           application_url?: string | null;
           authority_scope?: string;
+          availability_status?: string;
           created_at?: string;
           description?: string | null;
           effective_date?: string | null;
+          freshness_status?: string;
+          freshness_threshold_days?: number;
           id?: string;
           jurisdiction_id: string;
+          known_limitations?: string | null;
           name: string;
           next_review_at?: string | null;
+          official_source_status?: string;
           official_source_url?: string | null;
           permit_type: string;
           published_duration_days?: number | null;
           published_duration_text?: string | null;
           required_documents?: Json;
           review_date?: string | null;
+          review_owner_id?: string | null;
           reviewed_by?: string | null;
           rule_version: string;
           source_content_hash?: string | null;
           source_document_id?: string | null;
+          source_owner?: string | null;
           source_text?: string | null;
           source_title?: string | null;
           superseded_at?: string | null;
@@ -2461,23 +2786,30 @@ export type Database = {
           applicability_conditions?: string | null;
           application_url?: string | null;
           authority_scope?: string;
+          availability_status?: string;
           created_at?: string;
           description?: string | null;
           effective_date?: string | null;
+          freshness_status?: string;
+          freshness_threshold_days?: number;
           id?: string;
           jurisdiction_id?: string;
+          known_limitations?: string | null;
           name?: string;
           next_review_at?: string | null;
+          official_source_status?: string;
           official_source_url?: string | null;
           permit_type?: string;
           published_duration_days?: number | null;
           published_duration_text?: string | null;
           required_documents?: Json;
           review_date?: string | null;
+          review_owner_id?: string | null;
           reviewed_by?: string | null;
           rule_version?: string;
           source_content_hash?: string | null;
           source_document_id?: string | null;
+          source_owner?: string | null;
           source_text?: string | null;
           source_title?: string | null;
           superseded_at?: string | null;
@@ -2515,6 +2847,63 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      pilot_user_access: {
+        Row: {
+          approved_at: string | null;
+          approved_by: string | null;
+          created_at: string;
+          feedback_status: string;
+          intended_case_type: string | null;
+          intended_municipality: string | null;
+          offboarding_status: string;
+          onboarding_date: string | null;
+          organization: string | null;
+          permits_access: boolean;
+          pilot_status: string;
+          professional_role: string | null;
+          support_owner: string | null;
+          underwriting_preview: boolean;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          approved_at?: string | null;
+          approved_by?: string | null;
+          created_at?: string;
+          feedback_status?: string;
+          intended_case_type?: string | null;
+          intended_municipality?: string | null;
+          offboarding_status?: string;
+          onboarding_date?: string | null;
+          organization?: string | null;
+          permits_access?: boolean;
+          pilot_status?: string;
+          professional_role?: string | null;
+          support_owner?: string | null;
+          underwriting_preview?: boolean;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          approved_at?: string | null;
+          approved_by?: string | null;
+          created_at?: string;
+          feedback_status?: string;
+          intended_case_type?: string | null;
+          intended_municipality?: string | null;
+          offboarding_status?: string;
+          onboarding_date?: string | null;
+          organization?: string | null;
+          permits_access?: boolean;
+          pilot_status?: string;
+          professional_role?: string | null;
+          support_owner?: string | null;
+          underwriting_preview?: boolean;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
       };
       profiles: {
         Row: {
@@ -2559,6 +2948,7 @@ export type Database = {
           is_required: boolean | null;
           issued_date: string | null;
           jurisdiction_id: string | null;
+          municipal_confirmation_status: string;
           name: string;
           notes: string | null;
           owner_id: string;
@@ -2566,14 +2956,19 @@ export type Database = {
           permit_type: string;
           processing_duration_days: number | null;
           processing_duration_text: string | null;
+          professional_confirmation_status: string;
           project_id: string | null;
           required_reason: string | null;
           responsible_party: string | null;
           row_version: number;
           source_document_id: string | null;
+          source_freshness_status: string;
           source_kind: string;
           source_location: string | null;
+          source_official_status: string;
+          source_reviewed_at: string | null;
           source_text: string | null;
+          source_url: string | null;
           target_date: string | null;
           updated_at: string;
           workflow_status: string;
@@ -2593,6 +2988,7 @@ export type Database = {
           is_required?: boolean | null;
           issued_date?: string | null;
           jurisdiction_id?: string | null;
+          municipal_confirmation_status?: string;
           name: string;
           notes?: string | null;
           owner_id: string;
@@ -2600,14 +2996,19 @@ export type Database = {
           permit_type: string;
           processing_duration_days?: number | null;
           processing_duration_text?: string | null;
+          professional_confirmation_status?: string;
           project_id?: string | null;
           required_reason?: string | null;
           responsible_party?: string | null;
           row_version?: number;
           source_document_id?: string | null;
+          source_freshness_status?: string;
           source_kind?: string;
           source_location?: string | null;
+          source_official_status?: string;
+          source_reviewed_at?: string | null;
           source_text?: string | null;
+          source_url?: string | null;
           target_date?: string | null;
           updated_at?: string;
           workflow_status?: string;
@@ -2627,6 +3028,7 @@ export type Database = {
           is_required?: boolean | null;
           issued_date?: string | null;
           jurisdiction_id?: string | null;
+          municipal_confirmation_status?: string;
           name?: string;
           notes?: string | null;
           owner_id?: string;
@@ -2634,14 +3036,19 @@ export type Database = {
           permit_type?: string;
           processing_duration_days?: number | null;
           processing_duration_text?: string | null;
+          professional_confirmation_status?: string;
           project_id?: string | null;
           required_reason?: string | null;
           responsible_party?: string | null;
           row_version?: number;
           source_document_id?: string | null;
+          source_freshness_status?: string;
           source_kind?: string;
           source_location?: string | null;
+          source_official_status?: string;
+          source_reviewed_at?: string | null;
           source_text?: string | null;
+          source_url?: string | null;
           target_date?: string | null;
           updated_at?: string;
           workflow_status?: string;
@@ -3826,6 +4233,67 @@ export type Database = {
       };
     };
     Views: {
+      permit_professional_review_queue: {
+        Row: {
+          assigned_to: string | null;
+          case_id: string | null;
+          created_at: string | null;
+          due_at: string | null;
+          id: string | null;
+          item_type: string | null;
+          overdue: boolean | null;
+          permit_rule_id: string | null;
+          status: string | null;
+          summary: string | null;
+        };
+        Insert: {
+          assigned_to?: string | null;
+          case_id?: string | null;
+          created_at?: string | null;
+          due_at?: string | null;
+          id?: string | null;
+          item_type?: string | null;
+          overdue?: never;
+          permit_rule_id?: string | null;
+          status?: string | null;
+          summary?: string | null;
+        };
+        Update: {
+          assigned_to?: string | null;
+          case_id?: string | null;
+          created_at?: string | null;
+          due_at?: string | null;
+          id?: string | null;
+          item_type?: string | null;
+          overdue?: never;
+          permit_rule_id?: string | null;
+          status?: string | null;
+          summary?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "permit_review_items_case_id_fkey";
+            columns: ["case_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_cases";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_review_items_permit_rule_id_fkey";
+            columns: ["permit_rule_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_rule_review_queue";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_review_items_permit_rule_id_fkey";
+            columns: ["permit_rule_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_rules";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       permit_rule_review_queue: {
         Row: {
           id: string | null;
@@ -3972,6 +4440,14 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      current_product_access: {
+        Args: never;
+        Returns: {
+          permits_access: boolean;
+          pilot_status: string;
+          underwriting_preview: boolean;
+        }[];
+      };
       delete_underwriting_outputs: {
         Args: { p_project_id: string };
         Returns: undefined;
@@ -4020,6 +4496,7 @@ export type Database = {
         Args: { p_case_id: string };
         Returns: boolean;
       };
+      permit_pilot_access: { Args: never; Returns: boolean };
       permit_project_access: {
         Args: { p_project_id: string };
         Returns: boolean;
@@ -4112,6 +4589,26 @@ export type Database = {
       request_extraction_job_cancellation: {
         Args: { p_job_id: string };
         Returns: boolean;
+      };
+      respond_permit_case_handoff: {
+        Args: { p_handoff_id: string; p_status: string };
+        Returns: {
+          case_id: string;
+          created_at: string;
+          from_user_id: string;
+          id: string;
+          initiated_by: string;
+          note: string;
+          responded_at: string | null;
+          status: string;
+          to_user_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "permit_case_handoffs";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
       };
       set_permit_case_project: {
         Args: {

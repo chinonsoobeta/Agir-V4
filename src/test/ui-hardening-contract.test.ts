@@ -52,9 +52,9 @@ describe("UI hardening contract", () => {
     const i18n = read("src/lib/i18n.ts");
 
     expect(i18n).toContain('"nav.home": "Dashboard"');
-    expect(i18n).toContain('"shell.workspace": "Investment workspace"');
+    expect(i18n).toContain('"shell.workspace": "Property project workspace"');
     expect(i18n).toContain('"nav.home": "Tableau de bord"');
-    expect(i18n).toContain('"shell.workspace": "Espace d’investissement"');
+    expect(i18n).toContain('"shell.workspace": "Espace de projet immobilier"');
     expect(dashboard).toContain("Dashboard | Agir");
     expect(dashboard).not.toContain('eyebrow={t("dash.eyebrow")}');
     for (const source of [shell, auth, landing, dashboard, i18n]) {

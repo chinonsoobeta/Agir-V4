@@ -40,6 +40,7 @@ if (listErr) {
   process.exit(1);
 }
 const existing = list.users.find((u) => u.email === EMAIL);
+let userId;
 
 if (existing) {
   // Make sure it is confirmed and the password is known.
@@ -51,6 +52,7 @@ if (existing) {
     console.error("updateUser failed:", updErr.message);
     process.exit(1);
   }
+  userId = existing.id;
   console.log(`[demo-user] updated existing user ${EMAIL} (id=${existing.id})`);
 } else {
   const { data, error } = await admin.auth.admin.createUser({
@@ -63,5 +65,25 @@ if (existing) {
     console.error("createUser failed:", error.message);
     process.exit(1);
   }
+  userId = data.user.id;
   console.log(`[demo-user] created user ${EMAIL} (id=${data.user.id})`);
 }
+
+const { error: accessError } = await admin.from("pilot_user_access").upsert({
+  user_id: userId,
+  organization: "Agir release verification",
+  professional_role: "release_tester",
+  permits_access: true,
+  underwriting_preview: true,
+  pilot_status: "active",
+  feedback_status: "not_started",
+  offboarding_status: "not_started",
+  onboarding_date: new Date().toISOString().slice(0, 10),
+  support_owner: "Agir engineering",
+  approved_at: new Date().toISOString(),
+});
+if (accessError) {
+  console.error("pilot access setup failed:", accessError.message);
+  process.exit(1);
+}
+console.log(`[demo-user] enabled permit pilot and Underwriting Preview for ${EMAIL}`);
