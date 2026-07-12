@@ -436,6 +436,7 @@ export const analyzeDocument = createServerFn({ method: "POST" })
     // so environments without a worker keep working unchanged.
     const { getServerConfig } = await import("./config.server");
     const config = getServerConfig();
+    if (config.asyncExtraction) getServerConfig(["worker"]);
     let asyncMode = config.asyncExtraction;
 
     // Idempotent + observable: one job per (owner, document content). A retry or

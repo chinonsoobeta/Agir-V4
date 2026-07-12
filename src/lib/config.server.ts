@@ -152,12 +152,11 @@ export function getServerConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): ServerConfig {
   const config = readServerConfig(env);
-  const productionRequirements: ConfigRequirement[] = config.isProductionLike
-    ? ["supabase", "scanner", "worker", "observability"]
-    : [];
-  const missing = missingRequirements(config, [
-    ...new Set([...productionRequirements, ...requirements]),
-  ]);
+  // Callers declare only the services their operation uses. Production-wide
+  // readiness is enforced by scripts/validate-env.mjs at deployment time;
+  // requiring document infrastructure here would block unrelated actions such
+  // as authentication and Permit case creation.
+  const missing = missingRequirements(config, [...new Set(requirements)]);
   if (missing.length) throw new Error(`Server configuration is incomplete: ${missing.join("; ")}.`);
   return config;
 }

@@ -23,10 +23,15 @@ describe("server configuration boundary", () => {
     expect(config.scannerFailOpen).toBe(false);
   });
 
-  it("fails production configuration closed when the external scanner is absent", () => {
+  it("scopes production service requirements to the operation that uses them", () => {
     const env = { ...productionBase };
     delete env.DOCUMENT_SCAN_URL;
-    expect(() => getServerConfig([], env)).toThrow(/DOCUMENT_SCAN_URL/);
+    delete env.EXTRACTION_WORKER_TOKEN;
+    delete env.ERROR_WEBHOOK_URL;
+    expect(() => getServerConfig(["supabase"], env)).not.toThrow();
+    expect(() => getServerConfig(["scanner"], env)).toThrow(/DOCUMENT_SCAN_URL/);
+    expect(() => getServerConfig(["worker"], env)).toThrow(/EXTRACTION_WORKER_TOKEN/);
+    expect(() => getServerConfig(["observability"], env)).toThrow(/ERROR_WEBHOOK_URL/);
   });
 
   it("allows test-only scanner fail-open and redacts values from diagnostics", () => {
