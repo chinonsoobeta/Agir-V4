@@ -255,7 +255,7 @@ function IntegrationsPage() {
         subtitle="See what is connected, when it last synced, and whether it needs attention."
       />
       <PageBody>
-        <Card className="p-5 elevated bg-primary/[0.04]">
+        <Card className="surface-editorial bg-primary/[0.04] p-5">
           <div className="flex items-start gap-3">
             <Plug className="size-5 text-primary mt-0.5" />
             <div>
@@ -270,7 +270,7 @@ function IntegrationsPage() {
 
         {/* 3C: honest connector status. Only "live" connectors perform a real
             round-trip; planned ones are never shown as connected. */}
-        <Card className="p-5 elevated">
+        <Card className="surface-editorial p-5">
           <div className="flex items-center gap-2">
             <Plug className="size-4 text-muted-foreground" />
             <h2 className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
@@ -338,7 +338,7 @@ function IntegrationsPage() {
             const pending = connection?.status === "attention";
             const Icon = app.icon;
             return (
-              <Card key={app.provider} className="p-5 flex flex-col elevated">
+              <Card key={app.provider} className="surface-editorial flex flex-col p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="size-10 rounded-lg bg-primary/10 flex items-center justify-center">
                     <Icon className="size-5 text-primary" />
@@ -418,7 +418,7 @@ function IntegrationsPage() {
           })}
         </div>
         <div className="grid lg:grid-cols-2 gap-4">
-          <Card className="p-5 elevated">
+          <Card className="surface-editorial p-5">
             <div className="flex items-center gap-2">
               <History className="size-4 text-primary" />
               <h2 className="font-semibold">Sync history</h2>
@@ -451,7 +451,7 @@ function IntegrationsPage() {
               )}
             </div>
           </Card>
-          <Card className="p-5 elevated">
+          <Card className="surface-editorial p-5">
             <div className="flex items-center gap-2">
               <Webhook className="size-4 text-primary" />
               <h2 className="font-semibold">Outbound webhooks</h2>
@@ -715,7 +715,7 @@ function CsvConnectorPanel({
   });
 
   return (
-    <Card className="p-5 elevated">
+    <Card className="surface-editorial p-5">
       <div className="flex items-center gap-2">
         <FileSpreadsheet className="size-4 text-primary" />
         <h2 className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">

@@ -95,7 +95,7 @@ function MarketsPage() {
             ))}
           </div>
         ) : (
-          <Card className="p-16 text-center elevated">
+          <Card className="surface-editorial p-16 text-center">
             <Radar className="size-9 mx-auto text-muted-foreground" />
             <div className="text-sm font-medium mt-3">No market signals yet</div>
             <p className="text-xs text-muted-foreground mt-1">
@@ -112,7 +112,7 @@ function SignalCard({ signal }: { signal: MarketSignal }) {
   const Icon =
     signal.trend === "up" ? ArrowUpRight : signal.trend === "down" ? ArrowDownRight : ArrowRight;
   return (
-    <Card className="p-5 elevated">
+    <Card className="surface-editorial p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-[11px] uppercase tracking-widest text-muted-foreground">

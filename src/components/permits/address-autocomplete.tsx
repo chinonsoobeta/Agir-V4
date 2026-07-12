@@ -1,17 +1,10 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Loader2, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { canonicalPermitMunicipality } from "@/lib/permit-municipalities";
 
 /** The six pilot municipalities, keyed by the city name Photon/OSM returns.
  * Values match `jurisdictions.name` exactly so candidate generation works. */
-const PILOT_MUNICIPALITY_MAP: Record<string, string> = {
-  burnaby: "City of Burnaby",
-  coquitlam: "City of Coquitlam",
-  kelowna: "City of Kelowna",
-  richmond: "City of Richmond",
-  surrey: "City of Surrey",
-  vancouver: "City of Vancouver",
-};
 
 export type AddressSelection = {
   address: string;
@@ -43,9 +36,9 @@ export function formatAddressSuggestion(p: PhotonFeature["properties"]) {
 }
 
 export function resolveSuggestedMunicipality(p: PhotonFeature["properties"]): string | null {
-  const city = (p.city ?? p.district ?? p.county ?? "").toLowerCase().trim();
-  if (!city) return null;
-  return PILOT_MUNICIPALITY_MAP[city] ?? p.city ?? p.district ?? p.county ?? null;
+  const supplied = p.city ?? p.district ?? p.county ?? "";
+  if (!supplied.trim()) return null;
+  return canonicalPermitMunicipality(supplied);
 }
 
 /** Free-text address input with Photon (OpenStreetMap) suggestions, biased to

@@ -84,7 +84,7 @@ function PortfolioPage() {
           }
         />
         <PageBody>
-          <Card className="p-16 text-center elevated">
+          <Card className="surface-editorial p-16 text-center">
             <p className="text-sm text-muted-foreground">
               No deals yet. Open{" "}
               <Link to="/deals" className="text-primary underline">
@@ -142,7 +142,7 @@ function PortfolioPage() {
           </div>
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
             {insights.map((insight) => (
-              <Card key={insight.id} className="p-4 elevated">
+              <Card key={insight.id} className="surface-editorial p-4">
                 <div className="flex gap-3">
                   <div
                     className={`size-8 rounded-md flex items-center justify-center shrink-0 ${insight.severity === "critical" ? "bg-destructive/10 text-destructive" : insight.severity === "watch" ? "bg-warning/10 text-warning" : "bg-success/10 text-success"}`}
@@ -166,7 +166,7 @@ function PortfolioPage() {
             <Eyebrow>Investment Queue · requires attention</Eyebrow>
             <span className="text-xs text-muted-foreground">{queue.length} items</span>
           </div>
-          <Card className="divide-y divide-border overflow-hidden elevated">
+          <Card className="surface-editorial divide-y divide-border overflow-hidden">
             {queue.length === 0 ? (
               <div className="p-8 text-center text-sm text-muted-foreground">
                 Nothing in the queue. Every active deal is up to date.
@@ -241,7 +241,7 @@ function PortfolioPage() {
         {/* Risk heatmap */}
         <section>
           <Eyebrow>Risk Distribution</Eyebrow>
-          <Card className="p-5 mt-3 elevated">
+          <Card className="surface-editorial mt-3 p-5">
             <div className="flex h-3 rounded-full overflow-hidden bg-muted">
               {riskCounts.map(
                 (r) =>

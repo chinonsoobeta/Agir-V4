@@ -37,7 +37,8 @@ function AnalysisPage() {
       />
       <PageBody>
         {projects.length === 0 ? (
-          <Card className="p-16 text-center elevated">
+          <Card className="surface-editorial p-16 text-center">
+            <p className="eyebrow mb-3">Evidence-backed analysis</p>
             <p className="text-sm text-muted-foreground">Create a deal to run analysis.</p>
           </Card>
         ) : (

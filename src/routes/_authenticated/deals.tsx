@@ -398,7 +398,7 @@ function DealsPage() {
         )}
 
         {visible.length === 0 ? (
-          <Card className="p-16 text-center elevated">
+          <Card className="surface-editorial p-16 text-center">
             <p className="text-sm text-muted-foreground">{t("deals.emptyList")}</p>
           </Card>
         ) : view === "grid" ? (
@@ -509,7 +509,7 @@ function DealCard({ d }: { d: DealSummary }) {
     RECOMMENDATION_TONE[d.recommendation as keyof typeof RECOMMENDATION_TONE] ?? "neutral";
 
   return (
-    <Card className="p-5 flex flex-col gap-4 elevated hover:border-primary/40 transition-colors group">
+    <Card className="surface-editorial group flex flex-col gap-4 p-5 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
@@ -651,7 +651,7 @@ function DealTable({
   const show = (k: DealColumnKey) => columns.includes(k);
   const allSelected = deals.length > 0 && deals.every((d) => selected.has(d.id));
   return (
-    <Card className="overflow-x-auto elevated">
+    <Card className="surface-editorial overflow-x-auto">
       <table className="data-grid w-full min-w-[720px]">
         <thead>
           <tr>

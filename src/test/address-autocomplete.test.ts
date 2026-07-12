@@ -3,6 +3,7 @@ import {
   formatAddressSuggestion,
   resolveSuggestedMunicipality,
 } from "@/components/permits/address-autocomplete";
+import { canonicalPermitMunicipality } from "@/lib/permit-municipalities";
 
 describe("permit address autocomplete", () => {
   it("formats an address without inventing missing fields", () => {
@@ -27,6 +28,12 @@ describe("permit address autocomplete", () => {
     ["Kelowna", "City of Kelowna"],
   ])("maps pilot city %s to the catalogue name", (city, expected) => {
     expect(resolveSuggestedMunicipality({ city })).toBe(expected);
+    expect(canonicalPermitMunicipality(city)).toBe(expected);
+  });
+
+  it("accepts canonical catalogue names and leaves unsupported places explicit", () => {
+    expect(canonicalPermitMunicipality("City of Vancouver")).toBe("City of Vancouver");
+    expect(canonicalPermitMunicipality(" Metro Vancouver ")).toBe("Metro Vancouver");
   });
 
   it("does not turn a regional district into a pilot municipality", () => {

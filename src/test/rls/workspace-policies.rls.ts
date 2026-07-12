@@ -29,6 +29,7 @@ const ids = {
   otherProject: "20000000-0000-4000-8000-000000000002",
   contact: "30000000-0000-4000-8000-000000000001",
   permitCase: "40000000-0000-4000-8000-000000000001",
+  personalPermitCase: "40000000-0000-4000-8000-000000000004",
   permit: "40000000-0000-4000-8000-000000000002",
   document: "40000000-0000-4000-8000-000000000003",
   assignment: "40000000-0000-4000-8000-000000000005",
@@ -61,7 +62,7 @@ function shouldUseSsl(connectionString: string) {
 }
 
 function isDeniedError(error: unknown) {
-  return /row-level security|permission denied|does not exist|project access denied|handoff not found or response not allowed|Permit documents must belong to the same project|Only a workspace owner|A workspace must always have at least one owner|append-only/i.test(
+  return /row-level security|permission denied|does not exist|project access denied|handoff not found or response not allowed|Permit documents must belong to the same project|Only a workspace owner|Only the owner can move a personal permit case|A workspace must always have at least one owner|append-only/i.test(
     error instanceof Error ? error.message : String(error),
   );
 }
@@ -375,6 +376,43 @@ describe("workspace RLS policies", () => {
         )
       ).rowCount,
     ).toBe(0);
+  });
+
+  test("a personal permit case can be explicitly shared only by its owner", async () => {
+    await client.query(
+      `INSERT INTO public.permit_cases(id,owner_id,name,municipality,municipality_confirmed)
+       VALUES($1,$2,'Personal transfer case','City of Vancouver',true)`,
+      [ids.personalPermitCase, ids.owner],
+    );
+
+    await expectDenied(
+      asUser(
+        ids.member,
+        "SELECT public.transfer_permit_case_to_workspace($1,$2,'Member attempt')",
+        [ids.personalPermitCase, ids.workspace],
+      ),
+    );
+
+    const transferred = await asUser<{ transfer_permit_case_to_workspace: string }>(
+      ids.owner,
+      "SELECT public.transfer_permit_case_to_workspace($1,$2,'Share for permit review')",
+      [ids.personalPermitCase, ids.workspace],
+    );
+    expect(transferred.rows[0].transfer_permit_case_to_workspace).toBe(ids.personalPermitCase);
+
+    const caseRow = await asUser<{ workspace_id: string }>(
+      ids.owner,
+      "SELECT workspace_id FROM public.permit_cases WHERE id=$1",
+      [ids.personalPermitCase],
+    );
+    expect(caseRow.rows[0].workspace_id).toBe(ids.workspace);
+
+    const history = await asUser(
+      ids.member,
+      "SELECT id FROM public.permit_case_history WHERE case_id=$1 AND action='case_workspace_transferred' AND reason='Share for permit review'",
+      [ids.personalPermitCase],
+    );
+    expect(history.rowCount).toBe(1);
   });
 
   test("personal permit cases are private and owner-managed", async () => {

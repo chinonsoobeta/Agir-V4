@@ -39,7 +39,7 @@ function CommitteePage() {
       />
       <PageBody>
         {projects.length === 0 ? (
-          <Card className="p-16 text-center elevated">
+          <Card className="surface-editorial p-16 text-center">
             <p className="text-sm text-muted-foreground">{t("committee.empty")}</p>
           </Card>
         ) : (

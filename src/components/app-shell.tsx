@@ -330,7 +330,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <a href="#main-content" className="skip-link">
         {t("shell.skipToContent")}
       </a>
-      <aside className="sticky top-0 h-screen w-64 shrink-0 border-r border-sidebar-border bg-sidebar hidden lg:flex flex-col">
+      <aside className="sticky top-0 h-screen w-72 shrink-0 border-r border-sidebar-border bg-sidebar hidden lg:flex flex-col">
         <div className="px-6 py-6 border-b border-sidebar-border">
           <div className="flex items-center gap-2.5">
             <div className="size-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center">
@@ -357,7 +357,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         {navigation()}
       </aside>
-      <main id="main-content" className="flex-1 min-w-0 overflow-x-hidden">
+      <main
+        id="main-content"
+        className="flex-1 min-w-0 overflow-x-hidden bg-[radial-gradient(circle_at_top_right,color-mix(in_oklab,var(--primary)_7%,transparent),transparent_32rem)]"
+      >
         <div className="lg:hidden sticky top-0 z-50 h-14 border-b border-border bg-background/95 backdrop-blur flex items-center justify-between px-4">
           <div className="flex items-center gap-2.5">
             <div className="size-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center">
@@ -488,16 +491,14 @@ export function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <header className="border-b border-border bg-card/40 backdrop-blur sticky top-0 z-10">
-      <div className="px-5 sm:px-8 py-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+    <header className="workspace-header sticky top-0 z-10 backdrop-blur">
+      <div className="workspace-page px-[var(--page-gutter)] py-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         <div className="min-w-0">
-          {eyebrow && (
-            <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-semibold mb-1.5">
-              {eyebrow}
-            </div>
+          {eyebrow && <div className="eyebrow mb-2">{eyebrow}</div>}
+          <h1 className="display text-3xl font-semibold tracking-[-0.02em]">{title}</h1>
+          {subtitle && (
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{subtitle}</p>
           )}
-          <h1 className="display text-2xl font-semibold">{title}</h1>
-          {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
         </div>
         {actions && (
           <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">{actions}</div>
@@ -519,5 +520,9 @@ export function PageBody({
   children: React.ReactNode;
   className?: string;
 }) {
-  return <div className={cn("px-5 sm:px-8 py-6 space-y-6", className)}>{children}</div>;
+  return (
+    <div className={cn("workspace-page px-[var(--page-gutter)] py-8 space-y-7", className)}>
+      {children}
+    </div>
+  );
 }

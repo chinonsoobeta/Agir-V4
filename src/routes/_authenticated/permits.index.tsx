@@ -9,7 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useWorkspace } from "@/lib/workspace-context";
 import { ClipboardCheck, FileWarning, Plus, Search } from "lucide-react";
-import { PERMIT_LIMITATIONS_TEXT } from "@/lib/permit-limitations";
+import {
+  PERMIT_LIMITATIONS_APPROVAL_STATUS,
+  PERMIT_LIMITATIONS_TEXT,
+} from "@/lib/permit-limitations";
 export const Route = createFileRoute("/_authenticated/permits/")({
   head: () => ({ meta: [{ title: "Permits | Agir" }] }),
   component: PermitDashboard,
@@ -87,7 +90,7 @@ function PermitDashboard() {
               ).length;
               return (
                 <Link key={c.id} to="/permits/$caseId" params={{ caseId: c.id }}>
-                  <Card className="h-full p-5 transition-colors hover:border-primary/50">
+                  <Card className="surface-editorial h-full p-5 transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-lg">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <h2 className="font-semibold">{c.name}</h2>
@@ -112,8 +115,9 @@ function PermitDashboard() {
             })}
           </div>
         ) : (
-          <Card className="p-10 text-center">
+          <Card className="surface-editorial p-10 text-center">
             <ClipboardCheck className="mx-auto size-9 text-muted-foreground" />
+            <p className="eyebrow mt-5">Start a reviewed workflow</p>
             <h2 className="mt-3 font-semibold">No permit cases yet</h2>
             <p className="mt-2 text-sm text-muted-foreground">
               Start with what you know. Missing information can remain explicitly unknown.
@@ -123,10 +127,14 @@ function PermitDashboard() {
             </Link>
           </Card>
         )}
-        <Card className="border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+        <Card className="trust-note p-4 text-sm">
           <div className="flex gap-3">
             <FileWarning className="mt-0.5 size-4 shrink-0" />
-            <p>{PERMIT_LIMITATIONS_TEXT}</p>
+            <div>
+              <p className="font-medium">Evidence stays reviewable</p>
+              <p className="mt-1 leading-6 text-muted-foreground">{PERMIT_LIMITATIONS_TEXT}</p>
+              <span className="status-chip mt-3">{PERMIT_LIMITATIONS_APPROVAL_STATUS} wording</span>
+            </div>
           </div>
         </Card>
       </PageBody>
@@ -135,9 +143,9 @@ function PermitDashboard() {
 }
 function Metric({ label, value }: { label: string; value: number }) {
   return (
-    <Card className="p-4">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-semibold">{value}</p>
+    <Card className="surface-editorial metric-card">
+      <p className="eyebrow">{label}</p>
+      <p className="mt-2 font-mono text-3xl font-semibold tracking-[-0.04em]">{value}</p>
     </Card>
   );
 }

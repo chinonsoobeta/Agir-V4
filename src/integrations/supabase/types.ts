@@ -4654,6 +4654,10 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      transfer_permit_case_to_workspace: {
+        Args: { p_case_id: string; p_reason: string; p_workspace_id: string };
+        Returns: string;
+      };
       verify_audit_chain: { Args: { p_project: string }; Returns: Json };
       workspace_role: { Args: { ws: string }; Returns: string };
     };

@@ -103,13 +103,15 @@ function ComparePage() {
         </Card>
 
         {selectedIds.length < 2 ? (
-          <Card className="p-16 text-center elevated">
+          <Card className="surface-editorial p-16 text-center">
             <GitCompareArrows className="size-7 text-muted-foreground/40 mx-auto mb-3" />
             <p className="text-sm font-medium">{t("empty.compare.title")}</p>
             <p className="text-sm text-muted-foreground mt-1">{t("empty.compare.body")}</p>
           </Card>
         ) : compareQ.isLoading ? (
-          <Card className="p-16 text-center text-sm text-muted-foreground elevated">Loading…</Card>
+          <Card className="surface-editorial p-16 text-center text-sm text-muted-foreground">
+            Loading…
+          </Card>
         ) : (
           <>
             <ComparisonGrid deals={compared} />
@@ -124,7 +126,7 @@ function ComparePage() {
 function ComparisonGrid({ deals }: { deals: ComparisonDeal[] }) {
   const { fmt } = usePreferences();
   return (
-    <Card className="overflow-hidden elevated">
+    <Card className="surface-editorial overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>

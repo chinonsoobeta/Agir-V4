@@ -137,7 +137,7 @@ function RelationshipsPage() {
             ))}
           </div>
         ) : (
-          <Card className="p-14 text-center elevated">
+          <Card className="surface-editorial p-14 text-center">
             <Users className="size-8 mx-auto text-muted-foreground/50" />
             <div className="font-medium mt-3">No relationships found</div>
             <p className="text-sm text-muted-foreground mt-1">
@@ -162,7 +162,7 @@ function Stat({
   warning?: boolean;
 }) {
   return (
-    <Card className="p-4 elevated">
+    <Card className="surface-editorial p-4">
       <div className="flex items-center justify-between">
         <span className="text-[11px] uppercase tracking-widest text-muted-foreground">{label}</span>
         <Icon className={`size-4 ${warning ? "text-warning" : "text-primary"}`} />
@@ -205,7 +205,7 @@ function ContactCard({
     contact.next_follow_up_at && new Date(contact.next_follow_up_at).getTime() < Date.now();
 
   return (
-    <Card className="p-5 elevated">
+    <Card className="surface-editorial p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="font-semibold truncate">{contact.full_name}</div>

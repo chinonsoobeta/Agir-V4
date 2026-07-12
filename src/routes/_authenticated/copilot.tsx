@@ -164,7 +164,7 @@ function ChatUI({
           className={`flex-1 overflow-y-auto pr-2 ${messages.length === 0 ? "flex flex-col items-center justify-center" : "space-y-4"}`}
         >
           {messages.length === 0 && (
-            <Card className="p-8 text-center elevated max-w-xl w-full">
+            <Card className="surface-editorial w-full max-w-xl p-8 text-center">
               <Bot className="size-10 mx-auto text-primary" />
               <div className="mt-3 flex justify-center">
                 <Badge

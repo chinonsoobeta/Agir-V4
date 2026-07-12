@@ -94,7 +94,7 @@ function ExecutiveOverview() {
       <PageBody>
         <DemoGuide />
         <OnboardingChecklist />
-        <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-success">
+        <div className="status-chip w-fit border-success/25 bg-success/10 text-success">
           <Radio className="size-3" />
           {t("dash.liveData")}
         </div>
@@ -146,7 +146,7 @@ function ExecutiveOverview() {
                 </Link>
               }
             />
-            <Card className="p-5 elevated">
+            <Card className="surface-editorial p-5">
               <div className="space-y-4">
                 {summary.stages.map(({ stage, count, capital: stageCapital }) => {
                   const width = deals.length ? (count / deals.length) * 100 : 0;
@@ -181,7 +181,7 @@ function ExecutiveOverview() {
                 </Link>
               }
             />
-            <Card className="divide-y divide-border elevated overflow-hidden">
+            <Card className="surface-editorial divide-y divide-border overflow-hidden">
               {upcoming.length ? (
                 upcoming.map(({ deal, days }) => (
                   <Link
@@ -218,7 +218,7 @@ function ExecutiveOverview() {
         <div className="grid xl:grid-cols-[1.15fr_1fr] gap-5">
           <section>
             <SectionTitle title={t("dash.topOpportunities")} />
-            <Card className="overflow-hidden elevated">
+            <Card className="surface-editorial overflow-hidden">
               <div className="grid grid-cols-[1fr_auto_auto] gap-3 px-4 py-2.5 bg-muted/35 text-[11px] uppercase tracking-widest text-muted-foreground">
                 <span>{t("common.deal")}</span>
                 <span>{t("dash.confidence")}</span>
@@ -300,12 +300,12 @@ function Metric({
   detail: string;
 }) {
   return (
-    <Card className="p-4 elevated">
+    <Card className="surface-editorial metric-card">
       <div className="flex items-center justify-between">
-        <div className="text-[11px] uppercase tracking-widest text-muted-foreground">{label}</div>
+        <div className="eyebrow">{label}</div>
         <Icon className="size-4 text-primary" />
       </div>
-      <div className="num text-2xl mt-3">{value}</div>
+      <div className="num mt-3 text-3xl font-semibold tracking-[-0.04em]">{value}</div>
       <div className="text-[11px] text-muted-foreground mt-1">{detail}</div>
     </Card>
   );

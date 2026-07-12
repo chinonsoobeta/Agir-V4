@@ -10,6 +10,7 @@ import {
   respondPermitCaseHandoff,
   setPermitCaseProject,
   startPermitCaseHandoff,
+  transferPermitCaseToWorkspace,
 } from "@/lib/permit-cases.functions";
 import { listWorkspaceMembers } from "@/lib/workspaces.functions";
 import { getDocumentUrl, listPermitCaseDocuments } from "@/lib/documents.functions";
@@ -30,6 +31,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useWorkspace } from "@/lib/workspace-context";
+import { PERSONAL_WORKSPACE_ID } from "@/lib/workspaces.functions";
 import {
   Select,
   SelectContent,
@@ -47,6 +50,7 @@ import {
   Plus,
   Send,
   UserRoundCheck,
+  ShieldCheck,
 } from "lucide-react";
 export const Route = createFileRoute("/_authenticated/permits/$caseId")({
   component: PermitCaseWorkspace,
@@ -56,6 +60,7 @@ function PermitCaseWorkspace() {
   const { caseId } = Route.useParams();
   const { user } = Route.useRouteContext();
   const qc = useQueryClient();
+  const { workspaces } = useWorkspace();
   const { data: c, isLoading } = useQuery({
     queryKey: ["permit-case", caseId],
     queryFn: () => getPermitCase({ data: { id: caseId } }),
@@ -79,6 +84,9 @@ function PermitCaseWorkspace() {
     enabled: Boolean(c?.workspace_id),
   });
   const [linkOpen, setLinkOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [transferWorkspaceId, setTransferWorkspaceId] = useState("");
+  const [transferReason, setTransferReason] = useState("");
   const [projectId, setProjectId] = useState("");
   const [linkReason, setLinkReason] = useState("");
   const [collaboratorId, setCollaboratorId] = useState("");
@@ -98,6 +106,18 @@ function PermitCaseWorkspace() {
       setLinkOpen(false);
       setLinkReason("");
       qc.invalidateQueries({ queryKey: ["permit-case", caseId] });
+    },
+  });
+  const transfer = useMutation({
+    mutationFn: () =>
+      transferPermitCaseToWorkspace({
+        data: { case_id: caseId, workspace_id: transferWorkspaceId, reason: transferReason },
+      }),
+    onSuccess: () => {
+      setShareOpen(false);
+      setTransferReason("");
+      qc.invalidateQueries({ queryKey: ["permit-case", caseId] });
+      qc.invalidateQueries({ queryKey: ["permit-cases"] });
     },
   });
   const [view, setView] = useState<"guided" | "professional">(() =>
@@ -166,6 +186,17 @@ function PermitCaseWorkspace() {
         subtitle={c.property_address || "Address incomplete"}
         actions={
           <>
+            {!c.workspace_id && (
+              <Button
+                size="sm"
+                className="min-h-11 sm:min-h-8"
+                variant="outline"
+                onClick={() => setShareOpen(true)}
+              >
+                <UserRoundCheck className="mr-2 size-4" />
+                Share with workspace
+              </Button>
+            )}
             <Button
               size="sm"
               className="min-h-11 sm:min-h-8"
@@ -244,8 +275,16 @@ function PermitCaseWorkspace() {
                 v={[c.target_date, c.issue_date, c.expiration_date].filter(Boolean).length}
               />
             </div>
-            <Card className="p-5">
-              <h2 className="font-semibold">Known case facts</h2>
+            <Card className="surface-editorial p-6">
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <div>
+                  <p className="eyebrow">Evidence summary</p>
+                  <h2 className="mt-2 font-semibold">Known case facts</h2>
+                </div>
+                <span className="status-chip">
+                  <ShieldCheck className="size-3" /> reviewable
+                </span>
+              </div>
               <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
                 <Fact
                   k="Municipality"
@@ -274,7 +313,14 @@ function PermitCaseWorkspace() {
             )}
           </TabsContent>
           <TabsContent value="permits" className="space-y-4">
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between gap-4 surface-subtle rounded-xl p-4">
+              <div>
+                <p className="font-medium">Catalogue candidates</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Generate reviewable possibilities from the confirmed municipality. This does not
+                  confirm a requirement.
+                </p>
+              </div>
               <Button
                 disabled={!c.municipality_confirmed || generate.isPending}
                 onClick={() => generate.mutate()}
@@ -407,7 +453,7 @@ function PermitCaseWorkspace() {
             )}
           </TabsContent>
           <TabsContent value="documents" className="space-y-4">
-            <Card className="p-5">
+            <Card className="surface-editorial p-6">
               <h2 className="mb-4 font-semibold">Add supporting documents</h2>
               <DocumentDropzone
                 projectId={c.project_id}
@@ -588,24 +634,91 @@ function PermitCaseWorkspace() {
             )}
           </TabsContent>
           <TabsContent value="history" className="space-y-3">
-            {(c.permit_case_history ?? []).map((h: any) => (
-              <Card key={h.id} className="p-4">
-                <div className="flex gap-3">
-                  <History className="size-4" />
-                  <div>
-                    <p className="font-medium">{label(h.action)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(h.changed_at).toLocaleString()}
-                    </p>
-                    {h.reason && <p className="mt-2 text-sm">{h.reason}</p>}
+            {(c.permit_case_history ?? []).length ? (
+              (c.permit_case_history ?? []).map((h: any) => (
+                <Card key={h.id} className="surface-editorial p-4">
+                  <div className="flex gap-3">
+                    <History className="size-4" />
+                    <div>
+                      <p className="font-medium">{historyLabel(h.action)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(h.changed_at).toLocaleString()}
+                      </p>
+                      {h.reason && <p className="mt-2 text-sm leading-6">{h.reason}</p>}
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Recorded as immutable case history
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              ))
+            ) : (
+              <Empty text="No case changes have been recorded yet. Future changes, assignments, links, and evidence updates appear here." />
+            )}
           </TabsContent>
         </Tabs>
-        <Warning text={PERMIT_LIMITATIONS_TEXT} />
+        <details className="trust-note rounded-lg p-4 text-sm">
+          <summary className="cursor-pointer font-medium">
+            Limitations and evidence handling
+          </summary>
+          <p className="mt-3 leading-6 text-muted-foreground">{PERMIT_LIMITATIONS_TEXT}</p>
+        </details>
       </PageBody>
+      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Share this permit case</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm leading-6 text-muted-foreground">
+              Move this personal case into a workspace to invite collaborators, assign work, and
+              hand off responsibility. The case ID, documents, evidence, and history stay intact.
+            </p>
+            <div>
+              <Label>Property project workspace</Label>
+              <Select value={transferWorkspaceId} onValueChange={setTransferWorkspaceId}>
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Choose a workspace" />
+                </SelectTrigger>
+                <SelectContent>
+                  {workspaces
+                    .filter((workspace) => workspace.id !== PERSONAL_WORKSPACE_ID)
+                    .map((workspace) => (
+                      <SelectItem key={workspace.id} value={workspace.id}>
+                        {workspace.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="permit-transfer-reason">Reason</Label>
+              <Input
+                id="permit-transfer-reason"
+                className="mt-2"
+                value={transferReason}
+                onChange={(event) => setTransferReason(event.target.value)}
+              />
+            </div>
+            {transfer.error && (
+              <p role="alert" className="text-sm text-destructive">
+                {(transfer.error as Error).message}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShareOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!transferWorkspaceId || !transferReason.trim() || transfer.isPending}
+              onClick={() => transfer.mutate()}
+            >
+              {transfer.isPending ? "Sharing…" : "Share case"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
         <DialogContent>
           <DialogHeader>
@@ -675,9 +788,9 @@ function memberName(
 }
 function Metric({ k, v }: { k: string; v: number }) {
   return (
-    <Card className="p-4">
-      <p className="text-sm text-muted-foreground">{k}</p>
-      <p className="mt-1 text-2xl font-semibold">{v}</p>
+    <Card className="surface-editorial metric-card">
+      <p className="eyebrow">{k}</p>
+      <p className="mt-2 font-mono text-3xl font-semibold tracking-[-0.04em]">{v}</p>
     </Card>
   );
 }
@@ -691,17 +804,33 @@ function Fact({ k, v, source }: { k: string; v: string; source: string }) {
   );
 }
 function State({ v }: { v: string }) {
-  return <Badge variant="outline">{label(v)}</Badge>;
+  return (
+    <Badge variant="outline" className="status-chip">
+      {label(v)}
+    </Badge>
+  );
 }
 function Warning({ text }: { text: string }) {
   return (
-    <Card className="border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+    <Card className="trust-note p-4 text-sm">
       <div className="flex gap-3">
         <AlertTriangle className="mt-0.5 size-4 shrink-0" />
         <p>{text}</p>
       </div>
     </Card>
   );
+}
+function historyLabel(action: string) {
+  const labels: Record<string, string> = {
+    case_insert: "Permit case created",
+    case_update_reason: "Case details updated",
+    case_project_linked: "Underwriting project link updated",
+    case_handoff_started: "Handoff started",
+    case_handoff_accepted: "Handoff accepted",
+    case_handoff_rejected: "Handoff declined",
+    case_workspace_transferred: "Case shared with workspace",
+  };
+  return labels[action] ?? label(action);
 }
 function Empty({ text }: { text: string }) {
   return (

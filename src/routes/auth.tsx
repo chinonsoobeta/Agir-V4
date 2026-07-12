@@ -20,6 +20,7 @@ const TAB_COPY: Record<"signin" | "signup" | "reset", { heading: string; subcopy
 };
 
 export const Route = createFileRoute("/auth")({
+  ssr: false,
   head: () => ({ meta: [{ title: "Sign in | Agir" }] }),
   component: AuthPage,
 });
@@ -148,19 +149,20 @@ function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-[1.05fr_0.95fr] bg-[#f9fafc] text-[#0d2436]">
-      <div className="hidden lg:flex flex-col justify-between p-12 xl:p-16 border-r border-[#183046]/10 bg-[#0d2436] text-white">
+    <div className="min-h-screen grid lg:grid-cols-[1.05fr_0.95fr] bg-[#f7f8fa] text-[#0d2436]">
+      <div className="relative hidden overflow-hidden lg:flex flex-col justify-between p-12 xl:p-16 border-r border-[#183046]/10 bg-[#0d2436] text-white">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(76,160,205,0.22),transparent_30rem)]" />
         <Link to="/" className="flex items-center gap-3 w-fit">
           <div className="size-9 rounded-lg bg-[#00628e] text-white flex items-center justify-center font-semibold">
             <Building2 className="size-[18px]" />
           </div>
           <div className="text-xl font-semibold">Agir</div>
         </Link>
-        <div className="max-w-xl">
+        <div className="relative max-w-xl">
           <div className="text-xs uppercase tracking-[0.2em] text-[#8ec5e0] font-semibold">
             Permit research and workflow
           </div>
-          <h2 className="mt-5 text-4xl xl:text-5xl font-semibold leading-tight">
+          <h2 className="display mt-5 text-4xl xl:text-5xl font-semibold leading-[1.05] tracking-[-0.025em]">
             Keep permit evidence, decisions, and responsibility together.
           </h2>
           <p className="mt-6 text-lg leading-8 text-[#b6c6d6] max-w-lg">
@@ -188,7 +190,7 @@ function AuthPage() {
         </div>
       </div>
 
-      <div className="flex min-h-screen flex-col p-5 sm:p-8">
+      <div className="flex min-h-screen flex-col p-5 sm:p-8 lg:p-12">
         <Link
           to="/"
           className="inline-flex w-fit items-center gap-2 text-sm text-[#5b6b7a] hover:text-[#00628e]"
@@ -205,8 +207,13 @@ function AuthPage() {
                 </div>
                 <div className="text-lg font-semibold">Agir</div>
               </div>
-              <h1 className="text-2xl font-semibold text-[#0d2436]">{TAB_COPY[tab].heading}</h1>
-              <p className="text-sm text-[#6b7785] mt-2">{TAB_COPY[tab].subcopy}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5b849a]">
+                Property project workspace
+              </p>
+              <h1 className="display mt-2 text-3xl font-semibold tracking-[-0.025em] text-[#0d2436]">
+                {TAB_COPY[tab].heading}
+              </h1>
+              <p className="mt-2 text-sm leading-6 text-[#6b7785]">{TAB_COPY[tab].subcopy}</p>
             </div>
 
             <Button

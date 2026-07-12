@@ -71,7 +71,7 @@ function AssumptionsReviewCenter() {
             <button
               key={k}
               onClick={() => setFilter(k)}
-              className={`text-[11px] uppercase tracking-widest px-3 py-1.5 rounded border ${filter === k ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
+              className={`min-h-11 rounded-lg border px-3 text-[11px] uppercase tracking-widest sm:min-h-0 sm:py-1.5 ${filter === k ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
             >
               {label}
             </button>
@@ -79,12 +79,12 @@ function AssumptionsReviewCenter() {
         </div>
 
         {visible.length === 0 ? (
-          <Card className="p-12 text-center text-sm text-muted-foreground">
+          <Card className="surface-editorial p-12 text-center text-sm text-muted-foreground">
             Nothing here. Try the <strong>Try Harbour Centre demo</strong> button on the Projects
             page to seed a live deal.
           </Card>
         ) : (
-          <Card className="overflow-hidden">
+          <Card className="surface-editorial overflow-x-auto">
             <table className="data-grid w-full">
               <thead>
                 <tr className="bg-muted/30">

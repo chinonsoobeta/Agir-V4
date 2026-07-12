@@ -84,7 +84,19 @@ function NewPermitCase() {
         subtitle={`Step ${step} of 4: incomplete facts can remain unknown.`}
       />
       <PageBody className="mx-auto max-w-3xl">
-        <Card className="p-5 sm:p-7">
+        <div className="mb-5 grid grid-cols-4 gap-2" aria-label={`Step ${step} of 4`}>
+          {[1, 2, 3, 4].map((value) => (
+            <div key={value} className="space-y-2">
+              <div className={`h-1 rounded-full ${value <= step ? "bg-primary" : "bg-muted"}`} />
+              <span
+                className={`text-xs ${value === step ? "font-semibold text-foreground" : "text-muted-foreground"}`}
+              >
+                {value === 1 ? "Property" : value === 2 ? "Work" : value === 3 ? "Facts" : "Review"}
+              </span>
+            </div>
+          ))}
+        </div>
+        <Card className="surface-editorial p-5 sm:p-8">
           {step === 1 && (
             <div className="space-y-5">
               <h2 className="text-lg font-semibold">Property</h2>
@@ -214,7 +226,7 @@ function NewPermitCase() {
                   onChange={(e) => set("known_conditions", e.target.value)}
                 />
               </Field>
-              <p className="rounded-md border p-3 text-sm">
+              <p className="surface-subtle rounded-lg p-4 text-sm leading-6">
                 These are user-provided facts until supported by a linked document or authoritative
                 source.
               </p>
@@ -237,7 +249,7 @@ function NewPermitCase() {
                 />
                 <Summary k="Zoning" v="Unknown: no verified analysis" />
               </dl>
-              <p className="rounded-md bg-muted p-3 text-sm">
+              <p className="surface-subtle rounded-lg p-4 text-sm leading-6">
                 Creating this case does not create an underwriting deal or confirm any permit
                 requirement.
               </p>

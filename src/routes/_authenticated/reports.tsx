@@ -134,7 +134,7 @@ function ReportsPage() {
             </p>
           </div>
           {!projects.length ? (
-            <Card className="p-12 text-center text-sm text-muted-foreground">
+            <Card className="surface-editorial p-12 text-center text-sm text-muted-foreground">
               No projects yet. Create or seed a project before generating deal documents.
             </Card>
           ) : (
@@ -159,10 +159,8 @@ function ProjectSelector({
   onChange: (id: string) => void;
 }) {
   return (
-    <Card className="p-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center elevated">
-      <label className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
-        Project
-      </label>
+    <Card className="surface-editorial flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center">
+      <label className="eyebrow">Project</label>
       <Select value={projectId ?? undefined} onValueChange={onChange}>
         <SelectTrigger className="w-full sm:w-[260px]">
           <SelectValue placeholder="Select a project" />

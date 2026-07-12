@@ -160,7 +160,7 @@ function DocumentsPage() {
           <Cov label="Contributing Data" value={`${contributing} / ${docs.length}`} />
           <Cov label="Assumptions Extracted" value={String(totalContribued)} />
         </div>
-        <Card className="p-5 space-y-4 elevated">
+        <Card className="surface-editorial space-y-4 p-5">
           <div className="grid sm:grid-cols-2 gap-3">
             <Field label="Assign to deal">
               {(f) => (
@@ -236,7 +236,7 @@ function DocumentsPage() {
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
             {docs.map((d) => (
-              <Card key={d.id} className="p-4 elevated">
+              <Card key={d.id} className="surface-editorial p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-start gap-3 min-w-0">
                     <FileText className="size-5 text-primary shrink-0 mt-0.5" />

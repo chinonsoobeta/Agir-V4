@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { canonicalPermitMunicipality } from "@/lib/permit-municipalities";
 
 export const PROPERTY_TYPES = [
   "residential",
@@ -128,6 +129,7 @@ export const createPermitCase = createServerFn({ method: "POST" })
   .validator((d: unknown) => permitCaseInputSchema.parse(d))
   .handler(async ({ data, context }) => {
     const db = context.supabase as any;
+    const municipality = canonicalPermitMunicipality(data.municipality);
     if (data.project_id) {
       const p = await db
         .from("projects")
@@ -141,7 +143,7 @@ export const createPermitCase = createServerFn({ method: "POST" })
     }
     const r = await db
       .from("permit_cases")
-      .insert({ ...data, owner_id: context.userId })
+      .insert({ ...data, municipality, owner_id: context.userId })
       .select()
       .single();
     if (r.error) throw new Error(r.error.message);
@@ -160,9 +162,12 @@ export const updatePermitCase = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    const municipality = data.patch.municipality
+      ? canonicalPermitMunicipality(data.patch.municipality)
+      : data.patch.municipality;
     const r = await (context.supabase as any)
       .from("permit_cases")
-      .update(data.patch)
+      .update({ ...data.patch, municipality })
       .eq("id", data.id)
       .select()
       .single();
@@ -174,6 +179,27 @@ export const updatePermitCase = createServerFn({ method: "POST" })
       changed_by: context.userId,
     });
     return r.data;
+  });
+
+export const transferPermitCaseToWorkspace = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) =>
+    z
+      .object({
+        case_id: z.string().uuid(),
+        workspace_id: z.string().uuid(),
+        reason: z.string().trim().min(1).max(1000),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const result = await (context.supabase as any).rpc("transfer_permit_case_to_workspace", {
+      p_case_id: data.case_id,
+      p_workspace_id: data.workspace_id,
+      p_reason: data.reason,
+    });
+    if (result.error) throw new Error(result.error.message);
+    return result.data;
   });
 
 export const listAttachableProjects = createServerFn({ method: "GET" })
@@ -231,10 +257,11 @@ export const generateCasePermitCandidates = createServerFn({ method: "POST" })
     if (c.error) throw new Error(c.error.message);
     if (!c.data.municipality_confirmed || !c.data.municipality)
       throw new Error("Confirm the municipality before generating permit candidates.");
+    const municipality = canonicalPermitMunicipality(c.data.municipality);
     const j = await db
       .from("jurisdictions")
       .select("id,name,jurisdiction_type")
-      .eq("name", c.data.municipality)
+      .eq("name", municipality)
       .eq("jurisdiction_type", "municipality")
       .eq("active", true)
       .single();

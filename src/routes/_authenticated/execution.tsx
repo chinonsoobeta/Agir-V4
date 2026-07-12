@@ -112,7 +112,7 @@ function ExecutionPage() {
           />
           <Stat icon={CheckCircle2} label="Completed" value={String(completed)} tone="success" />
           <Stat icon={ShieldAlert} label="Blocked" value={String(blocked.length)} tone="danger" />
-          <Card className="p-4 elevated">
+          <Card className="surface-editorial p-4">
             <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
               Execution progress
             </div>
@@ -128,7 +128,7 @@ function ExecutionPage() {
         {milestones.length ? (
           <>
             {/* Table on md+, cards on mobile: no horizontal scrolling for the core workflow */}
-            <Card className="hidden md:block overflow-x-auto elevated">
+            <Card className="surface-editorial hidden overflow-x-auto md:block">
               <table className="data-grid w-full">
                 <thead>
                   <tr>
@@ -153,7 +153,7 @@ function ExecutionPage() {
             </div>
           </>
         ) : (
-          <Card className="elevated">
+          <Card className="surface-editorial">
             <div className="p-14 text-center">
               <CircleDashed className="size-8 mx-auto text-muted-foreground" />
               <div className="text-sm font-medium mt-3">No execution milestones yet</div>
@@ -207,7 +207,7 @@ function CriticalPathPanel({ projects, milestones }: { projects: any[]; mileston
   );
 
   return (
-    <Card className="elevated border-warning/35">
+    <Card className="surface-editorial border-warning/35">
       <div className="px-4 py-3 border-b border-border flex items-center gap-2">
         <ListChecks className="size-4 text-warning" />
         <span className="text-sm font-semibold">Critical path to close</span>
@@ -295,7 +295,7 @@ function AttentionQueue({
   } as const;
 
   return (
-    <Card className="elevated border-warning/35">
+    <Card className="surface-editorial border-warning/35">
       <div className="px-4 py-3 border-b border-border flex items-center gap-2">
         <AlertTriangle className="size-4 text-warning" />
         <span className="text-xs font-semibold uppercase tracking-widest text-warning">
@@ -463,7 +463,7 @@ function MilestoneCard({ item }: { item: any }) {
   const days = daysUntil(item.due_date);
   const overdue = days != null && days < 0 && item.status !== "complete";
   return (
-    <Card className="p-4 elevated">
+    <Card className="surface-editorial p-4">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="font-medium text-sm">{item.title}</div>
@@ -702,7 +702,7 @@ function Stat({
   tone?: "success" | "danger";
 }) {
   return (
-    <Card className="p-4 elevated">
+    <Card className="surface-editorial p-4">
       <div className="flex justify-between">
         <div className="text-[11px] uppercase tracking-widest text-muted-foreground">{label}</div>
         <Icon
