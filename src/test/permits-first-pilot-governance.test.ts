@@ -3,6 +3,9 @@ import { readFileSync } from "node:fs";
 
 const read = (path: string) => readFileSync(path, "utf8");
 const migration = read("supabase/migrations/20260711001300_permits_first_pilot_governance.sql");
+const openAccessMigration = read(
+  "supabase/migrations/20260712000200_open_authenticated_product_access.sql",
+);
 const shell = read("src/components/app-shell.tsx");
 const landing = read("src/routes/index.tsx");
 const auth = read("src/routes/auth.tsx");
@@ -42,14 +45,23 @@ describe("permits-first pilot governance", () => {
     expect(migration).toContain("WITH (security_invoker=true)");
   });
 
-  it("makes Permits primary and labels gated underwriting honestly", () => {
+  it("makes Permits primary and keeps Underwriting visibly labelled Preview", () => {
     expect(shell).toContain('["permits", "underwriting"]');
     expect(shell).toContain("Underwriting Preview");
-    expect(shell).toContain("underwritingPreview");
+    expect(shell).not.toContain("Request pilot access");
+    expect(shell).not.toContain("Access is limited during the pilot");
     expect(auth).toContain('navigate({ to: "/permits"');
     expect(landing).toContain("Property research and workflow system");
     expect(landing).toContain("Permit research and workflow");
     expect(landing).toContain("Coquitlam");
+  });
+
+  it("grants both products to every authenticated user without weakening ownership rules", () => {
+    expect(openAccessMigration).toContain("SELECT true, true, 'general_access'::text");
+    expect(openAccessMigration).toContain("SELECT auth.uid() IS NOT NULL");
+    expect(openAccessMigration).toContain("TO authenticated");
+    expect(openAccessMigration).toContain("FROM PUBLIC,anon");
+    expect(openAccessMigration).not.toMatch(/DROP POLICY|DISABLE ROW LEVEL SECURITY/);
   });
 
   it("does not add GIS or couple permits into underwriting", () => {

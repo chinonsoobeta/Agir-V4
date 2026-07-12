@@ -246,7 +246,7 @@ afterAll(async () => {
 });
 
 describe("workspace RLS policies", () => {
-  test("pilot entitlements are self-readable and service-managed", async () => {
+  test("legacy pilot records stay service-managed while product access is open", async () => {
     expect((await asUser(ids.owner, "SELECT user_id FROM public.pilot_user_access")).rowCount).toBe(
       1,
     );
@@ -265,13 +265,23 @@ describe("workspace RLS policies", () => {
       "SELECT underwriting_preview FROM public.current_product_access()",
     );
     expect(access.rows[0].underwriting_preview).toBe(true);
-    await expectDenied(
-      asUser(
-        ids.outsider,
-        "INSERT INTO public.permit_cases(owner_id,name) VALUES($1,'Unapproved pilot case')",
-        [ids.outsider],
-      ),
+    const generalAccess = await asUser<{ permits_access: boolean; pilot_status: string }>(
+      ids.outsider,
+      "SELECT permits_access,pilot_status FROM public.current_product_access()",
     );
+    expect(generalAccess.rows[0]).toEqual({
+      permits_access: true,
+      pilot_status: "general_access",
+    });
+    expect(
+      (
+        await asUser(
+          ids.outsider,
+          "INSERT INTO public.permit_cases(owner_id,name) VALUES($1,'General access case') RETURNING owner_id",
+          [ids.outsider],
+        )
+      ).rows[0].owner_id,
+    ).toBe(ids.outsider);
   });
 
   test("only approved effective legal copy is visible to authenticated users", async () => {
