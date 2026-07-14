@@ -29,8 +29,6 @@ import {
   Sparkles,
   TrendingUp,
 } from "lucide-react";
-import { RECOMMENDATION_TONE } from "@/lib/decision";
-import { TONE_TEXT } from "@/components/decision-ui";
 
 const portfolioQ = queryOptions({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
 const profileQ = queryOptions({ queryKey: ["my-profile"], queryFn: () => getMyProfile() });
@@ -225,9 +223,6 @@ function ExecutiveOverview() {
                 <span>{t("dash.score")}</span>
               </div>
               {opportunities.map((deal) => {
-                const tone =
-                  RECOMMENDATION_TONE[deal.recommendation as keyof typeof RECOMMENDATION_TONE] ??
-                  "neutral";
                 return (
                   <Link
                     key={deal.id}
@@ -237,12 +232,16 @@ function ExecutiveOverview() {
                   >
                     <div className="min-w-0">
                       <div className="text-sm font-medium truncate">{deal.name}</div>
-                      <div className={`text-[11px] uppercase tracking-wider ${TONE_TEXT[tone]}`}>
+                      <div className="text-[11px] uppercase tracking-wider text-foreground/80">
                         {deal.recommendationLabel}
                       </div>
                     </div>
                     <div className="w-24 hidden sm:block">
-                      <Progress value={deal.confidenceScore} className="h-1.5" />
+                      <Progress
+                        value={deal.confidenceScore}
+                        className="h-1.5"
+                        aria-label={`${deal.name} confidence ${deal.confidenceScore}%`}
+                      />
                     </div>
                     <div className="num text-lg font-semibold text-foreground">
                       {deal.investmentScore}

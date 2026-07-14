@@ -1,15 +1,24 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Loader2, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { canonicalPermitMunicipality } from "@/lib/permit-municipalities";
+import { searchAddresses, type AddressSearchResult } from "@/lib/address-search.functions";
 
-/** The six pilot municipalities, keyed by the city name Photon/OSM returns.
- * Values match `jurisdictions.name` exactly so candidate generation works. */
+/** Provider results are normalized through the shared municipality catalogue.
+ * Canonical values match `jurisdictions.name` exactly so research stays scoped. */
 
 export type AddressSelection = {
   address: string;
+  addressLine1: string;
+  buildingName: string | null;
   municipality: string | null;
   province: string | null;
+  postalCode: string | null;
+  provider: "google_places" | "openstreetmap";
+  placeId: string | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 type PhotonFeature = {
@@ -41,28 +50,38 @@ export function resolveSuggestedMunicipality(p: PhotonFeature["properties"]): st
   return canonicalPermitMunicipality(supplied);
 }
 
-/** Free-text address input with Photon (OpenStreetMap) suggestions, biased to
- * British Columbia. Selecting a suggestion reports the resolved municipality. */
+/** Free-text address/building lookup. The server uses Google Places when
+ * configured and a labelled OpenStreetMap fallback otherwise. */
 export function AddressAutocomplete({
   value,
   onChange,
   onSelect,
   placeholder,
+  id,
+  "aria-describedby": ariaDescribedBy,
+  "aria-invalid": ariaInvalid,
+  "aria-required": ariaRequired,
 }: {
   value: string;
   onChange: (v: string) => void;
   onSelect: (s: AddressSelection) => void;
   placeholder?: string;
+  id?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean;
+  "aria-required"?: boolean;
 }) {
-  const [suggestions, setSuggestions] = useState<PhotonFeature[]>([]);
+  const [suggestions, setSuggestions] = useState<AddressSearchResult[]>([]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const [loading, setLoading] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
+  const [searchError, setSearchError] = useState(false);
+  const requestIdRef = useRef(0);
   const skipNextFetch = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
   const statusId = useId();
+  const search = useServerFn(searchAddresses);
 
   useEffect(() => {
     if (skipNextFetch.current) {
@@ -73,53 +92,33 @@ export function AddressAutocomplete({
     if (q.length < 3) {
       setSuggestions([]);
       setOpen(false);
+      setSearchError(false);
       return;
     }
-    let controller: AbortController | null = null;
     const t = setTimeout(async () => {
-      abortRef.current?.abort();
-      controller = new AbortController();
-      abortRef.current = controller;
+      const requestId = ++requestIdRef.current;
       setLoading(true);
+      setSearchError(false);
       try {
-        // Bias and clamp results to British Columbia.
-        const url =
-          "https://photon.komoot.io/api?" +
-          new URLSearchParams({
-            q,
-            limit: "6",
-            lang: "en",
-            lat: "49.25",
-            lon: "-123.1",
-            bbox: "-139.06,48.2,-114.03,60.0",
-          });
-        const res = await fetch(url, {
-          signal: controller.signal,
-          credentials: "omit",
-          referrerPolicy: "no-referrer",
-        });
-        if (!res.ok) throw new Error(`Photon ${res.status}`);
-        const json = await res.json();
-        const features: PhotonFeature[] = (json.features ?? []).filter(
-          (f: PhotonFeature) => f.properties?.countrycode === "CA",
-        );
-        setSuggestions(features);
-        setOpen(features.length > 0);
+        const results = await search({ data: { query: q } });
+        if (requestId !== requestIdRef.current) return;
+        setSuggestions(results);
+        setOpen(results.length > 0);
         setActive(-1);
-      } catch (err) {
-        if ((err as Error).name !== "AbortError") {
-          setSuggestions([]);
-          setOpen(false);
-        }
+      } catch {
+        if (requestId !== requestIdRef.current) return;
+        setSuggestions([]);
+        setOpen(false);
+        setSearchError(true);
       } finally {
-        if (abortRef.current === controller) setLoading(false);
+        if (requestId === requestIdRef.current) setLoading(false);
       }
     }, 300);
     return () => {
       clearTimeout(t);
-      controller?.abort();
+      requestIdRef.current += 1;
     };
-  }, [value]);
+  }, [search, value]);
 
   useEffect(() => {
     const onPointerDown = (e: PointerEvent) => {
@@ -129,17 +128,13 @@ export function AddressAutocomplete({
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, []);
 
-  const choose = (f: PhotonFeature) => {
-    const label = formatAddressSuggestion(f.properties);
+  const choose = (result: AddressSearchResult) => {
     skipNextFetch.current = true;
-    onChange(label);
-    onSelect({
-      address: label,
-      municipality: resolveSuggestedMunicipality(f.properties),
-      province: f.properties.state ?? null,
-    });
+    onChange(result.addressLine1);
+    onSelect(result);
     setOpen(false);
     setSuggestions([]);
+    setSearchError(false);
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -164,6 +159,7 @@ export function AddressAutocomplete({
   return (
     <div ref={rootRef} className="relative">
       <Input
+        id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
@@ -172,8 +168,10 @@ export function AddressAutocomplete({
         role="combobox"
         aria-expanded={open}
         aria-controls={listboxId}
-        aria-activedescendant={active >= 0 ? `${listboxId}-option-${active}` : undefined}
-        aria-describedby={statusId}
+        aria-activedescendant={open && active >= 0 ? `${listboxId}-option-${active}` : undefined}
+        aria-describedby={[ariaDescribedBy, statusId].filter(Boolean).join(" ")}
+        aria-invalid={ariaInvalid}
+        aria-required={ariaRequired}
         aria-autocomplete="list"
         autoComplete="off"
       />
@@ -186,10 +184,17 @@ export function AddressAutocomplete({
       <span id={statusId} className="sr-only" role="status" aria-live="polite">
         {loading
           ? "Loading address suggestions"
-          : open
-            ? `${suggestions.length} address suggestions available`
-            : ""}
+          : searchError
+            ? "Address suggestions are unavailable. You can enter the address manually."
+            : open
+              ? `${suggestions.length} address suggestions available`
+              : ""}
       </span>
+      {searchError && (
+        <p className="mt-1 text-xs text-muted-foreground" role="alert">
+          Suggestions are unavailable. Enter the address manually.
+        </p>
+      )}
       {open && (
         <ul
           id={listboxId}
@@ -197,11 +202,10 @@ export function AddressAutocomplete({
           aria-label="Address suggestions"
           className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
         >
-          {suggestions.map((f, i) => {
-            const label = formatAddressSuggestion(f.properties);
+          {suggestions.map((result, i) => {
             return (
               <li
-                key={`${label}-${i}`}
+                key={`${result.provider}-${result.placeId ?? result.address}-${i}`}
                 id={`${listboxId}-option-${i}`}
                 role="option"
                 aria-selected={i === active}
@@ -211,16 +215,21 @@ export function AddressAutocomplete({
                 onPointerEnter={() => setActive(i)}
                 onPointerDown={(e) => {
                   e.preventDefault();
-                  choose(f);
+                  choose(result);
                 }}
               >
                 <MapPin aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-                <span className="truncate">{label}</span>
+                <span className="min-w-0">
+                  {result.buildingName && (
+                    <span className="block truncate font-medium">{result.buildingName}</span>
+                  )}
+                  <span className="block truncate">{result.address}</span>
+                </span>
               </li>
             );
           })}
           <li className="px-2 py-1 text-xs text-muted-foreground" aria-hidden>
-            Suggestions from OpenStreetMap
+            Suggestions identify their source and never confirm municipality or zoning.
           </li>
         </ul>
       )}

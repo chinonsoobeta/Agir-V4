@@ -14,6 +14,7 @@ import type {
   FlagRow,
   RiskRow,
 } from "./reports/report-data.server";
+import { effectiveAssumptions } from "./assumption-authority";
 
 export type DeterministicMemoContext = {
   project: ProjectRow;
@@ -60,7 +61,8 @@ function fmtByUnit(value: number | null | undefined, unit: string | null | undef
 const bullet = (lines: string[]) => lines.filter(Boolean).join("\n");
 
 export function buildDeterministicMemo(ctx: DeterministicMemoContext): Record<string, string> {
-  const { project, assumptions, outputs, flags, risks, errorFlags, verdict } = ctx;
+  const { project, outputs, flags, risks, errorFlags, verdict } = ctx;
+  const assumptions = effectiveAssumptions(ctx.assumptions);
 
   const baseMetric = (key: string) =>
     outputs.find((o) => o.scenario_key === "base" && o.metric_key === key);

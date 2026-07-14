@@ -4,6 +4,7 @@ import {
   displayDuration,
   displayRequirement,
   extractExplicitPermitMentions,
+  extractPermitResearchCandidates,
   PERMIT_UNKNOWN_DURATION,
   PERMIT_UNKNOWN_REQUIREMENT,
   ruleMatchesMunicipality,
@@ -32,6 +33,13 @@ const permitUi = fs.readFileSync(
 const governanceMigration = fs.readFileSync(
   new URL(
     "../../supabase/migrations/20260711000300_permit_governance_and_review.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const transactionalMigration = fs.readFileSync(
+  new URL(
+    "../../supabase/migrations/20260712001000_transactional_permit_catalogue_generation.sql",
     import.meta.url,
   ),
   "utf8",
@@ -85,12 +93,43 @@ describe("permit register deterministic domain", () => {
     expect(candidates).toEqual([
       {
         candidateName: "A plumbing permit",
+        permitType: "plumbing",
         sourceLocation: "line 2",
         sourceText: "A plumbing permit is listed on page 4.",
       },
     ]);
     expect(candidates[0]).not.toHaveProperty("duration");
     expect(extractExplicitPermitMentions("Renovation work is planned.")).toEqual([]);
+  });
+
+  it("categorizes only the explicit permit phrase for review", () => {
+    const candidates = extractExplicitPermitMentions(
+      "Electrical permit listed.\nA change of use approval may be needed.\nSpecial licence noted.",
+    );
+    expect(candidates.map((candidate) => candidate.permitType)).toEqual([
+      "electrical",
+      "occupancy_change_of_use",
+      "other",
+    ]);
+  });
+
+  it("turns explicit work scope into sourced review clues without deciding applicability", () => {
+    const candidates = extractPermitResearchCandidates(
+      "Scope: replace the service panel and add two circuits.\nInstall a heat pump and new ductwork.",
+    );
+    expect(candidates.map((candidate) => candidate.permitType)).toEqual([
+      "electrical",
+      "mechanical_hvac",
+    ]);
+    expect(candidates.every((candidate) => candidate.evidenceKind === "work_scope_signal")).toBe(
+      true,
+    );
+    expect(candidates[0]).toMatchObject({
+      candidateName: "Electrical permit or approval",
+      sourceLocation: "line 1",
+      confidenceScore: 0.55,
+    });
+    expect(candidates[0].description).toContain("before deciding whether an approval applies");
   });
 });
 describe("permit migration contract", () => {
@@ -175,11 +214,22 @@ describe("complete pilot matrix and workflow contract", () => {
     expect(matrixMigration).not.toMatch(/\d+\s*-\s*\d+\s*weeks/i);
   });
 
-  it("generates only municipality-matched, non-required review candidates", () => {
-    expect(permitFunctions).toContain('.eq("jurisdiction_id", jurisdictionResult.data.id)');
-    expect(permitFunctions).toContain('applicability_status: "unknown"');
-    expect(permitFunctions).toContain("is_required: null");
-    expect(permitFunctions).toContain("existing.has(rule.id)");
+  it("generates municipality-matched, non-required evidence in one governed transaction", () => {
+    expect(permitFunctions).toContain('"generate_permit_catalogue_candidates"');
+    expect(permitFunctions).toContain('p_parent_kind: "project"');
+    expect(transactionalMigration).toContain("pg_advisory_xact_lock");
+    expect(transactionalMigration).toContain("WHERE jurisdiction.name=v_municipality");
+    expect(transactionalMigration).toContain("AND rule.superseded_at IS NULL");
+    expect(transactionalMigration).toContain("to_jsonb(rule) AS rule_snapshot");
+    expect(transactionalMigration).toContain(
+      "rule.name,rule.permit_type,rule.description,'unknown'",
+    );
+    expect(transactionalMigration).toContain("'unresolved'");
+    expect(transactionalMigration).toContain("ON CONFLICT DO NOTHING");
+    expect(transactionalMigration).toContain(
+      "Possible paperwork if this approval applies. Confirm before relying on it.",
+    );
+    expect(transactionalMigration).not.toContain("DELETE FROM public.project_permits");
   });
 
   it("exposes document linking, audited downloads, and full checklist editing", () => {
@@ -194,7 +244,7 @@ describe("complete pilot matrix and workflow contract", () => {
       expect(permitUi).toContain(operation);
     }
     expect(permitUi).toContain("Choose project document");
-    expect(permitUi).toContain("Add required paperwork");
+    expect(permitUi).toContain("Add paperwork");
   });
 
   it("adds source governance, external authorities, review-only extraction, and disabled zoning sources", () => {

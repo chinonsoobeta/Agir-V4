@@ -81,6 +81,19 @@ export const listExtractionJobs = createServerFn({ method: "GET" })
     return rows ?? [];
   });
 
+export const getExtractionJobStatus = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const result = await context.supabase
+      .from("extraction_jobs")
+      .select("id,status,progress,message,error,result_json,updated_at")
+      .eq("id", data.id)
+      .single();
+    if (result.error) throw new Error(result.error.message);
+    return result.data;
+  });
+
 // Cancel an in-flight / queued extraction job. A completed job is immutable.
 export const cancelExtractionJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -439,9 +452,18 @@ export const analyzeDocument = createServerFn({ method: "POST" })
     if (config.asyncExtraction) getServerConfig(["worker"]);
     let asyncMode = config.asyncExtraction;
 
-    // Idempotent + observable: one job per (owner, document content). A retry or
-    // double-click re-attaches to the existing job instead of re-running OCR/AI.
-    const idempotencyKey = doc.content_hash || `doc:${doc.id}`;
+    // Cache only within the same AI runtime profile. Adding/rotating a key or
+    // changing provider/model selection must re-run summarization instead of
+    // returning a prior no-key fallback or an obsolete model result.
+    const [{ stableJsonHash }, { getAiRuntimeFingerprint }] = await Promise.all([
+      import("./hash.server"),
+      import("./ai-gateway.server"),
+    ]);
+    const idempotencyKey = stableJsonHash({
+      version: "document-analysis-v2",
+      document: doc.content_hash || `doc:${doc.id}`,
+      ai_runtime: getAiRuntimeFingerprint(),
+    });
     const { job, existed } = await claimJob(context, {
       kind: "document_analysis",
       idempotencyKey,

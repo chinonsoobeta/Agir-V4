@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { PERMIT_MUNICIPALITIES } from "@/lib/permit-municipalities";
 
 const read = (path: string) => readFileSync(path, "utf8");
 const migration = read("supabase/migrations/20260711001300_permits_first_pilot_governance.sql");
@@ -53,7 +54,9 @@ describe("permits-first pilot governance", () => {
     expect(auth).toContain('navigate({ to: "/permits"');
     expect(landing).toContain("Property research and workflow system");
     expect(landing).toContain("Permit research and workflow");
-    expect(landing).toContain("Coquitlam");
+    expect(landing).toContain("PERMIT_MUNICIPALITIES");
+    expect(PERMIT_MUNICIPALITIES).toHaveLength(22);
+    expect(PERMIT_MUNICIPALITIES).toContain("City of Coquitlam");
   });
 
   it("grants both products to every authenticated user without weakening ownership rules", () => {

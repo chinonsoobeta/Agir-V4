@@ -3,7 +3,7 @@
 // readiness chips, last-generated timestamps, downloads, and an in-app preview.
 
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   useQueries,
   useQuery,
@@ -99,13 +99,12 @@ function ReportsPage() {
   const { project: queryProject } = Route.useSearch();
   const { data: projects } = useSuspenseQuery(projectsQ);
   const { t } = usePreferences();
-  const [projectId, setProjectId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (projectId) return;
-    if (queryProject && projects.some((p) => p.id === queryProject)) setProjectId(queryProject);
-    else if (projects.length) setProjectId(projects[0].id);
-  }, [queryProject, projects, projectId]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const projectId =
+    selectedProjectId ??
+    (queryProject && projects.some((project) => project.id === queryProject)
+      ? queryProject
+      : (projects[0]?.id ?? null));
 
   return (
     <>
@@ -139,7 +138,11 @@ function ReportsPage() {
             </Card>
           ) : (
             <>
-              <ProjectSelector projects={projects} projectId={projectId} onChange={setProjectId} />
+              <ProjectSelector
+                projects={projects}
+                projectId={projectId}
+                onChange={setSelectedProjectId}
+              />
               {projectId && <ReportGrid key={projectId} projectId={projectId} />}
             </>
           )}
@@ -162,7 +165,7 @@ function ProjectSelector({
     <Card className="surface-editorial flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center">
       <label className="eyebrow">Project</label>
       <Select value={projectId ?? undefined} onValueChange={onChange}>
-        <SelectTrigger className="w-full sm:w-[260px]">
+        <SelectTrigger className="w-full sm:w-[260px]" aria-label="Project">
           <SelectValue placeholder="Select a project" />
         </SelectTrigger>
         <SelectContent>
@@ -370,7 +373,7 @@ function ReportCard({
       </div>
 
       {blockers.length > 0 && (
-        <div className="text-xs text-destructive bg-destructive/5 border border-destructive/20 rounded p-2">
+        <div className="text-xs text-foreground bg-destructive/5 border border-destructive/30 rounded p-2">
           {blockers.map((b) => (
             <div key={b}>{b}</div>
           ))}
@@ -387,7 +390,7 @@ function ReportCard({
         </div>
       )}
       {error && (
-        <div className="text-xs text-destructive bg-destructive/5 border border-destructive/30 rounded p-2 font-mono break-words">
+        <div className="text-xs text-foreground bg-destructive/5 border border-destructive/30 rounded p-2 font-mono break-words">
           {error}
         </div>
       )}
@@ -485,7 +488,12 @@ function ReportPreview({
                 {sec.heading}
               </div>
               {sec.table && (
-                <div className="overflow-x-auto">
+                <div
+                  className="overflow-x-auto"
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Report preview table"
+                >
                   <table className="data-grid w-full text-xs">
                     <thead>
                       <tr className="bg-muted/20">

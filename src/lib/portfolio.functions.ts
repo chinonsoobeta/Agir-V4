@@ -21,6 +21,27 @@ import type { Database } from "@/integrations/supabase/types";
 
 type ProjectRow = Database["public"]["Tables"]["projects"]["Row"];
 
+export function portfolioOutputsAreCurrent(freshness: string | null | undefined): boolean {
+  return freshness === "current";
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  limit: number,
+  run: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, values.length) }, async () => {
+    while (cursor < values.length) {
+      const index = cursor++;
+      results[index] = await run(values[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 // The financial_outputs / assumptions columns `inputs` and `conflict_values`
 // are stored as untyped `Json` in the DB schema, but the deterministic decision
 // layer reads them through the narrower structured shapes on OutputRow /
@@ -87,6 +108,7 @@ export type DealSummary = {
   probability: number;
   irr: number | null;
   dscr: number | null;
+  underwritingFreshness?: "current" | "stale" | "blocked" | "pending";
 };
 
 function capitalFor(project: ProjectRow, base: Record<string, number>): number {
@@ -126,33 +148,52 @@ export const listPortfolio = createServerFn({ method: "GET" })
       .from("projects")
       .select("*")
       .order("created_at", { ascending: false });
-    // If table doesn't exist (schema not migrated), return empty array instead of error
-    if (error && error.message?.includes("Could not find the table")) return [];
     if (error) throw new Error(error.message);
     if (!projects?.length) return [];
 
     const ids = projects.map((p) => p.id);
-    const [{ data: outputs }, { data: assumptions }, { data: decisions }, { data: docs }] =
-      await Promise.all([
-        context.supabase
-          .from("financial_outputs")
-          .select(
-            "project_id,scenario_key,metric_key,metric_label,value_numeric,unit,formula_text,inputs",
-          )
-          .in("project_id", ids),
-        context.supabase
-          .from("assumptions")
-          .select(
-            "project_id,field_key,field_label,category,value_numeric,value_text,unit,status,source_document_id,source_text,source_location,confidence_score,conflict_values",
-          )
-          .in("project_id", ids),
-        context.supabase
-          .from("decision_logs")
-          .select("project_id,decision,created_at")
-          .in("project_id", ids)
-          .order("created_at", { ascending: false }),
-        context.supabase.from("documents").select("project_id").in("project_id", ids),
-      ]);
+    const [outputsResult, assumptionsResult, decisionsResult, docsResult] = await Promise.all([
+      context.supabase
+        .from("financial_outputs")
+        .select(
+          "project_id,scenario_key,metric_key,metric_label,value_numeric,unit,formula_text,inputs",
+        )
+        .in("project_id", ids),
+      context.supabase
+        .from("assumptions")
+        .select(
+          "project_id,field_key,field_label,category,value_numeric,value_text,unit,status,source_document_id,source_text,source_location,confidence_score,conflict_values",
+        )
+        .in("project_id", ids)
+        .in("status", ["approved", "modified", "default_accepted", "calculated"])
+        .eq("dual_control_pending", false),
+      context.supabase
+        .from("decision_logs")
+        .select("project_id,decision,created_at")
+        .in("project_id", ids)
+        .order("created_at", { ascending: false }),
+      context.supabase.from("documents").select("project_id").in("project_id", ids),
+    ]);
+    for (const [label, result] of [
+      ["financial outputs", outputsResult],
+      ["assumptions", assumptionsResult],
+      ["decision history", decisionsResult],
+      ["documents", docsResult],
+    ] as const) {
+      if (result.error)
+        throw new Error(`Portfolio failed loading ${label}: ${result.error.message}`);
+    }
+    const outputs = outputsResult.data;
+    const assumptions = assumptionsResult.data;
+    const decisions = decisionsResult.data;
+    const docs = docsResult.data;
+    const { getUnderwritingRunStateForContext } = await import("./underwriting.server");
+    const runStates = await mapWithConcurrency(ids, 6, (project_id) =>
+      getUnderwritingRunStateForContext({ data: { project_id }, context }),
+    );
+    const freshnessByProject = new Map(
+      runStates.map((state) => [state.project_id, state.freshness] as const),
+    );
 
     const byProject = <T extends { project_id: string | null }>(rows: T[] | null) => {
       const m = new Map<string | null, T[]>();
@@ -173,15 +214,26 @@ export const listPortfolio = createServerFn({ method: "GET" })
       const a = asmMap.get(p.id) ?? [];
       const d = decMap.get(p.id) ?? [];
       const docCount = (docMap.get(p.id) ?? []).length;
-      const dec = buildDecision(o.map(toOutputRow), a.map(toAssumptionRow));
+      const underwritingFreshness = (freshnessByProject.get(p.id) ?? "pending") as NonNullable<
+        DealSummary["underwritingFreshness"]
+      >;
+      const outputsAreCurrent = portfolioOutputsAreCurrent(underwritingFreshness);
+      const dec = buildDecision(
+        (outputsAreCurrent ? o : []).map(toOutputRow),
+        a.map(toAssumptionRow),
+      );
+      const recommendation = outputsAreCurrent ? dec.recommendation : "RETURN_TO_UNDERWRITING";
+      const decisionForStage = { ...dec, recommendation };
       const stage = pipelineStageFor({
         status: p.status,
         docCount,
-        hasUnderwriting: dec.hasUnderwriting,
+        hasUnderwriting: outputsAreCurrent && dec.hasUnderwriting,
         decisions: d,
       });
       const topRisk =
-        dec.findings?.risks?.[0]?.title ?? dec.findings?.weaknesses?.[0]?.title ?? null;
+        !outputsAreCurrent && underwritingFreshness === "stale"
+          ? "Underwriting is stale; re-run before relying on this decision."
+          : (dec.findings?.risks?.[0]?.title ?? dec.findings?.weaknesses?.[0]?.title ?? null);
       return {
         id: p.id,
         name: p.name,
@@ -190,14 +242,14 @@ export const listPortfolio = createServerFn({ method: "GET" })
         status: p.status,
         stage,
         capital: capitalFor(p, dec.norm.base),
-        recommendation: dec.recommendation,
-        recommendationLabel: dec.recommendationLabel,
-        investmentScore: dec.investmentScore,
+        recommendation,
+        recommendationLabel: outputsAreCurrent ? dec.recommendationLabel : "Return to Underwriting",
+        investmentScore: outputsAreCurrent ? dec.investmentScore : null,
         confidenceScore: dec.confidenceScore,
         riskRating: dec.riskRating,
-        hasUnderwriting: dec.hasUnderwriting,
+        hasUnderwriting: outputsAreCurrent && dec.hasUnderwriting,
         topRisk,
-        nextAction: nextActionFor(stage, dec),
+        nextAction: nextActionFor(stage, decisionForStage),
         decisionCount: d.length,
         docCount,
         startDate: p.start_date ?? null,
@@ -214,8 +266,9 @@ export const listPortfolio = createServerFn({ method: "GET" })
                   ? 50
                   : 25),
         ),
-        irr: dec.norm.base.irr_estimate ?? null,
-        dscr: dec.norm.base.dscr ?? null,
+        irr: outputsAreCurrent ? (dec.norm.base.irr_estimate ?? null) : null,
+        dscr: outputsAreCurrent ? (dec.norm.base.dscr ?? null) : null,
+        underwritingFreshness,
       };
     });
   });
@@ -235,7 +288,7 @@ export const compareDeals = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     if (!projects?.length) return [];
 
-    const [{ data: outputs }, { data: assumptions }] = await Promise.all([
+    const [outputsResult, assumptionsResult] = await Promise.all([
       context.supabase
         .from("financial_outputs")
         .select(
@@ -247,8 +300,27 @@ export const compareDeals = createServerFn({ method: "GET" })
         .select(
           "project_id,field_key,field_label,category,value_numeric,value_text,unit,status,source_document_id,source_text,source_location,confidence_score,conflict_values",
         )
-        .in("project_id", ids),
+        .in("project_id", ids)
+        .in("status", ["approved", "modified", "default_accepted", "calculated"])
+        .eq("dual_control_pending", false),
     ]);
+    if (outputsResult.error)
+      throw new Error(
+        `Deal comparison failed loading financial outputs: ${outputsResult.error.message}`,
+      );
+    if (assumptionsResult.error)
+      throw new Error(
+        `Deal comparison failed loading assumptions: ${assumptionsResult.error.message}`,
+      );
+    const outputs = outputsResult.data;
+    const assumptions = assumptionsResult.data;
+    const { getUnderwritingRunStateForContext } = await import("./underwriting.server");
+    const runStates = await mapWithConcurrency(ids, 6, (project_id) =>
+      getUnderwritingRunStateForContext({ data: { project_id }, context }),
+    );
+    const currentProjects = new Set(
+      runStates.filter((state) => state.freshness === "current").map((state) => state.project_id),
+    );
 
     const out = new Map<string, SelectedOutputRow[]>();
     const asm = new Map<string, SelectedAssumptionRow[]>();
@@ -263,7 +335,8 @@ export const compareDeals = createServerFn({ method: "GET" })
       .map((id) => byId.get(id))
       .filter((p): p is ProjectRow => Boolean(p))
       .map((p) => {
-        const o = out.get(p.id) ?? [];
+        const outputsAreCurrent = currentProjects.has(p.id);
+        const o = outputsAreCurrent ? (out.get(p.id) ?? []) : [];
         const a = asm.get(p.id) ?? [];
         const dec = buildDecision(o.map(toOutputRow), a.map(toAssumptionRow));
         const findings = dec.findings;
@@ -281,20 +354,22 @@ export const compareDeals = createServerFn({ method: "GET" })
           name: p.name,
           type: p.type,
           location: p.location ?? null,
-          hasUnderwriting: dec.hasUnderwriting,
-          recommendation: dec.recommendation,
-          recommendationLabel: dec.recommendationLabel,
+          hasUnderwriting: outputsAreCurrent && dec.hasUnderwriting,
+          recommendation: outputsAreCurrent ? dec.recommendation : "RETURN_TO_UNDERWRITING",
+          recommendationLabel: outputsAreCurrent
+            ? dec.recommendationLabel
+            : "Return to Underwriting",
           riskRating: dec.riskRating,
-          investmentScore: dec.investmentScore,
+          investmentScore: outputsAreCurrent ? dec.investmentScore : null,
           confidenceScore: dec.confidenceScore,
           capital: capitalFor(p, dec.norm.base),
-          irr: dec.norm.base.irr_estimate ?? null,
-          equityMultiple: dec.norm.base.equity_multiple ?? null,
-          dscr: dec.norm.base.dscr ?? null,
-          yieldOnCost: dec.norm.base.yield_on_cost ?? null,
-          exitCap: dec.norm.base.exit_cap_rate_pct ?? null,
-          worstStressDscr: dec.norm.worstStress.dscr ?? null,
-          worstStressEm: dec.norm.worstStress.equity_multiple ?? null,
+          irr: outputsAreCurrent ? (dec.norm.base.irr_estimate ?? null) : null,
+          equityMultiple: outputsAreCurrent ? (dec.norm.base.equity_multiple ?? null) : null,
+          dscr: outputsAreCurrent ? (dec.norm.base.dscr ?? null) : null,
+          yieldOnCost: outputsAreCurrent ? (dec.norm.base.yield_on_cost ?? null) : null,
+          exitCap: outputsAreCurrent ? (dec.norm.base.exit_cap_rate_pct ?? null) : null,
+          worstStressDscr: outputsAreCurrent ? (dec.norm.worstStress.dscr ?? null) : null,
+          worstStressEm: outputsAreCurrent ? (dec.norm.worstStress.equity_multiple ?? null) : null,
           keyFindings,
           dataGaps,
           targetClose: p.target_close_date ?? p.completion_date ?? null,

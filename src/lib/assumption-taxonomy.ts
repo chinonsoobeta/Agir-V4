@@ -774,8 +774,8 @@ export const ASSUMPTION_DEFS: AssumptionDef[] = [
     aliases: ["lease-up curve", "absorption curve", "lease-up absorption", "absorption schedule"],
   },
 
-  // ---- Monthly cash-flow spine (WS1). All optional flags/inputs; absent => the
-  // annual engine path runs untouched. ----
+  // ---- Monthly cash-flow spine (WS1). It remains explicitly opt-in so an
+  // absent workflow flag cannot change established annual-model outputs. ----
   {
     key: "monthly_model",
     label: "Monthly Cash-flow Model",

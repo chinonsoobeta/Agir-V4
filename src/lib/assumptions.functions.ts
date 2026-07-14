@@ -22,6 +22,7 @@ import {
   type MappedCandidate,
 } from "./assumption-mapping";
 import { AI_ASSISTED_ALIAS, AI_AUTHORITY_NOTE, aiClassificationReasoning } from "./ai-authority";
+import type { AiGenerationProvenance } from "./ai-gateway.server";
 import { assertWorkflowPermission } from "./workflow-permissions.server";
 
 // ---------- Read APIs ----------
@@ -404,14 +405,16 @@ export const extractAssumptions = createServerFn({ method: "POST" })
     // AI is the default analysis path; the deterministic alias mapper is the
     // always-present backup. We fall back automatically (and record why) when no
     // key is configured or the model call fails.
-    const { hasAnthropicKey } = await import("./ai-gateway.server");
-    const aiAvailable = hasAnthropicKey();
+    const { getAiRuntimeFingerprint, hasAiProvider } = await import("./ai-gateway.server");
+    const aiAvailable = hasAiProvider();
     const wantsAI = data.mode === "ai";
     const useAI = wantsAI && aiAvailable;
     let aiFailureReason: string | null =
       wantsAI && !aiAvailable
-        ? "AI unavailable (ANTHROPIC_API_KEY missing or malformed): used the deterministic engine."
+        ? "AI unavailable (no valid ANTHROPIC_API_KEY or OPENAI_API_KEY): used the deterministic engine."
         : null;
+    let aiGeneration: AiGenerationProvenance | null = null;
+    let aiAttemptSucceeded = false;
     if (aiFailureReason) {
       await recordAiFallback(context, data.project_id, "assumption_extraction", aiFailureReason);
     }
@@ -429,12 +432,14 @@ export const extractAssumptions = createServerFn({ method: "POST" })
     // and returns the cached result instead of re-running the (billing-relevant)
     // AI classification over the whole corpus.
     const { stableJsonHash } = await import("./hash.server");
-    const { claimJob, completeJob } = await import("./extraction-jobs.server");
+    const { claimJob, completeJob, failJob } = await import("./extraction-jobs.server");
     const extractionKey = stableJsonHash({
       docs: docs
         .map((d) => ({ id: d.id, hash: (d as any).content_hash ?? null }))
         .sort((a, b) => a.id.localeCompare(b.id)),
       mode: data.mode,
+      ai_runtime:
+        data.mode === "ai" ? getAiRuntimeFingerprint() : "deterministic-classification-v1",
     });
     const { job: extractJob, existed: extractExisted } = await claimJob(context, {
       kind: "assumption_extraction",
@@ -676,18 +681,21 @@ export const extractAssumptions = createServerFn({ method: "POST" })
               `${i}. [${u.c.kind}] value=${u.c.value_text} ctx="${u.c.context.slice(0, 200)}" hint="${u.c.label_hint.slice(0, 80)}" doc="${u.c.doc_name}"`,
           )
           .join("\n");
-        const { getAgirModel } = await import("./ai-gateway.server");
-        const { generateText } = await import("ai");
-        const { text } = await generateText({
-          model: getAgirModel(),
+        const { generateAgirText } = await import("./ai-gateway.server");
+        const generated = await generateAgirText({
           temperature: 0,
+          maxOutputTokens: 6_000,
+          endUserId: context.userId,
           system: `You classify pre-extracted document candidates into canonical assumption keys. You may ONLY choose from the supplied candidate indices and taxonomy keys. Do not infer missing values, do not use outside knowledge, do not alter values, and do not create new candidates. If a candidate does not directly match, use field_key="ignore".`,
           prompt: `Canonical taxonomy:\n${taxonomyText}\n\nCandidates:\n${candidateList}\n\nReturn a JSON array (no prose). Schema: {"candidate_index":<int from the supplied candidate list>,"field_key":"<key or ignore>","confidence_score":<0-100>,"reasoning":"<short classification rationale only>"}.`,
         });
+        const text = generated.text;
+        aiGeneration = generated.ai;
         const m = text.match(/\[[\s\S]*\]/);
         const parsed = m ? JSON.parse(m[0]) : [];
         const safe = z.array(ClassificationSchema).safeParse(parsed);
         if (safe.success) {
+          aiAttemptSucceeded = true;
           // Indices in the model output address `subset`; pass the candidates in
           // that exact order so the boundary's index check is meaningful.
           const classified = applyAiClassifications(
@@ -697,16 +705,18 @@ export const extractAssumptions = createServerFn({ method: "POST" })
           );
           aiMapped.push(...classified);
           classifiedCount += classified.length;
+        } else {
+          throw new Error("AI classification returned invalid structured output.");
         }
-      } catch {
-        aiFailureReason = "AI classification failed; fell back to the deterministic engine.";
+      } catch (error) {
+        aiFailureReason = `AI classification failed; used deterministic mapping (${error instanceof Error ? error.message : "provider unavailable"}).`;
         warnings.push(aiFailureReason);
         await recordAiFallback(context, data.project_id, "assumption_extraction", aiFailureReason);
       }
     }
     // The mode actually used: "ai" only when AI ran without fault and produced a
     // result; otherwise the deterministic backup carried the run.
-    const analysisMode: "ai" | "deterministic" = useAI && !aiFailureReason ? "ai" : "deterministic";
+    const analysisMode: "ai" | "deterministic" = aiAttemptSucceeded ? "ai" : "deterministic";
 
     const mapped = [
       ...deterministic,
@@ -970,6 +980,7 @@ export const extractAssumptions = createServerFn({ method: "POST" })
       analysis_mode: analysisMode,
       ai_used: analysisMode === "ai",
       ai_note: aiFailureReason,
+      ai_generation: aiGeneration,
       authority_note: AI_AUTHORITY_NOTE,
       ai_classified_count: classifiedCount,
       ai_fallback: Boolean(aiFailureReason),
@@ -995,6 +1006,7 @@ export const extractAssumptions = createServerFn({ method: "POST" })
       analysis_mode: analysisMode,
       ai_used: analysisMode === "ai",
       ai_note: aiFailureReason,
+      ai_generation: aiGeneration,
       authority_note: AI_AUTHORITY_NOTE,
       ai_classified: classifiedCount,
       ai_fallback: Boolean(aiFailureReason),
@@ -1021,7 +1033,13 @@ export const extractAssumptions = createServerFn({ method: "POST" })
       "extract_assumptions",
       report,
     );
-    await completeJob(context, extractJob.id, report);
+    // A configured provider failure stays retryable. A no-key run is a valid
+    // deterministic completion and a later key/model change gets a new job key.
+    if (wantsAI && aiAvailable && aiFailureReason) {
+      await failJob(context, extractJob.id, aiFailureReason);
+    } else {
+      await completeJob(context, extractJob.id, report);
+    }
     return report;
   });
 

@@ -15,6 +15,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PERMIT_MUNICIPALITIES } from "@/lib/permit-municipalities";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -36,13 +37,13 @@ export const Route = createFileRoute("/")({
   component: LandingPage,
 });
 
-const municipalities = ["Vancouver", "Surrey", "Richmond", "Burnaby", "Coquitlam", "Kelowna"];
+const municipalities = PERMIT_MUNICIPALITIES;
 
 const permitCapabilities = [
   {
     icon: ClipboardCheck,
     title: "Review potential permits",
-    body: "Assemble the available evidence without turning candidates into confirmed requirements.",
+    body: "Compare possible approvals, keep the source, and record what still needs checking.",
   },
   {
     icon: FileClock,
@@ -76,7 +77,7 @@ function LandingPage() {
   }, []);
 
   const primaryTo = hasSession ? "/permits" : "/auth";
-  const primaryLabel = hasSession ? "Open permit workspace" : "Request pilot access";
+  const primaryLabel = hasSession ? "Open permit workspace" : "Get started";
 
   return (
     <main className="landing min-h-screen overflow-hidden bg-[#f6f7fc] text-[#0d2436]">
@@ -152,7 +153,7 @@ function LandingPage() {
               Property research and workflow system
             </p>
             <h1 className="mt-7 text-balance text-5xl font-semibold leading-[1.02] sm:text-6xl lg:text-7xl">
-              Keep permit research reviewable.
+              Keep permit research clear and organized.
             </h1>
             <p className="mt-7 max-w-2xl text-lg leading-8 text-[#505c80] sm:text-xl">
               Agir helps professionals assemble, review, source, share, hand off, and track permit
@@ -175,7 +176,7 @@ function LandingPage() {
               </a>
             </div>
             <div className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-sm text-[#505c80]">
-              {["Professional pilot", "Explicit unknowns", "Source and review history"].map(
+              {["Built for project teams", "Clear gaps", "Source and review history"].map(
                 (item) => (
                   <span key={item} className="flex items-center gap-2">
                     <CheckCircle2 className="size-4 text-[#00628e]" />
@@ -193,13 +194,13 @@ function LandingPage() {
             <dl className="mt-7 space-y-3 text-sm">
               <CaseState label="Municipality" value="Confirmed by user" />
               <CaseState label="Zoning" value="Unknown" />
-              <CaseState label="Permit candidates" value="Potential, not confirmed" />
-              <CaseState label="Source freshness" value="Review date shown" />
+              <CaseState label="Possible approvals" value="Not confirmed" />
+              <CaseState label="Source check" value="Review date shown" />
               <CaseState label="Responsibility" value="Assigned to project team" />
             </dl>
             <p className="mt-7 border-t border-white/10 pt-5 text-sm leading-6 text-[#b6c6d6]">
-              Candidate review never establishes that a permit is legally required. Confirm material
-              requirements with the appropriate authority or professional.
+              Keeping a possible approval does not make it a legal requirement. Confirm important
+              decisions with the authority or a qualified professional.
             </p>
           </Card>
         </div>
@@ -208,7 +209,7 @@ function LandingPage() {
       <section id="permits" className="mx-auto max-w-[1440px] px-5 py-24 sm:px-8 lg:px-12">
         <SectionIntro
           eyebrow="Permit research and workflow"
-          title="Keep the evidence and the work in one case."
+          title="Keep every source, file, and task with the property."
           body="Agir is designed for builders, permit consultants, architects, contractors, engineers, experienced property owners, and professional project teams."
         />
         <div className="mt-12 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -227,9 +228,9 @@ function LandingPage() {
       <section id="coverage" className="bg-[#e4f0fa]">
         <div className="mx-auto max-w-[1440px] px-5 py-24 sm:px-8 lg:px-12">
           <SectionIntro
-            eyebrow="Reviewed coverage boundary"
-            title="Six municipalities are prioritized for the pilot."
-            body="Catalogue coverage records official source URLs, review dates, freshness, authority scope, and known gaps. Reviewed coverage does not mean the catalogue is complete."
+            eyebrow="Coverage boundaries"
+            title="Create cases across 22 British Columbia municipalities."
+            body="All 21 Metro Vancouver municipalities plus Kelowna are available for case creation and research. Source depth varies by municipality and category. Coverage labels show what has and has not been reviewed."
           />
           <div className="mt-10 flex flex-wrap gap-3">
             {municipalities.map((name) => (
@@ -242,9 +243,9 @@ function LandingPage() {
             ))}
           </div>
           <p className="mt-7 max-w-3xl text-sm leading-6 text-[#505c80]">
-            Cases outside these municipalities can retain documents, checklists, collaboration, and
-            history. Reviewed municipal candidates remain unavailable, and missing coverage never
-            means that no permit is required.
+            A municipality being available does not mean its catalogue is complete. Unreviewed
+            categories remain clearly marked, and missing coverage never means that no permit is
+            required.
           </p>
         </div>
       </section>
@@ -261,8 +262,8 @@ function LandingPage() {
             Underwriting <span className="text-[#00628e]">Preview</span>
           </h2>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-[#646d92]">
-            Agir also provides deterministic underwriting and decision workflows. Underwriting is a
-            limited Preview for explicitly approved users and does not block access to Permits.
+            Agir also provides deterministic underwriting and decision workflows. Underwriting is
+            available to signed-in users as a Preview and remains separate from Permits.
           </p>
         </div>
         <Card className="border-[#183046]/10 bg-white p-7">
@@ -290,9 +291,9 @@ function LandingPage() {
           <div>
             <h3 className="text-lg font-semibold">Access and data</h3>
             <p className="mt-4 text-sm leading-7 text-[#b6c6d6]">
-              The pilot is allowlisted. Workspace roles control collaboration. Document access uses
-              authenticated, case-scoped authorization. Pilot analytics are designed to avoid
-              document contents and complete addresses.
+              Sign-in and workspace roles control access. Document access uses authenticated,
+              case-scoped authorization. Pilot analytics are designed to avoid document contents and
+              complete addresses.
             </p>
             <p className="mt-4 text-sm leading-7 text-[#b6c6d6]">
               Legal, privacy, municipal, operational, comprehension, and security reviews must be
@@ -335,7 +336,7 @@ function SectionIntro({ eyebrow, title, body }: { eyebrow: string; title: string
     <div className="max-w-3xl">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#00628e]">{eyebrow}</p>
       <h2 className="mt-5 text-4xl font-semibold leading-tight sm:text-5xl">{title}</h2>
-      <p className="mt-5 text-lg leading-8 text-[#646d92]">{body}</p>
+      <p className="mt-5 text-lg leading-8 text-[#465270]">{body}</p>
     </div>
   );
 }

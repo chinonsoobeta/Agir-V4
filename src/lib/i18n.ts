@@ -16,6 +16,7 @@ export type AppLanguage = "en" | "fr";
 export const en = {
   // ---- Navigation ----
   "nav.home": "Dashboard",
+  "nav.properties": "Properties",
   "nav.portfolio": "Portfolio",
   "nav.deals": "Deal flow",
   "nav.relationships": "Relationships",
@@ -286,6 +287,7 @@ export type TranslationKey = keyof typeof en;
 // French: Canadian. Missing keys fall back to English at lookup time.
 export const fr: Partial<Record<TranslationKey, string>> = {
   "nav.home": "Tableau de bord",
+  "nav.properties": "Propriétés",
   "nav.portfolio": "Portefeuille",
   "nav.deals": "Flux d’affaires",
   "nav.relationships": "Relations",

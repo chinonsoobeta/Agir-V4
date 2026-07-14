@@ -23,7 +23,7 @@ export function DealSelector({
         Deal
       </span>
       <Select value={value ?? ""} onValueChange={onChange}>
-        <SelectTrigger className="w-full sm:w-auto sm:min-w-[260px]">
+        <SelectTrigger className="w-full sm:w-auto sm:min-w-[260px]" aria-label="Deal">
           <SelectValue placeholder="Select a deal" />
         </SelectTrigger>
         <SelectContent>

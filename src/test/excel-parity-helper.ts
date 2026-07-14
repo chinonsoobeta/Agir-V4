@@ -115,7 +115,13 @@ function numberValue(value: unknown, label: string): number {
 
 export function readRepresentativeWorkbookFixture(workbookPath: string): ExcelParityFixture {
   if (!existsSync(workbookPath)) throw new Error(`Workbook not found at ${workbookPath}.`);
-  const workbook = XLSX.readFile(workbookPath, { cellFormula: true, cellDates: false });
+  // SheetJS ESM intentionally does not bind Node's fs module. Reading the
+  // bytes explicitly keeps this helper compatible with the browser-safe ESM
+  // package while preserving the same workbook parsing options.
+  const workbook = XLSX.read(readFileSync(workbookPath), {
+    cellFormula: true,
+    cellDates: false,
+  });
   const fixtureRows = tableObjects<RawFixtureRow>(
     rowsForSheet(workbook, "Fixture_Table"),
     "project_deal_name",

@@ -52,6 +52,51 @@ async function stillOwnsLiveLease(supabase: any, jobId: string, workerId: string
   );
 }
 
+async function jobActorCanWriteParent(
+  supabase: any,
+  job: { owner_id: string | null; project_id?: string | null; permit_case_id?: string | null },
+  scope: "case" | "project",
+) {
+  if (!job.owner_id) return false;
+  const table = scope === "case" ? "permit_cases" : "projects";
+  const id = scope === "case" ? job.permit_case_id : job.project_id;
+  if (!id) return false;
+  const parent = await supabase
+    .from(table)
+    .select("owner_id,workspace_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (parent.error || !parent.data) return false;
+  if (!parent.data.workspace_id) return parent.data.owner_id === job.owner_id;
+  const membership = await supabase
+    .from("workspace_members")
+    .select("role")
+    .eq("workspace_id", parent.data.workspace_id)
+    .eq("user_id", job.owner_id)
+    .maybeSingle();
+  return Boolean(membership.data && ["owner", "admin", "member"].includes(membership.data.role));
+}
+
+async function jobActorCanAnalyzeDocument(
+  supabase: any,
+  job: { owner_id: string | null; project_id?: string | null; permit_case_id?: string | null },
+  document: {
+    owner_id: string | null;
+    project_id?: string | null;
+    permit_case_id?: string | null;
+  },
+) {
+  if (!job.owner_id) return false;
+  if (
+    job.project_id !== (document.project_id ?? null) ||
+    job.permit_case_id !== (document.permit_case_id ?? null)
+  )
+    return false;
+  if (document.permit_case_id) return jobActorCanWriteParent(supabase, job, "case");
+  if (document.project_id) return jobActorCanWriteParent(supabase, job, "project");
+  return document.owner_id === job.owner_id;
+}
+
 async function executeDocumentVerification(args: { jobId: string; workerId: string }) {
   const { getServiceRoleClient } = await import("@/integrations/supabase/service-role.server");
   const supabase = getServiceRoleClient("document_ingestion_worker");
@@ -62,7 +107,13 @@ async function executeDocumentVerification(args: { jobId: string; workerId: stri
     )
     .eq("id", args.jobId)
     .maybeSingle();
-  if (jobError || !job || job.kind !== "document_verification" || job.pending_upload_id == null)
+  if (
+    jobError ||
+    !job ||
+    !job.owner_id ||
+    job.kind !== "document_verification" ||
+    job.pending_upload_id == null
+  )
     throw new Error("Verification job is unavailable.");
   if (!(await stillOwnsLiveLease(supabase, args.jobId, args.workerId)))
     throw new Error("Verification worker no longer holds the job lease.");
@@ -177,6 +228,11 @@ export const Route = createFileRoute("/api/extraction/worker")({
         const { getServiceRoleClient } =
           await import("@/integrations/supabase/service-role.server");
         const supabase = getServiceRoleClient("extraction_worker");
+        const assertLiveLease = async () => {
+          if (!(await stillOwnsLiveLease(supabase, jobId!, workerId!))) {
+            throw new Error("Worker no longer holds a live job lease.");
+          }
+        };
         const { data: job, error } = await supabase
           .from("extraction_jobs")
           .select("kind, status, lease_owner")
@@ -184,6 +240,11 @@ export const Route = createFileRoute("/api/extraction/worker")({
           .maybeSingle();
         if (error || !job || job.status !== "running" || job.lease_owner !== workerId)
           return Response.json({ status: "failed", error: "Job is not owned by this worker." });
+        try {
+          await assertLiveLease();
+        } catch {
+          return Response.json({ status: "failed", error: "Job lease is no longer active." });
+        }
         if (job.kind === "document_verification") {
           try {
             return Response.json(await executeDocumentVerification({ jobId, workerId }));
@@ -195,29 +256,83 @@ export const Route = createFileRoute("/api/extraction/worker")({
             });
           }
         }
-        if (job.kind !== "document_analysis")
+        if (
+          !["document_analysis", "permit_case_research", "permit_project_research"].includes(
+            job.kind,
+          )
+        )
           return Response.json({
             status: "failed",
             error: "Job kind is not executable by this handler.",
           });
         const { data: fullJob } = await supabase
           .from("extraction_jobs")
-          .select("owner_id, document_id")
+          .select("owner_id,project_id,permit_case_id,document_id")
           .eq("id", jobId)
           .maybeSingle();
-        if (!fullJob?.document_id)
-          return Response.json({ status: "failed", error: "Document job is invalid." });
+        if (!fullJob?.document_id || !fullJob.owner_id)
+          return Response.json({
+            status: "failed",
+            error: "Document job requester is unavailable.",
+          });
         const { data: doc } = await supabase
           .from("documents")
           .select("*")
           .eq("id", fullJob.document_id)
-          .eq("owner_id", fullJob.owner_id)
           .maybeSingle();
         if (!doc) return Response.json({ status: "failed", error: "Document is unavailable." });
+        if (
+          job.kind === "document_analysis" &&
+          !(await jobActorCanAnalyzeDocument(supabase, fullJob, doc))
+        )
+          return Response.json({
+            status: "failed",
+            error: "The requesting user no longer has access to this document.",
+          });
+        if (job.kind === "permit_case_research" || job.kind === "permit_project_research") {
+          const scope = job.kind === "permit_case_research" ? "case" : "project";
+          if (!(await jobActorCanWriteParent(supabase, fullJob, scope)))
+            return Response.json({
+              status: "failed",
+              error: "The requesting user no longer has write access.",
+            });
+          const expectedParent = scope === "case" ? fullJob.permit_case_id : fullJob.project_id;
+          const documentParent = scope === "case" ? doc.permit_case_id : doc.project_id;
+          if (!expectedParent || documentParent !== expectedParent)
+            return Response.json({
+              status: "failed",
+              error: "Document and Permit research scope do not match.",
+            });
+          try {
+            const { executePermitDocumentResearch } = await import("@/lib/permit-research.server");
+            const result = await executePermitDocumentResearch(
+              supabase,
+              doc,
+              scope,
+              fullJob.owner_id,
+              assertLiveLease,
+            );
+            await assertLiveLease();
+            return Response.json({
+              status: "completed",
+              message: "Permit document research completed.",
+              result,
+            });
+          } catch (err) {
+            return Response.json({
+              status: "failed",
+              error: err instanceof Error ? err.message : "Permit document research failed.",
+            });
+          }
+        }
         const { executeDocumentAnalysis, ExtractionFailure } =
           await import("@/lib/extraction-executor.server");
         try {
-          const result = await executeDocumentAnalysis({ supabase, userId: fullJob.owner_id }, doc);
+          const result = await executeDocumentAnalysis(
+            { supabase, userId: fullJob.owner_id, assertCanPersist: assertLiveLease },
+            doc,
+          );
+          await assertLiveLease();
           return Response.json({
             status: "completed",
             message: "Document analyzed by worker.",

@@ -176,8 +176,8 @@ const checks = [
     name: "browser E2E",
     command: "npm",
     args: ["run", "test:e2e"],
-    required: false,
-    scope: "local/dev-only unless PILOT_GATE_E2E=1",
+    required: true,
+    scope: "pilot-blocking",
     armedEnv: ["PILOT_GATE_E2E", "E2E_BASE_URL"],
     skip: shouldRunE2e ? null : "set PILOT_GATE_E2E=1 or E2E_BASE_URL to run",
   },
@@ -257,4 +257,16 @@ if (exitCode) {
   console.error("\n[pilot-gate] FAIL: required pilot confidence check failed.");
   process.exit(exitCode);
 }
-console.log("\n[pilot-gate] PASS: required pilot confidence checks completed.");
+const skippedRequired = results.filter((result) => result.required && result.status === "SKIP");
+if (skippedRequired.length) {
+  const labels = skippedRequired.map((result) => result.name).join(", ");
+  if (quick) {
+    console.log(
+      `\n[pilot-gate] QUICK CHECK COMPLETE: ${labels} skipped. This is not release evidence.`,
+    );
+    process.exit(0);
+  }
+  console.error(`\n[pilot-gate] INCOMPLETE: required checks skipped: ${labels}.`);
+  process.exit(1);
+}
+console.log("\n[pilot-gate] PASS: every required pilot confidence check completed.");

@@ -700,21 +700,25 @@ function AiSection() {
       label: "Extraction",
       detail: "Classifies unresolved document candidates after deterministic mapping.",
       ready: readiness?.features.extraction,
+      status: readiness?.features.extraction ? "Ready" : "Pending",
     },
     {
       label: "Underwriting",
-      detail: "May accept consensual static defaults; the engine still computes every value.",
+      detail: "Deterministic only. Defaults require an explicit analyst action.",
       ready: readiness?.features.underwriting,
+      status: "Engine-only",
     },
     {
       label: "Memo generation",
-      detail: "Adds governed narrative over deterministic outputs with provenance checks.",
+      detail: "Uses the governed deterministic memo and provenance gate for the pilot.",
       ready: readiness?.features.memoGeneration,
+      status: "Deterministic",
     },
     {
       label: "Copilot",
       detail: "Answers from approved assumptions, financial outputs, and deal findings.",
       ready: readiness?.features.copilot,
+      status: readiness?.features.copilot ? "Ready" : "Pending",
     },
   ];
 
@@ -722,12 +726,12 @@ function AiSection() {
     <>
       <SectionCard
         title="AI workflows"
-        description="Keep AI-assisted underwriting and memo surfaces visible. They safely fall back until a server key is configured."
+        description="Configure assisted extraction and Copilot. Underwriting inputs and pilot memo artifacts remain deterministic."
       >
         <div className="space-y-5">
           <Field
             label="AI-assisted workflows"
-            description="Show AI controls across extraction, underwriting, memo generation, and Copilot. Calculations remain deterministic."
+            description="Show assisted extraction and Copilot controls. AI cannot approve underwriting inputs or author the pilot memo artifact."
             orientation="horizontal"
             className="rounded-lg border p-3"
           >
@@ -750,14 +754,14 @@ function AiSection() {
               detail={
                 configured
                   ? `Using ${readiness?.model ?? "configured model"}.`
-                  : `Set ${readiness?.keyEnv ?? "API_KEY or ANTHROPIC_API_KEY"} on the server when ready.`
+                  : `Set ${readiness?.keyEnv ?? "ANTHROPIC_API_KEY or OPENAI_API_KEY"} on the server when ready.`
               }
               ok={configured}
             />
             <StatusTile
               icon={ServerCog}
-              title="Deterministic fallback"
-              detail="If the key is missing or a model call fails, Agir keeps running through the engine/template path."
+              title="Deterministic core available"
+              detail="Underwriting and pilot memos do not require AI. Configured-provider extraction failures stay visible and retryable."
               ok
             />
           </div>
@@ -775,7 +779,7 @@ function AiSection() {
                     row.ready ? "text-primary border-primary/40" : "text-muted-foreground",
                   )}
                 >
-                  {row.ready ? "Ready" : "Pending"}
+                  {row.status}
                 </Badge>
                 <div className="min-w-0">
                   <div className="text-sm font-medium">{row.label}</div>

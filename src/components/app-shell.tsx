@@ -25,6 +25,7 @@ import {
   Sun,
   Moon,
   ClipboardCheck,
+  MapPinned,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -36,7 +37,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { usePreferences, type TranslationKey } from "@/lib/preferences";
-import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetTrigger,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -59,6 +66,7 @@ import { savePreferenceData } from "@/lib/preferences.functions";
 
 const nav = [
   { to: "/dashboard", label: "nav.home", icon: LayoutDashboard },
+  { to: "/properties", label: "nav.properties", icon: MapPinned },
   { to: "/portfolio", label: "nav.portfolio", icon: LayoutGrid },
   { to: "/deals", label: "nav.deals", icon: Layers },
   { to: "/relationships", label: "nav.relationships", icon: ContactRound },
@@ -176,7 +184,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const savePreference = useServerFn(savePreferenceData);
   const isPermitRoute = pathname.startsWith("/permits");
   const isModeNeutralRoute =
-    pathname.startsWith("/settings") || pathname.startsWith("/accept-invite");
+    pathname.startsWith("/settings") ||
+    pathname.startsWith("/accept-invite") ||
+    pathname.startsWith("/properties");
   const routeMode = isPermitRoute ? "permits" : isModeNeutralRoute ? null : "underwriting";
   const [productMode, setProductMode] = useState<"underwriting" | "permits">(() => {
     if (routeMode) return routeMode;
@@ -249,7 +259,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <>
       <nav aria-label="Primary" className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
         {(productMode === "permits"
-          ? [{ to: "/permits", label: "Permit cases", icon: ClipboardCheck }]
+          ? [
+              { to: "/permits", label: "Permit cases", icon: ClipboardCheck },
+              { to: "/properties", label: "nav.properties", icon: MapPinned },
+            ]
           : nav
         ).map((item) => {
           const active = isActive(item.to);
@@ -374,6 +387,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </SheetTrigger>
             <SheetContent side="left" className="w-72 p-0 bg-sidebar flex flex-col">
               <SheetTitle className="sr-only">Navigation</SheetTitle>
+              <SheetDescription className="sr-only">
+                Workspace, product mode, and primary navigation.
+              </SheetDescription>
               <div className="px-5 py-5 border-b border-sidebar-border">
                 <div className="flex items-center gap-2.5">
                   <div className="size-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center">

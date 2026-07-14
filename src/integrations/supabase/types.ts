@@ -925,10 +925,11 @@ export type Database = {
           id: string;
           name: string;
           ocr_confidence: number | null;
-          owner_id: string;
+          owner_id: string | null;
           page_count: number | null;
           permit_case_id: string | null;
           project_id: string | null;
+          property_id: string | null;
           replaces_document_id: string | null;
           scan_detail: string | null;
           scan_status: string;
@@ -951,10 +952,11 @@ export type Database = {
           id?: string;
           name: string;
           ocr_confidence?: number | null;
-          owner_id: string;
+          owner_id?: string | null;
           page_count?: number | null;
           permit_case_id?: string | null;
           project_id?: string | null;
+          property_id?: string | null;
           replaces_document_id?: string | null;
           scan_detail?: string | null;
           scan_status?: string;
@@ -977,10 +979,11 @@ export type Database = {
           id?: string;
           name?: string;
           ocr_confidence?: number | null;
-          owner_id?: string;
+          owner_id?: string | null;
           page_count?: number | null;
           permit_case_id?: string | null;
           project_id?: string | null;
+          property_id?: string | null;
           replaces_document_id?: string | null;
           scan_detail?: string | null;
           scan_status?: string;
@@ -1003,6 +1006,13 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "documents_property_id_fkey";
+            columns: ["property_id"];
+            isOneToOne: false;
+            referencedRelation: "properties";
             referencedColumns: ["id"];
           },
           {
@@ -1079,7 +1089,7 @@ export type Database = {
           lease_owner: string | null;
           max_attempts: number;
           message: string | null;
-          owner_id: string;
+          owner_id: string | null;
           pending_upload_id: string | null;
           permit_case_id: string | null;
           priority: number;
@@ -1108,7 +1118,7 @@ export type Database = {
           lease_owner?: string | null;
           max_attempts?: number;
           message?: string | null;
-          owner_id: string;
+          owner_id?: string | null;
           pending_upload_id?: string | null;
           permit_case_id?: string | null;
           priority?: number;
@@ -1137,7 +1147,7 @@ export type Database = {
           lease_owner?: string | null;
           max_attempts?: number;
           message?: string | null;
-          owner_id?: string;
+          owner_id?: string | null;
           pending_upload_id?: string | null;
           permit_case_id?: string | null;
           priority?: number;
@@ -1556,6 +1566,9 @@ export type Database = {
       jurisdictions: {
         Row: {
           active: boolean;
+          coverage_status: string;
+          coverage_summary: string | null;
+          coverage_updated_at: string | null;
           created_at: string;
           id: string;
           jurisdiction_type: string;
@@ -1569,6 +1582,9 @@ export type Database = {
         };
         Insert: {
           active?: boolean;
+          coverage_status?: string;
+          coverage_summary?: string | null;
+          coverage_updated_at?: string | null;
           created_at?: string;
           id?: string;
           jurisdiction_type: string;
@@ -1582,6 +1598,9 @@ export type Database = {
         };
         Update: {
           active?: boolean;
+          coverage_status?: string;
+          coverage_summary?: string | null;
+          coverage_updated_at?: string | null;
           created_at?: string;
           id?: string;
           jurisdiction_type?: string;
@@ -2037,7 +2056,7 @@ export type Database = {
           action: string;
           case_id: string;
           changed_at: string;
-          changed_by: string;
+          changed_by: string | null;
           id: string;
           new_data: Json | null;
           previous_data: Json | null;
@@ -2047,7 +2066,7 @@ export type Database = {
           action: string;
           case_id: string;
           changed_at?: string;
-          changed_by: string;
+          changed_by?: string | null;
           id?: string;
           new_data?: Json | null;
           previous_data?: Json | null;
@@ -2057,7 +2076,7 @@ export type Database = {
           action?: string;
           case_id?: string;
           changed_at?: string;
-          changed_by?: string;
+          changed_by?: string | null;
           id?: string;
           new_data?: Json | null;
           previous_data?: Json | null;
@@ -2075,6 +2094,13 @@ export type Database = {
       };
       permit_cases: {
         Row: {
+          address_line_2: string | null;
+          address_place_id: string | null;
+          address_provider: string | null;
+          archive_reason: string | null;
+          archived_at: string | null;
+          archived_by: string | null;
+          building_name: string | null;
           created_at: string;
           description: string | null;
           existing_use: string | null;
@@ -2082,14 +2108,18 @@ export type Database = {
           id: string;
           issue_date: string | null;
           known_conditions: string | null;
+          latitude: number | null;
+          longitude: number | null;
           municipality: string | null;
           municipality_confirmed: boolean;
           name: string;
           notes: string | null;
-          owner_id: string;
+          owner_id: string | null;
+          postal_code: string | null;
           project_context: string | null;
           project_id: string | null;
           property_address: string | null;
+          property_id: string | null;
           property_type: string | null;
           proposed_use: string | null;
           province: string;
@@ -2105,6 +2135,13 @@ export type Database = {
           zoning_verified_at: string | null;
         };
         Insert: {
+          address_line_2?: string | null;
+          address_place_id?: string | null;
+          address_provider?: string | null;
+          archive_reason?: string | null;
+          archived_at?: string | null;
+          archived_by?: string | null;
+          building_name?: string | null;
           created_at?: string;
           description?: string | null;
           existing_use?: string | null;
@@ -2112,14 +2149,18 @@ export type Database = {
           id?: string;
           issue_date?: string | null;
           known_conditions?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
           municipality?: string | null;
           municipality_confirmed?: boolean;
           name: string;
           notes?: string | null;
-          owner_id: string;
+          owner_id?: string | null;
+          postal_code?: string | null;
           project_context?: string | null;
           project_id?: string | null;
           property_address?: string | null;
+          property_id?: string | null;
           property_type?: string | null;
           proposed_use?: string | null;
           province?: string;
@@ -2135,6 +2176,13 @@ export type Database = {
           zoning_verified_at?: string | null;
         };
         Update: {
+          address_line_2?: string | null;
+          address_place_id?: string | null;
+          address_provider?: string | null;
+          archive_reason?: string | null;
+          archived_at?: string | null;
+          archived_by?: string | null;
+          building_name?: string | null;
           created_at?: string;
           description?: string | null;
           existing_use?: string | null;
@@ -2142,14 +2190,18 @@ export type Database = {
           id?: string;
           issue_date?: string | null;
           known_conditions?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
           municipality?: string | null;
           municipality_confirmed?: boolean;
           name?: string;
           notes?: string | null;
-          owner_id?: string;
+          owner_id?: string | null;
+          postal_code?: string | null;
           project_context?: string | null;
           project_id?: string | null;
           property_address?: string | null;
+          property_id?: string | null;
           property_type?: string | null;
           proposed_use?: string | null;
           province?: string;
@@ -2170,6 +2222,13 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: true;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_cases_property_id_fkey";
+            columns: ["property_id"];
+            isOneToOne: false;
+            referencedRelation: "properties";
             referencedColumns: ["id"];
           },
           {
@@ -2243,11 +2302,12 @@ export type Database = {
           extraction_version: string;
           id: string;
           jurisdiction_id: string | null;
-          owner_id: string;
+          owner_id: string | null;
+          permit_case_id: string | null;
           permit_type: string | null;
           processing_duration_days: number | null;
           processing_duration_text: string | null;
-          project_id: string;
+          project_id: string | null;
           project_permit_id: string | null;
           review_reason: string | null;
           review_status: string;
@@ -2267,11 +2327,12 @@ export type Database = {
           extraction_version: string;
           id?: string;
           jurisdiction_id?: string | null;
-          owner_id: string;
+          owner_id?: string | null;
+          permit_case_id?: string | null;
           permit_type?: string | null;
           processing_duration_days?: number | null;
           processing_duration_text?: string | null;
-          project_id: string;
+          project_id?: string | null;
           project_permit_id?: string | null;
           review_reason?: string | null;
           review_status?: string;
@@ -2291,11 +2352,12 @@ export type Database = {
           extraction_version?: string;
           id?: string;
           jurisdiction_id?: string | null;
-          owner_id?: string;
+          owner_id?: string | null;
+          permit_case_id?: string | null;
           permit_type?: string | null;
           processing_duration_days?: number | null;
           processing_duration_text?: string | null;
-          project_id?: string;
+          project_id?: string | null;
           project_permit_id?: string | null;
           review_reason?: string | null;
           review_status?: string;
@@ -2318,6 +2380,13 @@ export type Database = {
             columns: ["jurisdiction_id"];
             isOneToOne: false;
             referencedRelation: "jurisdictions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_extraction_candidates_permit_case_id_fkey";
+            columns: ["permit_case_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_cases";
             referencedColumns: ["id"];
           },
           {
@@ -2393,7 +2462,7 @@ export type Database = {
         Row: {
           change_reason: string | null;
           changed_at: string;
-          changed_by: string;
+          changed_by: string | null;
           id: string;
           new_applicability_status: string | null;
           new_status: string | null;
@@ -2406,7 +2475,7 @@ export type Database = {
         Insert: {
           change_reason?: string | null;
           changed_at?: string;
-          changed_by: string;
+          changed_by?: string | null;
           id?: string;
           new_applicability_status?: string | null;
           new_status?: string | null;
@@ -2419,7 +2488,7 @@ export type Database = {
         Update: {
           change_reason?: string | null;
           changed_at?: string;
-          changed_by?: string;
+          changed_by?: string | null;
           id?: string;
           new_applicability_status?: string | null;
           new_status?: string | null;
@@ -2498,7 +2567,7 @@ export type Database = {
           document_id: string | null;
           due_date: string | null;
           id: string;
-          is_required: boolean;
+          is_required: boolean | null;
           name: string;
           notes: string | null;
           project_permit_id: string;
@@ -2519,7 +2588,7 @@ export type Database = {
           document_id?: string | null;
           due_date?: string | null;
           id?: string;
-          is_required?: boolean;
+          is_required?: boolean | null;
           name: string;
           notes?: string | null;
           project_permit_id: string;
@@ -2540,7 +2609,7 @@ export type Database = {
           document_id?: string | null;
           due_date?: string | null;
           id?: string;
-          is_required?: boolean;
+          is_required?: boolean | null;
           name?: string;
           notes?: string | null;
           project_permit_id?: string;
@@ -2938,6 +3007,8 @@ export type Database = {
           application_date: string | null;
           application_url: string | null;
           case_id: string | null;
+          catalogue_rule_snapshot: Json | null;
+          catalogue_rule_version: string | null;
           confidence_band: string | null;
           confidence_score: number | null;
           created_at: string;
@@ -2951,7 +3022,7 @@ export type Database = {
           municipal_confirmation_status: string;
           name: string;
           notes: string | null;
-          owner_id: string;
+          owner_id: string | null;
           permit_rule_id: string | null;
           permit_type: string;
           processing_duration_days: number | null;
@@ -2978,6 +3049,8 @@ export type Database = {
           application_date?: string | null;
           application_url?: string | null;
           case_id?: string | null;
+          catalogue_rule_snapshot?: Json | null;
+          catalogue_rule_version?: string | null;
           confidence_band?: string | null;
           confidence_score?: number | null;
           created_at?: string;
@@ -2991,7 +3064,7 @@ export type Database = {
           municipal_confirmation_status?: string;
           name: string;
           notes?: string | null;
-          owner_id: string;
+          owner_id?: string | null;
           permit_rule_id?: string | null;
           permit_type: string;
           processing_duration_days?: number | null;
@@ -3018,6 +3091,8 @@ export type Database = {
           application_date?: string | null;
           application_url?: string | null;
           case_id?: string | null;
+          catalogue_rule_snapshot?: Json | null;
+          catalogue_rule_version?: string | null;
           confidence_band?: string | null;
           confidence_score?: number | null;
           created_at?: string;
@@ -3031,7 +3106,7 @@ export type Database = {
           municipal_confirmation_status?: string;
           name?: string;
           notes?: string | null;
-          owner_id?: string;
+          owner_id?: string | null;
           permit_rule_id?: string | null;
           permit_type?: string;
           processing_duration_days?: number | null;
@@ -3101,6 +3176,11 @@ export type Database = {
       projects: {
         Row: {
           acquisition_cost: number | null;
+          address_line_2: string | null;
+          address_place_id: string | null;
+          address_provider: string | null;
+          address_region: string | null;
+          building_name: string | null;
           completion_date: string | null;
           construction_cost: number | null;
           created_at: string;
@@ -3109,16 +3189,20 @@ export type Database = {
           equity_amount: number | null;
           id: string;
           interest_rate: number | null;
+          latitude: number | null;
           lead_owner: string | null;
           location: string | null;
+          longitude: number | null;
           municipality: string | null;
           name: string;
           notes: string | null;
-          owner_id: string;
+          owner_id: string | null;
           permit_project_type: string | null;
+          postal_code: string | null;
           probability: number;
           project_description: string | null;
           property_address: string | null;
+          property_id: string | null;
           property_type: string | null;
           revenue_forecast: number | null;
           source: string | null;
@@ -3135,6 +3219,11 @@ export type Database = {
         };
         Insert: {
           acquisition_cost?: number | null;
+          address_line_2?: string | null;
+          address_place_id?: string | null;
+          address_provider?: string | null;
+          address_region?: string | null;
+          building_name?: string | null;
           completion_date?: string | null;
           construction_cost?: number | null;
           created_at?: string;
@@ -3143,16 +3232,20 @@ export type Database = {
           equity_amount?: number | null;
           id?: string;
           interest_rate?: number | null;
+          latitude?: number | null;
           lead_owner?: string | null;
           location?: string | null;
+          longitude?: number | null;
           municipality?: string | null;
           name: string;
           notes?: string | null;
-          owner_id: string;
+          owner_id?: string | null;
           permit_project_type?: string | null;
+          postal_code?: string | null;
           probability?: number;
           project_description?: string | null;
           property_address?: string | null;
+          property_id?: string | null;
           property_type?: string | null;
           revenue_forecast?: number | null;
           source?: string | null;
@@ -3169,6 +3262,11 @@ export type Database = {
         };
         Update: {
           acquisition_cost?: number | null;
+          address_line_2?: string | null;
+          address_place_id?: string | null;
+          address_provider?: string | null;
+          address_region?: string | null;
+          building_name?: string | null;
           completion_date?: string | null;
           construction_cost?: number | null;
           created_at?: string;
@@ -3177,16 +3275,20 @@ export type Database = {
           equity_amount?: number | null;
           id?: string;
           interest_rate?: number | null;
+          latitude?: number | null;
           lead_owner?: string | null;
           location?: string | null;
+          longitude?: number | null;
           municipality?: string | null;
           name?: string;
           notes?: string | null;
-          owner_id?: string;
+          owner_id?: string | null;
           permit_project_type?: string | null;
+          postal_code?: string | null;
           probability?: number;
           project_description?: string | null;
           property_address?: string | null;
+          property_id?: string | null;
           property_type?: string | null;
           revenue_forecast?: number | null;
           source?: string | null;
@@ -3203,10 +3305,430 @@ export type Database = {
         };
         Relationships: [
           {
+            foreignKeyName: "projects_property_id_fkey";
+            columns: ["property_id"];
+            isOneToOne: false;
+            referencedRelation: "properties";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "projects_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      properties: {
+        Row: {
+          address_line_1: string;
+          address_line_2: string | null;
+          archive_reason: string | null;
+          archived_at: string | null;
+          archived_by: string | null;
+          broker_name: string | null;
+          building_name: string | null;
+          country_code: string;
+          created_at: string;
+          currency: string;
+          display_name: string | null;
+          id: string;
+          identity_key: string | null;
+          latitude: number | null;
+          longitude: number | null;
+          municipality: string | null;
+          normalized_address: string;
+          notes: string | null;
+          owner_id: string | null;
+          owner_name: string | null;
+          place_provider: string;
+          postal_code: string | null;
+          price: number | null;
+          project_type: string | null;
+          provider_place_id: string | null;
+          region: string | null;
+          status: string;
+          unit: string | null;
+          updated_at: string;
+          workspace_id: string | null;
+          zoning_designation: string | null;
+          zoning_evidence: Json;
+          zoning_source_url: string | null;
+          zoning_verified_at: string | null;
+        };
+        Insert: {
+          address_line_1: string;
+          address_line_2?: string | null;
+          archive_reason?: string | null;
+          archived_at?: string | null;
+          archived_by?: string | null;
+          broker_name?: string | null;
+          building_name?: string | null;
+          country_code?: string;
+          created_at?: string;
+          currency?: string;
+          display_name?: string | null;
+          id?: string;
+          identity_key?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+          municipality?: string | null;
+          normalized_address: string;
+          notes?: string | null;
+          owner_id?: string | null;
+          owner_name?: string | null;
+          place_provider?: string;
+          postal_code?: string | null;
+          price?: number | null;
+          project_type?: string | null;
+          provider_place_id?: string | null;
+          region?: string | null;
+          status?: string;
+          unit?: string | null;
+          updated_at?: string;
+          workspace_id?: string | null;
+          zoning_designation?: string | null;
+          zoning_evidence?: Json;
+          zoning_source_url?: string | null;
+          zoning_verified_at?: string | null;
+        };
+        Update: {
+          address_line_1?: string;
+          address_line_2?: string | null;
+          archive_reason?: string | null;
+          archived_at?: string | null;
+          archived_by?: string | null;
+          broker_name?: string | null;
+          building_name?: string | null;
+          country_code?: string;
+          created_at?: string;
+          currency?: string;
+          display_name?: string | null;
+          id?: string;
+          identity_key?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+          municipality?: string | null;
+          normalized_address?: string;
+          notes?: string | null;
+          owner_id?: string | null;
+          owner_name?: string | null;
+          place_provider?: string;
+          postal_code?: string | null;
+          price?: number | null;
+          project_type?: string | null;
+          provider_place_id?: string | null;
+          region?: string | null;
+          status?: string;
+          unit?: string | null;
+          updated_at?: string;
+          workspace_id?: string | null;
+          zoning_designation?: string | null;
+          zoning_evidence?: Json;
+          zoning_source_url?: string | null;
+          zoning_verified_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "properties_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      property_activity_events: {
+        Row: {
+          actor_id: string | null;
+          after_state: Json | null;
+          before_state: Json | null;
+          created_at: string;
+          entity_id: string | null;
+          entity_type: string;
+          event_type: string;
+          id: string;
+          metadata: Json;
+          property_id: string;
+          reason: string | null;
+        };
+        Insert: {
+          actor_id?: string | null;
+          after_state?: Json | null;
+          before_state?: Json | null;
+          created_at?: string;
+          entity_id?: string | null;
+          entity_type: string;
+          event_type: string;
+          id?: string;
+          metadata?: Json;
+          property_id: string;
+          reason?: string | null;
+        };
+        Update: {
+          actor_id?: string | null;
+          after_state?: Json | null;
+          before_state?: Json | null;
+          created_at?: string;
+          entity_id?: string | null;
+          entity_type?: string;
+          event_type?: string;
+          id?: string;
+          metadata?: Json;
+          property_id?: string;
+          reason?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "property_activity_events_property_id_fkey";
+            columns: ["property_id"];
+            isOneToOne: false;
+            referencedRelation: "properties";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      property_contacts: {
+        Row: {
+          contact_id: string;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          notes: string | null;
+          property_id: string;
+          role: string;
+        };
+        Insert: {
+          contact_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          notes?: string | null;
+          property_id: string;
+          role?: string;
+        };
+        Update: {
+          contact_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          notes?: string | null;
+          property_id?: string;
+          role?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "property_contacts_contact_id_fkey";
+            columns: ["contact_id"];
+            isOneToOne: false;
+            referencedRelation: "relationship_contacts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "property_contacts_property_id_fkey";
+            columns: ["property_id"];
+            isOneToOne: false;
+            referencedRelation: "properties";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      property_link_change_authorizations: {
+        Row: {
+          actor_id: string | null;
+          created_at: string;
+          entity_id: string;
+          entity_type: string;
+          reason: string;
+          target_project_id: string | null;
+          target_property_id: string | null;
+          target_workspace_id: string | null;
+          transaction_id: number;
+        };
+        Insert: {
+          actor_id?: string | null;
+          created_at?: string;
+          entity_id: string;
+          entity_type: string;
+          reason: string;
+          target_project_id?: string | null;
+          target_property_id?: string | null;
+          target_workspace_id?: string | null;
+          transaction_id: number;
+        };
+        Update: {
+          actor_id?: string | null;
+          created_at?: string;
+          entity_id?: string;
+          entity_type?: string;
+          reason?: string;
+          target_project_id?: string | null;
+          target_property_id?: string | null;
+          target_workspace_id?: string | null;
+          transaction_id?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "property_link_change_authorizations_target_project_id_fkey";
+            columns: ["target_project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "property_link_change_authorizations_target_property_id_fkey";
+            columns: ["target_property_id"];
+            isOneToOne: false;
+            referencedRelation: "properties";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "property_link_change_authorizations_target_workspace_id_fkey";
+            columns: ["target_workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      property_next_action_authorizations: {
+        Row: {
+          actor_id: string;
+          task_id: string;
+          transaction_id: number;
+        };
+        Insert: {
+          actor_id: string;
+          task_id: string;
+          transaction_id: number;
+        };
+        Update: {
+          actor_id?: string;
+          task_id?: string;
+          transaction_id?: number;
+        };
+        Relationships: [];
+      };
+      property_search_documents: {
+        Row: {
+          property_id: string;
+          search_text: string;
+          source_key: string;
+          source_type: string;
+          updated_at: string;
+        };
+        Insert: {
+          property_id: string;
+          search_text: string;
+          source_key: string;
+          source_type: string;
+          updated_at?: string;
+        };
+        Update: {
+          property_id?: string;
+          search_text?: string;
+          source_key?: string;
+          source_type?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "property_search_documents_property_id_fkey";
+            columns: ["property_id"];
+            isOneToOne: false;
+            referencedRelation: "properties";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      property_tasks: {
+        Row: {
+          assigned_to: string | null;
+          completed_at: string | null;
+          created_at: string;
+          created_by: string | null;
+          due_at: string | null;
+          id: string;
+          is_next_action: boolean;
+          notes: string | null;
+          priority: string;
+          property_id: string;
+          status: string;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          assigned_to?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          due_at?: string | null;
+          id?: string;
+          is_next_action?: boolean;
+          notes?: string | null;
+          priority?: string;
+          property_id: string;
+          status?: string;
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          assigned_to?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          due_at?: string | null;
+          id?: string;
+          is_next_action?: boolean;
+          notes?: string | null;
+          priority?: string;
+          property_id?: string;
+          status?: string;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "property_tasks_property_id_fkey";
+            columns: ["property_id"];
+            isOneToOne: false;
+            referencedRelation: "properties";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      property_urls: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          label: string | null;
+          property_id: string;
+          url: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          label?: string | null;
+          property_id: string;
+          url: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          label?: string | null;
+          property_id?: string;
+          url?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "property_urls_property_id_fkey";
+            columns: ["property_id"];
+            isOneToOne: false;
+            referencedRelation: "properties";
             referencedColumns: ["id"];
           },
         ];
@@ -3316,7 +3838,7 @@ export type Database = {
           last_contacted_at: string | null;
           next_follow_up_at: string | null;
           notes: string | null;
-          owner_id: string;
+          owner_id: string | null;
           phone: string | null;
           relationship_type: string;
           strength: string;
@@ -3333,7 +3855,7 @@ export type Database = {
           last_contacted_at?: string | null;
           next_follow_up_at?: string | null;
           notes?: string | null;
-          owner_id: string;
+          owner_id?: string | null;
           phone?: string | null;
           relationship_type?: string;
           strength?: string;
@@ -3350,7 +3872,7 @@ export type Database = {
           last_contacted_at?: string | null;
           next_follow_up_at?: string | null;
           notes?: string | null;
-          owner_id?: string;
+          owner_id?: string | null;
           phone?: string | null;
           relationship_type?: string;
           strength?: string;
@@ -4210,21 +4732,21 @@ export type Database = {
       workspaces: {
         Row: {
           created_at: string;
-          created_by: string;
+          created_by: string | null;
           id: string;
           name: string;
           updated_at: string;
         };
         Insert: {
           created_at?: string;
-          created_by: string;
+          created_by?: string | null;
           id?: string;
           name: string;
           updated_at?: string;
         };
         Update: {
           created_at?: string;
-          created_by?: string;
+          created_by?: string | null;
           id?: string;
           name?: string;
           updated_at?: string;
@@ -4353,6 +4875,23 @@ export type Database = {
         Args: { p_canonical: string; p_prev_hash: string };
         Returns: string;
       };
+      authorize_property_link_change: {
+        Args: {
+          p_actor_id: string;
+          p_entity_id: string;
+          p_entity_type: string;
+          p_reason: string;
+          p_target_project_id: string;
+          p_target_property_id: string;
+          p_target_workspace_id: string;
+        };
+        Returns: undefined;
+      };
+      canonical_property_municipality: {
+        Args: { p_value: string };
+        Returns: string;
+      };
+      canonical_property_region: { Args: { p_value: string }; Returns: string };
       claim_document_upload_cleanup: {
         Args: { p_limit?: number };
         Returns: {
@@ -4378,7 +4917,7 @@ export type Database = {
           lease_owner: string | null;
           max_attempts: number;
           message: string | null;
-          owner_id: string;
+          owner_id: string | null;
           pending_upload_id: string | null;
           permit_case_id: string | null;
           priority: number;
@@ -4424,11 +4963,19 @@ export type Database = {
         };
         Returns: boolean;
       };
+      copy_property_to_workspace: {
+        Args: {
+          p_actor_id: string;
+          p_source_property_id: string;
+          p_workspace_id: string;
+        };
+        Returns: string;
+      };
       create_workspace: {
         Args: { p_name: string };
         Returns: {
           created_at: string;
-          created_by: string;
+          created_by: string | null;
           id: string;
           name: string;
           updated_at: string;
@@ -4451,6 +4998,34 @@ export type Database = {
       delete_underwriting_outputs: {
         Args: { p_project_id: string };
         Returns: undefined;
+      };
+      document_parent_write_access: {
+        Args: { p_permit_case_id: string; p_project_id: string };
+        Returns: boolean;
+      };
+      document_parent_write_access_for_user: {
+        Args: {
+          p_permit_case_id: string;
+          p_project_id: string;
+          p_user_id: string;
+        };
+        Returns: boolean;
+      };
+      document_read_access: {
+        Args: { p_document_id: string };
+        Returns: boolean;
+      };
+      document_storage_delete_access: {
+        Args: { p_storage_path: string };
+        Returns: boolean;
+      };
+      document_storage_read_access: {
+        Args: { p_storage_path: string };
+        Returns: boolean;
+      };
+      document_write_access: {
+        Args: { p_document_id: string };
+        Returns: boolean;
       };
       enqueue_document_verification: {
         Args: { p_upload_id: string };
@@ -4475,6 +5050,10 @@ export type Database = {
           object_path: string;
         }[];
       };
+      generate_permit_catalogue_candidates: {
+        Args: { p_parent_id: string; p_parent_kind: string };
+        Returns: Json;
+      };
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"];
@@ -4491,13 +5070,70 @@ export type Database = {
         Returns: boolean;
       };
       is_workspace_member: { Args: { ws: string }; Returns: boolean };
+      list_property_activity: {
+        Args: {
+          p_before_created_at?: string;
+          p_before_id?: string;
+          p_limit?: number;
+          p_property_id: string;
+        };
+        Returns: {
+          actor_id: string;
+          after_state: Json;
+          before_state: Json;
+          created_at: string;
+          entity_id: string;
+          entity_type: string;
+          event_type: string;
+          id: string;
+          metadata: Json;
+          property_id: string;
+          reason: string;
+          total_count: number;
+        }[];
+      };
+      normalize_property_address: {
+        Args: {
+          p_address_line_1: string;
+          p_address_line_2?: string;
+          p_municipality?: string;
+          p_postal_code?: string;
+          p_region?: string;
+          p_unit?: string;
+        };
+        Returns: string;
+      };
+      normalize_property_search_text: {
+        Args: { p_value: string };
+        Returns: string;
+      };
+      pending_upload_storage_insert_access: {
+        Args: { p_storage_path: string };
+        Returns: boolean;
+      };
       permit_case_access: { Args: { p_case_id: string }; Returns: boolean };
       permit_case_write_access: {
         Args: { p_case_id: string };
         Returns: boolean;
       };
+      permit_catalogue_municipality_approved: {
+        Args: { p_municipality: string };
+        Returns: boolean;
+      };
+      permit_catalogue_scope_signalled: {
+        Args: {
+          p_permit_type: string;
+          p_work_categories: string[];
+          p_work_type: string;
+        };
+        Returns: boolean;
+      };
       permit_pilot_access: { Args: never; Returns: boolean };
       permit_project_access: {
+        Args: { p_project_id: string };
+        Returns: boolean;
+      };
+      permit_project_read_access: {
         Args: { p_project_id: string };
         Returns: boolean;
       };
@@ -4578,6 +5214,61 @@ export type Database = {
           upload_id: string;
         }[];
       };
+      property_access: { Args: { p_property_id: string }; Returns: boolean };
+      property_identity_is_strong: {
+        Args: {
+          p_latitude: number;
+          p_longitude: number;
+          p_municipality: string;
+          p_place_provider: string;
+          p_postal_code: string;
+          p_provider_place_id: string;
+        };
+        Returns: boolean;
+      };
+      property_identity_key: {
+        Args: {
+          p_address_line_2: string;
+          p_latitude: number;
+          p_longitude: number;
+          p_municipality: string;
+          p_normalized_address: string;
+          p_place_provider: string;
+          p_postal_code: string;
+          p_provider_place_id: string;
+          p_unit: string;
+        };
+        Returns: string;
+      };
+      property_query_tokens: { Args: { p_query: string }; Returns: string[] };
+      property_search_like_pattern: {
+        Args: { p_token: string };
+        Returns: string;
+      };
+      property_search_match_scopes: {
+        Args: { p_property_ids: string[]; p_query: string };
+        Returns: {
+          match_scope: string;
+          property_id: string;
+        }[];
+      };
+      property_unit_identity: {
+        Args: { p_address_line_2: string; p_unit: string };
+        Returns: string;
+      };
+      property_write_access: {
+        Args: { p_property_id: string };
+        Returns: boolean;
+      };
+      record_permit_research_candidates: {
+        Args: {
+          p_candidates: Json;
+          p_document_id: string;
+          p_requested_by: string;
+          p_scope: string;
+        };
+        Returns: Json;
+      };
       reject_document_upload: {
         Args: { p_owner_id: string; p_reason: string; p_upload_id: string };
         Returns: boolean;
@@ -4610,14 +5301,78 @@ export type Database = {
           isSetofReturn: false;
         };
       };
-      set_permit_case_project: {
+      review_permit_extraction_candidate: {
+        Args: { p_candidate_id: string; p_decision: string; p_reason: string };
+        Returns: {
+          candidate_id: string;
+          decision: string;
+          project_permit_id: string;
+        }[];
+      };
+      search_properties: {
         Args: {
-          p_case_id: string;
-          p_expected_version: number;
-          p_project_id?: string;
-          p_reason: string;
+          p_include_archived?: boolean;
+          p_limit?: number;
+          p_max_price?: number;
+          p_min_price?: number;
+          p_municipality?: string;
+          p_project_type?: string;
+          p_query?: string;
+          p_workspace_id?: string;
         };
         Returns: {
+          address_line_1: string;
+          address_line_2: string | null;
+          archive_reason: string | null;
+          archived_at: string | null;
+          archived_by: string | null;
+          broker_name: string | null;
+          building_name: string | null;
+          country_code: string;
+          created_at: string;
+          currency: string;
+          display_name: string | null;
+          id: string;
+          identity_key: string | null;
+          latitude: number | null;
+          longitude: number | null;
+          municipality: string | null;
+          normalized_address: string;
+          notes: string | null;
+          owner_id: string | null;
+          owner_name: string | null;
+          place_provider: string;
+          postal_code: string | null;
+          price: number | null;
+          project_type: string | null;
+          provider_place_id: string | null;
+          region: string | null;
+          status: string;
+          unit: string | null;
+          updated_at: string;
+          workspace_id: string | null;
+          zoning_designation: string | null;
+          zoning_evidence: Json;
+          zoning_source_url: string | null;
+          zoning_verified_at: string | null;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "properties";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
+      set_permit_case_archived: {
+        Args: { p_archived: boolean; p_case_id: string; p_reason: string };
+        Returns: {
+          address_line_2: string | null;
+          address_place_id: string | null;
+          address_provider: string | null;
+          archive_reason: string | null;
+          archived_at: string | null;
+          archived_by: string | null;
+          building_name: string | null;
           created_at: string;
           description: string | null;
           existing_use: string | null;
@@ -4625,14 +5380,18 @@ export type Database = {
           id: string;
           issue_date: string | null;
           known_conditions: string | null;
+          latitude: number | null;
+          longitude: number | null;
           municipality: string | null;
           municipality_confirmed: boolean;
           name: string;
           notes: string | null;
-          owner_id: string;
+          owner_id: string | null;
+          postal_code: string | null;
           project_context: string | null;
           project_id: string | null;
           property_address: string | null;
+          property_id: string | null;
           property_type: string | null;
           proposed_use: string | null;
           province: string;
@@ -4654,10 +5413,100 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      set_permit_case_project: {
+        Args: {
+          p_case_id: string;
+          p_expected_version: number;
+          p_project_id?: string;
+          p_reason: string;
+        };
+        Returns: {
+          address_line_2: string | null;
+          address_place_id: string | null;
+          address_provider: string | null;
+          archive_reason: string | null;
+          archived_at: string | null;
+          archived_by: string | null;
+          building_name: string | null;
+          created_at: string;
+          description: string | null;
+          existing_use: string | null;
+          expiration_date: string | null;
+          id: string;
+          issue_date: string | null;
+          known_conditions: string | null;
+          latitude: number | null;
+          longitude: number | null;
+          municipality: string | null;
+          municipality_confirmed: boolean;
+          name: string;
+          notes: string | null;
+          owner_id: string | null;
+          postal_code: string | null;
+          project_context: string | null;
+          project_id: string | null;
+          property_address: string | null;
+          property_id: string | null;
+          property_type: string | null;
+          proposed_use: string | null;
+          province: string;
+          row_version: number;
+          target_date: string | null;
+          updated_at: string;
+          work_categories: string[];
+          work_type: string | null;
+          workspace_id: string | null;
+          zoning_designation: string | null;
+          zoning_source: string | null;
+          zoning_source_kind: string;
+          zoning_verified_at: string | null;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "permit_cases";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      set_property_next_action: {
+        Args: { p_enabled?: boolean; p_task_id: string };
+        Returns: {
+          assigned_to: string | null;
+          completed_at: string | null;
+          created_at: string;
+          created_by: string | null;
+          due_at: string | null;
+          id: string;
+          is_next_action: boolean;
+          notes: string | null;
+          priority: string;
+          property_id: string;
+          status: string;
+          title: string;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "property_tasks";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      show_limit: { Args: never; Returns: number };
+      show_trgm: { Args: { "": string }; Returns: string[] };
       transfer_permit_case_to_workspace: {
         Args: { p_case_id: string; p_reason: string; p_workspace_id: string };
         Returns: string;
       };
+      transfer_personal_property_to_workspace: {
+        Args: {
+          p_property_id: string;
+          p_reason: string;
+          p_workspace_id: string;
+        };
+        Returns: string;
+      };
+      user_deprovision_blockers: { Args: { p_user_id: string }; Returns: Json };
       verify_audit_chain: { Args: { p_project: string }; Returns: Json };
       workspace_role: { Args: { ws: string }; Returns: string };
     };

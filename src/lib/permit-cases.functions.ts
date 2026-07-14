@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { z } from "zod";
 import { canonicalPermitMunicipality } from "@/lib/permit-municipalities";
+import { z } from "zod";
 
 export const PROPERTY_TYPES = [
   "residential",
@@ -38,9 +38,16 @@ const caseShape = z.object({
   project_id: z.string().uuid().nullable().optional(),
   name: z.string().trim().min(1).max(250),
   property_address: z.string().max(500).nullable().optional(),
+  address_line_2: z.string().max(200).nullable().optional(),
+  building_name: z.string().max(250).nullable().optional(),
+  address_provider: z.enum(["google_places", "openstreetmap", "manual"]).nullable().optional(),
+  address_place_id: z.string().max(500).nullable().optional(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
   municipality: z.string().max(200).nullable().optional(),
   municipality_confirmed: z.boolean().default(false),
   province: z.string().min(1).max(100).default("British Columbia"),
+  postal_code: z.string().max(30).nullable().optional(),
   property_type: z.enum(PROPERTY_TYPES).nullable().optional(),
   work_type: z.enum(WORK_TYPES).nullable().optional(),
   project_context: z.enum(PROJECT_CONTEXTS).nullable().optional(),
@@ -181,6 +188,27 @@ export const updatePermitCase = createServerFn({ method: "POST" })
     return r.data;
   });
 
+export const setPermitCaseArchived = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) =>
+    z
+      .object({
+        case_id: z.string().uuid(),
+        archived: z.boolean(),
+        reason: z.string().trim().min(1).max(1000),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const result = await (context.supabase as any).rpc("set_permit_case_archived", {
+      p_case_id: data.case_id,
+      p_archived: data.archived,
+      p_reason: data.reason,
+    });
+    if (result.error) throw new Error(result.error.message);
+    return result.data;
+  });
+
 export const transferPermitCaseToWorkspace = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) =>
@@ -252,65 +280,68 @@ export const generateCasePermitCandidates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => z.object({ case_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
+    const result = await (context.supabase as any).rpc("generate_permit_catalogue_candidates", {
+      p_parent_kind: "permit_case",
+      p_parent_id: data.case_id,
+    });
+    if (result.error) throw new Error(result.error.message);
+    return result.data;
+  });
+
+export const listPermitCaseExtractionCandidates = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => z.object({ case_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const result = await (context.supabase as any)
+      .from("permit_extraction_candidates")
+      .select("*,documents(name)")
+      .eq("permit_case_id", data.case_id)
+      .order("created_at", { ascending: false });
+    if (result.error) throw new Error(result.error.message);
+    return result.data ?? [];
+  });
+
+export const extractPermitCaseDocumentCandidates = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) =>
+    z.object({ case_id: z.string().uuid(), document_id: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
     const db = context.supabase as any;
-    const c = await db.from("permit_cases").select("*").eq("id", data.case_id).single();
-    if (c.error) throw new Error(c.error.message);
-    if (!c.data.municipality_confirmed || !c.data.municipality)
-      throw new Error("Confirm the municipality before generating permit candidates.");
-    const municipality = canonicalPermitMunicipality(c.data.municipality);
-    const j = await db
-      .from("jurisdictions")
-      .select("id,name,jurisdiction_type")
-      .eq("name", municipality)
-      .eq("jurisdiction_type", "municipality")
-      .eq("active", true)
+    const documentResult = await db
+      .from("documents")
+      .select(
+        "id,owner_id,project_id,permit_case_id,name,file_type,storage_path,size_bytes,scan_status,status",
+      )
+      .eq("id", data.document_id)
+      .eq("permit_case_id", data.case_id)
       .single();
-    if (j.error) throw new Error("The confirmed municipality is not in the current permit pilot.");
-    const rules = await db
-      .from("permit_rules")
-      .select("*")
-      .eq("jurisdiction_id", j.data.id)
-      .is("superseded_at", null)
-      .order("permit_type");
-    if (rules.error) throw new Error(rules.error.message);
-    const existing = await db
-      .from("project_permits")
-      .select("permit_rule_id")
-      .eq("case_id", data.case_id);
-    if (existing.error) throw new Error(existing.error.message);
-    const ids = new Set((existing.data ?? []).map((x: any) => x.permit_rule_id));
-    const rows = (rules.data ?? [])
-      .filter((x: any) => !ids.has(x.id))
-      .map((x: any) => ({
-        case_id: data.case_id,
-        project_id: c.data.project_id,
-        owner_id: context.userId,
-        jurisdiction_id: j.data.id,
-        permit_rule_id: x.id,
-        name: x.name,
-        permit_type: x.permit_type,
-        description: x.description,
-        applicability_status: "unknown",
-        workflow_status: "not_started",
-        is_required: null,
-        processing_duration_text: x.published_duration_text,
-        processing_duration_days: x.published_duration_days,
-        duration_source: x.published_duration_text ? x.official_source_url : null,
-        application_url: x.application_url ?? x.official_source_url,
-        source_location: x.source_title,
-        source_text: x.source_text,
-        source_url: x.official_source_url,
-        source_reviewed_at: x.review_date,
-        source_freshness_status: x.freshness_status,
-        source_official_status: x.official_source_status,
-        source_kind: x.verification_status === "verified" ? "verified_source" : "needs_review",
-        confidence_band: "catalogue_candidate_scope_unconfirmed",
-        notes: `Candidate generated from ${j.data.name} rule ${x.rule_version}. Applicability requires review against verified case facts.`,
-      }));
-    if (!rows.length) return { created: 0, jurisdiction: j.data.name };
-    const ins = await db.from("project_permits").insert(rows);
-    if (ins.error) throw new Error(ins.error.message);
-    return { created: rows.length, jurisdiction: j.data.name };
+    if (documentResult.error) throw new Error(documentResult.error.message);
+    const access = await db.rpc("permit_case_write_access", { p_case_id: data.case_id });
+    if (access.error || !access.data) throw new Error("Permit case write access is required.");
+    const { requestPermitDocumentResearch } = await import("./permit-research.server");
+    return requestPermitDocumentResearch(context, documentResult.data, "case");
+  });
+
+export const reviewPermitCaseExtractionCandidate = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        decision: z.enum(["accepted", "rejected"]),
+        reason: z.string().trim().min(1).max(1000),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const reviewed = await (context.supabase as any).rpc("review_permit_extraction_candidate", {
+      p_candidate_id: data.id,
+      p_decision: data.decision,
+      p_reason: data.reason,
+    });
+    if (reviewed.error) throw new Error(reviewed.error.message);
+    return reviewed.data;
   });
 
 export const getPermitCaseCollaboration = createServerFn({ method: "GET" })

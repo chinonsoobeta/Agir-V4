@@ -66,6 +66,8 @@ import { useWorkspace } from "@/lib/workspace-context";
 import { usePreferences } from "@/lib/preferences";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DemoPackagePicker } from "@/components/demo-package-picker";
+import { AddressAutocomplete } from "@/components/permits/address-autocomplete";
+import { PERMIT_MUNICIPALITIES } from "@/lib/permit-municipalities";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -606,7 +608,13 @@ function DealCard({ d }: { d: DealSummary }) {
         </>
       ) : (
         <div className="border-t border-border pt-4">
-          <div className="text-sm text-muted-foreground">Not yet underwritten.</div>
+          <div className="text-sm text-muted-foreground">
+            {d.underwritingFreshness === "stale"
+              ? "Inputs changed after the last run. Re-run underwriting."
+              : d.underwritingFreshness === "blocked"
+                ? "Underwriting is blocked by unresolved inputs."
+                : "Not yet underwritten."}
+          </div>
           <div className={`text-xs font-semibold uppercase tracking-wider mt-1 ${TONE_TEXT[tone]}`}>
             {(d.nextAction ?? "Begin review").toUpperCase()}
           </div>
@@ -722,11 +730,15 @@ function DealTable({
                   </td>
                 )}
                 <td>
-                  <Link to="/projects/$id" params={{ id: deal.id }}>
-                    <Button variant="ghost" size="icon">
+                  <Button asChild variant="ghost" size="icon">
+                    <Link
+                      to="/projects/$id"
+                      params={{ id: deal.id }}
+                      aria-label={`Open ${deal.name}`}
+                    >
                       <ArrowRight className="size-4" />
-                    </Button>
-                  </Link>
+                    </Link>
+                  </Button>
                 </td>
               </tr>
             );
@@ -776,7 +788,15 @@ function NewDealDialog({ onClose, createFn }: { onClose: () => void; createFn: a
     target_close_date: "",
     lead_owner: "",
     property_address: "",
+    address_line_2: "",
+    building_name: "",
+    address_provider: "manual",
+    address_place_id: null as string | null,
+    latitude: null as number | null,
+    longitude: null as number | null,
     municipality: "",
+    address_region: "British Columbia",
+    postal_code: "",
     permit_project_type: "other",
     property_type: "industrial",
     project_description: "",
@@ -933,9 +953,52 @@ function NewDealDialog({ onClose, createFn }: { onClose: () => void; createFn: a
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <Label>Property address</Label>
-                <Input
+                <AddressAutocomplete
                   value={form.property_address}
-                  onChange={(e) => setForm({ ...form, property_address: e.target.value })}
+                  onChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      property_address: value,
+                      building_name:
+                        current.address_provider === "manual" ? current.building_name : "",
+                      municipality:
+                        current.address_provider === "manual" ? current.municipality : "",
+                      postal_code: current.address_provider === "manual" ? current.postal_code : "",
+                      address_provider: "manual",
+                      address_place_id: null,
+                      latitude: null,
+                      longitude: null,
+                    }))
+                  }
+                  onSelect={(selection) =>
+                    setForm({
+                      ...form,
+                      property_address: selection.addressLine1,
+                      building_name: selection.buildingName ?? form.building_name,
+                      municipality: selection.municipality ?? form.municipality,
+                      address_region: selection.province ?? form.address_region,
+                      postal_code: selection.postalCode ?? form.postal_code,
+                      address_provider: selection.provider,
+                      address_place_id: selection.placeId,
+                      latitude: selection.latitude,
+                      longitude: selection.longitude,
+                    })
+                  }
+                  placeholder="Search an address or building name"
+                />
+              </div>
+              <div>
+                <Label>Building or complex</Label>
+                <Input
+                  value={form.building_name}
+                  onChange={(e) => setForm({ ...form, building_name: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Unit, suite, or apartment</Label>
+                <Input
+                  value={form.address_line_2}
+                  onChange={(e) => setForm({ ...form, address_line_2: e.target.value })}
                 />
               </div>
               <div>
@@ -948,20 +1011,28 @@ function NewDealDialog({ onClose, createFn }: { onClose: () => void; createFn: a
                     <SelectValue placeholder="Confirm municipality" />
                   </SelectTrigger>
                   <SelectContent>
-                    {[
-                      "City of Vancouver",
-                      "City of Burnaby",
-                      "City of Richmond",
-                      "City of Surrey",
-                      "City of Coquitlam",
-                      "City of Kelowna",
-                    ].map((v) => (
+                    {PERMIT_MUNICIPALITIES.map((v) => (
                       <SelectItem key={v} value={v}>
                         {v}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div>
+                <Label>Province</Label>
+                <Input
+                  value={form.address_region}
+                  onChange={(e) => setForm({ ...form, address_region: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Postal code</Label>
+                <Input
+                  value={form.postal_code}
+                  onChange={(e) => setForm({ ...form, postal_code: e.target.value })}
+                  autoComplete="postal-code"
+                />
               </div>
               <div>
                 <Label>Project type</Label>

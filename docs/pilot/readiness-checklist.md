@@ -4,7 +4,8 @@ Run before granting a sandbox workspace to an external evaluator.
 
 ## Automated Gates
 
-- `npm run pilot:gate`
+- `npm run ops:release` (mandatory release proof; requires a disposable Supabase environment)
+- `npm run pilot:gate -- --full`
 - `npm run smoke:fresh-env`
 - `npm run pilot:audit`
 - `npm run backend:audit`
@@ -16,10 +17,10 @@ Run before granting a sandbox workspace to an external evaluator.
 - `npm run test:e2e`
 - `npm run test:rls`
 
-Use `npm run pilot:gate -- --quick` for a faster local preflight. Use
-`npm run pilot:gate -- --full` when the pilot environment has database and E2E
-targets configured; the summary marks DB/browser checks as skipped when their
-required environment variables are absent.
+Use `npm run pilot:gate -- --quick` only as a faster local preflight. It is not
+release evidence. The default gate exits nonzero when a required database or
+browser check is skipped. Use `npm run ops:release` against a disposable,
+freshly provisioned Supabase environment for the complete automated proof.
 
 Armed DB-backed checks:
 

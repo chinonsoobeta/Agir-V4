@@ -65,9 +65,11 @@ analyzeDocument (server fn)          worker process                the app
 - App endpoint unreachable: the job is marked failed with the HTTP status;
   retry by re-clicking "Run AI analysis" (idempotent claim) after the app is
   back.
-- AI provider hang: the model call is bounded by a 120s abort signal in the
-  executor, so a hung provider fails the job (retryable) instead of pinning
-  the worker.
+- AI provider hang: each platform-provider attempt is bounded by a 120s
+  timeout. When a second configured provider is allowed, the shared gateway
+  tries it before completing with a clearly audited deterministic text excerpt,
+  so a provider outage cannot discard successful document parsing or pin the
+  worker indefinitely.
 - `EXTRACTION_ASYNC=1` with no worker running: jobs sit visibly "queued" -
   the badge makes the misconfiguration observable. Production deployment gates
   require the token and worker contract; alert on queue age and dead letters.

@@ -19,6 +19,7 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedScenariosRouteImport } from './routes/_authenticated/scenarios'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
 import { Route as AuthenticatedRelationshipsRouteImport } from './routes/_authenticated/relationships'
+import { Route as AuthenticatedPropertiesRouteImport } from './routes/_authenticated/properties'
 import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated/projects'
 import { Route as AuthenticatedPortfolioRouteImport } from './routes/_authenticated/portfolio'
 import { Route as AuthenticatedPermitsRouteImport } from './routes/_authenticated/permits'
@@ -34,9 +35,11 @@ import { Route as AuthenticatedCommitteeRouteImport } from './routes/_authentica
 import { Route as AuthenticatedAssumptionsRouteImport } from './routes/_authenticated/assumptions'
 import { Route as AuthenticatedAnalysisRouteImport } from './routes/_authenticated/analysis'
 import { Route as AuthenticatedAcceptInviteRouteImport } from './routes/_authenticated/accept-invite'
+import { Route as AuthenticatedPropertiesIndexRouteImport } from './routes/_authenticated/properties.index'
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects.index'
 import { Route as AuthenticatedPermitsIndexRouteImport } from './routes/_authenticated/permits.index'
 import { Route as ApiExtractionWorkerRouteImport } from './routes/api/extraction/worker'
+import { Route as AuthenticatedPropertiesPropertyIdRouteImport } from './routes/_authenticated/properties.$propertyId'
 import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects.$id'
 import { Route as AuthenticatedPermitsNewRouteImport } from './routes/_authenticated/permits.new'
 import { Route as AuthenticatedPermitsCaseIdRouteImport } from './routes/_authenticated/permits.$caseId'
@@ -93,6 +96,11 @@ const AuthenticatedRelationshipsRoute =
     path: '/relationships',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedPropertiesRoute = AuthenticatedPropertiesRouteImport.update({
+  id: '/properties',
+  path: '/properties',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedProjectsRoute = AuthenticatedProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
@@ -171,6 +179,12 @@ const AuthenticatedAcceptInviteRoute =
     path: '/accept-invite',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedPropertiesIndexRoute =
+  AuthenticatedPropertiesIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedPropertiesRoute,
+  } as any)
 const AuthenticatedProjectsIndexRoute =
   AuthenticatedProjectsIndexRouteImport.update({
     id: '/',
@@ -188,6 +202,12 @@ const ApiExtractionWorkerRoute = ApiExtractionWorkerRouteImport.update({
   path: '/api/extraction/worker',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedPropertiesPropertyIdRoute =
+  AuthenticatedPropertiesPropertyIdRouteImport.update({
+    id: '/$propertyId',
+    path: '/$propertyId',
+    getParentRoute: () => AuthenticatedPropertiesRoute,
+  } as any)
 const AuthenticatedProjectsIdRoute = AuthenticatedProjectsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -234,6 +254,7 @@ export interface FileRoutesByFullPath {
   '/permits': typeof AuthenticatedPermitsRouteWithChildren
   '/portfolio': typeof AuthenticatedPortfolioRoute
   '/projects': typeof AuthenticatedProjectsRouteWithChildren
+  '/properties': typeof AuthenticatedPropertiesRouteWithChildren
   '/relationships': typeof AuthenticatedRelationshipsRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/scenarios': typeof AuthenticatedScenariosRoute
@@ -243,9 +264,11 @@ export interface FileRoutesByFullPath {
   '/permits/$caseId': typeof AuthenticatedPermitsCaseIdRoute
   '/permits/new': typeof AuthenticatedPermitsNewRoute
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
+  '/properties/$propertyId': typeof AuthenticatedPropertiesPropertyIdRoute
   '/api/extraction/worker': typeof ApiExtractionWorkerRoute
   '/permits/': typeof AuthenticatedPermitsIndexRoute
   '/projects/': typeof AuthenticatedProjectsIndexRoute
+  '/properties/': typeof AuthenticatedPropertiesIndexRoute
   '/api/scim/v2/Users': typeof ApiScimV2UsersRouteWithChildren
   '/api/scim/v2/Users/$id': typeof ApiScimV2UsersIdRoute
 }
@@ -275,9 +298,11 @@ export interface FileRoutesByTo {
   '/permits/$caseId': typeof AuthenticatedPermitsCaseIdRoute
   '/permits/new': typeof AuthenticatedPermitsNewRoute
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
+  '/properties/$propertyId': typeof AuthenticatedPropertiesPropertyIdRoute
   '/api/extraction/worker': typeof ApiExtractionWorkerRoute
   '/permits': typeof AuthenticatedPermitsIndexRoute
   '/projects': typeof AuthenticatedProjectsIndexRoute
+  '/properties': typeof AuthenticatedPropertiesIndexRoute
   '/api/scim/v2/Users': typeof ApiScimV2UsersRouteWithChildren
   '/api/scim/v2/Users/$id': typeof ApiScimV2UsersIdRoute
 }
@@ -302,6 +327,7 @@ export interface FileRoutesById {
   '/_authenticated/permits': typeof AuthenticatedPermitsRouteWithChildren
   '/_authenticated/portfolio': typeof AuthenticatedPortfolioRoute
   '/_authenticated/projects': typeof AuthenticatedProjectsRouteWithChildren
+  '/_authenticated/properties': typeof AuthenticatedPropertiesRouteWithChildren
   '/_authenticated/relationships': typeof AuthenticatedRelationshipsRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
   '/_authenticated/scenarios': typeof AuthenticatedScenariosRoute
@@ -311,9 +337,11 @@ export interface FileRoutesById {
   '/_authenticated/permits/$caseId': typeof AuthenticatedPermitsCaseIdRoute
   '/_authenticated/permits/new': typeof AuthenticatedPermitsNewRoute
   '/_authenticated/projects/$id': typeof AuthenticatedProjectsIdRoute
+  '/_authenticated/properties/$propertyId': typeof AuthenticatedPropertiesPropertyIdRoute
   '/api/extraction/worker': typeof ApiExtractionWorkerRoute
   '/_authenticated/permits/': typeof AuthenticatedPermitsIndexRoute
   '/_authenticated/projects/': typeof AuthenticatedProjectsIndexRoute
+  '/_authenticated/properties/': typeof AuthenticatedPropertiesIndexRoute
   '/api/scim/v2/Users': typeof ApiScimV2UsersRouteWithChildren
   '/api/scim/v2/Users/$id': typeof ApiScimV2UsersIdRoute
 }
@@ -338,6 +366,7 @@ export interface FileRouteTypes {
     | '/permits'
     | '/portfolio'
     | '/projects'
+    | '/properties'
     | '/relationships'
     | '/reports'
     | '/scenarios'
@@ -347,9 +376,11 @@ export interface FileRouteTypes {
     | '/permits/$caseId'
     | '/permits/new'
     | '/projects/$id'
+    | '/properties/$propertyId'
     | '/api/extraction/worker'
     | '/permits/'
     | '/projects/'
+    | '/properties/'
     | '/api/scim/v2/Users'
     | '/api/scim/v2/Users/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -379,9 +410,11 @@ export interface FileRouteTypes {
     | '/permits/$caseId'
     | '/permits/new'
     | '/projects/$id'
+    | '/properties/$propertyId'
     | '/api/extraction/worker'
     | '/permits'
     | '/projects'
+    | '/properties'
     | '/api/scim/v2/Users'
     | '/api/scim/v2/Users/$id'
   id:
@@ -405,6 +438,7 @@ export interface FileRouteTypes {
     | '/_authenticated/permits'
     | '/_authenticated/portfolio'
     | '/_authenticated/projects'
+    | '/_authenticated/properties'
     | '/_authenticated/relationships'
     | '/_authenticated/reports'
     | '/_authenticated/scenarios'
@@ -414,9 +448,11 @@ export interface FileRouteTypes {
     | '/_authenticated/permits/$caseId'
     | '/_authenticated/permits/new'
     | '/_authenticated/projects/$id'
+    | '/_authenticated/properties/$propertyId'
     | '/api/extraction/worker'
     | '/_authenticated/permits/'
     | '/_authenticated/projects/'
+    | '/_authenticated/properties/'
     | '/api/scim/v2/Users'
     | '/api/scim/v2/Users/$id'
   fileRoutesById: FileRoutesById
@@ -502,6 +538,13 @@ declare module '@tanstack/react-router' {
       path: '/relationships'
       fullPath: '/relationships'
       preLoaderRoute: typeof AuthenticatedRelationshipsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/properties': {
+      id: '/_authenticated/properties'
+      path: '/properties'
+      fullPath: '/properties'
+      preLoaderRoute: typeof AuthenticatedPropertiesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/projects': {
@@ -609,6 +652,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAcceptInviteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/properties/': {
+      id: '/_authenticated/properties/'
+      path: '/'
+      fullPath: '/properties/'
+      preLoaderRoute: typeof AuthenticatedPropertiesIndexRouteImport
+      parentRoute: typeof AuthenticatedPropertiesRoute
+    }
     '/_authenticated/projects/': {
       id: '/_authenticated/projects/'
       path: '/'
@@ -629,6 +679,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/extraction/worker'
       preLoaderRoute: typeof ApiExtractionWorkerRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/properties/$propertyId': {
+      id: '/_authenticated/properties/$propertyId'
+      path: '/$propertyId'
+      fullPath: '/properties/$propertyId'
+      preLoaderRoute: typeof AuthenticatedPropertiesPropertyIdRouteImport
+      parentRoute: typeof AuthenticatedPropertiesRoute
     }
     '/_authenticated/projects/$id': {
       id: '/_authenticated/projects/$id'
@@ -698,6 +755,23 @@ const AuthenticatedProjectsRouteWithChildren =
     AuthenticatedProjectsRouteChildren,
   )
 
+interface AuthenticatedPropertiesRouteChildren {
+  AuthenticatedPropertiesPropertyIdRoute: typeof AuthenticatedPropertiesPropertyIdRoute
+  AuthenticatedPropertiesIndexRoute: typeof AuthenticatedPropertiesIndexRoute
+}
+
+const AuthenticatedPropertiesRouteChildren: AuthenticatedPropertiesRouteChildren =
+  {
+    AuthenticatedPropertiesPropertyIdRoute:
+      AuthenticatedPropertiesPropertyIdRoute,
+    AuthenticatedPropertiesIndexRoute: AuthenticatedPropertiesIndexRoute,
+  }
+
+const AuthenticatedPropertiesRouteWithChildren =
+  AuthenticatedPropertiesRoute._addFileChildren(
+    AuthenticatedPropertiesRouteChildren,
+  )
+
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAcceptInviteRoute: typeof AuthenticatedAcceptInviteRoute
   AuthenticatedAnalysisRoute: typeof AuthenticatedAnalysisRoute
@@ -714,6 +788,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPermitsRoute: typeof AuthenticatedPermitsRouteWithChildren
   AuthenticatedPortfolioRoute: typeof AuthenticatedPortfolioRoute
   AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRouteWithChildren
+  AuthenticatedPropertiesRoute: typeof AuthenticatedPropertiesRouteWithChildren
   AuthenticatedRelationshipsRoute: typeof AuthenticatedRelationshipsRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
   AuthenticatedScenariosRoute: typeof AuthenticatedScenariosRoute
@@ -736,6 +811,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPermitsRoute: AuthenticatedPermitsRouteWithChildren,
   AuthenticatedPortfolioRoute: AuthenticatedPortfolioRoute,
   AuthenticatedProjectsRoute: AuthenticatedProjectsRouteWithChildren,
+  AuthenticatedPropertiesRoute: AuthenticatedPropertiesRouteWithChildren,
   AuthenticatedRelationshipsRoute: AuthenticatedRelationshipsRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
   AuthenticatedScenariosRoute: AuthenticatedScenariosRoute,

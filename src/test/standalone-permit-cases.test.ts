@@ -9,6 +9,10 @@ const migration = readFileSync(
   "utf8",
 );
 const server = readFileSync(resolve(root, "src/lib/permit-cases.functions.ts"), "utf8");
+const transactionalMigration = readFileSync(
+  resolve(root, "supabase/migrations/20260712001000_transactional_permit_catalogue_generation.sql"),
+  "utf8",
+);
 const shell = readFileSync(resolve(root, "src/components/app-shell.tsx"), "utf8");
 
 describe("standalone permit cases", () => {
@@ -58,10 +62,15 @@ describe("standalone permit cases", () => {
 
   it("only queries rules for the explicitly confirmed municipality", () => {
     expect(server).toContain("municipality_confirmed");
-    expect(server).toContain('.eq("jurisdiction_id", j.data.id)');
-    expect(server).toContain('.eq("jurisdiction_type", "municipality")');
-    expect(server).toContain('applicability_status: "unknown"');
-    expect(server).toContain("permit_rule_id");
+    expect(server).toContain('"generate_permit_catalogue_candidates"');
+    expect(server).toContain('p_parent_kind: "permit_case"');
+    expect(transactionalMigration).toContain("IF NOT v_municipality_confirmed");
+    expect(transactionalMigration).toContain("WHERE jurisdiction.name=v_municipality");
+    expect(transactionalMigration).toContain("jurisdiction.jurisdiction_type='municipality'");
+    expect(transactionalMigration).toContain(
+      "rule.name,rule.permit_type,rule.description,'unknown'",
+    );
+    expect(transactionalMigration).toContain("permit_rule_id");
   });
 
   it("persists and announces product mode without creating records", () => {

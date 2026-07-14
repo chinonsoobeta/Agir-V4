@@ -8,7 +8,15 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useWorkspace } from "@/lib/workspace-context";
-import { ClipboardCheck, FileWarning, Plus, Search } from "lucide-react";
+import {
+  AlertTriangle,
+  Archive,
+  ClipboardCheck,
+  FileWarning,
+  Plus,
+  RotateCcw,
+  Search,
+} from "lucide-react";
 import {
   PERMIT_LIMITATIONS_APPROVAL_STATUS,
   PERMIT_LIMITATIONS_TEXT,
@@ -20,23 +28,27 @@ export const Route = createFileRoute("/_authenticated/permits/")({
 function PermitDashboard() {
   const { activeWorkspace } = useWorkspace();
   const [search, setSearch] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const workspaceId = activeWorkspace?.name === "Personal workspace" ? null : activeWorkspace?.id;
-  const { data = [], isLoading } = useQuery({
+  const casesQ = useQuery({
     queryKey: ["permit-cases", workspaceId],
     queryFn: () => listPermitCases({ data: { workspace_id: workspaceId } }),
   });
+  const data = casesQ.data ?? [];
+  const activeCases = data.filter((c: any) => !c.archived_at);
+  const visibleCases = showArchived ? data.filter((c: any) => c.archived_at) : activeCases;
   const q = search.toLowerCase();
-  const rows = data.filter((c: any) =>
+  const rows = visibleCases.filter((c: any) =>
     `${c.name} ${c.property_address ?? ""} ${c.municipality ?? ""} ${(c.project_permits ?? []).map((p: any) => p.name).join(" ")}`
       .toLowerCase()
       .includes(q),
   );
-  const review = data.filter((c: any) =>
+  const review = activeCases.filter((c: any) =>
     (c.project_permits ?? []).some((p: any) =>
       ["unknown", "needs_review", "potentially_required"].includes(p.applicability_status),
     ),
   ).length;
-  const missing = data.reduce(
+  const missing = activeCases.reduce(
     (n: number, c: any) =>
       n +
       (c.project_permits ?? [])
@@ -49,7 +61,7 @@ function PermitDashboard() {
       <PageHeader
         eyebrow="Permits"
         title="Permit cases"
-        subtitle="Evidence-backed planning and tracking, separate from underwriting assumptions."
+        subtitle="Keep possible approvals, paperwork, documents, and responsibility together."
         actions={
           <Link to="/permits/new">
             <Button>
@@ -60,72 +72,116 @@ function PermitDashboard() {
         }
       />
       <PageBody>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Metric label="Active cases" value={data.length} />
-          <Metric label="Cases needing review" value={review} />
-          <Metric label="Missing paperwork" value={missing} />
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <label className="relative flex-1">
-            <span className="sr-only">Search permit cases</span>
-            <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
-            <Input
-              className="pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search address, case, permit, or authority"
-            />
-          </label>
-        </div>
-        {isLoading ? (
-          <p>Loading permit cases…</p>
-        ) : rows.length ? (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {rows.map((c: any) => {
-              const permits = c.project_permits ?? [];
-              const needs = permits.filter((p: any) =>
-                ["unknown", "needs_review", "potentially_required"].includes(
-                  p.applicability_status,
-                ),
-              ).length;
-              return (
-                <Link key={c.id} to="/permits/$caseId" params={{ caseId: c.id }}>
-                  <Card className="surface-editorial h-full p-5 transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-lg">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h2 className="font-semibold">{c.name}</h2>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {c.property_address || "Address incomplete"}
-                        </p>
-                      </div>
-                      <Badge variant="outline">
-                        {c.project_id ? "Underwriting-linked" : "Standalone"}
-                      </Badge>
-                    </div>
-                    <div className="mt-4 flex gap-4 text-sm">
-                      <span>{permits.length} potential approvals</span>
-                      <span>{needs} need review</span>
-                    </div>
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      {c.municipality_confirmed ? c.municipality : "Municipality unconfirmed"}
-                    </p>
-                  </Card>
-                </Link>
-              );
-            })}
-          </div>
-        ) : (
-          <Card className="surface-editorial p-10 text-center">
-            <ClipboardCheck className="mx-auto size-9 text-muted-foreground" />
-            <p className="eyebrow mt-5">Start a reviewed workflow</p>
-            <h2 className="mt-3 font-semibold">No permit cases yet</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Start with what you know. Missing information can remain explicitly unknown.
-            </p>
-            <Link to="/permits/new">
-              <Button className="mt-5">Start a permit project</Button>
-            </Link>
+        {casesQ.isError ? (
+          <Card className="surface-editorial p-6" role="alert">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 size-5 shrink-0 text-destructive" />
+              <div>
+                <h2 className="font-semibold">Permit cases could not be loaded</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {casesQ.error instanceof Error
+                    ? casesQ.error.message
+                    : "The permit service returned an unexpected error."}
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  No empty-case summary is shown because Agir could not verify the current records.
+                </p>
+                <Button className="mt-4" variant="outline" onClick={() => casesQ.refetch()}>
+                  <RotateCcw className="mr-2 size-4" />
+                  Try again
+                </Button>
+              </div>
+            </div>
           </Card>
+        ) : (
+          <>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Metric label="Active cases" value={activeCases.length} />
+              <Metric label="Cases needing review" value={review} />
+              <Metric label="Missing paperwork" value={missing} />
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <label className="relative flex-1">
+                <span className="sr-only">Search permit cases</span>
+                <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
+                <Input
+                  className="pl-9"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search address, case, permit, or authority"
+                />
+              </label>
+              <Button
+                type="button"
+                variant={showArchived ? "secondary" : "outline"}
+                aria-pressed={showArchived}
+                onClick={() => setShowArchived((value) => !value)}
+              >
+                <Archive className="mr-2 size-4" />
+                {showArchived ? "Show active" : "Show archived"}
+              </Button>
+            </div>
+            {casesQ.isLoading ? (
+              <p role="status">Loading permit cases…</p>
+            ) : rows.length ? (
+              <div className="grid gap-3 lg:grid-cols-2">
+                {rows.map((c: any) => {
+                  const permits = c.project_permits ?? [];
+                  const needs = permits.filter((p: any) =>
+                    ["unknown", "needs_review", "potentially_required"].includes(
+                      p.applicability_status,
+                    ),
+                  ).length;
+                  return (
+                    <Link key={c.id} to="/permits/$caseId" params={{ caseId: c.id }}>
+                      <Card className="surface-editorial h-full p-5 transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-lg">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h2 className="font-semibold">{c.name}</h2>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {c.property_address || "Address incomplete"}
+                            </p>
+                          </div>
+                          <Badge variant="outline">
+                            {c.archived_at
+                              ? "Archived"
+                              : c.project_id
+                                ? "Underwriting-linked"
+                                : "Standalone"}
+                          </Badge>
+                        </div>
+                        <div className="mt-4 flex gap-4 text-sm">
+                          <span>{permits.length} potential approvals</span>
+                          <span>{needs} need review</span>
+                        </div>
+                        <p className="mt-3 text-xs text-muted-foreground">
+                          {c.municipality_confirmed ? c.municipality : "Municipality unconfirmed"}
+                        </p>
+                      </Card>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <Card className="surface-editorial p-10 text-center">
+                <ClipboardCheck className="mx-auto size-9 text-muted-foreground" />
+                <p className="eyebrow mt-5">Start a reviewed workflow</p>
+                <h2 className="mt-3 font-semibold">
+                  {showArchived ? "No archived cases" : "No permit cases yet"}
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {showArchived
+                    ? "Archived cases stay searchable and can be restored from their case workspace."
+                    : "Start with the property and the work. You can add missing details later."}
+                </p>
+                {!showArchived && (
+                  <Link to="/permits/new">
+                    <Button className="mt-5">Start a permit project</Button>
+                  </Link>
+                )}
+              </Card>
+            )}
+          </>
         )}
         <Card className="trust-note p-4 text-sm">
           <div className="flex gap-3">

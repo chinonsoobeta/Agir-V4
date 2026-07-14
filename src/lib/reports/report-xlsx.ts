@@ -87,7 +87,9 @@ export function buildReportWorkbook(XLSX: typeof import("xlsx"), report: MemoRep
 }
 
 export async function renderReportXlsxArrayBuffer(report: MemoReport): Promise<ArrayBuffer> {
-  const XLSX = await import("xlsx");
+  // Reports only write modern XLSX files, so the official browser mini build
+  // is sufficient. Server-side ingestion continues to use the full parser.
+  const XLSX = await import("xlsx/dist/xlsx.mini.min.js");
   const wb = buildReportWorkbook(XLSX, report);
   return XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
 }

@@ -12,6 +12,7 @@ export type RateLimitBucket =
   | "report_generation"
   | "signed_document_url"
   | "chat_completion"
+  | "address_search"
   | "scim_operation"
   | "workspace_invitation";
 
@@ -48,6 +49,11 @@ export const RATE_LIMIT_POLICY: Record<
     maxEvents: 120,
     windowSeconds: 60 * 60,
     description: "Chat completion requests per user per hour.",
+  },
+  address_search: {
+    maxEvents: 300,
+    windowSeconds: 60 * 60,
+    description: "Server-side address searches per user per hour.",
   },
   scim_operation: {
     maxEvents: 200,

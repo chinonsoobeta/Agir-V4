@@ -2,13 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/integrations/supabase/types";
 import { handleSchemaCompatibilityFallback, isMissingColumn, isMissingRelation } from "./db-compat";
 import { stableJsonHash } from "./hash.server";
-
-const SNAPSHOT_ASSUMPTION_STATUSES: Database["public"]["Enums"]["assumption_status"][] = [
-  "approved",
-  "modified",
-  "default_accepted",
-  "calculated",
-];
+import { EFFECTIVE_ASSUMPTION_STATUSES, effectiveAssumptions } from "./assumption-authority";
 
 type Ctx = { supabase: SupabaseClient<Database>; userId: string };
 type MemoSnapshotRow = Database["public"]["Tables"]["memo_snapshots"]["Row"];
@@ -27,9 +21,11 @@ async function loadSnapshotInputs(ctx: Ctx, projectId: string) {
   const [{ data: assumptions }, { data: outputs }, { data: memos }] = await Promise.all([
     ctx.supabase
       .from("assumptions")
-      .select("field_key, field_label, value_numeric, value_text, unit, status, confidence_score")
+      .select(
+        "field_key, field_label, value_numeric, value_text, unit, status, confidence_score, dual_control_pending",
+      )
       .eq("project_id", projectId)
-      .in("status", SNAPSHOT_ASSUMPTION_STATUSES),
+      .in("status", [...EFFECTIVE_ASSUMPTION_STATUSES]),
     ctx.supabase
       .from("financial_outputs")
       .select("scenario_key, metric_key, metric_label, value_numeric, unit, formula_text")
@@ -50,7 +46,7 @@ async function loadSnapshotInputs(ctx: Ctx, projectId: string) {
     asRecord(asRecord(verdictRow)?.inputs)?.code ?? memoReport?.verdict_code ?? null;
   const verdictCode = typeof verdictRaw === "string" ? verdictRaw : null;
   return {
-    assumptions: assumptions ?? [],
+    assumptions: effectiveAssumptions(assumptions ?? []),
     outputs: outputs ?? [],
     memoId: memo?.id ?? null,
     runId:

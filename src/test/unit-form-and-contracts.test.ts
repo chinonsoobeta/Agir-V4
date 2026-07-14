@@ -93,11 +93,53 @@ const emptyTables = {
 };
 
 describe("unit-contract drift surfaced at the report-data boundary", () => {
+  test("pending dual-control and non-effective assumptions never enter report data", async () => {
+    const supabase = fakeSupabase(
+      {
+        ...emptyTables,
+        assumptions: [
+          {
+            id: "approved",
+            field_key: "hard_costs",
+            unit: "$",
+            value_numeric: 10,
+            status: "approved",
+          },
+          {
+            id: "pending",
+            field_key: "debt_amount",
+            unit: "$",
+            value_numeric: 999,
+            status: "modified",
+            dual_control_pending: true,
+          },
+          {
+            id: "extracted",
+            field_key: "land_cost",
+            unit: "$",
+            value_numeric: 888,
+            status: "extracted",
+          },
+        ],
+        financial_outputs: [],
+      },
+      { id: "p1", name: "Authority boundary" },
+    );
+
+    const report = await loadReportData(
+      supabase as unknown as Parameters<typeof loadReportData>[0],
+      "p1",
+    );
+    expect(report.assumptions.map((row) => row.id)).toEqual(["approved"]);
+  });
+
   test("a clean project surfaces no unit-contract issues", async () => {
     const supabase = fakeSupabase(
       {
         ...emptyTables,
-        assumptions: [{ id: "a1", field_key: "land_cost", unit: "$", value_numeric: 1 }],
+        assumptions: [
+          { id: "a1", field_key: "land_cost", unit: "$", value_numeric: 1, status: "approved" },
+        ],
         financial_outputs: [{ metric_key: "noi", unit: "$", value_numeric: 1 }],
       },
       { id: "p1", name: "Clean" },
@@ -114,7 +156,9 @@ describe("unit-contract drift surfaced at the report-data boundary", () => {
       {
         ...emptyTables,
         // land_cost must be "$"; persisted as "%" is drift.
-        assumptions: [{ id: "a1", field_key: "land_cost", unit: "%", value_numeric: 1 }],
+        assumptions: [
+          { id: "a1", field_key: "land_cost", unit: "%", value_numeric: 1, status: "approved" },
+        ],
         // a null unit predates the column and is NOT treated as drift.
         // financial output emitting a bogus unit.
         financial_outputs: [{ metric_key: "noi", unit: "bananas", value_numeric: 1 }],
@@ -134,7 +178,9 @@ describe("unit-contract drift surfaced at the report-data boundary", () => {
     const supabase = fakeSupabase(
       {
         ...emptyTables,
-        assumptions: [{ id: "a1", field_key: "land_cost", unit: null, value_numeric: 1 }],
+        assumptions: [
+          { id: "a1", field_key: "land_cost", unit: null, value_numeric: 1, status: "approved" },
+        ],
         financial_outputs: [],
       },
       { id: "p1", name: "Legacy" },

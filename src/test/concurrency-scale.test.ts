@@ -392,8 +392,8 @@ describe("concurrency and scale guards", () => {
       projects: [{ id: "p1", name: "Project" }],
       documents: [],
       assumptions: [
-        { id: "a1", project_id: "p1", field_key: "land_cost" },
-        { id: "a2", project_id: "p1", field_key: "hard_costs" },
+        { id: "a1", project_id: "p1", field_key: "land_cost", status: "approved" },
+        { id: "a2", project_id: "p1", field_key: "hard_costs", status: "approved" },
       ],
       assumption_versions: [
         { id: "v1", assumption_id: "a1" },
@@ -452,10 +452,10 @@ describe("concurrency and scale guards", () => {
     const accepted = await persistAcceptedDefaults(supabase, {
       projectId: "p1",
       userId: "u1",
-      // The AI path can return the same index twice; a single upsert statement
-      // must not list the same (project_id,key) conflict row more than once.
+      // Duplicate analyst selections must not list the same (project_id,key)
+      // conflict row more than once.
       keys: ["hold_years", "hold_years", "not_a_real_default"],
-      via: "ai",
+      via: "analyst",
     });
 
     expect(accepted).toEqual(["hold_years"]);

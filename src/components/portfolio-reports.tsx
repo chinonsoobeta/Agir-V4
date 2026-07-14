@@ -121,7 +121,12 @@ export function PortfolioReports() {
   return (
     <div className="space-y-4">
       {/* Report picker */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+      <div
+        className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1"
+        tabIndex={0}
+        role="region"
+        aria-label="Report views"
+      >
         {PORTFOLIO_REPORT_IDS.map((id) => (
           <button
             key={id}
@@ -236,7 +241,12 @@ export function PortfolioReports() {
             <p className="text-sm text-muted-foreground">No rows for this report and filter set.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div
+            className="overflow-x-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="Portfolio report table"
+          >
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/35 text-[11px] uppercase tracking-widest text-muted-foreground">
@@ -314,7 +324,7 @@ function FilterSelect({
 }) {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="h-8 w-auto min-w-[9rem] text-xs">
+      <SelectTrigger className="h-8 w-auto min-w-[9rem] text-xs" aria-label={placeholder}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>{children}</SelectContent>

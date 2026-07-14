@@ -2,6 +2,8 @@ import process from "node:process";
 
 /** The only server-side environment boundary. Never import this from browser code. */
 export type AgirEnvironment = "development" | "demo" | "test" | "staging" | "production";
+export type AiProvider = "anthropic" | "openai";
+export type AiProviderPolicy = "auto" | AiProvider;
 
 export type ServerConfig = Readonly<{
   nodeEnv?: string;
@@ -19,9 +21,16 @@ export type ServerConfig = Readonly<{
   workerToken?: string;
   errorWebhookUrl?: string;
   metricsWebhookUrl?: string;
+  aiProviderPolicy: AiProviderPolicy;
+  aiProviderFallback: boolean;
   aiModel: string;
+  anthropicModel: string;
+  openAiModel: string;
   anthropicApiKey?: string;
   anthropicApiKeyCandidates: readonly string[];
+  openAiApiKey?: string;
+  googleMapsApiKey?: string;
+  openStreetMapAddressFallback: boolean;
   scimBearerToken?: string;
   scimWorkspaceId?: string;
   maxOcrPages: number;
@@ -50,6 +59,17 @@ function positiveInteger(raw: string | undefined, fallback: number): number {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function aiProviderPolicy(raw: string | undefined): AiProviderPolicy {
+  const normalized = raw?.trim().toLowerCase();
+  return normalized === "anthropic" || normalized === "openai" ? normalized : "auto";
+}
+
+function providerCompatibleLegacyModel(provider: AiProvider, model: string | undefined) {
+  if (!model) return undefined;
+  if (provider === "anthropic") return model.startsWith("claude-") ? model : undefined;
+  return /^(gpt-|o\d)/.test(model) ? model : undefined;
+}
+
 export function resolveAgirEnvironment(
   raw = process.env.AGIR_ENV ?? process.env.NODE_ENV,
 ): AgirEnvironment {
@@ -73,6 +93,20 @@ export function resolveAgirEnvironment(
 export function readServerConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   const environment = resolveAgirEnvironment(env.AGIR_ENV ?? env.NODE_ENV);
   const isProductionLike = environment === "production" || environment === "staging";
+  const providerPolicy = aiProviderPolicy(value(env, "AGIR_AI_PROVIDER"));
+  const legacyModel = value(env, "AGIR_AI_MODEL");
+  const anthropicModel =
+    value(env, "AGIR_ANTHROPIC_MODEL") ??
+    (providerPolicy !== "openai"
+      ? providerCompatibleLegacyModel("anthropic", legacyModel)
+      : undefined) ??
+    "claude-sonnet-4-6";
+  const openAiModel =
+    value(env, "AGIR_OPENAI_MODEL") ??
+    (providerPolicy === "openai"
+      ? providerCompatibleLegacyModel("openai", legacyModel)
+      : undefined) ??
+    "gpt-5.6-terra";
   const scannerFormat =
     value(env, "DOCUMENT_SCAN_FORMAT")?.toLowerCase() === "multipart" ? "multipart" : "raw";
   return {
@@ -109,7 +143,14 @@ export function readServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCo
     workerToken: value(env, "EXTRACTION_WORKER_TOKEN"),
     errorWebhookUrl: value(env, "ERROR_WEBHOOK_URL"),
     metricsWebhookUrl: value(env, "METRICS_WEBHOOK_URL"),
-    aiModel: value(env, "AGIR_AI_MODEL") ?? "claude-sonnet-4-6",
+    aiProviderPolicy: providerPolicy,
+    aiProviderFallback: value(env, "AGIR_AI_PROVIDER_FALLBACK") !== "0",
+    // Compatibility value for older diagnostics. Runtime selection uses the
+    // provider-specific model below so an OpenAI key is never paired with a
+    // Claude model (or vice versa).
+    aiModel: legacyModel ?? (providerPolicy === "openai" ? openAiModel : anthropicModel),
+    anthropicModel,
+    openAiModel,
     // API_KEY remains the preferred local alias; diagnostics never expose it.
     // Preserve both aliases so the AI boundary can skip a malformed preferred
     // value and safely use a valid compatibility alias. Never expose either
@@ -118,6 +159,13 @@ export function readServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCo
     anthropicApiKeyCandidates: [value(env, "API_KEY"), value(env, "ANTHROPIC_API_KEY")].filter(
       (candidate): candidate is string => Boolean(candidate),
     ),
+    openAiApiKey: value(env, "OPENAI_API_KEY"),
+    googleMapsApiKey: value(env, "GOOGLE_MAPS_API_KEY"),
+    // Full addresses are property intelligence. Production never sends them
+    // to a second provider unless an operator explicitly enables it.
+    openStreetMapAddressFallback:
+      value(env, "ADDRESS_SEARCH_OPENSTREETMAP_FALLBACK") === "1" ||
+      (!isProductionLike && value(env, "ADDRESS_SEARCH_OPENSTREETMAP_FALLBACK") !== "0"),
     scimBearerToken: value(env, "SCIM_BEARER_TOKEN"),
     scimWorkspaceId: value(env, "SCIM_WORKSPACE_ID"),
     maxOcrPages: positiveInteger(value(env, "MAX_OCR_PAGES"), 10),
@@ -174,5 +222,9 @@ export function getRedactedConfigDiagnostics(env: NodeJS.ProcessEnv = process.en
     asyncExtraction: config.asyncExtraction,
     workerConfigured: Boolean(config.workerToken),
     observabilityConfigured: Boolean(config.errorWebhookUrl || config.metricsWebhookUrl),
+    aiConfigured: Boolean(config.anthropicApiKey || config.openAiApiKey),
+    aiProviderPolicy: config.aiProviderPolicy,
+    googleMapsConfigured: Boolean(config.googleMapsApiKey),
+    openStreetMapAddressFallback: config.openStreetMapAddressFallback,
   };
 }

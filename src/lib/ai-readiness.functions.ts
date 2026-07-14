@@ -1,12 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { DEFAULT_AI_MODEL, hasAnthropicKey } from "./ai-gateway.server";
+import type { AiProvider, AiProviderPolicy } from "./config.server";
 
 export type AiReadiness = {
   enabledByDefault: true;
   configured: boolean;
-  model: string;
-  keyEnv: "API_KEY or ANTHROPIC_API_KEY";
+  provider: AiProvider | null;
+  providerPolicy: AiProviderPolicy;
+  fallbackEnabled: boolean;
+  model: string | null;
+  keyEnv: "ANTHROPIC_API_KEY or OPENAI_API_KEY";
+  providers: Record<AiProvider, { configured: boolean; model: string }>;
   features: {
     extraction: boolean;
     underwriting: boolean;
@@ -18,19 +22,25 @@ export type AiReadiness = {
 export const getAiReadiness = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async (): Promise<AiReadiness> => {
-    const configured = hasAnthropicKey();
-    const { readServerConfig } = await import("./config.server");
+    const { getAiReadinessDiagnostics } = await import("./ai-gateway.server");
+    const readiness = getAiReadinessDiagnostics();
 
     return {
       enabledByDefault: true,
-      configured,
-      model: readServerConfig().aiModel || DEFAULT_AI_MODEL,
-      keyEnv: "API_KEY or ANTHROPIC_API_KEY",
+      configured: readiness.configured,
+      provider: readiness.activeProvider,
+      providerPolicy: readiness.policy,
+      fallbackEnabled: readiness.fallbackEnabled,
+      model: readiness.activeModel,
+      keyEnv: "ANTHROPIC_API_KEY or OPENAI_API_KEY",
+      providers: readiness.providers,
       features: {
-        extraction: true,
-        underwriting: true,
-        memoGeneration: true,
-        copilot: true,
+        extraction: readiness.configured,
+        // AI is deliberately not an approval authority or a memo-artifact
+        // author in the pilot. Those workflows remain fully deterministic.
+        underwriting: false,
+        memoGeneration: false,
+        copilot: readiness.configured,
       },
     };
   });

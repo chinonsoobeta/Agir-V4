@@ -37,7 +37,6 @@ import {
   Scale,
   FileText,
   Download,
-  Sparkles,
   CheckCircle2,
   Loader2,
   RefreshCw,
@@ -238,11 +237,6 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   const acceptDefaultsFn = useServerFn(acceptDefaults);
   const resolveFn = useServerFn(resolveConflict);
 
-  // AI runs by default (it only selects which consensual static defaults to
-  // accept: the engine still computes every number). Toggle off to force the
-  // pure deterministic path.
-  const [aiMode, setAiMode] = useState(true);
-  const mode: "ai" | "deterministic" = aiMode ? "ai" : "deterministic";
   const [lastMode, setLastMode] = useState<"ai" | "deterministic" | null>(null);
   const [lastBlockedReason, setLastBlockedReason] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -272,14 +266,9 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   };
 
   const run = useMutation({
-    mutationFn: (overrideMode?: "ai" | "deterministic") =>
-      runFn({ data: { project_id: projectId, mode: overrideMode ?? mode } }),
+    mutationFn: () => runFn({ data: { project_id: projectId, mode: "deterministic" } }),
     onMutate: () => {
-      setStatusMessage(
-        mode === "ai"
-          ? "Checking defaults, then running the deterministic engine."
-          : "Running deterministic underwriting.",
-      );
+      setStatusMessage("Running deterministic underwriting from explicitly approved inputs.");
       setLastBlockedReason(null);
     },
     onSuccess: async (r: RunResult) => {
@@ -320,10 +309,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
       }
       if (r.authority_note) toast.message(r.authority_note);
       if (r.blocked) toast.error("Underwriting is blocked: resolve the listed inputs first.");
-      else
-        toast.success(
-          `Underwriting complete (${r.analysis_mode === "ai" ? "AI" : "deterministic"}): verdict ${r.verdict.code}`,
-        );
+      else toast.success(`Deterministic underwriting complete: verdict ${r.verdict.code}`);
     },
     onError: (e: Error) => {
       setStatusMessage("Run failed before any new metrics were accepted.");
@@ -332,7 +318,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
   });
   const runNow = () => {
     if (!run.isPending) {
-      run.mutate(undefined);
+      run.mutate();
     }
   };
   const runOnKeyboard = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -568,27 +554,6 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                         ? "Accepting defaults..."
                         : `Accept ${readiness.defaults.length} defaults`}
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={run.isPending || !canAcceptDefaultsAndRun || !canRunWorkflow}
-                      onClick={runNow}
-                      onKeyDown={runOnKeyboard}
-                      title={
-                        !canRunWorkflow
-                          ? "Read-only role: cannot run underwriting."
-                          : canAcceptDefaultsAndRun
-                            ? "Accepts listed static defaults, then runs the deterministic engine."
-                            : "Resolve conflicts and non-default missing inputs before running."
-                      }
-                    >
-                      {run.isPending ? (
-                        <Loader2 className="size-3.5 mr-1 animate-spin" />
-                      ) : (
-                        <Sparkles className="size-3.5 mr-1" />
-                      )}
-                      {run.isPending ? "Running..." : "Let AI accept defaults & run"}
-                    </Button>
                   </div>
                   {lastAcceptedDefaults.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5">
@@ -600,9 +565,8 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
                     </div>
                   )}
                   <p className="text-[11px] text-muted-foreground mt-1">
-                    Writes source=default, status=default_accepted rows. Defaults are never applied
-                    silently: AI only selects from these fixed values; it never invents a number,
-                    and the engine does all math.
+                    Writes source=default, status=default_accepted rows only after this explicit
+                    analyst action. AI cannot accept or approve underwriting inputs.
                   </p>
                 </div>
               )}
@@ -695,7 +659,6 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
             runNow();
           }}
         >
-          <ModeToggle aiMode={aiMode} setAiMode={setAiMode} />
           <Button
             type="button"
             onClick={runNow}
@@ -711,20 +674,14 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
           >
             {run.isPending ? (
               <Loader2 className="size-4 mr-1 animate-spin" />
-            ) : aiMode ? (
-              <Sparkles className="size-4 mr-1" />
             ) : (
               <Calculator className="size-4 mr-1" />
             )}
             {run.isPending
               ? "Running..."
-              : aiMode
-                ? outputs.length
-                  ? "Re-run Underwriting (AI)"
-                  : "Run Underwriting (AI)"
-                : outputs.length
-                  ? "Re-run Deterministic Underwriting"
-                  : "Run Deterministic Underwriting"}
+              : outputs.length
+                ? "Re-run Deterministic Underwriting"
+                : "Run Deterministic Underwriting"}
           </Button>
           <Button
             type="button"
@@ -740,7 +697,7 @@ export function UnderwritingPanel({ projectId }: { projectId: string }) {
           </Button>
           {lastMode && <ModeBadge mode={lastMode} />}
           <span className="text-[11px] text-muted-foreground font-mono ml-auto">
-            engine computes every number · AI only selects fixed static defaults
+            engine computes every number · inputs require explicit analyst approval
           </span>
         </form>
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -1513,46 +1470,15 @@ function DeterministicRead({ row }: { row?: OutputRow }) {
   );
 }
 
-// AI-by-default / deterministic-backup selector.
-function ModeToggle({ aiMode, setAiMode }: { aiMode: boolean; setAiMode: (v: boolean) => void }) {
-  return (
-    <div
-      className="inline-flex rounded-md border border-border p-0.5 text-[11px] font-medium"
-      role="group"
-      aria-label="Analysis mode"
-    >
-      <button
-        type="button"
-        onClick={() => setAiMode(true)}
-        aria-pressed={aiMode}
-        className={`inline-flex items-center gap-1 rounded px-2 py-1 transition-colors ${aiMode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-      >
-        <Sparkles className="size-3" />
-        AI
-      </button>
-      <button
-        type="button"
-        onClick={() => setAiMode(false)}
-        aria-pressed={!aiMode}
-        className={`inline-flex items-center gap-1 rounded px-2 py-1 transition-colors ${!aiMode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-      >
-        <Calculator className="size-3" />
-        Engine
-      </button>
-    </div>
-  );
-}
-
 // Shows which path actually ran the most recent computation.
 function ModeBadge({ mode }: { mode: "ai" | "deterministic" }) {
-  const isAI = mode === "ai";
   return (
     <Badge
       variant="outline"
-      className={`text-[11px] uppercase tracking-wider ${isAI ? "bg-primary/15 text-primary border-primary/30" : "bg-muted text-muted-foreground border-border"}`}
+      className="text-[11px] uppercase tracking-wider bg-muted text-muted-foreground border-border"
     >
-      {isAI ? <Sparkles className="size-2.5 mr-1" /> : <Calculator className="size-2.5 mr-1" />}
-      {isAI ? "AI ran" : "Deterministic"}
+      <Calculator className="size-2.5 mr-1" />
+      {mode === "deterministic" ? "Deterministic" : "Legacy AI-labelled run"}
     </Badge>
   );
 }
@@ -1719,19 +1645,12 @@ export function MemoSection({ projectId }: { projectId: string }) {
   const gen = useMutation({
     mutationFn: () => generateMemoFn({ data: { project_id: projectId } }),
     onMutate: () => setError(null),
-    onSuccess: (row: any) => {
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["memos", projectId] });
       qc.invalidateQueries({ queryKey: ["audit", projectId] });
       qc.invalidateQueries({ queryKey: ["memo-debug", projectId] });
       qc.invalidateQueries({ queryKey: ["uw-run-state", projectId] });
-      const mode =
-        row?.content?.generation_mode ??
-        (row?.status === "generated_deterministic" ? "deterministic" : "ai");
-      toast.success(
-        mode === "deterministic"
-          ? "No AI key found. Generated deterministic memo instead."
-          : "AI-assisted investment memo generated",
-      );
+      toast.success("Deterministic investment memo generated.");
     },
     onError: (e: Error) => {
       // Never swallow the error behind a generic toast: surface it in the UI.
@@ -1872,12 +1791,12 @@ export function MemoSection({ projectId }: { projectId: string }) {
           </span>
         </div>
       )}
-      {debug.can_generate && !debug.env.has_anthropic_key && (
+      {debug.can_generate && (
         <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/20 border border-border rounded p-3">
           <Info className="size-4 shrink-0 mt-0.5" />
           <span>
-            No AI key configured: the memo will be generated from the{" "}
-            <strong>deterministic template</strong> (engine outputs + approved assumptions only).
+            The pilot memo uses the <strong>deterministic template</strong>: engine outputs and
+            approved assumptions only.
           </span>
         </div>
       )}
@@ -1893,7 +1812,7 @@ export function MemoSection({ projectId }: { projectId: string }) {
             <Diag label="financial_outputs exist" ok={debug.financial_outputs_count > 0} />
             <Diag label="cash_flows exist" ok={debug.cash_flows_count > 0} />
             <Diag label="reconciliation_flags exist" ok={debug.reconciliation_flags_count > 0} />
-            <Diag label="ANTHROPIC_API_KEY configured" ok={debug.env.has_anthropic_key} />
+            <Diag label="AI provider configured" ok={debug.env.has_ai_provider} />
             <Diag
               label="investment_memos insert failed"
               ok={!insertFailed}

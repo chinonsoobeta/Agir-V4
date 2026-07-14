@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import xlsx from "xlsx";
 
@@ -36,7 +36,10 @@ function tableObjects(rows, headerName) {
     .map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? null])));
 }
 
-const workbook = XLSX.readFile(workbookPath, { cellFormula: true, cellDates: false });
+const workbook = XLSX.read(readFileSync(workbookPath), {
+  cellFormula: true,
+  cellDates: false,
+});
 const fixtureRows = tableObjects(readRows(workbook, "Fixture_Table"), "project_deal_name");
 const checks = tableObjects(readRows(workbook, "Checks"), "Check");
 

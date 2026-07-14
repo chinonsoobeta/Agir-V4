@@ -18,11 +18,12 @@ Required live checks:
 
 ## Pilot Confidence Gate
 
-Run `npm run pilot:gate` before a customer demo or pilot sandbox handoff. It
-composes schema drift, migration safety, backend audits, pilot readiness,
-typecheck, unit tests, build, and env-gated RLS/E2E/load checks into one
-human-readable summary. `--quick` skips the build and runs the focused confidence
-subset; `--full` attempts the optional DB/browser checks too.
+Run `npm run ops:release` against a disposable Supabase environment before a
+customer demo or pilot sandbox handoff. It executes migrations, schema and type
+drift, unit and browser tests, accessibility checks, live RLS, scans, build, and
+audit-chain verification without a skip path. `npm run pilot:gate -- --quick`
+is a developer preflight only. The default pilot gate exits nonzero when a
+required database or browser check is skipped.
 
 ## Queue Worker
 

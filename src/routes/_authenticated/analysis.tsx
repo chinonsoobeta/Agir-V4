@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import { listProjects } from "@/lib/projects.functions";
 import { PageHeader, PageBody } from "@/components/app-shell";
@@ -21,12 +21,10 @@ export const Route = createFileRoute("/_authenticated/analysis")({
 function AnalysisPage() {
   const { deal } = Route.useSearch();
   const { data: projects } = useSuspenseQuery(projectsQ);
-  const [dealId, setDealId] = useState<string | null>(null);
-  useEffect(() => {
-    if (dealId) return;
-    if (deal && projects.some((p) => p.id === deal)) setDealId(deal);
-    else if (projects.length) setDealId(projects[0].id);
-  }, [deal, projects, dealId]);
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
+  const dealId =
+    selectedDealId ??
+    (deal && projects.some((project) => project.id === deal) ? deal : (projects[0]?.id ?? null));
 
   return (
     <>
@@ -43,7 +41,7 @@ function AnalysisPage() {
           </Card>
         ) : (
           <>
-            <DealSelector projects={projects} value={dealId} onChange={setDealId} />
+            <DealSelector projects={projects} value={dealId} onChange={setSelectedDealId} />
             {dealId && <AnalysisPanel key={dealId} projectId={dealId} />}
           </>
         )}

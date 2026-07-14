@@ -8,6 +8,7 @@
 // can run on the client (deal page, committee) or the server (copilot context).
 
 import { generateFindings, type FindingsReport, type FindingsRecommendation } from "./findings";
+import { effectiveAssumptions } from "./assumption-authority";
 import type { DealContext, Interpretation } from "./context/types";
 import type { WhatIfLever } from "./context/attribution";
 
@@ -50,6 +51,7 @@ export type AssumptionRow = {
   source_text?: string | null;
   source_location?: string | null;
   confidence_score?: number | null;
+  dual_control_pending?: boolean | null;
   conflict_values?: Array<{ value: number | string | null; source: string }> | null;
 };
 
@@ -397,9 +399,13 @@ export type DecisionSummary = {
 };
 
 export function buildDecision(outputs: OutputRow[], assumptions: AssumptionRow[]): DecisionSummary {
+  // Review rows are not decision authority. In particular, a material
+  // override remains `modified` while it awaits dual control, so every caller
+  // is protected even if its query accidentally includes the pending row.
+  const authoritativeAssumptions = effectiveAssumptions(assumptions);
   const norm = normalizeOutputs(outputs);
   const { score: confidenceScore, components: confidenceComponents } =
-    computeConfidenceScore(assumptions);
+    computeConfidenceScore(authoritativeAssumptions);
   const { score: investmentScore, components: investmentComponents } = computeInvestmentScore(
     norm,
     confidenceScore,
@@ -409,7 +415,7 @@ export function buildDecision(outputs: OutputRow[], assumptions: AssumptionRow[]
   let recommendation: DecisionRecommendation;
   if (norm.hasUnderwriting && Object.keys(norm.base).length > 0) {
     try {
-      findings = generateFindings(outputs, assumptions);
+      findings = generateFindings(outputs, authoritativeAssumptions);
       recommendation = findings.recommendation;
     } catch {
       recommendation = mapVerdict(norm.verdict);

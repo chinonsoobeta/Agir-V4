@@ -158,7 +158,7 @@ test("professional demo workflow resolves provenance and fail-closed underwritin
   await expect(
     page.getByRole("button", { name: /^Accept \d+ defaults$|^Accept defaults$/i }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: /Let AI accept defaults & run/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Let AI accept defaults & run/i })).toHaveCount(0);
   await expect(
     page.getByText(/engine runs only on approved or default-accepted inputs/i),
   ).toBeVisible();
@@ -174,7 +174,9 @@ test("professional demo workflow resolves provenance and fail-closed underwritin
   await expect(page.getByText(/IC review blocked/i).first()).toBeVisible();
 
   await page.getByRole("tab", { name: /audit/i }).click();
-  await expect(page.getByText(/Audit|underwriting|assumption/i).first()).toBeVisible();
+  await expect(
+    page.getByRole("tabpanel", { name: /audit/i }).getByText("Assumption Changes"),
+  ).toBeVisible();
 });
 
 test("professional demo workflow completes deterministic underwriting, memo, and audit path", async ({

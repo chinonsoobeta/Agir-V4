@@ -1,8 +1,16 @@
 # Permit pilot operations and release report
 
-Status date: 2026-07-11
+Status date: 2026-07-14
 
-Release recommendation: Do not begin the professional pilot yet. The software changes are a candidate for internal verification. Legal, municipal, security, comprehension, live database, recovery, support, and monitoring evidence is still missing.
+Release recommendation: Do not begin the professional pilot yet. The repository's strict automated release gate passes, but qualified legal and municipal approval, representative comprehension sessions, independent security review, a production restoration exercise, and named support and monitoring ownership are not recorded. Passing software checks is not a substitute for those external gates.
+
+## Automated release evidence
+
+The clean disposable-database release run on 2026-07-14 completed with 18 checks passed, 0 failed, 0 skipped, and 0 blocked. Evidence included 779 unit tests, 133 Playwright workflows across Chromium, Firefox, WebKit, and mobile Chromium, 33 live RLS/concurrency assertions, 63 fresh migrations, generated-type and schema-drift checks, deterministic underwriting golden coverage, production build and bundle checks, secret scanning, zero dependency vulnerabilities, extraction-worker contract verification, and audit-chain verification.
+
+This proves the checked repository state, not the production operating environment. The RLS suite is intentionally destructive and is guarded for throwaway databases only.
+
+The configured hosted Supabase database was upgraded with migrations `20260712000300` through `20260712001100` on 2026-07-14. A post-apply dry run reported zero pending migrations. No production backup restoration or alert-delivery exercise was performed by that migration operation.
 
 ## Recovery runbook
 
@@ -44,8 +52,8 @@ Alerts must identify an on-call owner before pilot activation. Production alert 
 
 ## Pilot onboarding
 
-1. Product owner approves the organization, professional role, intended municipality, intended case type, onboarding date, support owner, and Underwriting Preview entitlement.
-2. Operations creates the `pilot_user_access` row. Public self-enrollment remains unavailable.
+1. Product owner records the organization, professional role, intended municipality, intended case type, onboarding date, and support owner.
+2. Any authenticated user can currently enter Permits and Underwriting by explicit product decision. The legacy `pilot_user_access` records remain available for cohort operations and reporting, but do not gate product entry.
 3. Support explains candidate versus requirement, unknown versus not required, user-provided versus source-supported, source review versus professional confirmation, and applicability versus workflow status.
 4. The participant completes a case creation, candidate review, document upload, assignment, handoff, and history walkthrough.
 5. Support records misunderstandings without collecting complete addresses or document contents for analytics.
@@ -63,30 +71,25 @@ Retention wording and deletion limitations require legal and privacy approval.
 
 ## Accessibility report
 
-Implemented foundations include a skip link, semantic tabs, labelled radiogroups, active-mode announcement, keyboard address suggestions, minimum touch targets, and responsive permit case layouts. Automated unit contracts pass.
+Implemented foundations include a skip link, semantic tabs, labelled radiogroups and progress bars, active-mode announcement, keyboard address suggestions, minimum touch targets, focus handling, reduced-motion handling, and responsive layouts. Automated axe and keyboard coverage passes across the supported Chromium, Firefox, WebKit, and mobile-Chromium matrix.
 
 Still required:
 
-- Automated checks on every permit route and material state.
-- Manual keyboard walkthrough with focus return and error recovery.
+- Manual keyboard walkthrough with representative users, including focus return and error recovery.
 - VoiceOver and NVDA walkthroughs.
-- Reduced-motion review.
-- Phone, tablet, laptop, wide desktop, and 200 percent zoom verification.
-- Contrast review for freshness, provenance, warning, and confirmation states.
+- Recorded 200 percent zoom review of every material state.
+- A facilitated comprehension and accessibility session with representative property professionals.
 
 The accessibility gate fails until these checks are recorded.
 
 ## Security review
 
-Implemented controls include authenticated server functions, workspace and personal-case RLS, viewer read-only policies, removed-member revocation, case-scoped document access, signed uploads and downloads, filename guards, safe source URL constraints, append-only history grants, security-definer search paths, rate limits, and transactional case linking.
+Implemented controls include authenticated server functions, workspace and personal-case RLS, viewer read-only policies, removed-member revocation, case-scoped and pending-upload document access, signed uploads and downloads, filename guards, safe source URL constraints, append-only history grants, fixed security-definer search paths, rate limits, worker-token revocation checks, and transactional case linking.
 
 Required evidence remains:
 
-- Fresh and upgrade migrations on a live disposable database.
-- Live RLS tests for owner, administrator, member, viewer, removed member, outsider, invitation, assignment, handoff, project link, document link, Storage object, and actor forgery boundaries.
-- Dependency and secret scan.
 - Independent security review with no unresolved critical or high-severity issue.
-- Role-change behavior during active sessions.
+- Production role-change and token-revocation exercise during active sessions.
 
 The security gate fails until these checks are recorded.
 
@@ -94,14 +97,14 @@ The security gate fails until these checks are recorded.
 
 - [ ] Approved legal and privacy copy is effective and rendered.
 - [ ] Six municipality reviews are signed and current.
-- [ ] Product allowlist and support owners are populated.
-- [ ] Formatting, lint, TypeScript, and generated database types pass.
-- [ ] Fresh migration, upgrade migration, migration safety, and schema drift pass.
-- [ ] Permit unit, document, collaboration, handoff, live RLS, and Storage tests pass.
-- [ ] Browser E2E and accessibility checks pass on desktop and mobile engines.
-- [ ] Underwriting golden regression passes unchanged.
-- [ ] Production build and bundle audit pass.
-- [ ] Secret and dependency scans pass.
+- [ ] Support, incident, catalogue, and monitoring owners are named.
+- [x] Formatting, lint, TypeScript, and generated database types pass.
+- [x] Fresh migration, upgrade migration, migration safety, and schema drift pass in the disposable release environment.
+- [x] Permit unit, document, collaboration, handoff, live RLS, and Storage tests pass.
+- [x] Browser E2E and automated accessibility checks pass on Chromium, Firefox, WebKit, and mobile Chromium.
+- [x] Underwriting golden regression passes unchanged.
+- [x] Production build and bundle audit pass.
+- [x] Secret and dependency scans pass with zero dependency vulnerabilities.
 - [ ] Backup restoration and document recovery drills pass.
 - [ ] Monitoring, alerts, incident ownership, rollback, and known-issues register are active.
 - [ ] No required check is skipped, disabled, pending indefinitely, or omitted.
@@ -114,29 +117,29 @@ Collect time to first case, time to first reviewed candidate, unknown counts, ca
 
 ## Final release gates
 
-| Gate                | Result               | Reason                                                                                                               |
-| ------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Legal and privacy   | Failed               | Draft infrastructure exists; qualified approval does not                                                             |
-| Standalone workflow | Failed pending proof | Implementation exists; live database, Storage, replacement, cancellation, and browser proof are incomplete           |
-| Collaboration       | Failed pending proof | Assignment and handoff exist; complete notification, ownership transfer, and live authorization proof are incomplete |
-| Operational         | Failed               | Restoration drill, alerts, and named owners are not recorded                                                         |
-| Comprehension       | Failed               | Representative professional study is not recorded                                                                    |
-| Security            | Failed               | Live RLS and independent review are not recorded                                                                     |
-| Pilot               | Failed               | Dependent gates and complete deployment gate have not passed                                                         |
+| Gate                | Result         | Reason                                                                                                                    |
+| ------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Legal and privacy   | Failed         | Draft infrastructure exists; qualified approval does not                                                                  |
+| Standalone workflow | Automated pass | Unit, browser, migration, Storage, and live-RLS proof pass; representative production workflow exercise remains           |
+| Collaboration       | Automated pass | Assignment, handoff, sharing, revocation, and authorization checks pass; notification operations remain external          |
+| Operational         | Failed         | Restoration drill, alerts, and named owners are not recorded                                                              |
+| Comprehension       | Failed         | Representative professional study is not recorded                                                                         |
+| Security            | Failed         | Automated security checks pass; independent review and production revocation exercise are not recorded                    |
+| Pilot               | Failed         | The strict automated gate passes, but the external legal, municipal, comprehension, security, and operations gates do not |
 
 ## Known risks and catalogue gaps
 
-- Coquitlam begins as pending qualified review. New Westminster is retained as inactive historical catalogue evidence.
+- The requested municipal footprint is represented in the catalogue, but only seven municipalities have partial research coverage; fifteen are not started and none has qualified approval recorded.
 - Many category rows intentionally remain unknown because a category-specific official determination is not recorded.
 - Source retrieval can fail or be blocked. Unavailable is not interpreted as not required.
-- Notification delivery, ownership transfer, replacement document UI, and complete professional review operations remain incomplete.
-- The allowlist table requires an operational provisioning process and support ownership.
+- Notification delivery and complete professional review operations remain incomplete.
+- Property search currently evaluates the newest 200 property records; cursor pagination and direct upload from the canonical Property file area remain follow-up work. Existing deal and permit documents can be linked to a Property.
 - Legal and privacy wording is draft only.
 
 ## Recommended rollout sequence
 
 1. Internal engineering environment with fresh database and all automated gates.
-2. Named internal reviewers with Permit mode enabled and Underwriting Preview separately entitled.
+2. Named internal reviewers using the currently open authenticated access policy.
 3. Qualified municipal, legal, privacy, security, accessibility, and professional workflow review.
 4. Restoration drill and alert exercise.
 5. Small named professional cohort in one reviewed municipality with daily support review.

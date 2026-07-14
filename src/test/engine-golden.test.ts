@@ -282,4 +282,43 @@ describe("golden engine output snapshots", () => {
     expect(golden[1].metrics.egi).toBe(27_380_800);
     expect(golden).toMatchSnapshot();
   });
+
+  test("input assembly keeps the monthly spine opt-in", () => {
+    const rows = summitRows();
+    rows.scalars.push({ key: "construction_months", value_numeric: 24, status: "approved" });
+    expect(assembleEngineInput(rows).monthlyModel).toBe(false);
+
+    rows.scalars.push({ key: "monthly_model", value_numeric: 1, status: "approved" });
+    expect(assembleEngineInput(rows).monthlyModel).toBe(true);
+  });
+
+  test("unresolved error flags override otherwise passing investment gates", () => {
+    const verdict = computeInvestmentVerdict({
+      equity_multiple: 2,
+      profit_margin: 25,
+      development_spread: 250,
+      stress_dscr: 1.5,
+      stress_equity_multiple: 1.25,
+      equity_wipeout: false,
+      error_flag_count: 1,
+    });
+    expect(verdict).toMatchObject({
+      code: "REJECT",
+      hardFail: true,
+      hardFailReasons: ["unresolved_error_flags"],
+    });
+  });
+
+  test("missing required verdict metrics fail closed instead of becoming zero", () => {
+    const verdict = computeInvestmentVerdict({
+      equity_multiple: 2,
+      profit_margin: 25,
+      development_spread: 250,
+      stress_dscr: 1.5,
+      error_flag_count: 0,
+    });
+    expect(verdict.code).toBe("REJECT");
+    expect(verdict.hardFailReasons).toContain("missing_required_metrics");
+    expect(verdict.missingMetrics).toEqual(["stress_equity_multiple"]);
+  });
 });

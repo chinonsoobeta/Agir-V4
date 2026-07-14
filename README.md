@@ -33,7 +33,7 @@ Pure TypeScript. Computes TDC, GPR/EGI/NOI, yield on cost, development spread, e
 ### 3. Investment memo generator
 
 - A deterministic IC memorandum built from approved assumptions + engine outputs (stat strip, verdict banner, KPI cards, sources & uses, revenue build, scenario analysis, covenant compliance, risks, reconciliation flags, required actions, document sources, footnotes).
-- Optional AI-assisted prose when `ANTHROPIC_API_KEY` is set; numbers stay deterministic either way and are provenance-verified.
+- Pilot memos are deterministic artifacts. AI prose is intentionally disabled until it can pass the same structured semantic and provenance gates as the rendered memo.
 - Exports to **PDF** (jsPDF) and **DOCX** (`docx`).
 
 ### 4. Reports
@@ -81,7 +81,7 @@ Reports fail closed (e.g. "Run deterministic underwriting before generating this
 - **Framework:** TanStack Start (React 19, TanStack Router/Query), Vite, Tailwind v4, shadcn/ui
 - **Backend:** Supabase (Postgres + Auth + Storage), fail-closed RLS
 - **Docs/exports:** `unpdf` (read), `xlsx` (read/write), `jspdf` (PDF), `docx` (DOCX)
-- **AI (optional):** `@ai-sdk/anthropic`: prose only
+- **AI (optional):** Anthropic and OpenAI through one server-only provider gateway; document extraction/classification and Copilot only
 - **Tests:** Vitest
 
 ---
@@ -119,7 +119,7 @@ Notes:
 
 ### AI is optional
 
-Leave `ANTHROPIC_API_KEY` unset and the memo/report generators use the deterministic template. Set it to enable AI-assisted prose: financial figures remain deterministic and provenance-verified.
+Leave both `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` unset and Agir uses deterministic extraction fallbacks. Set either server-side key to enable assisted document summarization/classification and Copilot without a code change. `AGIR_AI_PROVIDER=auto|anthropic|openai` selects the preferred provider; when both keys exist, `AGIR_AI_PROVIDER_FALLBACK=1` permits failover. Provider-specific model overrides are `AGIR_ANTHROPIC_MODEL` and `AGIR_OPENAI_MODEL`. Underwriting inputs require explicit analyst approval, underwriting calculations are deterministic, and pilot memo artifacts and Permit conclusions remain deterministic and provenance-governed.
 
 ---
 

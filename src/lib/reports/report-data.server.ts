@@ -9,6 +9,7 @@ import {
   validateFinancialOutputUnits,
   type UnitContractIssue,
 } from "../unit-contracts";
+import { effectiveAssumptions } from "../assumption-authority";
 
 type Tbl<K extends keyof Database["public"]["Tables"]> = Database["public"]["Tables"][K]["Row"];
 
@@ -153,9 +154,14 @@ export async function loadReportData(
     need("scenarios", supabase.from("scenarios").select("*").eq("project_id", pid)),
   ]);
 
+  // Review-queue rows (including a material override awaiting its second
+  // approver) are deliberately excluded from governed report data. Reports
+  // may describe only assumptions that are effective at the authority boundary.
+  const effectiveAssumptionRows = effectiveAssumptions(assumptions as AssumptionRow[]);
+
   // assumption_versions is keyed by assumption_id (no project_id), so fetch it
   // for this project's assumptions after they load.
-  const assumptionIds = (assumptions as AssumptionRow[]).map((a) => a.id).filter(Boolean);
+  const assumptionIds = effectiveAssumptionRows.map((a) => a.id).filter(Boolean);
   const assumptionVersions = assumptionIds.length
     ? await need(
         "assumption_versions",
@@ -169,7 +175,7 @@ export async function loadReportData(
   // units. Never throws -- a report still builds, with the issues surfaced.
   const unitContractIssues: UnitContractIssue[] = [
     ...validatePersistedAssumptionUnits(
-      (assumptions as AssumptionRow[])
+      effectiveAssumptionRows
         .filter((a) => typeof a.unit === "string" && a.unit.length > 0)
         .map((a) => ({ field_key: a.field_key, unit: a.unit as string })),
     ),
@@ -187,7 +193,7 @@ export async function loadReportData(
   return {
     project: projectRes.data ?? null,
     documents: documents as DocumentRow[],
-    assumptions: assumptions as AssumptionRow[],
+    assumptions: effectiveAssumptionRows,
     assumptionVersions: assumptionVersions as AssumptionVersionRow[],
     engineInputs: engineInputs as EngineInputRow[],
     budget: budget as BudgetRow[],

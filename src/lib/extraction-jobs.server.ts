@@ -17,7 +17,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/integrations/supabase/types";
 import { handleSchemaCompatibilityFallback, isMissingColumn, isMissingRelation } from "./db-compat";
 
-export type JobKind = "document_analysis" | "assumption_extraction" | "underwriting";
+export type JobKind =
+  | "document_analysis"
+  | "assumption_extraction"
+  | "underwriting"
+  | "permit_case_research"
+  | "permit_project_research";
 export type JobStatus =
   | "queued"
   | "running"

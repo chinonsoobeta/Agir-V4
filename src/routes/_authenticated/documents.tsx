@@ -133,7 +133,8 @@ function DocumentsPage() {
       if (result && "queued" in result && result.queued) {
         toast.info("Analysis queued - a background worker will pick it up shortly.");
       } else {
-        toast.success("AI analysis ready");
+        const mode = result && "generationMode" in result ? result.generationMode : null;
+        toast.success(mode === "ai" ? "AI document summary ready" : "Document analysis ready");
       }
     },
     onError: (e: Error) => toast.error(e.message),

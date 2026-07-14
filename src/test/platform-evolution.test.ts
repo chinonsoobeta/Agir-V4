@@ -21,7 +21,7 @@ import { sortDeals } from "@/lib/deal-views";
 import { expandTemplate, milestoneTemplate } from "@/lib/milestone-templates";
 import { mapTimeline } from "@/lib/timeline";
 import { getSchemaCompatMode, isMissingColumn, isMissingRelation } from "@/lib/db-compat";
-import type { DealSummary } from "@/lib/portfolio.functions";
+import { portfolioOutputsAreCurrent, type DealSummary } from "@/lib/portfolio.functions";
 
 // ---- Fixtures ----
 function deal(p: Partial<DealSummary> = {}): DealSummary {
@@ -52,6 +52,15 @@ function deal(p: Partial<DealSummary> = {}): DealSummary {
     dscr: p.dscr ?? null,
   };
 }
+
+describe("portfolio decision freshness", () => {
+  it("allows decision outputs only for the current deterministic input basis", () => {
+    expect(portfolioOutputsAreCurrent("current")).toBe(true);
+    expect(portfolioOutputsAreCurrent("stale")).toBe(false);
+    expect(portfolioOutputsAreCurrent("blocked")).toBe(false);
+    expect(portfolioOutputsAreCurrent("pending")).toBe(false);
+  });
+});
 
 describe("i18n", () => {
   it("falls back to English for a missing French key", () => {

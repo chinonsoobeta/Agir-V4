@@ -11,6 +11,7 @@
 import { componentGpr } from "./engine";
 import { ENGINE_SCALAR_TO_TAXONOMY } from "./taxonomy-engine-map";
 import { ASSUMPTION_BY_KEY } from "./assumption-taxonomy";
+import { effectiveAssumptions } from "./assumption-authority";
 import type { ReportProvenanceManifest } from "./reports/provenance-manifest";
 import { provenanceManifestText } from "./reports/provenance-manifest";
 import type {
@@ -178,7 +179,8 @@ export function memoReportText(report: MemoReport): string {
 }
 
 export function buildMemoReport(ctx: MemoReportContext): MemoReport {
-  const { project, assumptions, engineInputs, outputs, flags, risks, documents, verdict } = ctx;
+  const { project, engineInputs, outputs, flags, risks, documents, verdict } = ctx;
+  const assumptions = effectiveAssumptions(ctx.assumptions);
   const derived: number[] = [];
   const track = <T extends number>(n: T): T => {
     if (Number.isFinite(n)) derived.push(n);

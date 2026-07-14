@@ -81,6 +81,7 @@ describe("backend hardening controls", () => {
     expect(checks.schemaDrift).toBe(true);
     expect(checks.databaseUrlConfigured).toBe(false);
     expect(checks.metricsSinkConfigured).toBe(false);
+    expect(checks.aiProviderConfigured).toBe(false);
     expect(checks.envValid).toBe(true);
   });
 });

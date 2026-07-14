@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -48,7 +48,7 @@ import {
   updatePermit,
   updatePermitRequirement,
 } from "@/lib/permits.functions";
-import { getDocumentUrl, listDocuments } from "@/lib/documents.functions";
+import { getDocumentUrl, getExtractionJobStatus, listDocuments } from "@/lib/documents.functions";
 import { getProject } from "@/lib/projects.functions";
 
 type Permit = any;
@@ -158,7 +158,11 @@ export function PermitRequirementChecklist({
             <span className={r.status === "received" ? "line-through text-muted-foreground" : ""}>
               {r.name}
             </span>
-            {r.is_required && <Badge variant="outline">Required</Badge>}
+            {r.is_required === true ? (
+              <Badge variant="outline">Required</Badge>
+            ) : r.is_required == null ? (
+              <Badge variant="secondary">Needs review</Badge>
+            ) : null}
             {r.document_id && <Badge variant="secondary">Document linked</Badge>}
             {onDelete && (
               <Button
@@ -223,8 +227,14 @@ export function PermitDetailPanel({ permit, onClose }: { permit: Permit; onClose
           name: requirementName,
           description: requirementDescription || null,
           requirement_type: "paperwork",
-          is_required: true,
-          notes: "Analyst-added checklist item.",
+          is_required: permit.applicability_status === "required" ? true : null,
+          applicability_state:
+            permit.applicability_status === "required" ? "required" : "unresolved",
+          source_kind: "analyst",
+          notes:
+            permit.applicability_status === "required"
+              ? "Analyst-added paperwork for a confirmed approval."
+              : "Analyst-added possible paperwork; applicability still needs review.",
         },
       }),
     onSuccess: () => {
@@ -326,7 +336,7 @@ export function PermitDetailPanel({ permit, onClose }: { permit: Permit; onClose
         <section>
           <h3 className="font-medium">Description</h3>
           <p className="text-sm text-muted-foreground">
-            {permit.description || "No verified description available."}
+            {permit.description || "Description not available yet."}
           </p>
         </section>
         <section>
@@ -346,7 +356,7 @@ export function PermitDetailPanel({ permit, onClose }: { permit: Permit; onClose
           )}
         </section>
         <section>
-          <h3 className="font-medium mb-2">Required paperwork</h3>
+          <h3 className="font-medium mb-2">Paperwork</h3>
           <PermitRequirementChecklist
             items={permit.permit_requirements}
             onChange={(id, status) => req.mutate({ id, status })}
@@ -370,7 +380,7 @@ export function PermitDetailPanel({ permit, onClose }: { permit: Permit; onClose
               onClick={() => addReq.mutate()}
             >
               <Plus className="mr-2 size-4" />
-              Add required paperwork
+              Add paperwork
             </Button>
           </div>
         </section>
@@ -600,21 +610,50 @@ function PermitExtractionReview({ projectId }: { projectId: string }) {
 function PermitDocumentExtraction({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const [result, setResult] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
   const { data: documents = [] } = useQuery({
     queryKey: ["docs", projectId],
     queryFn: () => listDocuments({ data: { project_id: projectId } }),
   });
+  const { data: job } = useQuery({
+    queryKey: ["permit-research-job", jobId],
+    queryFn: () => getExtractionJobStatus({ data: { id: jobId! } }),
+    enabled: Boolean(jobId),
+    refetchInterval: (query) =>
+      ["queued", "running"].includes((query.state.data as any)?.status) ? 2_000 : false,
+  });
+  useEffect(() => {
+    if (!jobId || !job) return;
+    if (job.status === "completed") {
+      const outcome = (job.result_json ?? {}) as { candidateCount?: number };
+      setResult(
+        outcome.candidateCount
+          ? `${outcome.candidateCount} sourced review candidate${outcome.candidateCount === 1 ? " is" : "s are"} ready.`
+          : "No sourced Permit clues were found in the document.",
+      );
+      qc.invalidateQueries({ queryKey: ["permit-extraction-candidates", projectId] });
+      setJobId(null);
+    } else if (["failed", "dead_lettered", "canceled"].includes(job.status)) {
+      setResult(job.error || "Permit document research did not complete.");
+      setJobId(null);
+    }
+  }, [job, jobId, projectId, qc]);
   const extraction = useMutation({
     mutationFn: (documentId: string) =>
       extractPermitCandidatesFromDocument({
         data: { project_id: projectId, document_id: documentId },
       }),
     onSuccess: (data) => {
-      setResult(
-        data.created
-          ? `Created ${data.created} review candidate${data.created === 1 ? "" : "s"}.`
-          : "No explicit permit or approval mentions were found.",
-      );
+      if (data.queued) {
+        setJobId(data.job_id);
+        setResult("Document research queued. You can keep working while it runs.");
+      } else {
+        setResult(
+          data.candidateCount
+            ? `${data.candidateCount} sourced review candidate${data.candidateCount === 1 ? " is" : "s are"} ready.`
+            : "No sourced Permit clues were found in the document.",
+        );
+      }
       qc.invalidateQueries({ queryKey: ["permit-extraction-candidates", projectId] });
     },
   });
@@ -622,10 +661,10 @@ function PermitDocumentExtraction({ projectId }: { projectId: string }) {
   return (
     <Card className="p-4 space-y-3">
       <div>
-        <h3 className="font-medium">Extract permit mentions from documents</h3>
+        <h3 className="font-medium">Find Permit clues in documents</h3>
         <p className="text-xs text-muted-foreground">
-          Finds explicit mentions only. Results always enter analyst review and never become
-          verified requirements automatically.
+          Finds explicit permit language and related work scope. Results always enter review and
+          never become verified requirements automatically.
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -840,7 +879,7 @@ export function PermitWorkspace({ projectId }: { projectId: string }) {
       <ExternalAuthorityDirectory />
       <div className="flex gap-2 text-xs text-muted-foreground">
         <CheckCircle2 className="size-4 text-success" />
-        Verified facts show their source. Unknown or analyst-provided facts remain visibly labelled.
+        Confirmed facts show their source. Everything else stays clearly marked for review.
       </div>
     </div>
   );

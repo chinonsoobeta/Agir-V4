@@ -163,7 +163,7 @@ function AuthPage() {
             Permit research and workflow
           </div>
           <h2 className="display mt-5 text-4xl xl:text-5xl font-semibold leading-[1.05] tracking-[-0.025em]">
-            Keep permit evidence, decisions, and responsibility together.
+            Keep permit sources, decisions, and responsibility together.
           </h2>
           <p className="mt-6 text-lg leading-8 text-[#b6c6d6] max-w-lg">
             Assemble available sources, review potential permits, track unresolved questions, and
@@ -172,7 +172,7 @@ function AuthPage() {
           <div className="mt-9 space-y-4">
             {[
               "Official sources and review dates stay visible",
-              "Unknown information remains explicitly unknown",
+              "Missing facts stay open until someone confirms them",
               "Assignments, documents, and history stay with the case",
             ].map((item) => (
               <div key={item} className="flex items-center gap-3 text-sm text-[#cdd9e4]">
@@ -186,7 +186,7 @@ function AuthPage() {
         </div>
         <div className="flex items-center gap-2 text-xs text-[#8294a4]">
           <ShieldCheck className="size-4" />
-          Underwriting is available separately as a limited Preview
+          Underwriting is available separately in Preview
         </div>
       </div>
 
@@ -207,7 +207,7 @@ function AuthPage() {
                 </div>
                 <div className="text-lg font-semibold">Agir</div>
               </div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5b849a]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#476a7c]">
                 Property project workspace
               </p>
               <h1 className="display mt-2 text-3xl font-semibold tracking-[-0.025em] text-[#0d2436]">
@@ -249,7 +249,7 @@ function AuthPage() {
                 <div className="w-full border-t border-[#183046]/10" />
               </div>
               <div className="relative flex justify-center text-[11px] uppercase tracking-widest">
-                <span className="bg-white px-2 text-[#7f8b97]">or</span>
+                <span className="bg-white px-2 text-[#5b6672]">or</span>
               </div>
             </div>
 

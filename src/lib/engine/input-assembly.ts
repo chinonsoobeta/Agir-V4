@@ -470,6 +470,8 @@ export function assembleEngineInput(rows: ProjectInputRows): BrandedUnderwriting
           ioMonths: scalar("refinance_io_months") ?? 0,
         }
       : null;
+  const constructionMonths = optionalZero("construction_months");
+  const leaseUpMonths = optionalZero("lease_up_months");
 
   return brandUnderwritingInput({
     budget: {
@@ -481,8 +483,8 @@ export function assembleEngineInput(rows: ProjectInputRows): BrandedUnderwriting
       other: budgetSum("other") || undefined,
     },
     revenueProgram,
-    constructionMonths: optionalZero("construction_months"),
-    leaseUpMonths: optionalZero("lease_up_months"),
+    constructionMonths,
+    leaseUpMonths,
     // When no project-level occupancy is approved (allowed: readiness then
     // requires every component to carry its own), the scalar is derived as the
     // GPR-weighted average of component occupancies. Fabricating 0% here would
@@ -508,7 +510,8 @@ export function assembleEngineInput(rows: ProjectInputRows): BrandedUnderwriting
     waterfall,
     // 1D: opt-in lease-up absorption (a positive flag turns it on).
     leaseUpCurve: (scalar("lease_up_curve") ?? 0) > 0,
-    // WS1 monthly spine: a positive flag opts the deal into monthly precision.
+    // Preserve numerical compatibility: the monthly spine is opt-in and runs
+    // only from an explicit approved/default-accepted positive flag.
     monthlyModel: (scalar("monthly_model") ?? 0) > 0,
     constructionDrawCurve: (scalar("construction_s_curve") ?? 0) > 0 ? "s_curve" : "straight_line",
     refinance,

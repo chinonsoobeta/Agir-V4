@@ -15,6 +15,11 @@ const allowed = new Set([
   // service-role credential. It never creates a client or exposes its value.
   "src/lib/config.server.ts",
   "src/lib/health.server.ts",
+  // Reviewed 2026-07-13: verified-document Permit research. The client is
+  // capability-labelled, candidates are capped, and the service-only RPC
+  // rechecks the requesting user's current parent write role before an atomic
+  // append. Candidates remain review-only and never establish applicability.
+  "src/lib/permit-research.server.ts",
   "src/lib/scim/supabase-store.server.ts",
   "src/lib/storage-download.server.ts",
   // Reviewed 2026-07-04: normalized underwriting run-history writes.

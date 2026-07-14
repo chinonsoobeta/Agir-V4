@@ -65,7 +65,15 @@ const ProjectSchema = z.object({
   notes: z.string().max(5000).optional().nullable(),
   workspace_id: z.string().uuid().optional().nullable(),
   property_address: z.string().max(500).optional().nullable(),
+  address_line_2: z.string().max(200).optional().nullable(),
+  building_name: z.string().max(250).optional().nullable(),
+  address_provider: z.enum(["google_places", "openstreetmap", "manual"]).optional().nullable(),
+  address_place_id: z.string().max(500).optional().nullable(),
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
   municipality: z.string().max(200).optional().nullable(),
+  address_region: z.string().max(200).optional().nullable(),
+  postal_code: z.string().max(30).optional().nullable(),
   permit_project_type: z
     .enum([
       "new_construction",

@@ -132,7 +132,11 @@ export function OnboardingChecklist() {
       </div>
 
       <div className="mt-4 flex items-center gap-3">
-        <Progress value={pct} className="h-2 flex-1" />
+        <Progress
+          value={pct}
+          className="h-2 flex-1"
+          aria-label={tx("onb.progress", { done: state.doneCount, total: state.total })}
+        />
         <span className="num text-xs text-muted-foreground whitespace-nowrap">
           {tx("onb.progress", { done: state.doneCount, total: state.total })}
         </span>

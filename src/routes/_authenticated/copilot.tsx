@@ -87,7 +87,7 @@ function CopilotPage() {
           value={focused?.id ?? "__all__"}
           onValueChange={(v) => setDealId(v === "__all__" ? null : v)}
         >
-          <SelectTrigger className="w-full sm:w-[220px]">
+          <SelectTrigger className="w-full sm:w-[220px]" aria-label="Copilot deal scope">
             <SelectValue placeholder="Whole portfolio" />
           </SelectTrigger>
           <SelectContent>
@@ -175,19 +175,19 @@ function ChatUI({
                       : "border-warning/40 text-warning"
                   }
                 >
-                  {aiReadiness?.configured ? "AI key configured" : "AI ready · key pending"}
+                  {aiReadiness?.configured ? "AI key configured" : "AI key required"}
                 </Badge>
               </div>
               <h3 className="mt-3 display text-xl">
                 {!aiReadiness?.configured
-                  ? "AI workflows are ready"
+                  ? "Connect an AI provider"
                   : focused
                     ? `What should we do about ${focused.name}?`
                     : "What decision should we make?"}
               </h3>
               <p className="text-sm text-muted-foreground mt-1">
                 {!aiReadiness?.configured
-                  ? `Set ${aiReadiness?.keyEnv ?? "API_KEY or ANTHROPIC_API_KEY"} on the server to activate chat. Extraction, underwriting and memo controls remain visible and fall back safely.`
+                  ? `Set ${aiReadiness?.keyEnv ?? "ANTHROPIC_API_KEY or OPENAI_API_KEY"} on the server to activate extraction and Copilot. Underwriting calculations and pilot memos remain deterministic.`
                   : focused
                     ? "Grounded in this deal's findings, scores and recommendation."
                     : "Grounded in approved assumptions and deterministic outputs."}
@@ -268,8 +268,8 @@ function ChatUI({
                 <p className="text-sm font-medium">AI key pending</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   Copilot is wired, but chat needs a server-side{" "}
-                  {aiReadiness?.keyEnv ?? "API_KEY or ANTHROPIC_API_KEY"}. Add the key later and
-                  this control will run without code changes.
+                  {aiReadiness?.keyEnv ?? "ANTHROPIC_API_KEY or OPENAI_API_KEY"}. Add the key later
+                  and this control will run without code changes.
                 </p>
               </Card>
             </div>

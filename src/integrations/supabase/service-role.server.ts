@@ -11,6 +11,7 @@ export const SERVICE_ROLE_CAPABILITIES = {
   document_ingestion_worker:
     "Verify pending upload bytes and atomically finalize or reject them under a live queue lease.",
   extraction_worker: "Claim and heartbeat durable extraction jobs.",
+  permit_research_worker: "Write review-only Permit evidence derived from verified documents.",
   run_history_write: "Persist immutable normalized underwriting run history rows.",
   scim_provisioning: "Provision users and workspace memberships from enterprise IdP events.",
   schema_maintenance: "Refresh schema cache and run schema drift maintenance.",

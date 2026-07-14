@@ -50,9 +50,16 @@ function NewPermitCase() {
   const [form, setForm] = useState<any>({
     name: "",
     property_address: "",
+    address_line_2: "",
+    building_name: "",
+    address_provider: "manual",
+    address_place_id: null,
+    latitude: null,
+    longitude: null,
     municipality: "",
     municipality_confirmed: false,
     province: "British Columbia",
+    postal_code: "",
     property_type: null,
     work_type: null,
     project_context: null,
@@ -110,27 +117,55 @@ function NewPermitCase() {
                     setForm((f: any) => ({
                       ...f,
                       property_address: v,
+                      building_name: f.address_provider === "manual" ? f.building_name : "",
+                      municipality: f.address_provider === "manual" ? f.municipality : "",
+                      postal_code: f.address_provider === "manual" ? f.postal_code : "",
+                      address_provider: "manual",
+                      address_place_id: null,
+                      latitude: null,
+                      longitude: null,
                       municipality_confirmed: false,
                     }))
                   }
                   onSelect={(s) =>
                     setForm((f: any) => ({
                       ...f,
-                      property_address: s.address,
+                      property_address: s.addressLine1,
+                      building_name: s.buildingName ?? f.building_name,
+                      address_provider: s.provider,
+                      address_place_id: s.placeId,
+                      latitude: s.latitude,
+                      longitude: s.longitude,
                       municipality: s.municipality ?? f.municipality,
                       province: s.province ?? f.province,
+                      postal_code: s.postalCode ?? f.postal_code,
                       municipality_confirmed: false,
                     }))
                   }
                   placeholder="Start typing to see suggestions…"
                 />
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Suggestions are provided by OpenStreetMap through Photon. Your typed address is
-                  sent to that service. Suggested municipalities remain unconfirmed and provide no
-                  zoning evidence.
+                  Search supports street addresses and building names. The municipality remains
+                  unconfirmed and no zoning is inferred.
                 </p>
               </Field>
               <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Building or complex name">
+                  <Input
+                    value={form.building_name}
+                    onChange={(e) => set("building_name", e.target.value)}
+                    placeholder="Optional"
+                  />
+                </Field>
+                <Field label="Unit, suite, or apartment">
+                  <Input
+                    value={form.address_line_2}
+                    onChange={(e) => set("address_line_2", e.target.value)}
+                    placeholder="e.g. Suite 1204"
+                  />
+                </Field>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-3">
                 <Field label="Municipality">
                   <Input
                     value={form.municipality}
@@ -139,6 +174,13 @@ function NewPermitCase() {
                 </Field>
                 <Field label="Province">
                   <Input value={form.province} onChange={(e) => set("province", e.target.value)} />
+                </Field>
+                <Field label="Postal code">
+                  <Input
+                    value={form.postal_code}
+                    onChange={(e) => set("postal_code", e.target.value)}
+                    autoComplete="postal-code"
+                  />
                 </Field>
               </div>
               <label className="flex min-h-11 items-center gap-3">
@@ -155,7 +197,7 @@ function NewPermitCase() {
                 onChange={(v) => set("property_type", v)}
               />
               <p className="text-sm text-muted-foreground">
-                Zoning change analysis not yet available. Zoning is not inferred from the address.
+                Zoning is not checked from the address. Add a verified zoning source later.
               </p>
             </div>
           )}
@@ -237,17 +279,18 @@ function NewPermitCase() {
               <h2 className="text-lg font-semibold">Review</h2>
               <dl className="grid gap-3 text-sm sm:grid-cols-2">
                 <Summary k="Case" v={form.name} />
-                <Summary k="Address" v={form.property_address || "Unknown"} />
+                <Summary k="Address" v={form.property_address || "Not provided"} />
+                <Summary k="Unit or suite" v={form.address_line_2 || "None"} />
                 <Summary
                   k="Municipality"
                   v={form.municipality_confirmed ? form.municipality : "Unconfirmed"}
                 />
-                <Summary k="Work" v={form.work_type ? pretty(form.work_type) : "Unknown"} />
+                <Summary k="Work" v={form.work_type ? pretty(form.work_type) : "Not provided"} />
                 <Summary
                   k="Property"
-                  v={form.property_type ? pretty(form.property_type) : "Unknown"}
+                  v={form.property_type ? pretty(form.property_type) : "Not provided"}
                 />
-                <Summary k="Zoning" v="Unknown: no verified analysis" />
+                <Summary k="Zoning" v="Not checked yet" />
               </dl>
               <p className="surface-subtle rounded-lg p-4 text-sm leading-6">
                 Creating this case does not create an underwriting deal or confirm any permit

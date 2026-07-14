@@ -38,6 +38,7 @@ import {
 } from "./context";
 import { generateFindings } from "./findings";
 import { reconcileRecommendation } from "./decision";
+import { effectiveAssumptions } from "./assumption-authority";
 import { AI_AUTHORITY_NOTE } from "./ai-authority";
 import {
   handleSchemaCompatibilityFallback,
@@ -69,6 +70,23 @@ type ServerContext = {
   supabase: SupabaseFacade;
   userId: string;
 };
+
+async function mapWithConcurrency<T, R>(
+  values: readonly T[],
+  concurrency: number,
+  task: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (cursor < values.length) {
+      const index = cursor++;
+      results[index] = await task(values[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
 
 async function auditWorkflowEvent(
   ctx: ServerContext,
@@ -722,8 +740,8 @@ export async function getUnderwritingReadinessForContext({
 // ---------- Defaults are static and consensual ----------
 
 // Persist a batch of accepted static defaults in a SINGLE upsert instead of one
-// round-trip per key. Both the analyst ("accept all") and the AI-assisted paths
-// accept N keys at once; issuing N sequential upserts was a real N+1 against
+// round-trip per key. The analyst may accept N keys at once; issuing N
+// sequential upserts was a real N+1 against
 // underwriting_inputs. All rows share the (project_id,key) conflict target, so a
 // single .upsert([...]) is equivalent - and duplicate keys are collapsed first
 // because Postgres rejects a statement that touches the same conflict row twice.
@@ -733,9 +751,12 @@ export async function persistAcceptedDefaults(
     projectId: string;
     userId: string;
     keys: string[];
-    via: "analyst" | "ai";
+    via: "analyst";
   },
 ): Promise<string[]> {
+  if (opts.via !== "analyst") {
+    throw new Error("Static defaults require explicit analyst acceptance.");
+  }
   const seen = new Set<string>();
   const accepted: string[] = [];
   for (const key of opts.keys) {
@@ -746,10 +767,7 @@ export async function persistAcceptedDefaults(
   if (!accepted.length) return [];
 
   const approvedAt = new Date().toISOString();
-  const reason =
-    opts.via === "ai"
-      ? "AI accepted the consensual static default"
-      : "Static default accepted by analyst";
+  const reason = "Static default accepted by analyst";
   const rows = accepted.map((key) => ({
     project_id: opts.projectId,
     owner_id: opts.userId,
@@ -809,7 +827,7 @@ async function mirrorAcceptedDefaultsToAssumptions(
       source_text: defaultDef.label,
       formula_text: `Static default accepted by analyst: ${defaultDef.label}`,
       ai_reasoning:
-        "Static default accepted explicitly. AI did not invent this value; the deterministic engine reads the fixed default.",
+        "Static default accepted explicitly by the analyst; the deterministic engine reads the fixed default.",
       approved_by: opts.userId,
       approved_at: approvedAt,
     };
@@ -957,71 +975,6 @@ export async function resolveConflictForContext({
   return { key: data.key, resolved, note };
 }
 
-// ---------- AI-assisted input selection (never invents a value) ----------
-//
-// "AI selects inputs, the engine computes." The ONLY thing AI may do here is
-// choose, from the consensual STATIC defaults in DEFAULTS, which defaultable
-// inputs are reasonable to accept on the analyst's behalf so a deal blocked
-// solely by defaultable gaps can run. It selects by index from a fixed list.
-// it cannot change a value or introduce a number that is not already a
-// pre-approved constant. Accepted rows are written as default_accepted with
-// provenance and remain fully visible and reversible by the analyst.
-async function aiSelectDefaults(
-  ctx: ServerContext,
-  projectId: string,
-  defaultable: string[],
-): Promise<string[]> {
-  const keys = defaultable.filter((k) => DEFAULTS[k] != null);
-  if (!keys.length) return [];
-  const list = keys
-    .map((k, i) => `${i}. key=${k} static_default=${DEFAULTS[k].value} (${DEFAULTS[k].label})`)
-    .join("\n");
-  const { getAgirModel } = await import("./ai-gateway.server");
-  const { generateText } = await import("ai");
-  const { text } = await generateText({
-    model: getAgirModel(),
-    temperature: 0,
-    system:
-      "You are an institutional real estate underwriter deciding which STATIC, pre-approved default assumptions are reasonable to accept for a development pro forma. You may ONLY accept or skip the listed defaults: you cannot change a value or introduce a new one. Accept a default only when its fixed value is a standard, defensible market convention for that missing input.",
-    prompt: `Missing defaultable inputs and their fixed default values:\n${list}\n\nReturn ONLY a JSON array of the integer indices you accept (e.g. [0,2]). Return [] to accept none.`,
-  });
-  const m = text.match(/\[[\s\S]*?\]/);
-  let indices: unknown = [];
-  try {
-    indices = m ? JSON.parse(m[0]) : [];
-  } catch {
-    indices = [];
-  }
-  const chosenKeys: string[] = [];
-  for (const raw of Array.isArray(indices) ? indices : []) {
-    const key = keys[Number(raw)];
-    if (key) chosenKeys.push(key);
-  }
-  const accepted = await persistAcceptedDefaults(ctx.supabase, {
-    projectId,
-    userId: ctx.userId,
-    keys: chosenKeys,
-    via: "ai",
-  });
-  if (accepted.length) {
-    await mirrorAcceptedDefaultsToAssumptions(ctx.supabase, {
-      projectId,
-      userId: ctx.userId,
-      keys: accepted,
-    });
-    await ctx.supabase.from("audit_logs").insert({
-      project_id: projectId,
-      owner_id: ctx.userId,
-      user_id: ctx.userId,
-      entity_type: "underwriting_inputs",
-      entity_id: null,
-      action: "ai_accept_defaults",
-      payload: { accepted, defaults: accepted.map((k) => ({ key: k, value: DEFAULTS[k].value })) },
-    });
-  }
-  return accepted;
-}
-
 // ---------- The underwriting run (engine math is always deterministic) ----------
 
 export type RunFullUnderwritingData = {
@@ -1036,52 +989,27 @@ export async function runFullUnderwritingForContext(
   await assertWorkflowPermission(context, data.project_id, "canRunUnderwriting");
   const { enforceRateLimit } = await import("./rate-limit.server");
   await enforceRateLimit(context, "underwriting_run", {
-    metadata: { project_id: data.project_id, mode: data.mode ?? "ai" },
+    metadata: { project_id: data.project_id, mode: "deterministic", requested_mode: data.mode },
   });
-  const { hasAnthropicKey } = await import("./ai-gateway.server");
-  const aiAvailable = hasAnthropicKey();
-  const wantsAI = data.mode === "ai";
-  const useAI = wantsAI && aiAvailable;
-  let aiFailureReason: string | null =
-    wantsAI && !aiAvailable
-      ? "AI unavailable (ANTHROPIC_API_KEY missing or malformed): used the deterministic engine."
+  // Compatibility accepts the historical `mode` field, but AI is never an
+  // underwriting-input authority. Missing defaults and conflicts must be
+  // accepted or resolved through an explicit analyst action before this run.
+  const aiFailureReason: string | null =
+    data.mode === "ai"
+      ? "AI cannot approve underwriting inputs. The deterministic engine ran only on explicitly approved or analyst-accepted inputs."
       : null;
-  if (aiFailureReason) {
-    await auditWorkflowEvent(context, data.project_id, "ai_fallback", {
-      feature: "underwriting",
-      reason: aiFailureReason,
-    });
-  }
   const aiAcceptedDefaults: string[] = [];
+  const aiGeneration = null;
 
-  let rows = await loadProjectRows(context.supabase, data.project_id);
-  let readiness = computeReadiness(rows);
+  const rows = await loadProjectRows(context.supabase, data.project_id);
+  const readiness = computeReadiness(rows);
 
-  // AI input selection: if defaultable gaps are all that block the run, let AI
-  // accept the consensual static defaults so the engine can compute. Falls
-  // back silently to the deterministic path (analyst's manual "Accept
-  // defaults") on any failure.
-  if (useAI && readiness.status === "blocked" && readiness.defaultable.length) {
-    try {
-      const accepted = await aiSelectDefaults(context, data.project_id, readiness.defaultable);
-      aiAcceptedDefaults.push(...accepted);
-      if (accepted.length) {
-        rows = await loadProjectRows(context.supabase, data.project_id);
-        readiness = computeReadiness(rows);
-      }
-    } catch (error) {
-      aiFailureReason = `AI input selection failed; fell back to the deterministic engine (${error instanceof Error ? error.message : "unavailable"}).`;
-      await auditWorkflowEvent(context, data.project_id, "ai_fallback", {
-        feature: "underwriting",
-        reason: aiFailureReason,
-      });
-    }
-  }
-  const analysisMode: "ai" | "deterministic" = useAI && !aiFailureReason ? "ai" : "deterministic";
+  const analysisMode = "deterministic" as const;
   const aiMeta = {
     analysis_mode: analysisMode,
-    ai_used: analysisMode === "ai",
+    ai_used: false,
     ai_note: aiFailureReason,
+    ai_generation: aiGeneration,
     ai_accepted_defaults: aiAcceptedDefaults,
     authority_note: AI_AUTHORITY_NOTE,
   };
@@ -1105,6 +1033,7 @@ export async function runFullUnderwritingForContext(
         readiness,
         analysis_mode: analysisMode,
         ai_note: aiFailureReason,
+        ai_generation: aiGeneration,
       },
     });
     if (!blockedRun) {
@@ -1123,6 +1052,7 @@ export async function runFullUnderwritingForContext(
         readiness,
         analysis_mode: analysisMode,
         ai_note: aiFailureReason,
+        ai_generation: aiGeneration,
         run_id: blockedRun?.id ?? null,
         run_number: blockedRun?.run_number ?? null,
         input_fingerprint: inputFingerprint,
@@ -1271,14 +1201,30 @@ export async function runFullUnderwritingForContext(
     .select("workspace_id")
     .eq("id", data.project_id)
     .maybeSingle();
-  const peerProjectIds = projectWs?.workspace_id
+  const candidatePeerProjectIds: string[] = projectWs?.workspace_id
     ? await context.supabase
         .from("projects")
         .select("id")
         .eq("workspace_id", projectWs.workspace_id)
         .neq("id", data.project_id)
+        .order("updated_at", { ascending: false })
+        .limit(50)
         .then((r: { data: Array<{ id: string }> | null }) => r.data?.map((p) => p.id) ?? [])
     : [];
+  // Compatibility outputs retain the last completed run. Only exact-current
+  // peer runs may influence portfolio norms; stale or unverifiable peers are
+  // excluded and curated benchmarks remain the conservative context.
+  let peerProjectIds: string[] = [];
+  try {
+    const peerStates = await mapWithConcurrency(candidatePeerProjectIds, 6, (project_id) =>
+      getUnderwritingRunStateForContext({ data: { project_id }, context }),
+    );
+    peerProjectIds = peerStates
+      .filter((state) => state.freshness === "current")
+      .map((state) => state.project_id);
+  } catch {
+    peerProjectIds = [];
+  }
   const { data: portfolioRows } = peerProjectIds.length
     ? await context.supabase
         .from("financial_outputs")
@@ -1300,7 +1246,7 @@ export async function runFullUnderwritingForContext(
   // persisted recommendation matches what the Decision tab would compute.
   const { data: findingsAssumptions } = await context.supabase
     .from("assumptions")
-    .select("field_key,value_numeric,status,confidence_score")
+    .select("field_key,value_numeric,status,confidence_score,dual_control_pending")
     .eq("project_id", data.project_id);
   let findingsRec: string | null = null;
   try {
@@ -1309,7 +1255,7 @@ export async function runFullUnderwritingForContext(
       .map((s) => ({ key: s.key, label: s.key, output: s.output }));
     findingsRec = generateFindings(
       base,
-      (findingsAssumptions ?? []) as any,
+      effectiveAssumptions(findingsAssumptions ?? []) as any,
       scenarios as any,
     ).recommendation;
   } catch {
@@ -1364,6 +1310,18 @@ export async function runFullUnderwritingForContext(
     project_id: data.project_id,
     owner_id: context.userId,
     scenario_key: "base",
+    metric_key: "equity_wipeout",
+    metric_label: "Equity Wipeout",
+    value_numeric: base.equityWipeout ? 1 : 0,
+    unit: "count",
+    formula_text:
+      "1 when net sale proceeds before debt are below the loan payoff at exit; otherwise 0.",
+    inputs: { equity_wipeout: base.equityWipeout },
+  });
+  outputInserts.push({
+    project_id: data.project_id,
+    owner_id: context.userId,
+    scenario_key: "base",
     metric_key: "risk_score",
     metric_label: "Risk Score",
     value_numeric: riskScore,
@@ -1380,7 +1338,15 @@ export async function runFullUnderwritingForContext(
     value_numeric: null,
     unit: "count",
     formula_text: `${verdict.code}: ${verdict.gates.filter((g) => !g.pass).length} of ${verdict.gates.length} gates failed${verdict.hardFail ? "; hard fail (equity wipeout or error-severity reconciliation flag)" : ""}`,
-    inputs: { code: verdict.code, gates: verdict.gates, hardFail: verdict.hardFail },
+    inputs: {
+      code: verdict.code,
+      gates: verdict.gates,
+      hardFail: verdict.hardFail,
+      hardFailReasons: verdict.hardFailReasons,
+      missingMetrics: verdict.missingMetrics,
+      equity_wipeout: base.equityWipeout,
+      error_flag_count: errorFlags.length,
+    },
   });
   // The deterministic "analyst read": thesis, contextual interpretations,
   // what-if levers, and audience-adapted narratives (all provenance-clean).
@@ -1442,6 +1408,7 @@ export async function runFullUnderwritingForContext(
     error_flags: errorFlags.length,
     equity_wipeout: base.equityWipeout,
     analysis_mode: analysisMode,
+    ai_generation: aiGeneration,
     ai_accepted_defaults: aiAcceptedDefaults,
   };
   const resultBase = {

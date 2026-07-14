@@ -3,43 +3,15 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { computeInvestmentVerdict } from "./verdict";
 import { buildAllowedValues, verifyNumericProvenance, type AllowedValue } from "./engine";
-import { DEFAULT_AI_MODEL } from "./ai-gateway.server";
 import type { MemoReportContext } from "./memo-report";
 import { AI_AUTHORITY_NOTE } from "./ai-authority";
 import { isMissingColumn } from "./db-compat";
+import { EFFECTIVE_ASSUMPTION_STATUSES, effectiveAssumptions } from "./assumption-authority";
 
-// The LLM's only job here is PROSE around values injected from engine output.
-// It runs at temperature 0, and every generated memo is post-verified: each
-// numeric token must trace to an approved/default_accepted/calculated input,
-// an engine output, or a reconciliation figure. Orphan numbers badge the memo
-// needs_review and are persisted in verification_report: they NEVER block
-// memo creation.
-
-// Harden model output parsing: strip markdown fences, take the first JSON
-// object, and on any failure fall back to a memo whose executive_summary is the
-// raw text (with a parse_warning recorded in verification_report).
-function parseMemoJson(text: string): {
-  memo: Record<string, unknown>;
-  parse_warning: string | null;
-} {
-  let cleaned = text.trim();
-  const fenced = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenced) cleaned = fenced[1].trim();
-  const obj = cleaned.match(/\{[\s\S]*\}/);
-  if (obj) {
-    try {
-      const parsed = JSON.parse(obj[0]);
-      if (parsed && typeof parsed === "object")
-        return { memo: parsed as Record<string, unknown>, parse_warning: null };
-    } catch {
-      /* fall through to fallback */
-    }
-  }
-  return {
-    memo: { executive_summary: text },
-    parse_warning: "Model output was not valid JSON; stored the raw text as executive_summary.",
-  };
-}
+// The pilot memo is deliberately deterministic. AI prose is not labelled or
+// exported until it can pass a strict schema, semantic-verdict, and provenance
+// gate as the actual rendered artifact. This keeps every visible sentence and
+// number aligned with the deterministic run.
 
 export const generateMemo = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -60,10 +32,10 @@ export const generateMemo = createServerFn({ method: "POST" })
     const assumptionsRes = await context.supabase
       .from("assumptions")
       .select(
-        "field_key,field_label,value_numeric,value_text,unit,status,confidence_score,source_document_id,source_text,formula_text,approved_by,approved_at",
+        "field_key,field_label,value_numeric,value_text,unit,status,confidence_score,source_document_id,source_text,formula_text,approved_by,approved_at,dual_control_pending",
       )
       .eq("project_id", data.project_id)
-      .in("status", ["approved", "modified", "default_accepted", "calculated"]);
+      .in("status", [...EFFECTIVE_ASSUMPTION_STATUSES]);
     if (assumptionsRes.error)
       throw new Error(
         `Memo generation failed loading assumptions: ${assumptionsRes.error.message}`,
@@ -119,7 +91,7 @@ export const generateMemo = createServerFn({ method: "POST" })
     if (documentsRes.error)
       throw new Error(`Memo generation failed loading documents: ${documentsRes.error.message}`);
 
-    const assumptions = assumptionsRes.data ?? [];
+    const assumptions = effectiveAssumptions(assumptionsRes.data ?? []);
     const engineInputs = engineInputsRes.data ?? [];
     let outputs = outputsRes.data ?? [];
     let cashFlows = cashFlowsRes.data ?? [];
@@ -152,38 +124,40 @@ export const generateMemo = createServerFn({ method: "POST" })
       if (scoped.risks.length) risks = scoped.risks as typeof risks;
     }
 
-    const outputValue = (scenario: string, key: string) =>
-      Number(
-        outputs.find((row) => row.scenario_key === scenario && row.metric_key === key)
-          ?.value_numeric ?? 0,
-      );
+    const outputValue = (scenario: string, key: string): number | null => {
+      const raw = outputs.find(
+        (row) => row.scenario_key === scenario && row.metric_key === key,
+      )?.value_numeric;
+      if (raw == null) return null;
+      const value = Number(raw);
+      return Number.isFinite(value) ? value : null;
+    };
+    const requiredOutputValue = (scenario: string, key: string): number => {
+      const value = outputValue(scenario, key);
+      if (value == null)
+        throw new Error(
+          `Underwriting output ${scenario}.${key} is missing or invalid. Re-run deterministic underwriting before generating a memo.`,
+        );
+      return value;
+    };
     const errorFlags = flags.filter((f) => f.severity === "error" && !f.resolved);
-    const verdictRow = outputs.find(
-      (row) => row.scenario_key === "base" && row.metric_key === "verdict",
-    );
     const verdict = computeInvestmentVerdict({
-      equity_multiple: outputValue("base", "equity_multiple"),
-      profit_margin: outputValue("base", "profit_margin"),
-      development_spread: outputValue("base", "development_spread"),
-      stress_dscr: outputValue("combined", "dscr"),
-      stress_equity_multiple: outputValue("combined", "equity_multiple"),
+      equity_multiple: requiredOutputValue("base", "equity_multiple"),
+      profit_margin: requiredOutputValue("base", "profit_margin"),
+      development_spread: requiredOutputValue("base", "development_spread"),
+      stress_dscr: requiredOutputValue("combined", "dscr"),
+      stress_equity_multiple: requiredOutputValue("combined", "equity_multiple"),
+      equity_wipeout: requiredOutputValue("base", "equity_wipeout") === 1,
       error_flag_count: errorFlags.length,
     });
 
-    // ---- AI is OPTIONAL. With a key we use the AI-assisted flow; without one we
-    // fall back to a deterministic template. Never throw for a missing key. ----
-    const { hasAnthropicKey } = await import("./ai-gateway.server");
-    const aiAvailable = hasAnthropicKey();
-    let generation_mode: "ai" | "deterministic" = aiAvailable ? "ai" : "deterministic";
-    let ai_note: string | null = aiAvailable
-      ? null
-      : "AI memo generation unavailable: deterministic template used.";
+    const generation_mode = "deterministic" as const;
+    const ai_note =
+      "Investment memos use the governed deterministic template; AI prose is not enabled for the pilot artifact.";
 
-    // Structured IC-memorandum report: deterministic in BOTH modes (the AI only
-    // affects prose, never the tables/figures). Drives the formatted on-screen
-    // view and the PDF/DOCX downloads.
+    // The same deterministic report drives the on-screen view and PDF/DOCX.
     const { buildMemoReport, memoReportText } = await import("./memo-report");
-    let report = buildMemoReport({
+    const report = buildMemoReport({
       project,
       // These are column-subset selects; the memo builder reads only the
       // selected fields, so assert them to the full row shapes it expects.
@@ -194,11 +168,11 @@ export const generateMemo = createServerFn({ method: "POST" })
       risks: risks as unknown as MemoReportContext["risks"],
       documents: documents as unknown as MemoReportContext["documents"],
       verdict,
-      generationMode: generation_mode,
+      generationMode: "deterministic",
       generatedLabel: new Date().toLocaleString("en-US", { month: "long", year: "numeric" }),
     });
 
-    // Allowed numeric provenance set, shared by both generation paths.
+    // Allowed numeric provenance set for the governed artifact.
     // Reconciliation figures and their pure-function differences/ratios are
     // legitimately derivable (a gap is uses - sources; a covenant shortfall is
     // required / actual), as are the report's own pure-function derivations
@@ -247,96 +221,23 @@ export const generateMemo = createServerFn({ method: "POST" })
       ...cashFlowAllowed,
     ];
 
-    let memo: Record<string, unknown> = {};
-    let parse_warning: string | null = null;
+    const { buildDeterministicMemo } = await import("./memo-template");
+    type DetCtx = Parameters<typeof buildDeterministicMemo>[0];
+    const memo: Record<string, unknown> = buildDeterministicMemo({
+      project,
+      assumptions: assumptions as unknown as DetCtx["assumptions"],
+      engineInputs: engineInputs as unknown as DetCtx["engineInputs"],
+      outputs: outputs as unknown as DetCtx["outputs"],
+      cashFlows: cashFlows as unknown as DetCtx["cashFlows"],
+      flags: flags as unknown as DetCtx["flags"],
+      risks: risks as unknown as DetCtx["risks"],
+      errorFlags: errorFlags as unknown as DetCtx["errorFlags"],
+      verdict,
+    });
+    const parse_warning = null;
+    const ai_generation = null;
 
-    if (aiAvailable) {
-      const { readServerConfig } = await import("./config.server");
-      const model = readServerConfig().aiModel || DEFAULT_AI_MODEL;
-      const contextBlock = {
-        project: {
-          name: project.name,
-          location: project.location,
-          type: project.type,
-          status: project.status,
-          notes: project.notes,
-        },
-        approved_assumptions: assumptions,
-        engine_inputs: engineInputs,
-        financial_outputs: outputs,
-        cash_flows: cashFlows,
-        reconciliation_flags: flags,
-        unresolved_error_flags: errorFlags,
-        deterministic_verdict: verdict,
-        persisted_verdict: verdictRow?.formula_text ?? null,
-      };
-      const prompt = `CONTEXT:
-${JSON.stringify(contextBlock, null, 2)}
-
-Generate an investor-grade investment memo. Respond ONLY in strict JSON with keys: executive_summary, project_description, market_overview, development_plan, capital_stack, financial_highlights, sensitivity, key_risks, risk_mitigation, investment_recommendation, managing_director_verdict, investment_committee_recommendation, sources_and_assumptions.
-
-Every unresolved_error_flags entry MUST be stated verbatim in key_risks and reflected in the recommendation. Use the deterministic_verdict.code exactly in every recommendation section.`;
-
-      let rawText = "";
-      try {
-        const { getAgirModel } = await import("./ai-gateway.server");
-        const { generateText } = await import("ai");
-        const result = await generateText({
-          model: getAgirModel(model),
-          temperature: 0,
-          system: `Use ONLY values present in CONTEXT. Never introduce a number not in CONTEXT. Cite the metric_key or field_key when quoting a figure. If a section lacks data, write "Insufficient approved data." The investment recommendation must be exactly the deterministic_verdict.code. If deterministic_verdict.code is REJECT, state the magnitude of the projected loss plainly: no sugarcoating.`,
-          prompt,
-        });
-        rawText = result.text;
-      } catch (error) {
-        generation_mode = "deterministic";
-        ai_note = `AI memo generation failed: deterministic template used (${error instanceof Error ? error.message : String(error)}).`;
-        await context.supabase.from("audit_logs").insert({
-          project_id: data.project_id,
-          owner_id: context.userId,
-          user_id: context.userId,
-          entity_type: "project",
-          entity_id: data.project_id,
-          action: "ai_fallback",
-          payload: { feature: "memo_generation", reason: ai_note },
-        });
-      }
-      if (generation_mode === "ai") {
-        const parsed = parseMemoJson(rawText);
-        memo = parsed.memo;
-        parse_warning = parsed.parse_warning;
-      }
-    }
-
-    if (generation_mode === "deterministic") {
-      const { buildDeterministicMemo } = await import("./memo-template");
-      type DetCtx = Parameters<typeof buildDeterministicMemo>[0];
-      memo = buildDeterministicMemo({
-        project,
-        assumptions: assumptions as unknown as DetCtx["assumptions"],
-        engineInputs: engineInputs as unknown as DetCtx["engineInputs"],
-        outputs: outputs as unknown as DetCtx["outputs"],
-        cashFlows: cashFlows as unknown as DetCtx["cashFlows"],
-        flags: flags as unknown as DetCtx["flags"],
-        risks: risks as unknown as DetCtx["risks"],
-        errorFlags: errorFlags as unknown as DetCtx["errorFlags"],
-        verdict,
-      });
-      report = buildMemoReport({
-        project,
-        assumptions: assumptions as unknown as MemoReportContext["assumptions"],
-        engineInputs: engineInputs as unknown as MemoReportContext["engineInputs"],
-        outputs: outputs as unknown as MemoReportContext["outputs"],
-        flags: flags as unknown as MemoReportContext["flags"],
-        risks: risks as unknown as MemoReportContext["risks"],
-        documents: documents as unknown as MemoReportContext["documents"],
-        verdict,
-        generationMode: generation_mode,
-        generatedLabel: new Date().toLocaleString("en-US", { month: "long", year: "numeric" }),
-      });
-    }
-
-    // ---- Output provenance verifier (deterministic, both paths) ----
+    // ---- Output provenance verifier ----
     // Verify the prose sections AND every numeric-bearing string the formatted
     // report (tables, stats, footnotes) will render.
     const memoText = [
@@ -351,18 +252,13 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
       orphans: provenance.orphans,
       parse_warning,
       ai_note,
+      ai_generation,
       authority_note: AI_AUTHORITY_NOTE,
       verified_at: new Date().toISOString(),
     };
 
-    // Provenance NEVER blocks creation: a failing AI memo is saved with
-    // needs_review=true and its orphan tokens recorded for the reviewer.
-    const status =
-      generation_mode === "deterministic"
-        ? "generated_deterministic"
-        : provenance.pass
-          ? "generated"
-          : "needs_review";
+    // A deterministic artifact that fails the same gate remains review-only.
+    const status = provenance.pass ? "generated_deterministic" : "needs_review";
 
     const memoInsert = {
       project_id: project.id,
@@ -387,6 +283,7 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
         needs_review: !provenance.pass,
         parse_warning,
         ai_note,
+        ai_generation,
         authority_note: AI_AUTHORITY_NOTE,
       },
       verification_report: verificationReport,
@@ -422,6 +319,7 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
         input_fingerprint: memoRun?.input_fingerprint ?? null,
         verification_pass: provenance.pass,
         generation_mode,
+        ai_generation,
       },
     });
 
@@ -429,7 +327,7 @@ Every unresolved_error_flags entry MUST be stated verbatim in key_risks and refl
       project_id: project.id,
       user_id: context.userId,
       activity_type: "memo_generated",
-      description: `Generated ${generation_mode === "deterministic" ? "deterministic-template" : "AI-assisted"} investment memo${provenance.pass ? " (provenance verified)" : `: NEEDS REVIEW: ${provenance.orphans.length} token(s) lack provenance`}`,
+      description: `Generated deterministic-template investment memo${provenance.pass ? " (provenance verified)" : `: NEEDS REVIEW: ${provenance.orphans.length} token(s) lack provenance`}`,
     });
     return row;
   });
@@ -524,8 +422,8 @@ export const debugMemoReadiness = createServerFn({ method: "GET" })
     if (financial_outputs_count === 0)
       blocking_reasons.push("No financial outputs: run deterministic underwriting first.");
 
-    const { hasAnthropicKey } = await import("./ai-gateway.server");
-    const has_anthropic_key = hasAnthropicKey();
+    const { getAiReadinessDiagnostics } = await import("./ai-gateway.server");
+    const ai = getAiReadinessDiagnostics();
 
     return {
       project_id: data.project_id,
@@ -543,8 +441,11 @@ export const debugMemoReadiness = createServerFn({ method: "GET" })
       can_generate: blocking_reasons.length === 0,
       blocking_reasons,
       env: {
-        has_anthropic_key,
-        model: (await import("./config.server")).readServerConfig().aiModel || DEFAULT_AI_MODEL,
+        has_anthropic_key: ai.providers.anthropic.configured,
+        has_openai_key: ai.providers.openai.configured,
+        has_ai_provider: ai.configured,
+        provider: ai.activeProvider,
+        model: ai.activeModel,
       },
     };
   });

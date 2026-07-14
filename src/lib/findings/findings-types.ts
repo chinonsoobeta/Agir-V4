@@ -79,6 +79,7 @@ export type AssumptionRow = {
   source_text?: string | null;
   source_location?: string | null;
   confidence_score?: number | null;
+  dual_control_pending?: boolean | null;
 };
 
 export type GenerateFindingsInput = {

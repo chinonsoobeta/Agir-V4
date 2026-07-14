@@ -22,8 +22,14 @@ SUPABASE_SERVICE_ROLE_KEY=
 POSTGRES_URL=
 VITE_SUPABASE_URL=
 VITE_SUPABASE_PUBLISHABLE_KEY=
+AGIR_AI_PROVIDER=auto
+AGIR_AI_PROVIDER_FALLBACK=1
 ANTHROPIC_API_KEY=
-AGIR_AI_MODEL=claude-sonnet-4-6
+OPENAI_API_KEY=
+AGIR_ANTHROPIC_MODEL=claude-sonnet-4-6
+AGIR_OPENAI_MODEL=gpt-5.6-terra
+GOOGLE_MAPS_API_KEY=
+ADDRESS_SEARCH_OPENSTREETMAP_FALLBACK=0
 ERROR_WEBHOOK_URL=
 METRICS_WEBHOOK_URL=
 DOCUMENT_SCAN_URL=
@@ -36,6 +42,14 @@ AGIR_ENV=production
 `VITE_SUPABASE_PUBLISHABLE_KEY` should equal `SUPABASE_PUBLISHABLE_KEY`.
 
 Never expose `SUPABASE_SERVICE_ROLE_KEY` with a `VITE_` prefix.
+
+AI credentials are optional and server-only. Configure either provider key or
+both; `auto` preserves Anthropic as the first choice and uses OpenAI when the
+first provider is unavailable. Set `AGIR_AI_PROVIDER=anthropic|openai` to make
+the preference explicit, or `AGIR_AI_PROVIDER_FALLBACK=0` to disable provider
+failover. AI remains limited to document extraction/classification and Copilot;
+underwriting inputs require explicit analyst approval, while underwriting
+outputs, pilot memo artifacts, and Permit conclusions remain deterministic.
 
 `AGIR_ENV=production` (or `staging`) requires a configured external scanner,
 worker token, observability sink, server URL/key, and the database URL for

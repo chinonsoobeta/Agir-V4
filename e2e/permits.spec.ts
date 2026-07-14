@@ -37,22 +37,23 @@ test("municipality candidates, checklist, and document picker work end to end", 
     .eq("id", projectId!);
   if (profile.error) throw new Error(profile.error.message);
 
-  await page.reload();
+  await page.waitForLoadState("networkidle");
+  await page.goto(page.url(), { waitUntil: "domcontentloaded" });
   await page.getByRole("tab", { name: "Permits" }).click();
   await expect(page.getByRole("heading", { name: "Permits" })).toBeVisible();
   await expect(page.getByText("No permit records match this view")).toBeVisible();
   await page.getByRole("button", { name: /generate municipality candidates/i }).click();
-  await expect(page.getByText(/Created 14 review candidates for City of Vancouver/)).toBeVisible();
+  await expect(page.getByText(/Created \d+ review candidates for City of Vancouver/)).toBeVisible();
   await expect(page.getByText("Building permit", { exact: true })).toBeVisible();
 
   await page.getByText("Building permit", { exact: true }).click();
   const panel = page.locator("div.fixed.inset-y-0");
   await expect(panel).toHaveCount(1);
   await expect(
-    panel.getByText("Processing duration: Not found in verified sources.", { exact: true }),
+    panel.getByText("Timeline not available from the source yet.", { exact: true }),
   ).toBeVisible();
   await panel.getByPlaceholder("Paperwork name").fill("Signed application form");
-  await panel.getByRole("button", { name: "Add required paperwork" }).click();
+  await panel.getByRole("button", { name: "Add paperwork" }).click();
   await expect(panel.getByText("Signed application form", { exact: true })).toBeVisible();
 
   const documentPicker = panel.getByRole("combobox").filter({ hasText: "Choose project document" });

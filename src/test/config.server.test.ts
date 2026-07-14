@@ -42,4 +42,49 @@ describe("server configuration boundary", () => {
     expect(diagnostics).not.toContain("worker-secret");
     expect(diagnostics).not.toContain("postgres://");
   });
+
+  it("resolves provider-specific AI models and platform-only keys", () => {
+    const config = readServerConfig({
+      AGIR_AI_PROVIDER: "openai",
+      OPENAI_API_KEY: "sk-proj-secret",
+      AGIR_AI_MODEL: "gpt-platform-model",
+      ANTHROPIC_API_KEY: "sk-ant-secret",
+      GOOGLE_MAPS_API_KEY: "maps-secret",
+    });
+    expect(config.aiProviderPolicy).toBe("openai");
+    expect(config.openAiModel).toBe("gpt-platform-model");
+    expect(config.anthropicModel).toBe("claude-sonnet-4-6");
+    expect(config.aiProviderFallback).toBe(true);
+    expect(config.googleMapsApiKey).toBe("maps-secret");
+    expect(config.openStreetMapAddressFallback).toBe(true);
+
+    const productionAddressConfig = readServerConfig({
+      AGIR_ENV: "production",
+      GOOGLE_MAPS_API_KEY: "maps-secret",
+    });
+    expect(productionAddressConfig.openStreetMapAddressFallback).toBe(false);
+    expect(
+      readServerConfig({
+        AGIR_ENV: "production",
+        ADDRESS_SEARCH_OPENSTREETMAP_FALLBACK: "1",
+      }).openStreetMapAddressFallback,
+    ).toBe(true);
+
+    const incompatibleLegacyModel = readServerConfig({
+      AGIR_AI_PROVIDER: "openai",
+      AGIR_AI_MODEL: "claude-sonnet-4-6",
+    });
+    expect(incompatibleLegacyModel.openAiModel).toBe("gpt-5.6-terra");
+
+    const diagnostics = JSON.stringify(
+      getRedactedConfigDiagnostics({
+        OPENAI_API_KEY: "sk-proj-secret",
+        GOOGLE_MAPS_API_KEY: "maps-secret",
+      }),
+    );
+    expect(diagnostics).toContain('"aiConfigured":true');
+    expect(diagnostics).toContain('"googleMapsConfigured":true');
+    expect(diagnostics).not.toContain("sk-proj-secret");
+    expect(diagnostics).not.toContain("maps-secret");
+  });
 });

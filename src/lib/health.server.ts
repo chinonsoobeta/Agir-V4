@@ -1,5 +1,6 @@
 import type { SchemaDriftCheck } from "./schema-drift.server";
 import { validateServerEnv } from "./env.server";
+import { hasAiProvider } from "./ai-gateway.server";
 
 const hasAny = (env: NodeJS.ProcessEnv, keys: readonly string[]) =>
   keys.some((key) => Boolean(env[key]?.trim()));
@@ -15,6 +16,7 @@ export type HealthChecks = {
   metricsSinkConfigured: boolean;
   auditVerifierConfigured: boolean;
   governanceConfigured: boolean;
+  aiProviderConfigured: boolean;
   envValid: boolean;
 };
 
@@ -52,6 +54,7 @@ export function buildHealthChecks(
     metricsSinkConfigured: hasAny(env, ["METRICS_WEBHOOK_URL", "ERROR_WEBHOOK_URL"]),
     auditVerifierConfigured: schema.configured,
     governanceConfigured: hasAny(env, ["DATABASE_URL", "SUPABASE_DB_URL", "SUPABASE_DATABASE_URL"]),
+    aiProviderConfigured: hasAiProvider(env),
     envValid: envValidation.ok,
   };
 }

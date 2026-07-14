@@ -19,6 +19,7 @@ import type { ReportData, AssumptionRow } from "./report-data.server";
 import type { AllowedValue } from "../engine/provenance";
 import type { WhatIfLever } from "../context/attribution";
 import type { Interpretation } from "../context/types";
+import { effectiveAssumptions } from "../assumption-authority";
 
 // Structured payload persisted on the "insight" financial_outputs row (Json).
 type InsightInputs = {
@@ -107,6 +108,7 @@ export const VERDICT_BANNER: Record<string, string> = {
 };
 
 export function makeAccessors(data: ReportData) {
+  const governedAssumptions = effectiveAssumptions(data.assumptions);
   const oRow = (s: string, k: string) =>
     data.outputs.find((o) => o.scenario_key === s && o.metric_key === k);
   const oVal = (s: string, k: string): number | null => {
@@ -118,7 +120,7 @@ export function makeAccessors(data: ReportData) {
     const r = eRow(k);
     return r && r.value_numeric != null ? Number(r.value_numeric) : null;
   };
-  const aByKey = (k: string) => data.assumptions.find((a) => a.field_key === k);
+  const aByKey = (k: string) => governedAssumptions.find((a) => a.field_key === k);
   const aVal = (k: string): number | null => {
     const r = aByKey(k);
     return r && r.value_numeric != null ? Number(r.value_numeric) : null;
@@ -131,13 +133,15 @@ export type DerivedCore = ReturnType<typeof deriveCore>;
 export function deriveCore(data: ReportData) {
   const { oVal, eVal, aVal } = makeAccessors(data);
   const tdc = oVal("base", "total_project_cost") ?? aVal("total_project_cost") ?? 0;
-  const loan = aVal("debt_amount") ?? eVal("loan_amount") ?? 0;
-  const committedEquity = aVal("equity_amount") ?? eVal("equity_amount") ?? 0;
+  // Engine inputs are the numerical authority for the run. The reviewed
+  // assumption is only a compatibility fallback for legacy report data.
+  const loan = eVal("loan_amount") ?? aVal("debt_amount") ?? 0;
+  const committedEquity = eVal("equity_amount") ?? aVal("equity_amount") ?? 0;
   const requiredEquity = oVal("base", "equity_requirement") ?? tdc - loan;
   const fundingGap = requiredEquity - committedEquity;
   const noi = oVal("base", "stabilized_noi");
   const dscr = oVal("base", "dscr");
-  const minDscr = aVal("min_dscr") ?? eVal("min_dscr");
+  const minDscr = eVal("min_dscr") ?? aVal("min_dscr");
   const exitCap = eVal("exit_cap_rate_pct") ?? aVal("exit_cap_rate");
   const ltc = oVal("base", "loan_to_cost");
   const lenderOcc = eVal("lender_stabilized_occupancy_pct") ?? aVal("lender_stabilized_occupancy");
@@ -160,11 +164,12 @@ export function reportVerdict(data: ReportData) {
   const { oVal } = makeAccessors(data);
   const errorFlags = data.flags.filter((f) => f.severity === "error" && !f.resolved);
   return computeInvestmentVerdict({
-    equity_multiple: oVal("base", "equity_multiple") ?? 0,
-    profit_margin: oVal("base", "profit_margin") ?? 0,
-    development_spread: oVal("base", "development_spread") ?? 0,
-    stress_dscr: oVal("combined", "dscr") ?? 0,
-    stress_equity_multiple: oVal("combined", "equity_multiple") ?? 0,
+    equity_multiple: oVal("base", "equity_multiple") ?? undefined,
+    profit_margin: oVal("base", "profit_margin") ?? undefined,
+    development_spread: oVal("base", "development_spread") ?? undefined,
+    stress_dscr: oVal("combined", "dscr") ?? undefined,
+    stress_equity_multiple: oVal("combined", "equity_multiple") ?? undefined,
+    equity_wipeout: oVal("base", "equity_wipeout") === 1,
     error_flag_count: errorFlags.length,
   });
 }
@@ -212,10 +217,11 @@ export function defaultAcceptedFields(data: ReportData): string[] {
 }
 
 export function inputCounts(data: ReportData) {
-  const approved = data.assumptions.filter(
+  const governedAssumptions = effectiveAssumptions(data.assumptions);
+  const approved = governedAssumptions.filter(
     (a) => a.status === "approved" || a.status === "modified",
   ).length;
-  const calculated = data.assumptions.filter((a) => a.status === "calculated").length;
+  const calculated = governedAssumptions.filter((a) => a.status === "calculated").length;
   const defaultAccepted = data.engineInputs.filter((i) => i.status === "default_accepted").length;
   return { approved, calculated, defaultAccepted };
 }
@@ -324,7 +330,7 @@ export function reportAllowedValues(
   // Assumptions and engine inputs use the unit contract when available. Legacy
   // engine input rows may not carry units, so they remain admissible as raw
   // deterministic inputs after the typed pass.
-  data.assumptions.forEach((a) => push(a.value_numeric, a.unit));
+  effectiveAssumptions(data.assumptions).forEach((a) => push(a.value_numeric, a.unit));
   // underwriting_inputs carry no unit column; legacy rows stay admissible as
   // raw deterministic inputs (unit undefined).
   data.engineInputs.forEach((i) => push(i.value_numeric, tokenUnitForCanonicalUnit(undefined)));

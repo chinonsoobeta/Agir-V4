@@ -1,5 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import {
+  canonicalPermitMunicipality,
+  isCoveredPermitMunicipality,
+} from "@/lib/permit-municipalities";
 import { z } from "zod";
 
 export const APPLICABILITY_STATUSES = [
@@ -22,9 +26,8 @@ export const WORKFLOW_STATUSES = [
   "rejected",
   "blocked",
 ] as const;
-export const UNKNOWN_DURATION = "Processing duration: Not found in verified sources.";
-export const UNKNOWN_REQUIREMENT =
-  "Requirement status: Cannot be determined from the available project information.";
+export const UNKNOWN_DURATION = "Timeline not available from the source yet.";
+export const UNKNOWN_REQUIREMENT = "Not enough information to decide yet.";
 
 const permitShape = z.object({
   project_id: z.string().uuid().nullable().optional(),
@@ -178,7 +181,7 @@ export const addPermitRequirement = createServerFn({ method: "POST" })
         name: z.string().min(1),
         description: z.string().nullable().optional(),
         requirement_type: z.string().default("paperwork"),
-        is_required: z.boolean().default(true),
+        is_required: z.boolean().nullable().default(null),
         notes: z.string().nullable().optional(),
         source_kind: z
           .enum([
@@ -196,6 +199,14 @@ export const addPermitRequirement = createServerFn({ method: "POST" })
         applicability_state: z
           .enum(["required", "potentially_required", "unresolved", "not_applicable"])
           .default("unresolved"),
+      })
+      .superRefine((value, ctx) => {
+        if (value.is_required === true && value.applicability_state !== "required")
+          ctx.addIssue({
+            code: "custom",
+            path: ["applicability_state"],
+            message: "Required paperwork needs a confirmed required state.",
+          });
       })
       .parse(d),
   )
@@ -318,6 +329,11 @@ export const updateProjectPermitProfile = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { id, ...patch } = data;
+    if (patch.municipality) {
+      patch.municipality = canonicalPermitMunicipality(patch.municipality);
+      if (!isCoveredPermitMunicipality(patch.municipality))
+        throw new Error("Choose one of the municipalities in the current research catalogue.");
+    }
     const r = await (context.supabase as any)
       .from("projects")
       .update(patch)
@@ -335,126 +351,10 @@ export const generatePermitCandidates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => z.object({ project_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const db = context.supabase as any;
-    const projectResult = await db
-      .from("projects")
-      .select("id,municipality,property_address,workspace_id")
-      .eq("id", data.project_id)
-      .single();
-    if (projectResult.error) throw new Error(projectResult.error.message);
-    if (!projectResult.data.municipality) {
-      throw new Error("Confirm the project municipality before generating permit candidates.");
-    }
-    const jurisdictionResult = await db
-      .from("jurisdictions")
-      .select("id,name")
-      .eq("name", projectResult.data.municipality)
-      .eq("active", true)
-      .single();
-    if (jurisdictionResult.error) {
-      throw new Error("The confirmed municipality is not in the current permit pilot.");
-    }
-    const rulesResult = await db
-      .from("permit_rules")
-      .select("*")
-      .eq("jurisdiction_id", jurisdictionResult.data.id)
-      .eq("rule_version", "2026-07-10-matrix")
-      .order("permit_type");
-    if (rulesResult.error) throw new Error(rulesResult.error.message);
-    const existingResult = await db
-      .from("project_permits")
-      .select("permit_rule_id")
-      .eq("project_id", data.project_id)
-      .not("permit_rule_id", "is", null);
-    if (existingResult.error) throw new Error(existingResult.error.message);
-    const existing = new Set((existingResult.data ?? []).map((row: any) => row.permit_rule_id));
-    const rules = (rulesResult.data ?? []).filter((rule: any) => !existing.has(rule.id));
-    if (!rules.length) return { created: 0, jurisdiction: jurisdictionResult.data.name };
-    const rows = rules.map((rule: any) => ({
-      project_id: data.project_id,
-      owner_id: context.userId,
-      jurisdiction_id: jurisdictionResult.data.id,
-      permit_rule_id: rule.id,
-      name: rule.name,
-      permit_type: rule.permit_type,
-      description: rule.description,
-      applicability_status: "unknown",
-      workflow_status: "not_started",
-      is_required: null,
-      processing_duration_text: rule.published_duration_text,
-      processing_duration_days: rule.published_duration_days,
-      duration_source: rule.published_duration_text ? rule.official_source_url : null,
-      application_url: rule.application_url ?? rule.official_source_url,
-      source_location: rule.source_title,
-      source_text: rule.source_text,
-      source_kind: rule.verification_status === "unknown" ? "unknown" : "verified_source",
-      confidence_band:
-        rule.verification_status === "unknown" ? "unknown" : "source_verified_scope_unconfirmed",
-      notes:
-        "Generated from the municipality-specific pilot catalogue. Applicability requires analyst review against verified project facts.",
-    }));
-    const inserted = await db.from("project_permits").insert(rows).select("id,permit_rule_id");
-    if (inserted.error) throw new Error(inserted.error.message);
-    const requirementRows = (inserted.data ?? []).flatMap((permit: any) => {
-      const rule = rules.find((candidate: any) => candidate.id === permit.permit_rule_id);
-      return Array.isArray(rule?.required_documents)
-        ? rule.required_documents.map((name: string) => ({
-            project_permit_id: permit.id,
-            name,
-            requirement_type: "paperwork",
-            status: "missing",
-            is_required: true,
-            source_text: rule.source_text,
-          }))
-        : [];
+    const result = await (context.supabase as any).rpc("generate_permit_catalogue_candidates", {
+      p_parent_kind: "project",
+      p_parent_id: data.project_id,
     });
-    if (requirementRows.length) {
-      const requirements = await db.from("permit_requirements").insert(requirementRows);
-      if (requirements.error) throw new Error(requirements.error.message);
-    }
-    return { created: rows.length, jurisdiction: jurisdictionResult.data.name };
-  });
-
-const extractionCandidateSchema = z
-  .object({
-    project_id: z.string().uuid(),
-    document_id: z.string().uuid(),
-    jurisdiction_id: z.string().uuid().nullable().optional(),
-    candidate_name: z.string().min(1).max(250),
-    permit_type: z.string().max(100).nullable().optional(),
-    description: z.string().max(5000).nullable().optional(),
-    processing_duration_text: z.string().max(500).nullable().optional(),
-    processing_duration_days: z.number().nonnegative().nullable().optional(),
-    authority_name: z.string().max(250).nullable().optional(),
-    source_location: z.string().min(1).max(500),
-    source_text: z.string().min(1).max(10000),
-    confidence_score: z.number().min(0).max(1).nullable().optional(),
-    extraction_version: z.string().min(1).max(100),
-  })
-  .superRefine((row, ctx) => {
-    if (row.processing_duration_days != null && !row.processing_duration_text) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["processing_duration_text"],
-        message: "Extracted numeric durations require verbatim source text.",
-      });
-    }
-  });
-
-/** LLM/extractor boundary: stores a candidate only. This cannot create a
- * verified rule or project permit until an analyst explicitly accepts it. */
-export const createPermitExtractionCandidate = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .validator((d: unknown) => extractionCandidateSchema.parse(d))
-  .handler(async ({ data, context }) => {
-    const result = await (context.supabase as any)
-      .from("permit_extraction_candidates")
-      .upsert(
-        { ...data, owner_id: context.userId, review_status: "needs_review" },
-        { onConflict: "document_id,candidate_name,source_location,extraction_version" },
-      )
-      .select()
-      .single();
     if (result.error) throw new Error(result.error.message);
     return result.data;
   });
@@ -484,60 +384,11 @@ export const reviewPermitExtractionCandidate = createServerFn({ method: "POST" }
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const db = context.supabase as any;
-    const current = await db
-      .from("permit_extraction_candidates")
-      .select("*")
-      .eq("id", data.id)
-      .eq("review_status", "needs_review")
-      .single();
-    if (current.error) throw new Error(current.error.message);
-    let projectPermitId: string | null = null;
-    if (data.decision === "accepted") {
-      const permit = await db
-        .from("project_permits")
-        .insert({
-          project_id: current.data.project_id,
-          owner_id: context.userId,
-          jurisdiction_id: current.data.jurisdiction_id,
-          name: current.data.candidate_name,
-          permit_type: current.data.permit_type ?? "other",
-          description: current.data.description,
-          applicability_status: "needs_review",
-          workflow_status: "not_started",
-          is_required: null,
-          processing_duration_text: current.data.processing_duration_text,
-          processing_duration_days: current.data.processing_duration_days,
-          duration_source: current.data.processing_duration_text
-            ? `Project document: ${current.data.document_id}`
-            : null,
-          source_document_id: current.data.document_id,
-          source_location: current.data.source_location,
-          source_text: current.data.source_text,
-          source_kind: "extracted",
-          confidence_score: current.data.confidence_score,
-          confidence_band: "extracted_analyst_accepted_needs_applicability_review",
-          required_reason: data.reason,
-          notes:
-            "Accepted from document extraction. Acceptance preserves evidence but does not establish that the permit is required.",
-        })
-        .select("id")
-        .single();
-      if (permit.error) throw new Error(permit.error.message);
-      projectPermitId = permit.data.id;
-    }
-    const reviewed = await db
-      .from("permit_extraction_candidates")
-      .update({
-        review_status: data.decision,
-        reviewed_by: context.userId,
-        reviewed_at: new Date().toISOString(),
-        review_reason: data.reason,
-        project_permit_id: projectPermitId,
-      })
-      .eq("id", data.id)
-      .select()
-      .single();
+    const reviewed = await (context.supabase as any).rpc("review_permit_extraction_candidate", {
+      p_candidate_id: data.id,
+      p_decision: data.decision,
+      p_reason: data.reason,
+    });
     if (reviewed.error) throw new Error(reviewed.error.message);
     return reviewed.data;
   });
@@ -564,48 +415,15 @@ export const extractPermitCandidatesFromDocument = createServerFn({ method: "POS
     const db = context.supabase as any;
     const documentResult = await db
       .from("documents")
-      .select("id,project_id,name,file_type,storage_path")
+      .select(
+        "id,owner_id,project_id,permit_case_id,name,file_type,storage_path,size_bytes,scan_status,status",
+      )
       .eq("id", data.document_id)
       .eq("project_id", data.project_id)
       .single();
     if (documentResult.error) throw new Error(documentResult.error.message);
-    const { downloadDocumentBlob } = await import("./storage-download.server");
-    const download = await downloadDocumentBlob(context.supabase, documentResult.data.storage_path);
-    if (download.error || !download.data) {
-      throw new Error(
-        `Unable to read source document: ${download.error?.message ?? "unknown error"}`,
-      );
-    }
-    const { extractFileTextWithMeta } = await import("./document-text.server");
-    const extracted = await extractFileTextWithMeta(
-      documentResult.data.name,
-      documentResult.data.file_type,
-      await download.data.arrayBuffer(),
-    );
-    const { extractExplicitPermitMentions } = await import("./permit-domain");
-    const mentions = extractExplicitPermitMentions(extracted.text);
-    if (!mentions.length) return { created: 0, candidates: [] };
-    const rows = mentions.map((mention) => ({
-      project_id: data.project_id,
-      owner_id: context.userId,
-      document_id: data.document_id,
-      candidate_name: mention.candidateName,
-      permit_type: null,
-      source_location: mention.sourceLocation,
-      source_text: mention.sourceText,
-      confidence_score: extracted.recoveredViaOcr
-        ? Math.min(0.6, (extracted.ocrConfidence ?? 0) / 100)
-        : 0.7,
-      review_status: "needs_review",
-      extraction_version: "explicit-mention-v1",
-    }));
-    const inserted = await db
-      .from("permit_extraction_candidates")
-      .upsert(rows, {
-        onConflict: "document_id,candidate_name,source_location,extraction_version",
-        ignoreDuplicates: true,
-      })
-      .select();
-    if (inserted.error) throw new Error(inserted.error.message);
-    return { created: inserted.data?.length ?? 0, candidates: inserted.data ?? [] };
+    const access = await db.rpc("permit_project_access", { p_project_id: data.project_id });
+    if (access.error || !access.data) throw new Error("Project write access is required.");
+    const { requestPermitDocumentResearch } = await import("./permit-research.server");
+    return requestPermitDocumentResearch(context, documentResult.data, "project");
   });

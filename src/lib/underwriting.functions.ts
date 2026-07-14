@@ -35,7 +35,9 @@ const ResolveConflictSchema = z.object({
 
 const RunFullUnderwritingSchema = z.object({
   project_id: z.string().uuid(),
-  mode: z.enum(["ai", "deterministic"]).default("ai"),
+  // Keep the historical "ai" input for old clients, but new/omitted requests
+  // are always labelled according to the engine that actually runs.
+  mode: z.enum(["ai", "deterministic"]).default("deterministic"),
 });
 
 const ListRunsSchema = z.object({

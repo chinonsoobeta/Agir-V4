@@ -28,6 +28,7 @@ describe("backend operational hardening contract", () => {
 
   test("rate limits cover expensive backend surfaces", () => {
     expect(Object.keys(RATE_LIMIT_POLICY).sort()).toEqual([
+      "address_search",
       "chat_completion",
       "document_analysis",
       "document_upload",
@@ -100,6 +101,7 @@ describe("backend operational hardening contract", () => {
       "document_storage_recovery",
       "document_upload_finalization",
       "extraction_worker",
+      "permit_research_worker",
       "run_history_write",
       "schema_maintenance",
       "scim_provisioning",

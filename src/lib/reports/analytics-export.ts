@@ -84,7 +84,10 @@ export async function downloadReportXlsx(
   asOf: string,
   filename: string,
 ) {
-  const XLSX = await import("xlsx");
+  // Browser exports only need XLSX workbook writing and the core worksheet
+  // utilities. The official mini build keeps the patched SheetJS runtime out
+  // of the initial bundle without shipping legacy format/codepage readers.
+  const XLSX = await import("xlsx/dist/xlsx.mini.min.js");
   const wb = XLSX.utils.book_new();
 
   // Data sheet built cell-by-cell so numbers are genuine numeric cells.
