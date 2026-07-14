@@ -230,7 +230,7 @@ function LandingPage() {
           <SectionIntro
             eyebrow="Coverage boundaries"
             title="Create cases across 22 British Columbia municipalities."
-            body="All 21 Metro Vancouver municipalities plus Kelowna are available for case creation and research. Source depth varies by municipality and category. Coverage labels show what has and has not been reviewed."
+            body="All 21 Metro Vancouver municipalities plus Kelowna are available. Each jurisdiction has a dated official-source inventory; project-specific permit decisions still require case evidence and qualified review."
           />
           <div className="mt-10 flex flex-wrap gap-3">
             {municipalities.map((name) => (
@@ -243,9 +243,9 @@ function LandingPage() {
             ))}
           </div>
           <p className="mt-7 max-w-3xl text-sm leading-6 text-[#505c80]">
-            A municipality being available does not mean its catalogue is complete. Unreviewed
-            categories remain clearly marked, and missing coverage never means that no permit is
-            required.
+            A municipality being researched does not mean its catalogue is professionally approved.
+            Unreviewed categories remain clearly marked, and missing coverage never means that no
+            permit is required.
           </p>
         </div>
       </section>

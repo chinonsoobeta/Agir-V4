@@ -1578,6 +1578,7 @@ export type Database = {
           permit_portal_url: string | null;
           province: string;
           regional_area: string | null;
+          research_completed_at: string | null;
           updated_at: string;
         };
         Insert: {
@@ -1594,6 +1595,7 @@ export type Database = {
           permit_portal_url?: string | null;
           province: string;
           regional_area?: string | null;
+          research_completed_at?: string | null;
           updated_at?: string;
         };
         Update: {
@@ -1610,6 +1612,7 @@ export type Database = {
           permit_portal_url?: string | null;
           province?: string;
           regional_area?: string | null;
+          research_completed_at?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -1792,6 +1795,47 @@ export type Database = {
           },
         ];
       };
+      municipal_research_sources: {
+        Row: {
+          applicability_note: string;
+          checked_at: string;
+          id: string;
+          jurisdiction_id: string;
+          next_check_at: string;
+          source_kind: string;
+          source_title: string;
+          source_url: string;
+        };
+        Insert: {
+          applicability_note: string;
+          checked_at: string;
+          id?: string;
+          jurisdiction_id: string;
+          next_check_at: string;
+          source_kind: string;
+          source_title: string;
+          source_url: string;
+        };
+        Update: {
+          applicability_note?: string;
+          checked_at?: string;
+          id?: string;
+          jurisdiction_id?: string;
+          next_check_at?: string;
+          source_kind?: string;
+          source_title?: string;
+          source_url?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "municipal_research_sources_jurisdiction_id_fkey";
+            columns: ["jurisdiction_id"];
+            isOneToOne: false;
+            referencedRelation: "jurisdictions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       notifications: {
         Row: {
           action_url: string | null;
@@ -1890,6 +1934,7 @@ export type Database = {
           owner_id: string;
           permit_case_id: string | null;
           project_id: string | null;
+          property_id: string | null;
           status: string;
           updated_at: string;
           workspace_id: string | null;
@@ -1909,6 +1954,7 @@ export type Database = {
           owner_id: string;
           permit_case_id?: string | null;
           project_id?: string | null;
+          property_id?: string | null;
           status?: string;
           updated_at?: string;
           workspace_id?: string | null;
@@ -1928,6 +1974,7 @@ export type Database = {
           owner_id?: string;
           permit_case_id?: string | null;
           project_id?: string | null;
+          property_id?: string | null;
           status?: string;
           updated_at?: string;
           workspace_id?: string | null;
@@ -1952,6 +1999,13 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "pending_document_uploads_property_id_fkey";
+            columns: ["property_id"];
+            isOneToOne: false;
+            referencedRelation: "properties";
             referencedColumns: ["id"];
           },
           {
@@ -5003,14 +5057,24 @@ export type Database = {
         Args: { p_permit_case_id: string; p_project_id: string };
         Returns: boolean;
       };
-      document_parent_write_access_for_user: {
-        Args: {
-          p_permit_case_id: string;
-          p_project_id: string;
-          p_user_id: string;
-        };
-        Returns: boolean;
-      };
+      document_parent_write_access_for_user:
+        | {
+            Args: {
+              p_permit_case_id: string;
+              p_project_id: string;
+              p_property_id: string;
+              p_user_id: string;
+            };
+            Returns: boolean;
+          }
+        | {
+            Args: {
+              p_permit_case_id: string;
+              p_project_id: string;
+              p_user_id: string;
+            };
+            Returns: boolean;
+          };
       document_read_access: {
         Args: { p_document_id: string };
         Returns: boolean;
@@ -5214,6 +5278,20 @@ export type Database = {
           upload_id: string;
         }[];
       };
+      prepare_property_document_upload: {
+        Args: {
+          p_category?: string;
+          p_expected_content_type: string;
+          p_expected_size_bytes: number;
+          p_file_name: string;
+          p_property_id: string;
+        };
+        Returns: {
+          expires_at: string;
+          object_path: string;
+          upload_id: string;
+        }[];
+      };
       property_access: { Args: { p_property_id: string }; Returns: boolean };
       property_identity_is_strong: {
         Args: {
@@ -5311,6 +5389,62 @@ export type Database = {
       };
       search_properties: {
         Args: {
+          p_include_archived?: boolean;
+          p_limit?: number;
+          p_max_price?: number;
+          p_min_price?: number;
+          p_municipality?: string;
+          p_project_type?: string;
+          p_query?: string;
+          p_workspace_id?: string;
+        };
+        Returns: {
+          address_line_1: string;
+          address_line_2: string | null;
+          archive_reason: string | null;
+          archived_at: string | null;
+          archived_by: string | null;
+          broker_name: string | null;
+          building_name: string | null;
+          country_code: string;
+          created_at: string;
+          currency: string;
+          display_name: string | null;
+          id: string;
+          identity_key: string | null;
+          latitude: number | null;
+          longitude: number | null;
+          municipality: string | null;
+          normalized_address: string;
+          notes: string | null;
+          owner_id: string | null;
+          owner_name: string | null;
+          place_provider: string;
+          postal_code: string | null;
+          price: number | null;
+          project_type: string | null;
+          provider_place_id: string | null;
+          region: string | null;
+          status: string;
+          unit: string | null;
+          updated_at: string;
+          workspace_id: string | null;
+          zoning_designation: string | null;
+          zoning_evidence: Json;
+          zoning_source_url: string | null;
+          zoning_verified_at: string | null;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "properties";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
+      search_properties_page: {
+        Args: {
+          p_before_id?: string;
+          p_before_updated_at?: string;
           p_include_archived?: boolean;
           p_limit?: number;
           p_max_price?: number;

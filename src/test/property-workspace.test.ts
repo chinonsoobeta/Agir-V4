@@ -8,6 +8,9 @@ describe("canonical property workspace backend contract", () => {
   const propagation = read("supabase/migrations/20260712000500_property_link_propagation.sql");
   const taskIntegrity = read("supabase/migrations/20260712000600_property_task_integrity.sql");
   const hardening = read("supabase/migrations/20260712000800_property_production_hardening.sql");
+  const gapClosure = read(
+    "supabase/migrations/20260714000100_close_catalogue_search_and_property_upload_gaps.sql",
+  );
   const functions = read("src/lib/properties.functions.ts");
 
   test("defines one tenant-scoped property record and shared workflow children", () => {
@@ -104,5 +107,17 @@ describe("canonical property workspace backend contract", () => {
     expect(functions).toContain("canonicalPermitMunicipality");
     expect(functions).toContain('rpc("property_search_match_scopes"');
     expect(functions).toContain('rpc("list_property_activity"');
+  });
+
+  test("paginates the complete catalogue and authorizes direct property files", () => {
+    expect(gapClosure).toContain("CREATE FUNCTION public.search_properties_page");
+    expect(gapClosure).toContain("p_before_updated_at timestamptz DEFAULT NULL");
+    expect(gapClosure).toContain("(property.updated_at,property.id)<");
+    expect(gapClosure).toContain(
+      "CREATE OR REPLACE FUNCTION public.prepare_property_document_upload",
+    );
+    expect(gapClosure).toContain("property_id uuid REFERENCES public.properties");
+    expect(gapClosure).toContain("v_upload.property_id");
+    expect(functions).toContain("next_cursor");
   });
 });

@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, MapPin, Plus, Search, SlidersHorizontal, UserRound } from "lucide-react";
 import { PageBody, PageHeader } from "@/components/app-shell";
 import { PropertyEditor } from "@/components/properties/property-editor";
@@ -52,7 +52,7 @@ function PropertiesPage() {
   const search = useDeferredValue(query.trim());
   const qc = useQueryClient();
 
-  const propertiesQ = useQuery({
+  const propertiesQ = useInfiniteQuery({
     queryKey: [
       "properties",
       workspaceId,
@@ -63,7 +63,8 @@ function PropertiesPage() {
       maxPrice,
       includeArchived,
     ],
-    queryFn: () =>
+    initialPageParam: null as { updated_at: string; id: string } | null,
+    queryFn: ({ pageParam }) =>
       listProperties({
         data: {
           workspace_id: workspaceId,
@@ -73,11 +74,17 @@ function PropertiesPage() {
           min_price: optionalNumber(minPrice),
           max_price: optionalNumber(maxPrice),
           include_archived: includeArchived,
-          limit: 200,
+          before_updated_at: pageParam?.updated_at ?? null,
+          before_id: pageParam?.id ?? null,
+          limit: 50,
         },
       }),
+    getNextPageParam: (page) => page.next_cursor ?? undefined,
   });
-  const properties = useMemo(() => propertiesQ.data ?? [], [propertiesQ.data]);
+  const properties = useMemo(
+    () => propertiesQ.data?.pages.flatMap((page) => page.items) ?? [],
+    [propertiesQ.data],
+  );
   const municipalities = useMemo(
     () => new Set(properties.map((property: any) => property.municipality).filter(Boolean)).size,
     [properties],
@@ -105,8 +112,8 @@ function PropertiesPage() {
       />
       <PageBody>
         <div className="grid gap-3 sm:grid-cols-3">
-          <SummaryCard label="Properties found" value={properties.length} />
-          <SummaryCard label="Municipalities" value={municipalities} />
+          <SummaryCard label="Properties loaded" value={properties.length} />
+          <SummaryCard label="Municipalities loaded" value={municipalities} />
           <SummaryCard label="Workspace" value={activeWorkspace?.name ?? "Personal"} text />
         </div>
 
@@ -202,71 +209,87 @@ function PropertiesPage() {
             </Button>
           </Card>
         ) : properties.length ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {properties.map((property: any) => (
-              <Link
-                key={property.id}
-                to="/properties/$propertyId"
-                params={{ propertyId: property.id }}
-                className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <Card className="surface-editorial h-full p-5 transition-colors group-hover:border-primary/35">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 items-start gap-3">
-                      <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10">
-                        <Building2 className="size-5 text-primary" />
+          <>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {properties.map((property: any) => (
+                <Link
+                  key={property.id}
+                  to="/properties/$propertyId"
+                  params={{ propertyId: property.id }}
+                  className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <Card className="surface-editorial h-full p-5 transition-colors group-hover:border-primary/35">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10">
+                          <Building2 className="size-5 text-primary" />
+                        </div>
+                        <div className="min-w-0">
+                          <h2 className="truncate font-semibold">{propertyTitle(property)}</h2>
+                          {property.building_name &&
+                            property.building_name !== propertyTitle(property) && (
+                              <p className="truncate text-xs text-muted-foreground">
+                                {property.building_name}
+                              </p>
+                            )}
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <h2 className="truncate font-semibold">{propertyTitle(property)}</h2>
-                        {property.building_name &&
-                          property.building_name !== propertyTitle(property) && (
-                            <p className="truncate text-xs text-muted-foreground">
-                              {property.building_name}
-                            </p>
+                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        {property.archived_at && <Badge variant="outline">Archived</Badge>}
+                        {matchLabel(property.match_scope) && (
+                          <Badge variant="secondary">{matchLabel(property.match_scope)}</Badge>
+                        )}
+                        {!property.archived_at &&
+                          !matchLabel(property.match_scope) &&
+                          property.project_type && (
+                            <Badge variant="outline" className="max-w-32 truncate">
+                              {propertyProjectTypeLabel(property.project_type)}
+                            </Badge>
                           )}
                       </div>
                     </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1.5">
-                      {property.archived_at && <Badge variant="outline">Archived</Badge>}
-                      {matchLabel(property.match_scope) && (
-                        <Badge variant="secondary">{matchLabel(property.match_scope)}</Badge>
-                      )}
-                      {!property.archived_at &&
-                        !matchLabel(property.match_scope) &&
-                        property.project_type && (
-                          <Badge variant="outline" className="max-w-32 truncate">
-                            {propertyProjectTypeLabel(property.project_type)}
-                          </Badge>
-                        )}
+                    <div className="mt-5 space-y-3 text-sm">
+                      <div className="flex items-start gap-2 text-muted-foreground">
+                        <MapPin className="mt-0.5 size-4 shrink-0" />
+                        <span>{propertyAddress(property) || "Address not recorded"}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 border-y border-border py-3">
+                        <PropertyFact label="Price" value={propertyPrice(property)} />
+                        <PropertyFact
+                          label="Zoning"
+                          value={property.zoning_designation || "Not recorded"}
+                        />
+                      </div>
+                      <div className="flex items-start gap-2 text-muted-foreground">
+                        <UserRound className="mt-0.5 size-4 shrink-0" />
+                        <span>
+                          {[property.owner_name, property.broker_name]
+                            .filter(Boolean)
+                            .join(" · ") || "Owner and broker not recorded"}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="mt-5 space-y-3 text-sm">
-                    <div className="flex items-start gap-2 text-muted-foreground">
-                      <MapPin className="mt-0.5 size-4 shrink-0" />
-                      <span>{propertyAddress(property) || "Address not recorded"}</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 border-y border-border py-3">
-                      <PropertyFact label="Price" value={propertyPrice(property)} />
-                      <PropertyFact
-                        label="Zoning"
-                        value={property.zoning_designation || "Not recorded"}
-                      />
-                    </div>
-                    <div className="flex items-start gap-2 text-muted-foreground">
-                      <UserRound className="mt-0.5 size-4 shrink-0" />
-                      <span>
-                        {[property.owner_name, property.broker_name].filter(Boolean).join(" · ") ||
-                          "Owner and broker not recorded"}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="mt-5 text-xs text-muted-foreground">
-                    Updated {new Date(property.updated_at).toLocaleDateString("en-CA")}
-                  </p>
-                </Card>
-              </Link>
-            ))}
-          </div>
+                    <p className="mt-5 text-xs text-muted-foreground">
+                      Updated {new Date(property.updated_at).toLocaleDateString("en-CA")}
+                    </p>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+            {propertiesQ.hasNextPage && (
+              <div className="flex justify-center pt-2">
+                <Button
+                  variant="outline"
+                  disabled={propertiesQ.isFetchingNextPage}
+                  onClick={() => propertiesQ.fetchNextPage()}
+                >
+                  {propertiesQ.isFetchingNextPage
+                    ? "Loading older properties…"
+                    : "Load older properties"}
+                </Button>
+              </div>
+            )}
+          </>
         ) : (
           <Card className="surface-editorial p-14 text-center">
             <Building2 className="mx-auto size-8 text-muted-foreground/50" />

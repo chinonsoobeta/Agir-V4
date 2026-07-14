@@ -59,6 +59,7 @@ const STATUS_META: Record<ItemStatus, { icon: LucideIcon; cls: string; label: st
 export function DocumentDropzone({
   projectId,
   permitCaseId,
+  propertyId,
   category,
   existingNames,
   onChanged,
@@ -67,6 +68,7 @@ export function DocumentDropzone({
 }: {
   projectId: string | null;
   permitCaseId?: string | null;
+  propertyId?: string | null;
   category: string;
   existingNames: string[];
   onChanged: () => void;
@@ -108,6 +110,7 @@ export function DocumentDropzone({
         data: {
           project_id: projectId,
           permit_case_id: permitCaseId ?? null,
+          property_id: propertyId ?? null,
           name: file.name,
           file_type: file.type || null,
           category,
@@ -154,6 +157,7 @@ export function DocumentDropzone({
         doc = await createFn({
           data: {
             project_id: projectId,
+            property_id: propertyId ?? null,
             name: file.name,
             file_type: file.type,
             category,

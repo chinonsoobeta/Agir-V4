@@ -14,13 +14,14 @@ const ATOMIC_UPLOAD_FEATURE = "atomic staged document uploads";
 
 export const listDocuments = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .validator((d: { project_id?: string }) => d)
+  .validator((d: { project_id?: string; property_id?: string }) => d)
   .handler(async ({ data, context }) => {
     let q = context.supabase
       .from("documents")
       .select("*")
       .order("upload_date", { ascending: false });
     if (data?.project_id) q = q.eq("project_id", data.project_id);
+    if (data?.property_id) q = q.eq("property_id", data.property_id);
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
     return rows ?? [];
@@ -157,6 +158,7 @@ export const retryExtractionJob = createServerFn({ method: "POST" })
 
 const CreateDocSchema = z.object({
   project_id: z.string().uuid().optional().nullable(),
+  property_id: z.string().uuid().optional().nullable(),
   name: z.string().min(1).max(255),
   file_type: z.string().max(255).optional().nullable(),
   category: z.string().max(255).optional().nullable(),
@@ -171,14 +173,26 @@ const CreateDocSchema = z.object({
     .nullable(),
 });
 
-const UploadIntentSchema = z.object({
-  project_id: z.string().uuid().optional().nullable(),
-  permit_case_id: z.string().uuid().optional().nullable(),
-  name: z.string().min(1).max(255),
-  file_type: z.string().max(255).optional().nullable(),
-  category: z.string().max(255).optional().nullable(),
-  size_bytes: z.number().int().positive(),
-});
+const UploadIntentSchema = z
+  .object({
+    project_id: z.string().uuid().optional().nullable(),
+    permit_case_id: z.string().uuid().optional().nullable(),
+    property_id: z.string().uuid().optional().nullable(),
+    name: z.string().min(1).max(255),
+    file_type: z.string().max(255).optional().nullable(),
+    category: z.string().max(255).optional().nullable(),
+    size_bytes: z.number().int().positive(),
+  })
+  .superRefine((value, context) => {
+    const parents = [value.project_id, value.permit_case_id, value.property_id].filter(Boolean);
+    if (parents.length !== 1) {
+      context.addIssue({
+        code: "custom",
+        path: ["property_id"],
+        message: "Choose exactly one document parent.",
+      });
+    }
+  });
 
 const FinalizeUploadSchema = z.object({ upload_id: z.string().uuid() });
 
@@ -195,23 +209,29 @@ export const requestDocumentUpload = createServerFn({ method: "POST" })
     const intent = validateUploadIntent(data.name, data.size_bytes);
     if (!intent.ok) throw new Error(intent.detail);
 
-    if (!data.project_id && !data.permit_case_id)
-      throw new Error("An underwriting project or permit case is required for upload.");
-    const prepared = data.permit_case_id
-      ? await context.supabase.rpc("prepare_permit_document_upload", {
-          p_permit_case_id: data.permit_case_id,
+    const prepared = data.property_id
+      ? await context.supabase.rpc("prepare_property_document_upload", {
+          p_property_id: data.property_id,
           p_file_name: data.name,
           p_expected_content_type: data.file_type ?? null,
           p_expected_size_bytes: data.size_bytes,
           p_category: data.category ?? null,
         } as never)
-      : await context.supabase.rpc("prepare_document_upload", {
-          p_project_id: data.project_id ?? null,
-          p_file_name: data.name,
-          p_expected_content_type: data.file_type ?? null,
-          p_expected_size_bytes: data.size_bytes,
-          p_category: data.category ?? null,
-        } as never);
+      : data.permit_case_id
+        ? await context.supabase.rpc("prepare_permit_document_upload", {
+            p_permit_case_id: data.permit_case_id,
+            p_file_name: data.name,
+            p_expected_content_type: data.file_type ?? null,
+            p_expected_size_bytes: data.size_bytes,
+            p_category: data.category ?? null,
+          } as never)
+        : await context.supabase.rpc("prepare_document_upload", {
+            p_project_id: data.project_id ?? null,
+            p_file_name: data.name,
+            p_expected_content_type: data.file_type ?? null,
+            p_expected_size_bytes: data.size_bytes,
+            p_category: data.category ?? null,
+          } as never);
     if (isMissingFunction(prepared.error) || isMissingRelation(prepared.error)) {
       // The direct browser path is a deliberately narrow demo/test bridge for
       // an unmigrated local fixture. Strict environments fail closed below.
@@ -262,7 +282,7 @@ export const finalizeDocumentUpload = createServerFn({ method: "POST" })
     const { data: pending, error: pendingError } = await context.supabase
       .from("pending_document_uploads")
       .select(
-        "id, owner_id, project_id, permit_case_id, object_path, file_name, expected_size_bytes, status",
+        "id, owner_id, project_id, permit_case_id, property_id, object_path, file_name, expected_size_bytes, status",
       )
       .eq("id", data.upload_id)
       .single();
@@ -335,6 +355,7 @@ export const createDocument = createServerFn({ method: "POST" })
         .eq("owner_id", context.userId)
         .eq("content_hash", data.content_hash);
       dq = data.project_id ? dq.eq("project_id", data.project_id) : dq.is("project_id", null);
+      dq = data.property_id ? dq.eq("property_id", data.property_id) : dq.is("property_id", null);
       const { data: existing, error: existingError } = await dq.maybeSingle();
       if (existingError) throw new Error(existingError.message);
       if (existing) return { ...existing, deduped: true };

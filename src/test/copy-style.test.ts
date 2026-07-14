@@ -37,7 +37,7 @@ describe("product copy", () => {
     expect(source).toContain("Keeping a possible approval does not make it a legal requirement.");
     expect(source).toMatch(/Underwriting is\s+available to signed-in users as a Preview/);
     expect(source).toContain("Create cases across 22 British Columbia municipalities.");
-    expect(source).toContain("Source depth varies by municipality and category.");
+    expect(source).toContain("Each jurisdiction has a dated official-source inventory");
     expect(source).not.toContain("AI-powered");
   });
 });

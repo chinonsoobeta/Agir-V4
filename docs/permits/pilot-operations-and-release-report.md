@@ -129,7 +129,7 @@ Collect time to first case, time to first reviewed candidate, unknown counts, ca
 
 ## Known risks and catalogue gaps
 
-- The requested municipal footprint is represented in the catalogue, but only seven municipalities have partial research coverage; fifteen are not started and none has qualified approval recorded.
+- The requested municipal footprint is represented and all 22 official source inventories were checked on 2026-07-14. No municipality has qualified catalogue approval recorded; category and case applicability therefore remain fail-closed.
 - Many category rows intentionally remain unknown because a category-specific official determination is not recorded.
 - Source retrieval can fail or be blocked. Unavailable is not interpreted as not required.
 - Notification delivery and complete professional review operations remain incomplete.

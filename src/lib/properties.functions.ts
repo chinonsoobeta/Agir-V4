@@ -10,6 +10,11 @@ export type PropertyTaskRow = Database["public"]["Tables"]["property_tasks"]["Ro
 export type PropertyActivityRow = Database["public"]["Tables"]["property_activity_events"]["Row"];
 export type PropertyMatchScope = "current" | "historical" | "current_and_historical";
 export type PropertySearchRow = PropertyRow & { match_scope?: PropertyMatchScope };
+export type PropertySearchCursor = { updated_at: string; id: string };
+export type PropertySearchPage = {
+  items: PropertySearchRow[];
+  next_cursor: PropertySearchCursor | null;
+};
 export type PropertyContactRow = Database["public"]["Tables"]["property_contacts"]["Row"] & {
   contact: Database["public"]["Tables"]["relationship_contacts"]["Row"];
 };
@@ -34,24 +39,36 @@ export type PropertyActivityPage = {
   next_cursor: PropertyActivityCursor | null;
 };
 
-const listPropertiesSchema = z.object({
-  workspace_id: z.string().uuid().nullable().optional(),
-  query: z
-    .string()
-    .trim()
-    .max(300)
-    .refine(
-      (query) => query.split(/\s+/).filter(Boolean).length <= 20,
-      "Search supports up to 20 fragments at a time.",
-    )
-    .optional(),
-  municipality: z.string().trim().max(200).optional(),
-  project_type: z.string().trim().max(100).optional(),
-  min_price: z.number().nonnegative().optional(),
-  max_price: z.number().nonnegative().optional(),
-  include_archived: z.boolean().default(false),
-  limit: z.number().int().min(1).max(200).default(50),
-});
+const listPropertiesSchema = z
+  .object({
+    workspace_id: z.string().uuid().nullable().optional(),
+    query: z
+      .string()
+      .trim()
+      .max(300)
+      .refine(
+        (query) => query.split(/\s+/).filter(Boolean).length <= 20,
+        "Search supports up to 20 fragments at a time.",
+      )
+      .optional(),
+    municipality: z.string().trim().max(200).optional(),
+    project_type: z.string().trim().max(100).optional(),
+    min_price: z.number().nonnegative().optional(),
+    max_price: z.number().nonnegative().optional(),
+    include_archived: z.boolean().default(false),
+    before_updated_at: z.string().datetime().nullable().optional(),
+    before_id: z.string().uuid().nullable().optional(),
+    limit: z.number().int().min(1).max(100).default(50),
+  })
+  .superRefine((value, context) => {
+    if (Boolean(value.before_updated_at) !== Boolean(value.before_id)) {
+      context.addIssue({
+        code: "custom",
+        path: [value.before_updated_at ? "before_id" : "before_updated_at"],
+        message: "Property pagination requires both cursor fields.",
+      });
+    }
+  });
 
 export type ListPropertiesInput = z.input<typeof listPropertiesSchema>;
 
@@ -142,8 +159,8 @@ function nextActivityCursor(rows: PropertyActivityRow[], hasMore: boolean) {
 export const listProperties = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => listPropertiesSchema.parse(input ?? {}))
-  .handler(async ({ data, context }): Promise<PropertySearchRow[]> => {
-    const result = await (context.supabase as any).rpc("search_properties", {
+  .handler(async ({ data, context }): Promise<PropertySearchPage> => {
+    const result = await context.supabase.rpc("search_properties_page", {
       p_workspace_id: data.workspace_id ?? null,
       p_query: data.query || null,
       p_municipality: data.municipality || null,
@@ -151,13 +168,19 @@ export const listProperties = createServerFn({ method: "GET" })
       p_min_price: data.min_price ?? null,
       p_max_price: data.max_price ?? null,
       p_include_archived: data.include_archived,
+      p_before_updated_at: data.before_updated_at ?? null,
+      p_before_id: data.before_id ?? null,
       p_limit: data.limit,
-    });
+    } as never);
     if (result.error) throw new Error(result.error.message);
-    const properties = (result.data ?? []) as PropertyRow[];
-    if (!data.query || !properties.length) return properties;
+    const rows = (result.data ?? []) as PropertyRow[];
+    const hasMore = rows.length > data.limit;
+    const properties = rows.slice(0, data.limit);
+    const last = properties.at(-1);
+    const next_cursor = hasMore && last ? { updated_at: last.updated_at, id: last.id } : null;
+    if (!data.query || !properties.length) return { items: properties, next_cursor };
 
-    const matches = await (context.supabase as any).rpc("property_search_match_scopes", {
+    const matches = await context.supabase.rpc("property_search_match_scopes", {
       p_property_ids: properties.map((property) => property.id),
       p_query: data.query,
     });
@@ -167,10 +190,11 @@ export const listProperties = createServerFn({ method: "GET" })
     for (const match of matches.data ?? []) {
       scopes.set(match.property_id, match.match_scope as PropertyMatchScope);
     }
-    return properties.map((property) => {
+    const items = properties.map((property) => {
       const match_scope = scopes.get(property.id);
       return match_scope ? { ...property, match_scope } : property;
     });
+    return { items, next_cursor };
   });
 
 export const listPropertyActivity = createServerFn({ method: "GET" })

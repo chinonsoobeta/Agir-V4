@@ -85,7 +85,7 @@ function shouldUseSsl(connectionString: string) {
 }
 
 function isDeniedError(error: unknown) {
-  return /row-level security|permission denied|does not exist|project access denied|Project write access is required|Permit case write access is required|Archived Permit cases are read-only|linked Permit case|approved research catalogue|Catalogue evidence can only be created|Document job access is denied|handoff not found or response not allowed|Permit documents must belong to the same project|Only a workspace owner|Only the owner can move a personal permit case|Only the owner can move an active personal property|A workspace must always have at least one owner|append-only|Property write access denied|same property workspace|explicit property move|Property ownership and workspace cannot be changed|Property workspace cannot be changed|Task assignee must belong|set_property_next_action|canonical Property record|Record attribution cannot be changed/i.test(
+  return /row-level security|permission denied|does not exist|project access denied|property access denied|Project write access is required|Permit case write access is required|Archived Permit cases are read-only|linked Permit case|approved research catalogue|Catalogue evidence can only be created|Document job access is denied|handoff not found or response not allowed|Permit documents must belong to the same project|Only a workspace owner|Only the owner can move a personal permit case|Only the owner can move an active personal property|A workspace must always have at least one owner|append-only|Property write access denied|same property workspace|explicit property move|Property ownership and workspace cannot be changed|Property workspace cannot be changed|Task assignee must belong|set_property_next_action|canonical Property record|Record attribution cannot be changed/i.test(
     error instanceof Error ? error.message : String(error),
   );
 }
@@ -615,6 +615,40 @@ describe("workspace RLS policies", () => {
       [ids.property, cursor.created_at, cursor.id],
     );
     expect(second.rows.map((row) => row.id)).not.toContain(cursor.id);
+  });
+
+  test("property search keyset pages traverse beyond the former 200-record window", async () => {
+    await client.query(
+      `INSERT INTO public.properties(owner_id,workspace_id,address_line_1,municipality,notes)
+       SELECT $1,$2,'Archive ' || g || ' Street','Vancouver','deep catalogue pagination'
+       FROM generate_series(1,205) AS g`,
+      [ids.owner, ids.workspace],
+    );
+    const first = await asUser<{ id: string; updated_at: string }>(
+      ids.member,
+      "SELECT id,updated_at::text AS updated_at FROM public.search_properties_page($1,'deep catalogue pagination',NULL,NULL,NULL,NULL,false,NULL,NULL,100)",
+      [ids.workspace],
+    );
+    expect(first.rows).toHaveLength(101);
+    const firstVisible = first.rows.slice(0, 100);
+    const cursor = firstVisible.at(-1)!;
+    const second = await asUser<{ id: string; updated_at: string }>(
+      ids.member,
+      "SELECT id,updated_at::text AS updated_at FROM public.search_properties_page($1,'deep catalogue pagination',NULL,NULL,NULL,NULL,false,$2,$3,100)",
+      [ids.workspace, cursor.updated_at, cursor.id],
+    );
+    expect(second.rows).toHaveLength(101);
+    const secondVisible = second.rows.slice(0, 100);
+    const secondCursor = secondVisible.at(-1)!;
+    const third = await asUser<{ id: string }>(
+      ids.member,
+      "SELECT id FROM public.search_properties_page($1,'deep catalogue pagination',NULL,NULL,NULL,NULL,false,$2,$3,100)",
+      [ids.workspace, secondCursor.updated_at, secondCursor.id],
+    );
+    expect(third.rows).toHaveLength(5);
+    expect(
+      new Set([...firstVisible, ...secondVisible, ...third.rows].map((row) => row.id)).size,
+    ).toBe(205);
   });
 
   test("property tasks and record links enforce roles, scope, and canonical link history", async () => {
@@ -2060,6 +2094,79 @@ describe("workspace RLS policies", () => {
         [ids.project],
       ),
     );
+  });
+
+  test("property-scoped uploads require contributor access and retain the property parent", async () => {
+    await asUser(
+      ids.owner,
+      `INSERT INTO public.properties(id,owner_id,workspace_id,address_line_1,municipality)
+       VALUES($1,$2,$3,'707 File Avenue','Vancouver')`,
+      [ids.property, ids.owner, ids.workspace],
+    );
+    await expectDenied(
+      asUser(
+        ids.viewer,
+        "SELECT * FROM public.prepare_property_document_upload($1,'Viewer.pdf','application/pdf',1024,'property_file')",
+        [ids.property],
+      ),
+    );
+    const prepared = await asUser<{ upload_id: string; object_path: string }>(
+      ids.member,
+      "SELECT * FROM public.prepare_property_document_upload($1,'Title.pdf','application/pdf',1024,'property_file')",
+      [ids.property],
+    );
+    expect(prepared.rows[0].object_path).toContain(
+      `${ids.member}/pending/${prepared.rows[0].upload_id}/`,
+    );
+    const pending = await asUser<{ property_id: string; project_id: string | null }>(
+      ids.member,
+      "SELECT property_id,project_id FROM public.pending_document_uploads WHERE id=$1",
+      [prepared.rows[0].upload_id],
+    );
+    expect(pending.rows[0]).toEqual({ property_id: ids.property, project_id: null });
+    expect(
+      (
+        await asUser<{ allowed: boolean }>(
+          ids.member,
+          "SELECT public.pending_upload_storage_insert_access($1) AS allowed",
+          [prepared.rows[0].object_path],
+        )
+      ).rows[0].allowed,
+    ).toBe(true);
+    expect(
+      (
+        await asUser(ids.outsider, "SELECT id FROM public.pending_document_uploads WHERE id=$1", [
+          prepared.rows[0].upload_id,
+        ])
+      ).rowCount,
+    ).toBe(0);
+
+    const queued = await asUser<{ job_id: string }>(
+      ids.member,
+      "SELECT job_id FROM public.enqueue_document_verification($1)",
+      [prepared.rows[0].upload_id],
+    );
+    await client.query(
+      `UPDATE public.extraction_jobs SET status='running',lease_owner='property-worker',
+         lease_expires_at=now()+interval '5 minutes'
+       WHERE id=$1`,
+      [queued.rows[0].job_id],
+    );
+    const finalized = await client.query<{ document_id: string }>(
+      "SELECT document_id FROM public.complete_document_verification($1,'property-worker',$2,1024,'application/pdf','clean')",
+      [queued.rows[0].job_id, "c".repeat(64)],
+    );
+    const visibleDocument = await asUser<{ property_id: string }>(
+      ids.viewer,
+      "SELECT property_id FROM public.documents WHERE id=$1",
+      [finalized.rows[0].document_id],
+    );
+    expect(visibleDocument.rows[0].property_id).toBe(ids.property);
+    const audit = await client.query(
+      "SELECT id FROM public.audit_logs WHERE entity_id=$1 AND action='document_upload_finalized' AND payload->>'property_id'=$2",
+      [finalized.rows[0].document_id, ids.property],
+    );
+    expect(audit.rowCount).toBe(1);
   });
 
   test("concurrent upload reservations cannot exceed the per-user file quota", async () => {

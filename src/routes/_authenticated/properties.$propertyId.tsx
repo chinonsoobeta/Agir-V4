@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageBody, PageHeader } from "@/components/app-shell";
+import { DocumentDropzone } from "@/components/document-dropzone";
 import { HistoryStateDiff } from "@/components/history-state-diff";
 import { PropertyEditor } from "@/components/properties/property-editor";
 import { Badge } from "@/components/ui/badge";
@@ -748,6 +749,24 @@ function PropertyRecords({
           </div>
         ) : (
           <p className="mt-4 text-sm text-muted-foreground">No documents linked.</p>
+        )}
+        {canEdit && (
+          <div className="mt-5 border-t border-border pt-4">
+            <p className="mb-3 text-xs text-muted-foreground">
+              Upload directly to this property. These files remain scoped to the property record.
+            </p>
+            <DocumentDropzone
+              projectId={null}
+              propertyId={property.id}
+              category="property_file"
+              existingNames={documents.map((document) => document.name)}
+              onChanged={() => {
+                qc.invalidateQueries({ queryKey: ["property", property.id] });
+                qc.invalidateQueries({ queryKey: ["documents"] });
+              }}
+              helperText="PDF, Excel, Word, CSV, text, or images · 75 MB per file"
+            />
+          </div>
         )}
         {canEdit && availableDocs.length > 0 && (
           <div className="mt-5 border-t border-border pt-4">

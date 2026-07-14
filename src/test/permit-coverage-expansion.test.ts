@@ -13,6 +13,10 @@ const transactionalMigration = readFileSync(
   "supabase/migrations/20260712001000_transactional_permit_catalogue_generation.sql",
   "utf8",
 );
+const completionMigration = readFileSync(
+  "supabase/migrations/20260714000100_close_catalogue_search_and_property_upload_gaps.sql",
+  "utf8",
+);
 const functions = readFileSync("src/lib/permit-cases.functions.ts", "utf8");
 const workspace = readFileSync("src/routes/_authenticated/permits.$caseId.tsx", "utf8");
 
@@ -39,6 +43,18 @@ describe("permit research expansion", () => {
     }
     expect(migration).toContain("coverage_status");
     expect(migration).toContain("Coverage placeholder only. This row is not a permit requirement.");
+  });
+
+  it("records completed official-source inventories without claiming qualified approval", () => {
+    expect(completionMigration).toContain(
+      "CREATE TABLE IF NOT EXISTS public.municipal_research_sources",
+    );
+    expect(completionMigration).toContain("'researched','reviewed'");
+    expect(completionMigration).toContain(
+      "CASE WHEN j.coverage_status='reviewed' THEN 'reviewed' ELSE 'researched' END",
+    );
+    expect(completionMigration).toContain("Category and case applicability remain unapproved");
+    expect(completionMigration).not.toContain("SET coverage_status='reviewed'");
   });
 
   it("selects one current rule per permit type without deleting prior evidence", () => {
