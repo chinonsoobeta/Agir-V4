@@ -77,7 +77,13 @@ for (const rule of rules ?? []) {
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       sourceText = canonicalSourceText(await response.text());
-      observed = { sourceText, hash: createHash("sha256").update(sourceText).digest("hex") };
+      observed = {
+        sourceText,
+        hash: createHash("sha256").update(sourceText).digest("hex"),
+        httpStatus: response.status,
+        etag: response.headers.get("etag"),
+        lastModified: response.headers.get("last-modified"),
+      };
       sourceCache.set(rule.official_source_url, observed);
     }
     sourceText = observed.sourceText;
@@ -117,5 +123,90 @@ for (const rule of rules ?? []) {
   if (update.error) throw new Error(update.error.message);
 }
 
-console.log(JSON.stringify({ checked: rules?.length ?? 0, changed, unavailable, write }, null, 2));
+const municipalResult = await supabase
+  .from("municipal_research_sources")
+  .select("id,source_title,source_url,last_observed_hash,next_check_at,consecutive_failures")
+  .order("source_title")
+  .limit(100);
+if (municipalResult.error) throw new Error(municipalResult.error.message);
+let municipalChecked = 0;
+for (const source of municipalResult.data ?? []) {
+  if (
+    !process.argv.includes("--all") &&
+    source.next_check_at &&
+    new Date(source.next_check_at) > now
+  )
+    continue;
+  municipalChecked += 1;
+  let status = "current";
+  let observed = sourceCache.get(source.source_url);
+  let errorDetail = null;
+  try {
+    if (!observed) {
+      const response = await fetch(source.source_url, {
+        headers: { "user-agent": "AgirMunicipalSourceMonitor/1.0" },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const sourceText = canonicalSourceText(await response.text());
+      observed = {
+        sourceText,
+        hash: createHash("sha256").update(sourceText).digest("hex"),
+        httpStatus: response.status,
+        etag: response.headers.get("etag"),
+        lastModified: response.headers.get("last-modified"),
+      };
+      sourceCache.set(source.source_url, observed);
+    }
+    if (source.last_observed_hash && source.last_observed_hash !== observed.hash) {
+      status = "changed";
+      changed += 1;
+    }
+  } catch (cause) {
+    status = "unavailable";
+    unavailable += 1;
+    errorDetail = cause instanceof Error ? cause.message : String(cause);
+  }
+  console.log(`${status.padEnd(11)} municipal source ${source.source_title} ${source.source_url}`);
+  if (!write) continue;
+  const snapshot = await supabase.from("municipal_source_snapshots").insert({
+    source_id: source.id,
+    observation_status: status,
+    http_status: observed?.httpStatus ?? null,
+    content_hash: observed?.hash ?? null,
+    content_excerpt: observed?.sourceText?.slice(0, 10_000) ?? null,
+    etag: observed?.etag ?? null,
+    last_modified: observed?.lastModified ?? null,
+    error_detail: errorDetail,
+  });
+  if (snapshot.error) throw new Error(snapshot.error.message);
+  const nextCheck = new Date(now);
+  nextCheck.setUTCDate(nextCheck.getUTCDate() + (status === "current" ? 90 : 7));
+  const sourceUpdate = await supabase
+    .from("municipal_research_sources")
+    .update({
+      integrity_status: status,
+      last_observed_at: now.toISOString(),
+      ...(observed?.hash ? { last_observed_hash: observed.hash } : {}),
+      next_check_at: nextCheck.toISOString(),
+      consecutive_failures:
+        status === "unavailable" ? Number(source.consecutive_failures ?? 0) + 1 : 0,
+    })
+    .eq("id", source.id);
+  if (sourceUpdate.error) throw new Error(sourceUpdate.error.message);
+}
+
+console.log(
+  JSON.stringify(
+    {
+      checked: rules?.length ?? 0,
+      municipal_checked: municipalChecked,
+      changed,
+      unavailable,
+      write,
+    },
+    null,
+    2,
+  ),
+);
 if (changed || unavailable) process.exitCode = 2;

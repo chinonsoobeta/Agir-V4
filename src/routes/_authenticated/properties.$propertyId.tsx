@@ -9,12 +9,15 @@ import {
   Check,
   CircleDot,
   ContactRound,
+  Download,
   ExternalLink,
   FileText,
   MapPin,
   Pencil,
   Plus,
+  RefreshCw,
   ShieldCheck,
+  Trash2,
   Workflow,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -44,7 +47,14 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { listDocuments } from "@/lib/documents.functions";
+import {
+  deleteDocument,
+  getDocumentUrl,
+  listDocuments,
+  listExtractionJobs,
+  listPendingDocumentUploads,
+  retryPendingDocumentUpload,
+} from "@/lib/documents.functions";
 import { listRelationshipContacts } from "@/lib/operating-depth.functions";
 import { listPermitCases } from "@/lib/permit-cases.functions";
 import { listProjects } from "@/lib/projects.functions";
@@ -669,11 +679,30 @@ function PropertyRecords({
   const workspaceId = property.workspace_id ?? null;
   const [documentId, setDocumentId] = useState("");
   const [contactId, setContactId] = useState("");
+  const [replacement, setReplacement] = useState<any | null>(null);
   const qc = useQueryClient();
   const docsQ = useQuery({
     queryKey: ["documents"],
     queryFn: () => listDocuments({ data: {} }),
     enabled: canEdit,
+  });
+  const pendingQ = useQuery({
+    queryKey: ["property-upload-status", property.id],
+    queryFn: () => listPendingDocumentUploads({ data: { property_id: property.id } }),
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((item: any) =>
+        ["pending", "verification_queued", "verification_running"].includes(item.status),
+      )
+        ? 3000
+        : false,
+  });
+  const jobsQ = useQuery({
+    queryKey: ["property-extraction-jobs", property.id],
+    queryFn: () => listExtractionJobs({ data: { property_id: property.id } }),
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((item: any) => ["queued", "running"].includes(item.status))
+        ? 3000
+        : false,
   });
   const projectsQ = useQuery({
     queryKey: ["projects"],
@@ -692,6 +721,39 @@ function PropertyRecords({
   });
   const docFn = useServerFn(linkPropertyDocument);
   const contactFn = useServerFn(linkPropertyContact);
+  const urlFn = useServerFn(getDocumentUrl);
+  const deleteFn = useServerFn(deleteDocument);
+  const retryFn = useServerFn(retryPendingDocumentUpload);
+  const refreshFiles = () => {
+    qc.invalidateQueries({ queryKey: ["property", property.id] });
+    qc.invalidateQueries({ queryKey: ["documents"] });
+    qc.invalidateQueries({ queryKey: ["property-upload-status", property.id] });
+    qc.invalidateQueries({ queryKey: ["property-extraction-jobs", property.id] });
+  };
+  const openDocument = useMutation({
+    mutationFn: (id: string) => urlFn({ data: { id } }),
+    onSuccess: ({ url }) => {
+      if (!url) return toast.error("A download link could not be created.");
+      window.open(url, "_blank", "noopener,noreferrer");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const removeDocument = useMutation({
+    mutationFn: (id: string) => deleteFn({ data: { id } }),
+    onSuccess: () => {
+      refreshFiles();
+      toast.success("Document removal queued");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const retryUpload = useMutation({
+    mutationFn: (id: string) => retryFn({ data: { id } }),
+    onSuccess: () => {
+      refreshFiles();
+      toast.success("Verification queued again");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
   const attachDocument = useMutation({
     mutationFn: () => docFn({ data: { property_id: property.id, document_id: documentId } }),
     onSuccess: () => {
@@ -738,17 +800,103 @@ function PropertyRecords({
         </div>
         {documents.length ? (
           <div className="mt-4 space-y-2">
-            {documents.map((document) => (
-              <div key={document.id} className="rounded-lg border border-border px-4 py-3">
-                <div className="truncate text-sm font-medium">{document.name}</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {document.category || document.file_type || "Document"}
+            {documents.map((document) => {
+              const job = (jobsQ.data ?? []).find((item: any) => item.document_id === document.id);
+              return (
+                <div key={document.id} className="rounded-lg border border-border px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">{document.name}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {document.category || document.file_type || "Document"} · Version{" "}
+                        {document.version_number ?? 1} ·{" "}
+                        {document.deletion_requested_at
+                          ? "removal queued"
+                          : job?.status || document.extraction_status}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Added {new Date(document.upload_date).toLocaleString("en-CA")}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Open ${document.name}`}
+                        onClick={() => openDocument.mutate(document.id)}
+                      >
+                        <Download className="size-4" />
+                      </Button>
+                      {canEdit && !document.deletion_requested_at && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          aria-label={`Upload a new version of ${document.name}`}
+                          onClick={() => setReplacement(document)}
+                        >
+                          <RefreshCw className="size-4" />
+                        </Button>
+                      )}
+                      {canEdit && !document.deletion_requested_at && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          aria-label={`Remove ${document.name}`}
+                          onClick={() => removeDocument.mutate(document.id)}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <p className="mt-4 text-sm text-muted-foreground">No documents linked.</p>
+        )}
+        {(pendingQ.data ?? []).some(
+          (item: any) => !["finalized", "duplicate"].includes(item.status),
+        ) && (
+          <div className="mt-4 space-y-2" aria-live="polite">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Upload activity
+            </p>
+            {(pendingQ.data ?? [])
+              .filter((item: any) => !["finalized", "duplicate"].includes(item.status))
+              .map((item: any) => (
+                <div key={item.id} className="rounded-lg border border-border px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate font-medium">{item.file_name}</span>
+                    <Badge
+                      variant={
+                        item.status === "failed" || item.status === "rejected"
+                          ? "destructive"
+                          : "secondary"
+                      }
+                    >
+                      {String(item.status).replaceAll("_", " ")}
+                    </Badge>
+                  </div>
+                  {item.failure_reason && (
+                    <p className="mt-1 text-xs text-muted-foreground">{item.failure_reason}</p>
+                  )}
+                  {canEdit &&
+                    ["failed", "rejected"].includes(item.status) &&
+                    item.retry_count < 3 && (
+                      <Button
+                        className="mt-2"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => retryUpload.mutate(item.id)}
+                      >
+                        Retry verification
+                      </Button>
+                    )}
+                </div>
+              ))}
+          </div>
         )}
         {canEdit && (
           <div className="mt-5 border-t border-border pt-4">
@@ -761,10 +909,36 @@ function PropertyRecords({
               category="property_file"
               existingNames={documents.map((document) => document.name)}
               onChanged={() => {
-                qc.invalidateQueries({ queryKey: ["property", property.id] });
-                qc.invalidateQueries({ queryKey: ["documents"] });
+                refreshFiles();
               }}
               helperText="PDF, Excel, Word, CSV, text, or images · 75 MB per file"
+            />
+          </div>
+        )}
+        {canEdit && replacement && (
+          <div className="mt-5 rounded-lg border border-primary/25 bg-primary/5 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">New version of {replacement.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  The existing version remains in the evidence chain.
+                </p>
+              </div>
+              <Button size="sm" variant="ghost" onClick={() => setReplacement(null)}>
+                Cancel
+              </Button>
+            </div>
+            <DocumentDropzone
+              projectId={null}
+              propertyId={property.id}
+              replacesDocumentId={replacement.id}
+              category={replacement.category || "property_file"}
+              existingNames={documents.map((document) => document.name)}
+              onChanged={() => {
+                setReplacement(null);
+                refreshFiles();
+              }}
+              helperText="Choose the replacement file · the prior version is retained"
             />
           </div>
         )}

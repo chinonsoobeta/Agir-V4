@@ -560,6 +560,19 @@ describe("workspace RLS policies", () => {
         )
       ).rowCount,
     ).toBe(0);
+    for (let index = 0; index < 5; index += 1) {
+      await asUser(
+        ids.member,
+        "SELECT * FROM public.create_property_search_session($1,'deep catalogue pagination',NULL,NULL,NULL,NULL,false)",
+        [ids.workspace],
+      );
+    }
+    const boundedSessions = await asUser<{ count: number }>(
+      ids.member,
+      "SELECT count(*)::int AS count FROM public.property_search_sessions WHERE owner_id=$1",
+      [ids.member],
+    );
+    expect(boundedSessions.rows[0].count).toBe(5);
   });
 
   test("property search preserves old fragments and activity uses stable keyset pages", async () => {
@@ -649,6 +662,52 @@ describe("workspace RLS policies", () => {
     expect(
       new Set([...firstVisible, ...secondVisible, ...third.rows].map((row) => row.id)).size,
     ).toBe(205);
+
+    const session = await asUser<{ session_id: string; total_count: number }>(
+      ids.member,
+      "SELECT * FROM public.create_property_search_session($1,'deep catalogue pagination',NULL,NULL,NULL,NULL,false)",
+      [ids.workspace],
+    );
+    expect(Number(session.rows[0].total_count)).toBe(205);
+    const snapshotFirst = await asUser<{ property_snapshot: { id: string; notes: string } }>(
+      ids.member,
+      "SELECT property_snapshot FROM public.get_property_search_session_page($1,0,100)",
+      [session.rows[0].session_id],
+    );
+    const snapshotSecond = await asUser<{ property_snapshot: { id: string; notes: string } }>(
+      ids.member,
+      "SELECT property_snapshot FROM public.get_property_search_session_page($1,100,100)",
+      [session.rows[0].session_id],
+    );
+    const snapshotThird = await asUser<{ property_snapshot: { id: string; notes: string } }>(
+      ids.member,
+      "SELECT property_snapshot FROM public.get_property_search_session_page($1,200,100)",
+      [session.rows[0].session_id],
+    );
+    const snapshotRows = [...snapshotFirst.rows, ...snapshotSecond.rows, ...snapshotThird.rows];
+    expect(snapshotRows).toHaveLength(205);
+    expect(new Set(snapshotRows.map((row) => row.property_snapshot.id)).size).toBe(205);
+    const notYetViewed = snapshotThird.rows[0].property_snapshot;
+    await asUser(
+      ids.member,
+      "UPDATE public.properties SET notes='changed after snapshot' WHERE id=$1",
+      [notYetViewed.id],
+    );
+    const stable = await asUser<{ property_snapshot: { notes: string } }>(
+      ids.member,
+      "SELECT property_snapshot FROM public.get_property_search_session_page($1,200,1)",
+      [session.rows[0].session_id],
+    );
+    expect(stable.rows[0].property_snapshot.notes).toBe("deep catalogue pagination");
+    expect(
+      (
+        await asUser(
+          ids.outsider,
+          "SELECT property_snapshot FROM public.get_property_search_session_page($1,0,10)",
+          [session.rows[0].session_id],
+        )
+      ).rowCount,
+    ).toBe(0);
   });
 
   test("property tasks and record links enforce roles, scope, and canonical link history", async () => {
@@ -2146,6 +2205,15 @@ describe("workspace RLS policies", () => {
       "SELECT job_id FROM public.enqueue_document_verification($1)",
       [prepared.rows[0].upload_id],
     );
+    expect(
+      (
+        await asUser(
+          ids.viewer,
+          "SELECT id FROM public.extraction_jobs WHERE id=$1 AND property_id=$2",
+          [queued.rows[0].job_id, ids.property],
+        )
+      ).rowCount,
+    ).toBe(1);
     await client.query(
       `UPDATE public.extraction_jobs SET status='running',lease_owner='property-worker',
          lease_expires_at=now()+interval '5 minutes'
@@ -2167,6 +2235,121 @@ describe("workspace RLS policies", () => {
       [finalized.rows[0].document_id, ids.property],
     );
     expect(audit.rowCount).toBe(1);
+
+    const ownerDuplicate = await asUser<{ upload_id: string }>(
+      ids.owner,
+      "SELECT * FROM public.prepare_property_document_upload($1,'Owner copy.pdf','application/pdf',1024,'property_file')",
+      [ids.property],
+    );
+    const ownerDuplicateJob = await asUser<{ job_id: string }>(
+      ids.owner,
+      "SELECT job_id FROM public.enqueue_document_verification($1)",
+      [ownerDuplicate.rows[0].upload_id],
+    );
+    await client.query(
+      `UPDATE public.extraction_jobs SET status='running',lease_owner='owner-worker',
+         lease_expires_at=now()+interval '5 minutes' WHERE id=$1`,
+      [ownerDuplicateJob.rows[0].job_id],
+    );
+    const deduped = await client.query<{ document_id: string; deduped: boolean }>(
+      "SELECT document_id,deduped FROM public.complete_document_verification($1,'owner-worker',$2,1024,'application/pdf','clean')",
+      [ownerDuplicateJob.rows[0].job_id, "c".repeat(64)],
+    );
+    expect(deduped.rows[0]).toEqual({
+      document_id: finalized.rows[0].document_id,
+      deduped: true,
+    });
+
+    const replacement = await asUser<{ upload_id: string }>(
+      ids.member,
+      "SELECT * FROM public.prepare_property_document_version_upload($1,$2,'Title revised.pdf','application/pdf',2048,'property_file')",
+      [ids.property, finalized.rows[0].document_id],
+    );
+    const replacementJob = await asUser<{ job_id: string }>(
+      ids.member,
+      "SELECT job_id FROM public.enqueue_document_verification($1)",
+      [replacement.rows[0].upload_id],
+    );
+    await client.query(
+      `UPDATE public.extraction_jobs SET status='running',lease_owner='property-worker-v2',
+         lease_expires_at=now()+interval '5 minutes' WHERE id=$1`,
+      [replacementJob.rows[0].job_id],
+    );
+    const versioned = await client.query<{ document_id: string }>(
+      "SELECT document_id FROM public.complete_document_verification($1,'property-worker-v2',$2,2048,'application/pdf','clean')",
+      [replacementJob.rows[0].job_id, "d".repeat(64)],
+    );
+    const version = await asUser<{ version_number: number; replaces_document_id: string }>(
+      ids.viewer,
+      "SELECT version_number,replaces_document_id FROM public.documents WHERE id=$1",
+      [versioned.rows[0].document_id],
+    );
+    expect(Number(version.rows[0].version_number)).toBe(2);
+    expect(version.rows[0].replaces_document_id).toBe(finalized.rows[0].document_id);
+
+    const failedUpload = await asUser<{ upload_id: string }>(
+      ids.member,
+      "SELECT * FROM public.prepare_property_document_upload($1,'Retry.pdf','application/pdf',512,'property_file')",
+      [ids.property],
+    );
+    const failedJob = await asUser<{ job_id: string }>(
+      ids.member,
+      "SELECT job_id FROM public.enqueue_document_verification($1)",
+      [failedUpload.rows[0].upload_id],
+    );
+    await client.query(
+      "UPDATE public.pending_document_uploads SET status='failed',failure_reason='scanner timeout' WHERE id=$1",
+      [failedUpload.rows[0].upload_id],
+    );
+    await client.query("UPDATE public.extraction_jobs SET status='failed' WHERE id=$1", [
+      failedJob.rows[0].job_id,
+    ]);
+    const retry = await asUser<{ status: string }>(
+      ids.member,
+      "SELECT status FROM public.retry_property_document_upload($1)",
+      [failedUpload.rows[0].upload_id],
+    );
+    expect(retry.rows[0].status).toBe("verification_queued");
+
+    await expect(
+      asUser(ids.member, "SELECT public.request_document_deletion($1)", [
+        finalized.rows[0].document_id,
+      ]),
+    ).rejects.toThrow(/newer versions cannot be removed/i);
+    const deletionRequest = await asUser<{ request_id: string }>(
+      ids.member,
+      "SELECT public.request_document_deletion($1) AS request_id",
+      [versioned.rows[0].document_id],
+    );
+    expect(
+      (
+        await asUser(
+          ids.viewer,
+          "SELECT id FROM public.document_deletion_requests WHERE id=$1 AND property_id=$2",
+          [deletionRequest.rows[0].request_id, ids.property],
+        )
+      ).rowCount,
+    ).toBe(1);
+    const claimedDeletion = await client.query<{ request_id: string }>(
+      "SELECT request_id FROM public.claim_document_deletions(10) WHERE request_id=$1",
+      [deletionRequest.rows[0].request_id],
+    );
+    expect(claimedDeletion.rowCount).toBe(1);
+    expect(
+      (
+        await client.query<{ completed: boolean }>(
+          "SELECT public.complete_document_deletion($1) AS completed",
+          [deletionRequest.rows[0].request_id],
+        )
+      ).rows[0].completed,
+    ).toBe(true);
+    expect(
+      (
+        await asUser(ids.viewer, "SELECT id FROM public.documents WHERE id=$1", [
+          versioned.rows[0].document_id,
+        ])
+      ).rowCount,
+    ).toBe(0);
   });
 
   test("concurrent upload reservations cannot exceed the per-user file quota", async () => {

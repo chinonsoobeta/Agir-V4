@@ -60,6 +60,7 @@ export function DocumentDropzone({
   projectId,
   permitCaseId,
   propertyId,
+  replacesDocumentId,
   category,
   existingNames,
   onChanged,
@@ -69,6 +70,7 @@ export function DocumentDropzone({
   projectId: string | null;
   permitCaseId?: string | null;
   propertyId?: string | null;
+  replacesDocumentId?: string | null;
   category: string;
   existingNames: string[];
   onChanged: () => void;
@@ -88,7 +90,7 @@ export function DocumentDropzone({
     setQueue((q) => q.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   }
 
-  async function processFile(file: File, id: string, existing: Set<string>) {
+  async function processFile(file: File, id: string) {
     if (!ACCEPT_RE.test(file.name)) {
       setItem(id, { status: "failed", error: "Unsupported file type" });
       return;
@@ -100,10 +102,6 @@ export function DocumentDropzone({
       });
       return;
     }
-    if (existing.has(file.name.toLowerCase())) {
-      setItem(id, { status: "duplicate" });
-      return;
-    }
     try {
       setItem(id, { status: "uploading" });
       const authorization = await requestUploadFn({
@@ -111,6 +109,7 @@ export function DocumentDropzone({
           project_id: projectId,
           permit_case_id: permitCaseId ?? null,
           property_id: propertyId ?? null,
+          replaces_document_id: replacesDocumentId ?? null,
           name: file.name,
           file_type: file.type || null,
           category,
@@ -158,6 +157,7 @@ export function DocumentDropzone({
           data: {
             project_id: projectId,
             property_id: propertyId ?? null,
+            replaces_document_id: replacesDocumentId ?? null,
             name: file.name,
             file_type: file.type,
             category,
@@ -191,20 +191,18 @@ export function DocumentDropzone({
   function enqueue(files: FileList | File[]) {
     const arr = [...files];
     if (!arr.length) return;
-    const existing = new Set(existingNames.map((n) => n.toLowerCase()));
-    // Also guard against duplicates within the same drop.
-    const seen = new Set<string>();
+    // Filenames are not identities: a revised report commonly keeps its name.
+    // The worker's server-computed content hash is the authoritative duplicate
+    // check, while explicit replacement intent creates a version edge.
+    void existingNames;
     const items: { file: File; id: string }[] = [];
     for (const file of arr) {
       const id = `u${seq.current++}`;
       items.push({ file, id });
-      const dup = existing.has(file.name.toLowerCase()) || seen.has(file.name.toLowerCase());
-      seen.add(file.name.toLowerCase());
-      setQueue((q) => [{ id, name: file.name, status: dup ? "duplicate" : "queued" }, ...q]);
+      setQueue((q) => [{ id, name: file.name, status: "queued" }, ...q]);
     }
     for (const { file, id } of items) {
-      if (!existing.has(file.name.toLowerCase())) void processFile(file, id, existing);
-      existing.add(file.name.toLowerCase());
+      void processFile(file, id);
     }
   }
 

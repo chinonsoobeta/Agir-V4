@@ -10,10 +10,12 @@ export type PropertyTaskRow = Database["public"]["Tables"]["property_tasks"]["Ro
 export type PropertyActivityRow = Database["public"]["Tables"]["property_activity_events"]["Row"];
 export type PropertyMatchScope = "current" | "historical" | "current_and_historical";
 export type PropertySearchRow = PropertyRow & { match_scope?: PropertyMatchScope };
-export type PropertySearchCursor = { updated_at: string; id: string };
+export type PropertySearchCursor = { session_id: string; offset: number };
 export type PropertySearchPage = {
   items: PropertySearchRow[];
   next_cursor: PropertySearchCursor | null;
+  total_count: number;
+  session_id: string;
 };
 export type PropertyContactRow = Database["public"]["Tables"]["property_contacts"]["Row"] & {
   contact: Database["public"]["Tables"]["relationship_contacts"]["Row"];
@@ -39,36 +41,26 @@ export type PropertyActivityPage = {
   next_cursor: PropertyActivityCursor | null;
 };
 
-const listPropertiesSchema = z
-  .object({
-    workspace_id: z.string().uuid().nullable().optional(),
-    query: z
-      .string()
-      .trim()
-      .max(300)
-      .refine(
-        (query) => query.split(/\s+/).filter(Boolean).length <= 20,
-        "Search supports up to 20 fragments at a time.",
-      )
-      .optional(),
-    municipality: z.string().trim().max(200).optional(),
-    project_type: z.string().trim().max(100).optional(),
-    min_price: z.number().nonnegative().optional(),
-    max_price: z.number().nonnegative().optional(),
-    include_archived: z.boolean().default(false),
-    before_updated_at: z.string().datetime().nullable().optional(),
-    before_id: z.string().uuid().nullable().optional(),
-    limit: z.number().int().min(1).max(100).default(50),
-  })
-  .superRefine((value, context) => {
-    if (Boolean(value.before_updated_at) !== Boolean(value.before_id)) {
-      context.addIssue({
-        code: "custom",
-        path: [value.before_updated_at ? "before_id" : "before_updated_at"],
-        message: "Property pagination requires both cursor fields.",
-      });
-    }
-  });
+const listPropertiesSchema = z.object({
+  workspace_id: z.string().uuid().nullable().optional(),
+  query: z
+    .string()
+    .trim()
+    .max(300)
+    .refine(
+      (query) => query.split(/\s+/).filter(Boolean).length <= 20,
+      "Search supports up to 20 fragments at a time.",
+    )
+    .optional(),
+  municipality: z.string().trim().max(200).optional(),
+  project_type: z.string().trim().max(100).optional(),
+  min_price: z.number().nonnegative().optional(),
+  max_price: z.number().nonnegative().optional(),
+  include_archived: z.boolean().default(false),
+  session_id: z.string().uuid().nullable().optional(),
+  offset: z.number().int().min(0).max(100_000).default(0),
+  limit: z.number().int().min(1).max(100).default(50),
+});
 
 export type ListPropertiesInput = z.input<typeof listPropertiesSchema>;
 
@@ -160,41 +152,49 @@ export const listProperties = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => listPropertiesSchema.parse(input ?? {}))
   .handler(async ({ data, context }): Promise<PropertySearchPage> => {
-    const result = await context.supabase.rpc("search_properties_page", {
-      p_workspace_id: data.workspace_id ?? null,
-      p_query: data.query || null,
-      p_municipality: data.municipality || null,
-      p_project_type: data.project_type || null,
-      p_min_price: data.min_price ?? null,
-      p_max_price: data.max_price ?? null,
-      p_include_archived: data.include_archived,
-      p_before_updated_at: data.before_updated_at ?? null,
-      p_before_id: data.before_id ?? null,
-      p_limit: data.limit,
-    } as never);
-    if (result.error) throw new Error(result.error.message);
-    const rows = (result.data ?? []) as PropertyRow[];
-    const hasMore = rows.length > data.limit;
-    const properties = rows.slice(0, data.limit);
-    const last = properties.at(-1);
-    const next_cursor = hasMore && last ? { updated_at: last.updated_at, id: last.id } : null;
-    if (!data.query || !properties.length) return { items: properties, next_cursor };
-
-    const matches = await context.supabase.rpc("property_search_match_scopes", {
-      p_property_ids: properties.map((property) => property.id),
-      p_query: data.query,
-    });
-    if (matches.error) throw new Error(matches.error.message);
-
-    const scopes = new Map<string, PropertyMatchScope>();
-    for (const match of matches.data ?? []) {
-      scopes.set(match.property_id, match.match_scope as PropertyMatchScope);
+    const db = context.supabase as any;
+    let sessionId = data.session_id ?? null;
+    let totalCount = 0;
+    if (!sessionId) {
+      const created = await db.rpc("create_property_search_session", {
+        p_workspace_id: data.workspace_id ?? null,
+        p_query: data.query || null,
+        p_municipality: data.municipality || null,
+        p_project_type: data.project_type || null,
+        p_min_price: data.min_price ?? null,
+        p_max_price: data.max_price ?? null,
+        p_include_archived: data.include_archived,
+      });
+      if (created.error) throw new Error(created.error.message);
+      sessionId = created.data?.[0]?.session_id ?? null;
+      totalCount = Number(created.data?.[0]?.total_count ?? 0);
+      if (!sessionId) throw new Error("Property search session was not created.");
+    } else {
+      const session = await db
+        .from("property_search_sessions")
+        .select("total_count")
+        .eq("id", sessionId)
+        .single();
+      if (session.error) throw new Error("This search expired. Refresh the results and try again.");
+      totalCount = Number(session.data.total_count ?? 0);
     }
-    const items = properties.map((property) => {
-      const match_scope = scopes.get(property.id);
-      return match_scope ? { ...property, match_scope } : property;
+    const page = await db.rpc("get_property_search_session_page", {
+      p_session_id: sessionId,
+      p_offset: data.offset,
+      p_limit: data.limit,
     });
-    return { items, next_cursor };
+    if (page.error) throw new Error(page.error.message);
+    const items = (page.data ?? []).map((row: any) => ({
+      ...(row.property_snapshot as PropertyRow),
+      ...(row.match_scope ? { match_scope: row.match_scope as PropertyMatchScope } : {}),
+    }));
+    const nextOffset = data.offset + items.length;
+    return {
+      items,
+      total_count: totalCount,
+      session_id: sessionId,
+      next_cursor: nextOffset < totalCount ? { session_id: sessionId, offset: nextOffset } : null,
+    };
   });
 
 export const listPropertyActivity = createServerFn({ method: "GET" })

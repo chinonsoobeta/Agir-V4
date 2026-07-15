@@ -8,6 +8,7 @@ const SIDEBAR_ROUTES: { path: string; heading: RegExp }[] = [
   // The dashboard greets the user by name ("Good morning, Maple").
   { path: "/dashboard", heading: /overview|dashboard|home|good (morning|afternoon|evening)/i },
   { path: "/portfolio", heading: /portfolio/i },
+  { path: "/properties", heading: /properties/i },
   { path: "/deals", heading: /deals/i },
   { path: "/relationships", heading: /relationship/i },
   { path: "/compare", heading: /compare/i },

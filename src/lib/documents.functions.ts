@@ -44,16 +44,17 @@ export const listPermitCaseDocuments = createServerFn({ method: "GET" })
  * object is eligible for extraction, provenance review, or underwriting. */
 export const listPendingDocumentUploads = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .validator((d: { project_id?: string }) => d)
+  .validator((d: { project_id?: string; property_id?: string }) => d)
   .handler(async ({ data, context }) => {
     let q = context.supabase
       .from("pending_document_uploads")
       .select(
-        "id, project_id, file_name, category, status, failure_reason, created_at, expires_at, document_id",
+        "id, project_id, property_id, file_name, category, status, failure_reason, created_at, expires_at, document_id, retry_count, last_retry_at, replaces_document_id",
       )
       .order("created_at", { ascending: false })
       .limit(100);
     if (data?.project_id) q = q.eq("project_id", data.project_id);
+    if (data?.property_id) q = q.eq("property_id", data.property_id);
     const { data: rows, error } = await q;
     if (isMissingRelation(error)) return [];
     if (error) throw new Error(error.message);
@@ -62,7 +63,7 @@ export const listPendingDocumentUploads = createServerFn({ method: "GET" })
 
 export const listExtractionJobs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .validator((d: { project_id?: string }) => d)
+  .validator((d: { project_id?: string; property_id?: string }) => d)
   .handler(async ({ data, context }) => {
     let q = context.supabase
       .from("extraction_jobs")
@@ -70,6 +71,7 @@ export const listExtractionJobs = createServerFn({ method: "GET" })
       .order("created_at", { ascending: false })
       .limit(100);
     if (data?.project_id) q = q.eq("project_id", data.project_id);
+    if (data?.property_id) q = q.eq("property_id", data.property_id);
     const { data: rows, error } = await q;
     if (isMissingRelation(error))
       return handleSchemaCompatibilityFallback(error, {
@@ -178,6 +180,7 @@ const UploadIntentSchema = z
     project_id: z.string().uuid().optional().nullable(),
     permit_case_id: z.string().uuid().optional().nullable(),
     property_id: z.string().uuid().optional().nullable(),
+    replaces_document_id: z.string().uuid().optional().nullable(),
     name: z.string().min(1).max(255),
     file_type: z.string().max(255).optional().nullable(),
     category: z.string().max(255).optional().nullable(),
@@ -210,13 +213,22 @@ export const requestDocumentUpload = createServerFn({ method: "POST" })
     if (!intent.ok) throw new Error(intent.detail);
 
     const prepared = data.property_id
-      ? await context.supabase.rpc("prepare_property_document_upload", {
-          p_property_id: data.property_id,
-          p_file_name: data.name,
-          p_expected_content_type: data.file_type ?? null,
-          p_expected_size_bytes: data.size_bytes,
-          p_category: data.category ?? null,
-        } as never)
+      ? data.replaces_document_id
+        ? await context.supabase.rpc("prepare_property_document_version_upload", {
+            p_property_id: data.property_id,
+            p_replaces_document_id: data.replaces_document_id,
+            p_file_name: data.name,
+            p_expected_content_type: data.file_type ?? null,
+            p_expected_size_bytes: data.size_bytes,
+            p_category: data.category ?? null,
+          } as never)
+        : await context.supabase.rpc("prepare_property_document_upload", {
+            p_property_id: data.property_id,
+            p_file_name: data.name,
+            p_expected_content_type: data.file_type ?? null,
+            p_expected_size_bytes: data.size_bytes,
+            p_category: data.category ?? null,
+          } as never)
       : data.permit_case_id
         ? await context.supabase.rpc("prepare_permit_document_upload", {
             p_permit_case_id: data.permit_case_id,
@@ -392,16 +404,22 @@ export const deleteDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { data: doc } = await context.supabase
-      .from("documents")
-      .select("storage_path")
-      .eq("id", data.id)
-      .single();
-    if (doc?.storage_path)
-      await context.supabase.storage.from("documents").remove([doc.storage_path]);
-    const { error } = await context.supabase.from("documents").delete().eq("id", data.id);
-    if (error) throw new Error(error.message);
-    return { ok: true };
+    const requested = await context.supabase.rpc("request_document_deletion", {
+      p_document_id: data.id,
+    } as never);
+    if (requested.error) throw new Error(requested.error.message);
+    return { ok: true, request_id: requested.data as string };
+  });
+
+export const retryPendingDocumentUpload = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const retried = await context.supabase.rpc("retry_property_document_upload", {
+      p_upload_id: data.id,
+    } as never);
+    if (retried.error) throw new Error(retried.error.message);
+    return retried.data?.[0] ?? { status: "verification_queued", job_id: null };
   });
 
 export const getDocumentUrl = createServerFn({ method: "GET" })
@@ -412,10 +430,11 @@ export const getDocumentUrl = createServerFn({ method: "GET" })
     await enforceRateLimit(context, "signed_document_url", { metadata: { document_id: data.id } });
     const { data: doc, error } = await context.supabase
       .from("documents")
-      .select("storage_path,project_id")
+      .select("storage_path,project_id,deletion_requested_at")
       .eq("id", data.id)
       .single();
     if (error) throw new Error(error.message);
+    if (doc.deletion_requested_at) throw new Error("Document removal is already queued.");
     if (
       doc.storage_path.startsWith("/") ||
       doc.storage_path.includes("..") ||

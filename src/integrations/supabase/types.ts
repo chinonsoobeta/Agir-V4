@@ -464,6 +464,13 @@ export type Database = {
             referencedRelation: "jurisdictions";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "authoritative_land_data_sources_jurisdiction_id_fkey";
+            columns: ["jurisdiction_id"];
+            isOneToOne: false;
+            referencedRelation: "municipal_catalogue_release_gate";
+            referencedColumns: ["jurisdiction_id"];
+          },
         ];
       };
       cash_flows: {
@@ -911,6 +918,60 @@ export type Database = {
           },
         ];
       };
+      document_deletion_requests: {
+        Row: {
+          claimed_at: string | null;
+          completed_at: string | null;
+          document_id: string | null;
+          error_detail: string | null;
+          id: string;
+          property_id: string | null;
+          requested_at: string;
+          requested_by: string | null;
+          status: string;
+          storage_path: string;
+        };
+        Insert: {
+          claimed_at?: string | null;
+          completed_at?: string | null;
+          document_id?: string | null;
+          error_detail?: string | null;
+          id?: string;
+          property_id?: string | null;
+          requested_at?: string;
+          requested_by?: string | null;
+          status?: string;
+          storage_path: string;
+        };
+        Update: {
+          claimed_at?: string | null;
+          completed_at?: string | null;
+          document_id?: string | null;
+          error_detail?: string | null;
+          id?: string;
+          property_id?: string | null;
+          requested_at?: string;
+          requested_by?: string | null;
+          status?: string;
+          storage_path?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "document_deletion_requests_document_id_fkey";
+            columns: ["document_id"];
+            isOneToOne: false;
+            referencedRelation: "documents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "document_deletion_requests_property_id_fkey";
+            columns: ["property_id"];
+            isOneToOne: false;
+            referencedRelation: "properties";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       documents: {
         Row: {
           ai_assumptions: string | null;
@@ -918,6 +979,8 @@ export type Database = {
           ai_summary: string | null;
           category: string | null;
           content_hash: string | null;
+          deletion_requested_at: string | null;
+          deletion_requested_by: string | null;
           extraction_error: string | null;
           extraction_review_status: string;
           extraction_status: string;
@@ -945,6 +1008,8 @@ export type Database = {
           ai_summary?: string | null;
           category?: string | null;
           content_hash?: string | null;
+          deletion_requested_at?: string | null;
+          deletion_requested_by?: string | null;
           extraction_error?: string | null;
           extraction_review_status?: string;
           extraction_status?: string;
@@ -972,6 +1037,8 @@ export type Database = {
           ai_summary?: string | null;
           category?: string | null;
           content_hash?: string | null;
+          deletion_requested_at?: string | null;
+          deletion_requested_by?: string | null;
           extraction_error?: string | null;
           extraction_review_status?: string;
           extraction_status?: string;
@@ -1095,6 +1162,7 @@ export type Database = {
           priority: number;
           progress: number;
           project_id: string | null;
+          property_id: string | null;
           result_json: Json | null;
           scheduled_at: string;
           started_at: string | null;
@@ -1124,6 +1192,7 @@ export type Database = {
           priority?: number;
           progress?: number;
           project_id?: string | null;
+          property_id?: string | null;
           result_json?: Json | null;
           scheduled_at?: string;
           started_at?: string | null;
@@ -1153,6 +1222,7 @@ export type Database = {
           priority?: number;
           progress?: number;
           project_id?: string | null;
+          property_id?: string | null;
           result_json?: Json | null;
           scheduled_at?: string;
           started_at?: string | null;
@@ -1187,6 +1257,13 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "extraction_jobs_property_id_fkey";
+            columns: ["property_id"];
+            isOneToOne: false;
+            referencedRelation: "properties";
             referencedColumns: ["id"];
           },
         ];
@@ -1799,8 +1876,12 @@ export type Database = {
         Row: {
           applicability_note: string;
           checked_at: string;
+          consecutive_failures: number;
           id: string;
+          integrity_status: string;
           jurisdiction_id: string;
+          last_observed_at: string | null;
+          last_observed_hash: string | null;
           next_check_at: string;
           source_kind: string;
           source_title: string;
@@ -1809,8 +1890,12 @@ export type Database = {
         Insert: {
           applicability_note: string;
           checked_at: string;
+          consecutive_failures?: number;
           id?: string;
+          integrity_status?: string;
           jurisdiction_id: string;
+          last_observed_at?: string | null;
+          last_observed_hash?: string | null;
           next_check_at: string;
           source_kind: string;
           source_title: string;
@@ -1819,8 +1904,12 @@ export type Database = {
         Update: {
           applicability_note?: string;
           checked_at?: string;
+          consecutive_failures?: number;
           id?: string;
+          integrity_status?: string;
           jurisdiction_id?: string;
+          last_observed_at?: string | null;
+          last_observed_hash?: string | null;
           next_check_at?: string;
           source_kind?: string;
           source_title?: string;
@@ -1832,6 +1921,60 @@ export type Database = {
             columns: ["jurisdiction_id"];
             isOneToOne: false;
             referencedRelation: "jurisdictions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "municipal_research_sources_jurisdiction_id_fkey";
+            columns: ["jurisdiction_id"];
+            isOneToOne: false;
+            referencedRelation: "municipal_catalogue_release_gate";
+            referencedColumns: ["jurisdiction_id"];
+          },
+        ];
+      };
+      municipal_source_snapshots: {
+        Row: {
+          content_excerpt: string | null;
+          content_hash: string | null;
+          error_detail: string | null;
+          etag: string | null;
+          http_status: number | null;
+          id: string;
+          last_modified: string | null;
+          observation_status: string;
+          observed_at: string;
+          source_id: string;
+        };
+        Insert: {
+          content_excerpt?: string | null;
+          content_hash?: string | null;
+          error_detail?: string | null;
+          etag?: string | null;
+          http_status?: number | null;
+          id?: string;
+          last_modified?: string | null;
+          observation_status: string;
+          observed_at?: string;
+          source_id: string;
+        };
+        Update: {
+          content_excerpt?: string | null;
+          content_hash?: string | null;
+          error_detail?: string | null;
+          etag?: string | null;
+          http_status?: number | null;
+          id?: string;
+          last_modified?: string | null;
+          observation_status?: string;
+          observed_at?: string;
+          source_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "municipal_source_snapshots_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "municipal_research_sources";
             referencedColumns: ["id"];
           },
         ];
@@ -1921,6 +2064,7 @@ export type Database = {
       pending_document_uploads: {
         Row: {
           category: string | null;
+          cleaned_at: string | null;
           created_at: string;
           document_id: string | null;
           expected_content_type: string | null;
@@ -1930,17 +2074,21 @@ export type Database = {
           file_name: string;
           finalized_at: string | null;
           id: string;
+          last_retry_at: string | null;
           object_path: string;
           owner_id: string;
           permit_case_id: string | null;
           project_id: string | null;
           property_id: string | null;
+          replaces_document_id: string | null;
+          retry_count: number;
           status: string;
           updated_at: string;
           workspace_id: string | null;
         };
         Insert: {
           category?: string | null;
+          cleaned_at?: string | null;
           created_at?: string;
           document_id?: string | null;
           expected_content_type?: string | null;
@@ -1950,17 +2098,21 @@ export type Database = {
           file_name: string;
           finalized_at?: string | null;
           id?: string;
+          last_retry_at?: string | null;
           object_path: string;
           owner_id: string;
           permit_case_id?: string | null;
           project_id?: string | null;
           property_id?: string | null;
+          replaces_document_id?: string | null;
+          retry_count?: number;
           status?: string;
           updated_at?: string;
           workspace_id?: string | null;
         };
         Update: {
           category?: string | null;
+          cleaned_at?: string | null;
           created_at?: string;
           document_id?: string | null;
           expected_content_type?: string | null;
@@ -1970,11 +2122,14 @@ export type Database = {
           file_name?: string;
           finalized_at?: string | null;
           id?: string;
+          last_retry_at?: string | null;
           object_path?: string;
           owner_id?: string;
           permit_case_id?: string | null;
           project_id?: string | null;
           property_id?: string | null;
+          replaces_document_id?: string | null;
+          retry_count?: number;
           status?: string;
           updated_at?: string;
           workspace_id?: string | null;
@@ -2006,6 +2161,13 @@ export type Database = {
             columns: ["property_id"];
             isOneToOne: false;
             referencedRelation: "properties";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "pending_document_uploads_replaces_document_id_fkey";
+            columns: ["replaces_document_id"];
+            isOneToOne: false;
+            referencedRelation: "documents";
             referencedColumns: ["id"];
           },
           {
@@ -2437,6 +2599,13 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "permit_extraction_candidates_jurisdiction_id_fkey";
+            columns: ["jurisdiction_id"];
+            isOneToOne: false;
+            referencedRelation: "municipal_catalogue_release_gate";
+            referencedColumns: ["jurisdiction_id"];
+          },
+          {
             foreignKeyName: "permit_extraction_candidates_permit_case_id_fkey";
             columns: ["permit_case_id"];
             isOneToOne: false;
@@ -2701,6 +2870,66 @@ export type Database = {
           },
         ];
       };
+      permit_review_assignments: {
+        Row: {
+          assigned_at: string;
+          completed_at: string | null;
+          due_at: string | null;
+          id: string;
+          jurisdiction_id: string;
+          notes: string | null;
+          permit_type: string;
+          qualification_basis: string;
+          reviewer_id: string | null;
+          reviewer_name: string;
+          reviewer_organization: string | null;
+          status: string;
+        };
+        Insert: {
+          assigned_at?: string;
+          completed_at?: string | null;
+          due_at?: string | null;
+          id?: string;
+          jurisdiction_id: string;
+          notes?: string | null;
+          permit_type: string;
+          qualification_basis: string;
+          reviewer_id?: string | null;
+          reviewer_name: string;
+          reviewer_organization?: string | null;
+          status?: string;
+        };
+        Update: {
+          assigned_at?: string;
+          completed_at?: string | null;
+          due_at?: string | null;
+          id?: string;
+          jurisdiction_id?: string;
+          notes?: string | null;
+          permit_type?: string;
+          qualification_basis?: string;
+          reviewer_id?: string | null;
+          reviewer_name?: string;
+          reviewer_organization?: string | null;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "permit_review_assignments_jurisdiction_id_fkey";
+            columns: ["jurisdiction_id"];
+            isOneToOne: false;
+            referencedRelation: "jurisdictions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permit_review_assignments_jurisdiction_id_fkey";
+            columns: ["jurisdiction_id"];
+            isOneToOne: false;
+            referencedRelation: "municipal_catalogue_release_gate";
+            referencedColumns: ["jurisdiction_id"];
+          },
+        ];
+      };
       permit_review_items: {
         Row: {
           assigned_to: string | null;
@@ -2949,6 +3178,13 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "permit_rules_jurisdiction_id_fkey";
+            columns: ["jurisdiction_id"];
+            isOneToOne: false;
+            referencedRelation: "municipal_catalogue_release_gate";
+            referencedColumns: ["jurisdiction_id"];
+          },
+          {
             foreignKeyName: "permit_rules_source_document_id_fkey";
             columns: ["source_document_id"];
             isOneToOne: false;
@@ -2970,6 +3206,45 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      pilot_external_signoffs: {
+        Row: {
+          accountable_name: string | null;
+          accountable_role: string;
+          evidence_hash: string | null;
+          evidence_url: string | null;
+          expires_at: string | null;
+          gate_key: string;
+          notes: string | null;
+          result: string;
+          signed_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          accountable_name?: string | null;
+          accountable_role: string;
+          evidence_hash?: string | null;
+          evidence_url?: string | null;
+          expires_at?: string | null;
+          gate_key: string;
+          notes?: string | null;
+          result?: string;
+          signed_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          accountable_name?: string | null;
+          accountable_role?: string;
+          evidence_hash?: string | null;
+          evidence_url?: string | null;
+          expires_at?: string | null;
+          gate_key?: string;
+          notes?: string | null;
+          result?: string;
+          signed_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       pilot_user_access: {
         Row: {
@@ -3196,6 +3471,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "jurisdictions";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_permits_jurisdiction_id_fkey";
+            columns: ["jurisdiction_id"];
+            isOneToOne: false;
+            referencedRelation: "municipal_catalogue_release_gate";
+            referencedColumns: ["jurisdiction_id"];
           },
           {
             foreignKeyName: "project_permits_permit_rule_id_fkey";
@@ -3692,6 +3974,76 @@ export type Database = {
             columns: ["property_id"];
             isOneToOne: false;
             referencedRelation: "properties";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      property_search_session_items: {
+        Row: {
+          match_scope: string | null;
+          ordinal: number;
+          property_id: string;
+          property_snapshot: Json;
+          session_id: string;
+        };
+        Insert: {
+          match_scope?: string | null;
+          ordinal: number;
+          property_id: string;
+          property_snapshot: Json;
+          session_id: string;
+        };
+        Update: {
+          match_scope?: string | null;
+          ordinal?: number;
+          property_id?: string;
+          property_snapshot?: Json;
+          session_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "property_search_session_items_session_id_fkey";
+            columns: ["session_id"];
+            isOneToOne: false;
+            referencedRelation: "property_search_sessions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      property_search_sessions: {
+        Row: {
+          created_at: string;
+          expires_at: string;
+          filters: Json;
+          id: string;
+          owner_id: string;
+          total_count: number;
+          workspace_id: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          expires_at?: string;
+          filters: Json;
+          id?: string;
+          owner_id: string;
+          total_count?: number;
+          workspace_id?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          expires_at?: string;
+          filters?: Json;
+          id?: string;
+          owner_id?: string;
+          total_count?: number;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "property_search_sessions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },
         ];
@@ -4809,6 +5161,19 @@ export type Database = {
       };
     };
     Views: {
+      municipal_catalogue_release_gate: {
+        Row: {
+          active_category_count: number | null;
+          approved_category_count: number | null;
+          coverage_status: string | null;
+          current_evidence_category_count: number | null;
+          jurisdiction_id: string | null;
+          jurisdiction_name: string | null;
+          release_ready: boolean | null;
+          sources_current: boolean | null;
+        };
+        Relationships: [];
+      };
       permit_professional_review_queue: {
         Row: {
           assigned_to: string | null;
@@ -4891,7 +5256,22 @@ export type Database = {
             referencedRelation: "jurisdictions";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "permit_rules_jurisdiction_id_fkey";
+            columns: ["jurisdiction_id"];
+            isOneToOne: false;
+            referencedRelation: "municipal_catalogue_release_gate";
+            referencedColumns: ["jurisdiction_id"];
+          },
         ];
+      };
+      pilot_external_release_gate: {
+        Row: {
+          approved_count: number | null;
+          release_ready: boolean | null;
+          required_count: number | null;
+        };
+        Relationships: [];
       };
     };
     Functions: {
@@ -4946,6 +5326,14 @@ export type Database = {
         Returns: string;
       };
       canonical_property_region: { Args: { p_value: string }; Returns: string };
+      claim_document_deletions: {
+        Args: { p_limit?: number };
+        Returns: {
+          document_id: string;
+          request_id: string;
+          storage_path: string;
+        }[];
+      };
       claim_document_upload_cleanup: {
         Args: { p_limit?: number };
         Returns: {
@@ -4977,6 +5365,7 @@ export type Database = {
           priority: number;
           progress: number;
           project_id: string | null;
+          property_id: string | null;
           result_json: Json | null;
           scheduled_at: string;
           started_at: string | null;
@@ -4990,6 +5379,18 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      cleanup_property_search_sessions: {
+        Args: { p_limit?: number };
+        Returns: number;
+      };
+      complete_document_deletion: {
+        Args: { p_request_id: string };
+        Returns: boolean;
+      };
+      complete_document_upload_cleanup: {
+        Args: { p_upload_id: string };
+        Returns: boolean;
       };
       complete_document_verification: {
         Args: {
@@ -5024,6 +5425,21 @@ export type Database = {
           p_workspace_id: string;
         };
         Returns: string;
+      };
+      create_property_search_session: {
+        Args: {
+          p_include_archived?: boolean;
+          p_max_price?: number;
+          p_min_price?: number;
+          p_municipality?: string;
+          p_project_type?: string;
+          p_query?: string;
+          p_workspace_id?: string;
+        };
+        Returns: {
+          session_id: string;
+          total_count: number;
+        }[];
       };
       create_workspace: {
         Args: { p_name: string };
@@ -5099,6 +5515,10 @@ export type Database = {
           status: string;
         }[];
       };
+      fail_document_deletion: {
+        Args: { p_error: string; p_request_id: string };
+        Returns: boolean;
+      };
       finalize_document_upload: {
         Args: {
           p_actual_size_bytes: number;
@@ -5117,6 +5537,13 @@ export type Database = {
       generate_permit_catalogue_candidates: {
         Args: { p_parent_id: string; p_parent_kind: string };
         Returns: Json;
+      };
+      get_property_search_session_page: {
+        Args: { p_limit?: number; p_offset?: number; p_session_id: string };
+        Returns: {
+          match_scope: string;
+          property_snapshot: Json;
+        }[];
       };
       has_role: {
         Args: {
@@ -5292,6 +5719,21 @@ export type Database = {
           upload_id: string;
         }[];
       };
+      prepare_property_document_version_upload: {
+        Args: {
+          p_category?: string;
+          p_expected_content_type: string;
+          p_expected_size_bytes: number;
+          p_file_name: string;
+          p_property_id: string;
+          p_replaces_document_id: string;
+        };
+        Returns: {
+          expires_at: string;
+          object_path: string;
+          upload_id: string;
+        }[];
+      };
       property_access: { Args: { p_property_id: string }; Returns: boolean };
       property_identity_is_strong: {
         Args: {
@@ -5355,6 +5797,10 @@ export type Database = {
         Args: { p_job_id: string; p_reason: string; p_worker_id: string };
         Returns: boolean;
       };
+      request_document_deletion: {
+        Args: { p_document_id: string };
+        Returns: string;
+      };
       request_extraction_job_cancellation: {
         Args: { p_job_id: string };
         Returns: boolean;
@@ -5378,6 +5824,13 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      retry_property_document_upload: {
+        Args: { p_upload_id: string };
+        Returns: {
+          job_id: string;
+          status: string;
+        }[];
       };
       review_permit_extraction_candidate: {
         Args: { p_candidate_id: string; p_decision: string; p_reason: string };

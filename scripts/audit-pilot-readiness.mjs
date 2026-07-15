@@ -10,6 +10,8 @@ const requiredFiles = [
   "docs/pilot/unsupervised-pilot-script.md",
   "docs/pilot/pilot-deal-packages.md",
   "docs/pilot/pilot-observation-scorecard.md",
+  "docs/pilot/remediation-release-gate.md",
+  "docs/pilot/remediation-implementation-report.md",
   "docs/security/sso-scim.md",
   "docs/security/penetration-test-readiness.md",
   "docs/compliance/soc2/evidence-binder.md",
@@ -48,6 +50,12 @@ const requiredPhrases = {
     "npm run worker:extraction",
     "npm run audit:verify-chains",
     "npm run governance:enforce",
+  ],
+  "docs/pilot/remediation-release-gate.md": [
+    "pilot_external_signoffs",
+    "immutable, permission-filtered 30-minute result",
+    "An unfilled template is not approval evidence",
+    "npm run pilot:gate -- --full",
   ],
 };
 

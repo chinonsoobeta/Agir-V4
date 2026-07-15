@@ -30,6 +30,10 @@ const hasRlsDatabase = hasAny(["EPHEMERAL_DATABASE_URL", "SUPABASE_TEST_DATABASE
 const hasAuditChainDatabase = hasAny(["AUDIT_CHAIN_DATABASE_URL"]);
 const hasGovernanceDatabase = hasAny(["DATA_GOVERNANCE_DATABASE_URL"]);
 const hasTenantDbLoadDatabase = hasAny(["TENANT_DB_LOAD_DATABASE_URL"]);
+const hasPropertySearchLoadDatabase = hasAny([
+  "PROPERTY_SEARCH_LOAD_DATABASE_URL",
+  "TENANT_DB_LOAD_DATABASE_URL",
+]);
 const shouldRunE2e = process.env.PILOT_GATE_E2E === "1" || process.env.E2E_BASE_URL || full;
 
 const checks = [
@@ -74,6 +78,23 @@ const checks = [
     args: ["run", "pilot:audit"],
     required: true,
     scope: "pilot-blocking",
+  },
+  {
+    name: "qualified external and municipal approvals",
+    command: "npm",
+    args: ["run", "pilot:external-gates"],
+    required: true,
+    scope: "pilot-blocking external evidence",
+    armedEnv: [
+      "POSTGRES_URL",
+      "DATABASE_URL",
+      "SUPABASE_DB_URL",
+      "SUPABASE_DATABASE_URL",
+      "SUPABASE_POSTGRES_URL",
+      "POSTGRES_PRISMA_URL",
+      "POSTGRES_URL_NON_POOLING",
+    ],
+    skip: full ? null : "external approval evidence is enforced by --full",
   },
   {
     name: "typecheck",
@@ -171,6 +192,18 @@ const checks = [
     scope: "scale evidence",
     armedEnv: ["TENANT_DB_LOAD_DATABASE_URL"],
     skip: hasTenantDbLoadDatabase || full ? null : "no TENANT_DB_LOAD_DATABASE_URL",
+  },
+  {
+    name: "property search database load",
+    command: "npm",
+    args: ["run", "load:property-search-db"],
+    required: false,
+    scope: "scale evidence",
+    armedEnv: ["PROPERTY_SEARCH_LOAD_DATABASE_URL", "TENANT_DB_LOAD_DATABASE_URL"],
+    skip:
+      hasPropertySearchLoadDatabase || full
+        ? null
+        : "no PROPERTY_SEARCH_LOAD_DATABASE_URL or TENANT_DB_LOAD_DATABASE_URL",
   },
   {
     name: "browser E2E",
