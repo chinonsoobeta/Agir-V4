@@ -147,6 +147,21 @@ describe("WS1.1A equity draw timing", () => {
     expect(drawn[0]).toEqual({ t: 0, amount: -100_000 });
     expect(drawn.reduce((s, c) => s + c.amount, 0)).toBeCloseTo(-1_200_000, 6);
   });
+
+  test("equity draws conserve cents when a commitment cannot divide evenly by months", () => {
+    const draws = buildEquityContributions(100.01, 3);
+    expect(draws.map((draw) => draw.amount)).toEqual([-33.34, -33.34, -33.33]);
+    expect(draws.reduce((sum, draw) => sum + draw.amount, 0)).toBeCloseTo(-100.01, 9);
+
+    const waterfall = runWaterfall([...draws, { t: 1, amount: 120 }], {
+      lpEquityPct: 100,
+      gpEquityPct: 0,
+      preferredReturnPct: 8,
+      gpCatchUpPct: 0,
+      tiers: [{ hurdlePct: null, gpPct: 20 }],
+    });
+    expect(waterfall.lp.contributed).toBe(100.01);
+  });
 });
 
 describe("WS1.1B multi-tranche debt (mezzanine)", () => {

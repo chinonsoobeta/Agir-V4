@@ -64,4 +64,20 @@ describe("enterprise compliance readiness model", () => {
     expect(csv).toContain("quoted");
     expect(csv).toContain("value");
   });
+
+  test("renders formula-like audit text as literal spreadsheet text", () => {
+    const csv = renderAuditExportCsv([
+      {
+        id: "=cmd()",
+        created_at: "2026-06-29T12:00:00.000Z",
+        project_id: null,
+        user_id: null,
+        entity_type: "audit",
+        entity_id: null,
+        action: "@SUM(1,1)",
+      },
+    ]);
+    expect(csv).toContain("'=cmd()");
+    expect(csv).toContain("'@SUM(1,1)");
+  });
 });

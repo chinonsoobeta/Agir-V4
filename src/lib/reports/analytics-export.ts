@@ -27,7 +27,11 @@ const isNumeric = (t: ReportColumnType) =>
   t === "integer" || t === "number" || t === "currency" || t === "percent" || t === "multiple";
 
 function csvEscape(value: string): string {
-  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  // A CSV is a data export, not a formula authoring surface. Protect text that
+  // spreadsheet importers would otherwise evaluate, while leaving numeric
+  // metric cells raw so they retain their numeric type.
+  const safe = /^[\t\r\n ]*[=+\-@]/.test(value) ? `'${value}` : value;
+  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 /** Pure CSV. Numeric cells emit raw numbers; a title + "data as of" preface the table. */

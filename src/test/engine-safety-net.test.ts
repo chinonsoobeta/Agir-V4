@@ -114,6 +114,33 @@ describe("engine-input plausibility boundary", () => {
     expect(readiness.impossible).toContain("budget:hard:negative");
   });
 
+  test("non-finite budget and revenue values hard-block instead of entering the engine", () => {
+    const rows = approvedRows();
+    const hard = rows.budget.find((b) => b.category === "hard");
+    if (!hard) throw new Error("Missing hard-cost fixture row");
+    hard.amount = Number.POSITIVE_INFINITY;
+    rows.revenue[0]!.rent = Number.NaN;
+
+    const readiness = computeReadiness(rows);
+    expect(readiness.status).toBe("blocked");
+    expect(readiness.impossible).toContain("budget:hard:not_finite");
+    expect(readiness.impossible).toContain("revenue:1BR:rent_not_finite");
+  });
+
+  test("optional other budget lines fail closed once they are present", () => {
+    const nonFinite = approvedRows();
+    nonFinite.budget.push({
+      category: "other",
+      amount: Number.POSITIVE_INFINITY,
+      status: "approved",
+    });
+    expect(computeReadiness(nonFinite).impossible).toContain("budget:other:not_finite");
+
+    const conflicting = approvedRows();
+    conflicting.budget.push({ category: "other", amount: 250_000, status: "conflicting" });
+    expect(computeReadiness(conflicting).conflicting).toContain("budget:other");
+  });
+
   test("negative rent and unit count hard-block per component", () => {
     const rows = approvedRows();
     rows.revenue = [

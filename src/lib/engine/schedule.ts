@@ -253,12 +253,16 @@ export function applyMonthlySchedule(
   // horizon; modeling it anyway would swap the exit payoff to a loan that never
   // existed and date the refi cash flows after the sale. Ignore it loudly.
   const refiRaw = input.refinance && input.refinance.month > 0 ? input.refinance : null;
-  const refi = refiRaw && Math.round(refiRaw.month) < totalMonths ? refiRaw : null;
+  // The exit occurs in the final schedule period. A refinance in that same
+  // period cannot affect the deal before sale, so it is outside the modeled
+  // horizon just like a refinance after exit.
+  const exitMonth = totalMonths - 1;
+  const refi = refiRaw && Math.round(refiRaw.month) < exitMonth ? refiRaw : null;
   if (refiRaw && !refi) {
     warnings.push({
       key: "refinance_beyond_horizon",
-      message: `Refinance month ${Math.round(refiRaw.month)} falls at or after the exit (month ${totalMonths}); the refinance was ignored.`,
-      expected: totalMonths,
+      message: `Refinance month ${Math.round(refiRaw.month)} falls at or after the exit (month ${exitMonth}); the refinance was ignored.`,
+      expected: exitMonth,
       actual: Math.round(refiRaw.month),
     });
   }
@@ -474,7 +478,6 @@ export function applyMonthlySchedule(
   }
 
   // ---- Exit: sale + loan payoff (refi-aware) -------------------------------
-  const exitMonth = totalMonths - 1;
   const seniorPayoffAtExit =
     refi && newSenior
       ? loanBalanceAfterMonths(

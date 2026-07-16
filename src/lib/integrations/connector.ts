@@ -84,7 +84,15 @@ export function parseCsv(text: string): string[][] {
 }
 
 export function toCsv(rows: string[][]): string {
-  const esc = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  // CSV is commonly opened directly in spreadsheet software. Prefix values
+  // that Excel/Sheets can interpret as formulas, including values with leading
+  // whitespace, so imported deal text never becomes executable spreadsheet
+  // content. The apostrophe is an import marker, not displayed cell content.
+  const formulaSafe = (v: string) => (/^[\t\r\n ]*[=+\-@]/.test(v) ? `'${v}` : v);
+  const esc = (v: string) => {
+    const safe = formulaSafe(v);
+    return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+  };
   return rows.map((r) => r.map((c) => esc(c ?? "")).join(",")).join("\n");
 }
 

@@ -219,10 +219,36 @@ export function computeReadiness(rows: ProjectInputRows): Readiness {
   for (const category of REQUIRED_BUDGET_CATEGORIES) {
     const lines = rows.budget.filter((b) => b.category === category);
     if (lines.some((b) => b.status === "conflicting")) pushConflicting(`budget:${category}`);
+    else if (
+      lines.some(
+        (b) => ENGINE_READABLE_STATUSES.includes(b.status) && !Number.isFinite(Number(b.amount)),
+      )
+    )
+      pushImpossible(`budget:${category}:not_finite`);
     else if (lines.some((b) => ENGINE_READABLE_STATUSES.includes(b.status) && Number(b.amount) < 0))
       pushImpossible(`budget:${category}:negative`);
     else if (!lines.some((b) => ENGINE_READABLE_STATUSES.includes(b.status)))
       pushMissing(`budget:${category}`);
+  }
+
+  // "Other" is optional, but once it has entered the review queue it is still
+  // an engine input.  Never silently omit a conflicting, negative, or non-finite
+  // reserve line: doing so changes TDC without an analyst decision.
+  const otherBudgetLines = rows.budget.filter((b) => b.category === "other");
+  if (otherBudgetLines.some((b) => b.status === "conflicting")) {
+    pushConflicting("budget:other");
+  } else if (
+    otherBudgetLines.some(
+      (b) => ENGINE_READABLE_STATUSES.includes(b.status) && !Number.isFinite(Number(b.amount)),
+    )
+  ) {
+    pushImpossible("budget:other:not_finite");
+  } else if (
+    otherBudgetLines.some(
+      (b) => ENGINE_READABLE_STATUSES.includes(b.status) && Number(b.amount) < 0,
+    )
+  ) {
+    pushImpossible("budget:other:negative");
   }
 
   for (const key of REQUIRED_SCALAR_KEYS) {
@@ -265,6 +291,13 @@ export function computeReadiness(rows: ProjectInputRows): Readiness {
     ENGINE_READABLE_STATUSES.includes(r.status),
   );
   for (const r of engineReadableComponents) {
+    if (!Number.isFinite(Number(r.unit_count)))
+      pushImpossible(`revenue:${r.unit_type}:units_not_finite`);
+    if (!Number.isFinite(Number(r.rent))) pushImpossible(`revenue:${r.unit_type}:rent_not_finite`);
+    if (r.avg_sf != null && !Number.isFinite(Number(r.avg_sf)))
+      pushImpossible(`revenue:${r.unit_type}:sf_not_finite`);
+    if (r.occupancy_pct != null && !Number.isFinite(Number(r.occupancy_pct)))
+      pushImpossible(`revenue:${r.unit_type}:occupancy_not_finite`);
     if (Number(r.unit_count) < 0) pushImpossible(`revenue:${r.unit_type}:negative_units`);
     if (Number(r.rent) < 0) pushImpossible(`revenue:${r.unit_type}:negative_rent`);
     if (r.avg_sf != null && Number(r.avg_sf) < 0)

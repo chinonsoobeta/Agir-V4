@@ -74,7 +74,11 @@ export function trancheDebtServiceForYear(t: DebtTranche, year: number): number 
   const amort = annualDebtService(t.amount, t.ratePct, t.amortYears);
   const monthlyIo = io / 12;
   const monthlyAmort = amort / 12;
-  const ioMonthsInYear = Math.min(12, Math.max(0, t.ioMonths - (year - 1) * 12));
+  // IO is a monthly term. The balance and monthly-spine primitives both
+  // canonicalize a fractional input to whole months, so this annual roll-up
+  // must do the same to keep the two calculation paths reconciled.
+  const ioMonths = Math.max(0, Math.round(t.ioMonths));
+  const ioMonthsInYear = Math.min(12, Math.max(0, ioMonths - (year - 1) * 12));
   return ioMonthsInYear * monthlyIo + (12 - ioMonthsInYear) * monthlyAmort;
 }
 

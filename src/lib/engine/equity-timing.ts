@@ -15,6 +15,8 @@
 // The equity MULTIPLE is a money multiple and stays intentionally timing-free;
 // only the IRR vector (and the waterfall, which shares this vector) is affected.
 
+import { splitMoney } from "./decimal-money";
+
 export type EquityContribution = { t: number; amount: number };
 
 export type EquityDrawConvention = "upfront" | "straight_line";
@@ -31,8 +33,15 @@ export function buildEquityContributions(equity: number, drawMonths: number): Eq
   if (total <= 0 || months <= 1) {
     return [{ t: 0, amount: -total }];
   }
-  const perMonth = total / months;
-  return Array.from({ length: months }, (_, m) => ({ t: m / 12, amount: -perMonth }));
+  // A waterfall rounds each contribution to cents. Splitting the raw number
+  // (e.g. $100.01 / 3) creates fractional-cent flows that can round up three
+  // times, overstating committed capital by a cent. Allocate the cents once,
+  // with the existing largest-remainder rule, so timed draws conserve money.
+  const draws = splitMoney(
+    total,
+    Array.from({ length: months }, () => 1),
+  );
+  return draws.map((draw, m) => ({ t: m / 12, amount: -draw }));
 }
 
 // Human-readable description of the draw convention for formula_text.

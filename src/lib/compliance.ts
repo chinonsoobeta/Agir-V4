@@ -53,7 +53,11 @@ export type AuditExportEvent = {
 const csvCell = (value: unknown): string => {
   if (value == null) return "";
   const raw = typeof value === "string" ? value : JSON.stringify(value);
-  return `"${raw.replaceAll('"', '""')}"`;
+  // Quoting alone does not stop spreadsheet formula evaluation on CSV import.
+  // Preserve audit evidence as text even when an action or identifier begins
+  // with a formula sigil.
+  const safe = /^[\t\r\n ]*[=+\-@]/.test(raw) ? `'${raw}` : raw;
+  return `"${safe.replaceAll('"', '""')}"`;
 };
 
 export function renderAuditExportCsv(events: AuditExportEvent[]): string {

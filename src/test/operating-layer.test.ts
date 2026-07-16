@@ -413,6 +413,16 @@ describe("3C integrations: CSV reference connector round-trip", () => {
     expect(parseCsv(csv)[1]).toContain("Harbour Centre, Phase II");
   });
 
+  test("outbound text is neutralized before a spreadsheet can treat it as a formula", () => {
+    const csv = csvConnector.formatOutbound(
+      [{ ...records[0], name: '=HYPERLINK("https://attacker.invalid")', source: " @SUM(1,1)" }],
+      mapping,
+    );
+    const cells = parseCsv(csv)[1];
+    expect(cells).toContain('\'=HYPERLINK("https://attacker.invalid")');
+    expect(cells).toContain("' @SUM(1,1)");
+  });
+
   test("rows missing the mapped external id or name are reported, not imported", () => {
     const csv = "Deal ID,Opportunity Name\n,No ID Deal\nCRM-9,\nCRM-10,Good Deal";
     const { records: parsed, errors } = csvConnector.parseInbound(csv, {

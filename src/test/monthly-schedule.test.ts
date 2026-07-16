@@ -297,4 +297,30 @@ describe("WS1 (1C): refinance does not falsely break the year-1 reconciliation",
     const out = runUnderwriting(devDeal({ monthlyModel: true }));
     expect(out.schedule!.reconciliation.every((r) => r.withinTolerance)).toBe(true);
   });
+
+  test("a fractional IO term uses the same whole-month convention in annual and monthly debt service", () => {
+    const out = runUnderwriting(
+      devDeal({ constructionMonths: 0, leaseUpMonths: 0, ioMonths: 12.5, monthlyModel: true }),
+    );
+    const debtService = out.schedule!.reconciliation.find(
+      (row) => row.key === "debt_service_year1",
+    );
+    expect(debtService?.withinTolerance).toBe(true);
+  });
+
+  test("a refinance in the exit period is ignored instead of changing the sale payoff", () => {
+    const out = runUnderwriting(
+      devDeal({
+        constructionMonths: 0,
+        leaseUpMonths: 0,
+        holdYears: 5,
+        monthlyModel: true,
+        // Five hold years create periods 0..59; period 59 is the sale period.
+        refinance: { month: 59, newAmount: 22_000_000, ratePct: 5, amortYears: 30, ioMonths: 0 },
+      }),
+    );
+    expect(out.warnings.some((warning) => warning.key === "refinance_beyond_horizon")).toBe(true);
+    expect(out.values.refiNewLoanAmount).toBeUndefined();
+    expect(out.schedule!.nodes.some((node) => node.lineKey === "refi_proceeds")).toBe(false);
+  });
 });

@@ -276,6 +276,13 @@ describe("CSV export", () => {
     expect(csv).toContain("300"); // raw numeric capital, not "$300"
     expect(csv).not.toContain("$300");
   });
+
+  it("exports formula-like report text as literal text", () => {
+    const r = buildConcentration([deal({ id: "a", name: "=1+1", capital: 300, type: "office" })]);
+    const csv = reportToCsv(r, "=Report", "Jun 23, 2026");
+    expect(csv).toContain("'=Report");
+    expect(csv).toContain("'=1+1");
+  });
 });
 
 describe("deal comparison", () => {
