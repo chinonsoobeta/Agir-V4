@@ -47,6 +47,20 @@ export default defineConfig(({ mode }) => {
   if (!process.env.SUPABASE_ANON_KEY && SUPABASE_ANON_KEY) {
     process.env.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
   }
+  // Keep server-only AI configuration available to TanStack Start handlers in
+  // local development. These values are deliberately *not* added to `define`
+  // or a VITE_ variable, so they cannot be inlined into the browser bundle.
+  for (const key of [
+    "AGIR_AI_PROVIDER",
+    "AGIR_AI_PROVIDER_FALLBACK",
+    "AGIR_AI_MODEL",
+    "AGIR_ANTHROPIC_MODEL",
+    "AGIR_OPENAI_MODEL",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+  ]) {
+    if (!process.env[key] && env[key]) process.env[key] = env[key];
+  }
 
   return {
     define: {
