@@ -202,6 +202,82 @@ async function executeDocumentVerification(args: { jobId: string; workerId: stri
   };
 }
 
+/**
+ * Runs one already-claimed job. This is shared by the protected worker endpoint
+ * and the Vercel cron dispatcher so queue work never depends on a public
+ * self-request (which can be blocked by deployment protection).
+ */
+export async function executeQueuedExtractionJob(args: { jobId: string; workerId: string }) {
+  const { getServiceRoleClient } = await import("@/integrations/supabase/service-role.server");
+  const supabase = getServiceRoleClient("extraction_worker");
+  const assertLiveLease = async () => {
+    if (!(await stillOwnsLiveLease(supabase, args.jobId, args.workerId))) {
+      throw new Error("Worker no longer holds a live job lease.");
+    }
+  };
+  const { data: job, error } = await supabase
+    .from("extraction_jobs")
+    .select("kind, status, lease_owner")
+    .eq("id", args.jobId)
+    .maybeSingle();
+  if (error || !job || job.status !== "running" || job.lease_owner !== args.workerId)
+    return { status: "failed", error: "Job is not owned by this worker." };
+  try {
+    await assertLiveLease();
+  } catch {
+    return { status: "failed", error: "Job lease is no longer active." };
+  }
+  if (job.kind === "document_verification") {
+    try {
+      return await executeDocumentVerification(args);
+    } catch (error) {
+      return {
+        status: "failed",
+        error: "Document verification could not complete safely.",
+        code: verificationFailureCode(error),
+      };
+    }
+  }
+  if (!['document_analysis', 'permit_case_research', 'permit_project_research'].includes(job.kind))
+    return { status: "failed", error: "Job kind is not executable by this handler." };
+  const { data: fullJob } = await supabase
+    .from("extraction_jobs")
+    .select("owner_id,project_id,permit_case_id,document_id")
+    .eq("id", args.jobId)
+    .maybeSingle();
+  if (!fullJob?.document_id || !fullJob.owner_id)
+    return { status: "failed", error: "Document job requester is unavailable." };
+  const { data: doc } = await supabase.from("documents").select("*").eq("id", fullJob.document_id).maybeSingle();
+  if (!doc) return { status: "failed", error: "Document is unavailable." };
+  if (job.kind === "document_analysis" && !(await jobActorCanAnalyzeDocument(supabase, fullJob, doc)))
+    return { status: "failed", error: "The requesting user no longer has access to this document." };
+  if (job.kind === "permit_case_research" || job.kind === "permit_project_research") {
+    const scope = job.kind === "permit_case_research" ? "case" : "project";
+    if (!(await jobActorCanWriteParent(supabase, fullJob, scope)))
+      return { status: "failed", error: "The requesting user no longer has write access." };
+    const expectedParent = scope === "case" ? fullJob.permit_case_id : fullJob.project_id;
+    const documentParent = scope === "case" ? doc.permit_case_id : doc.project_id;
+    if (!expectedParent || documentParent !== expectedParent)
+      return { status: "failed", error: "Document and Permit research scope do not match." };
+    try {
+      const { executePermitDocumentResearch } = await import("@/lib/permit-research.server");
+      const result = await executePermitDocumentResearch(supabase, doc, scope, fullJob.owner_id, assertLiveLease);
+      await assertLiveLease();
+      return { status: "completed", message: "Permit document research completed.", result };
+    } catch (err) {
+      return { status: "failed", error: err instanceof Error ? err.message : "Permit document research failed." };
+    }
+  }
+  const { executeDocumentAnalysis, ExtractionFailure } = await import("@/lib/extraction-executor.server");
+  try {
+    const result = await executeDocumentAnalysis({ supabase, userId: fullJob.owner_id, assertCanPersist: assertLiveLease }, doc);
+    await assertLiveLease();
+    return { status: "completed", message: "Document analyzed by worker.", result };
+  } catch (err) {
+    return { status: "failed", error: err instanceof ExtractionFailure || err instanceof Error ? err.message : "Document analysis failed." };
+  }
+}
+
 export const Route = createFileRoute("/api/extraction/worker")({
   server: {
     handlers: {
@@ -225,128 +301,7 @@ export const Route = createFileRoute("/api/extraction/worker")({
             { status: 400 },
           );
 
-        const { getServiceRoleClient } =
-          await import("@/integrations/supabase/service-role.server");
-        const supabase = getServiceRoleClient("extraction_worker");
-        const assertLiveLease = async () => {
-          if (!(await stillOwnsLiveLease(supabase, jobId!, workerId!))) {
-            throw new Error("Worker no longer holds a live job lease.");
-          }
-        };
-        const { data: job, error } = await supabase
-          .from("extraction_jobs")
-          .select("kind, status, lease_owner")
-          .eq("id", jobId)
-          .maybeSingle();
-        if (error || !job || job.status !== "running" || job.lease_owner !== workerId)
-          return Response.json({ status: "failed", error: "Job is not owned by this worker." });
-        try {
-          await assertLiveLease();
-        } catch {
-          return Response.json({ status: "failed", error: "Job lease is no longer active." });
-        }
-        if (job.kind === "document_verification") {
-          try {
-            return Response.json(await executeDocumentVerification({ jobId, workerId }));
-          } catch (error) {
-            return Response.json({
-              status: "failed",
-              error: "Document verification could not complete safely.",
-              code: verificationFailureCode(error),
-            });
-          }
-        }
-        if (
-          !["document_analysis", "permit_case_research", "permit_project_research"].includes(
-            job.kind,
-          )
-        )
-          return Response.json({
-            status: "failed",
-            error: "Job kind is not executable by this handler.",
-          });
-        const { data: fullJob } = await supabase
-          .from("extraction_jobs")
-          .select("owner_id,project_id,permit_case_id,document_id")
-          .eq("id", jobId)
-          .maybeSingle();
-        if (!fullJob?.document_id || !fullJob.owner_id)
-          return Response.json({
-            status: "failed",
-            error: "Document job requester is unavailable.",
-          });
-        const { data: doc } = await supabase
-          .from("documents")
-          .select("*")
-          .eq("id", fullJob.document_id)
-          .maybeSingle();
-        if (!doc) return Response.json({ status: "failed", error: "Document is unavailable." });
-        if (
-          job.kind === "document_analysis" &&
-          !(await jobActorCanAnalyzeDocument(supabase, fullJob, doc))
-        )
-          return Response.json({
-            status: "failed",
-            error: "The requesting user no longer has access to this document.",
-          });
-        if (job.kind === "permit_case_research" || job.kind === "permit_project_research") {
-          const scope = job.kind === "permit_case_research" ? "case" : "project";
-          if (!(await jobActorCanWriteParent(supabase, fullJob, scope)))
-            return Response.json({
-              status: "failed",
-              error: "The requesting user no longer has write access.",
-            });
-          const expectedParent = scope === "case" ? fullJob.permit_case_id : fullJob.project_id;
-          const documentParent = scope === "case" ? doc.permit_case_id : doc.project_id;
-          if (!expectedParent || documentParent !== expectedParent)
-            return Response.json({
-              status: "failed",
-              error: "Document and Permit research scope do not match.",
-            });
-          try {
-            const { executePermitDocumentResearch } = await import("@/lib/permit-research.server");
-            const result = await executePermitDocumentResearch(
-              supabase,
-              doc,
-              scope,
-              fullJob.owner_id,
-              assertLiveLease,
-            );
-            await assertLiveLease();
-            return Response.json({
-              status: "completed",
-              message: "Permit document research completed.",
-              result,
-            });
-          } catch (err) {
-            return Response.json({
-              status: "failed",
-              error: err instanceof Error ? err.message : "Permit document research failed.",
-            });
-          }
-        }
-        const { executeDocumentAnalysis, ExtractionFailure } =
-          await import("@/lib/extraction-executor.server");
-        try {
-          const result = await executeDocumentAnalysis(
-            { supabase, userId: fullJob.owner_id, assertCanPersist: assertLiveLease },
-            doc,
-          );
-          await assertLiveLease();
-          return Response.json({
-            status: "completed",
-            message: "Document analyzed by worker.",
-            result,
-          });
-        } catch (err) {
-          return Response.json({
-            status: "failed",
-            error:
-              err instanceof ExtractionFailure || err instanceof Error
-                ? err.message
-                : "Document analysis failed.",
-          });
-        }
+        return Response.json(await executeQueuedExtractionJob({ jobId, workerId }));
       },
     },
   },

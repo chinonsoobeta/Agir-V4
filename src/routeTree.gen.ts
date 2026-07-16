@@ -39,6 +39,7 @@ import { Route as AuthenticatedPropertiesIndexRouteImport } from './routes/_auth
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects.index'
 import { Route as AuthenticatedPermitsIndexRouteImport } from './routes/_authenticated/permits.index'
 import { Route as ApiExtractionWorkerRouteImport } from './routes/api/extraction/worker'
+import { Route as ApiExtractionCronRouteImport } from './routes/api/extraction/cron'
 import { Route as AuthenticatedPropertiesPropertyIdRouteImport } from './routes/_authenticated/properties.$propertyId'
 import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects.$id'
 import { Route as AuthenticatedPermitsNewRouteImport } from './routes/_authenticated/permits.new'
@@ -202,6 +203,11 @@ const ApiExtractionWorkerRoute = ApiExtractionWorkerRouteImport.update({
   path: '/api/extraction/worker',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiExtractionCronRoute = ApiExtractionCronRouteImport.update({
+  id: '/api/extraction/cron',
+  path: '/api/extraction/cron',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedPropertiesPropertyIdRoute =
   AuthenticatedPropertiesPropertyIdRouteImport.update({
     id: '/$propertyId',
@@ -265,6 +271,7 @@ export interface FileRoutesByFullPath {
   '/permits/new': typeof AuthenticatedPermitsNewRoute
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/properties/$propertyId': typeof AuthenticatedPropertiesPropertyIdRoute
+  '/api/extraction/cron': typeof ApiExtractionCronRoute
   '/api/extraction/worker': typeof ApiExtractionWorkerRoute
   '/permits/': typeof AuthenticatedPermitsIndexRoute
   '/projects/': typeof AuthenticatedProjectsIndexRoute
@@ -299,6 +306,7 @@ export interface FileRoutesByTo {
   '/permits/new': typeof AuthenticatedPermitsNewRoute
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/properties/$propertyId': typeof AuthenticatedPropertiesPropertyIdRoute
+  '/api/extraction/cron': typeof ApiExtractionCronRoute
   '/api/extraction/worker': typeof ApiExtractionWorkerRoute
   '/permits': typeof AuthenticatedPermitsIndexRoute
   '/projects': typeof AuthenticatedProjectsIndexRoute
@@ -338,6 +346,7 @@ export interface FileRoutesById {
   '/_authenticated/permits/new': typeof AuthenticatedPermitsNewRoute
   '/_authenticated/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/_authenticated/properties/$propertyId': typeof AuthenticatedPropertiesPropertyIdRoute
+  '/api/extraction/cron': typeof ApiExtractionCronRoute
   '/api/extraction/worker': typeof ApiExtractionWorkerRoute
   '/_authenticated/permits/': typeof AuthenticatedPermitsIndexRoute
   '/_authenticated/projects/': typeof AuthenticatedProjectsIndexRoute
@@ -377,6 +386,7 @@ export interface FileRouteTypes {
     | '/permits/new'
     | '/projects/$id'
     | '/properties/$propertyId'
+    | '/api/extraction/cron'
     | '/api/extraction/worker'
     | '/permits/'
     | '/projects/'
@@ -411,6 +421,7 @@ export interface FileRouteTypes {
     | '/permits/new'
     | '/projects/$id'
     | '/properties/$propertyId'
+    | '/api/extraction/cron'
     | '/api/extraction/worker'
     | '/permits'
     | '/projects'
@@ -449,6 +460,7 @@ export interface FileRouteTypes {
     | '/_authenticated/permits/new'
     | '/_authenticated/projects/$id'
     | '/_authenticated/properties/$propertyId'
+    | '/api/extraction/cron'
     | '/api/extraction/worker'
     | '/_authenticated/permits/'
     | '/_authenticated/projects/'
@@ -464,6 +476,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   ApiChatRoute: typeof ApiChatRoute
   ApiHealthRoute: typeof ApiHealthRoute
+  ApiExtractionCronRoute: typeof ApiExtractionCronRoute
   ApiExtractionWorkerRoute: typeof ApiExtractionWorkerRoute
   ApiScimV2UsersRoute: typeof ApiScimV2UsersRouteWithChildren
 }
@@ -680,6 +693,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiExtractionWorkerRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/extraction/cron': {
+      id: '/api/extraction/cron'
+      path: '/api/extraction/cron'
+      fullPath: '/api/extraction/cron'
+      preLoaderRoute: typeof ApiExtractionCronRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/properties/$propertyId': {
       id: '/_authenticated/properties/$propertyId'
       path: '/$propertyId'
@@ -840,6 +860,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   ApiChatRoute: ApiChatRoute,
   ApiHealthRoute: ApiHealthRoute,
+  ApiExtractionCronRoute: ApiExtractionCronRoute,
   ApiExtractionWorkerRoute: ApiExtractionWorkerRoute,
   ApiScimV2UsersRoute: ApiScimV2UsersRouteWithChildren,
 }
