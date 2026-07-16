@@ -191,10 +191,26 @@ export function DocumentDropzone({
   function enqueue(files: FileList | File[]) {
     const arr = [...files];
     if (!arr.length) return;
-    // Filenames are not identities: a revised report commonly keeps its name.
-    // The worker's server-computed content hash is the authoritative duplicate
-    // check, while explicit replacement intent creates a version edge.
-    void existingNames;
+    const knownNames = new Set(existingNames.map((name) => name.trim().toLocaleLowerCase()));
+    const repeatedNames = [
+      ...new Set(
+        arr
+          .filter((file) => knownNames.has(file.name.trim().toLocaleLowerCase()))
+          .map((file) => file.name),
+      ),
+    ];
+    // Filenames are only an early warning. The worker's server-computed content
+    // hash remains authoritative, and explicit replacement intent is expected
+    // to reuse filenames.
+    if (
+      !replacesDocumentId &&
+      repeatedNames.length > 0 &&
+      !window.confirm(
+        `${repeatedNames.join(", ")} already ${repeatedNames.length === 1 ? "exists" : "exist"}. Upload anyway?`,
+      )
+    ) {
+      return;
+    }
     const items: { file: File; id: string }[] = [];
     for (const file of arr) {
       const id = `u${seq.current++}`;

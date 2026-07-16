@@ -105,8 +105,9 @@ describe("canonical property workspace backend contract", () => {
     expect(functions).toContain('"openstreetmap"');
     expect(functions).toContain('.is("property_id", null)');
     expect(functions).toContain("canonicalPermitMunicipality");
-    expect(functions).toContain('rpc("create_property_search_session"');
-    expect(functions).toContain('rpc("get_property_search_session_page"');
+    expect(functions).toContain('rpc("search_properties_page"');
+    expect(functions).not.toContain('rpc("create_property_search_session"');
+    expect(functions).not.toContain('rpc("get_property_search_session_page"');
     expect(functions).toContain('rpc("list_property_activity"');
   });
 

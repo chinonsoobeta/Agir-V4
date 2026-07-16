@@ -63,7 +63,7 @@ function PropertiesPage() {
       maxPrice,
       includeArchived,
     ],
-    initialPageParam: null as { session_id: string; offset: number } | null,
+    initialPageParam: null as { updated_at: string; id: string } | null,
     queryFn: ({ pageParam }) =>
       listProperties({
         data: {
@@ -74,8 +74,8 @@ function PropertiesPage() {
           min_price: optionalNumber(minPrice),
           max_price: optionalNumber(maxPrice),
           include_archived: includeArchived,
-          session_id: pageParam?.session_id ?? null,
-          offset: pageParam?.offset ?? 0,
+          before_updated_at: pageParam?.updated_at ?? null,
+          before_id: pageParam?.id ?? null,
           limit: 50,
         },
       }),
@@ -89,7 +89,6 @@ function PropertiesPage() {
     () => new Set(properties.map((property: any) => property.municipality).filter(Boolean)).size,
     [properties],
   );
-  const totalProperties = propertiesQ.data?.pages[0]?.total_count ?? properties.length;
   const activeFilters = [municipality, projectType, minPrice, maxPrice].filter(Boolean).length;
 
   const clearFilters = () => {
@@ -113,11 +112,7 @@ function PropertiesPage() {
       />
       <PageBody>
         <div className="grid gap-3 sm:grid-cols-3">
-          <SummaryCard
-            label="Properties"
-            value={`${properties.length} of ${totalProperties}`}
-            text
-          />
+          <SummaryCard label="Properties loaded" value={properties.length} />
           <SummaryCard label="Municipalities loaded" value={municipalities} />
           <SummaryCard label="Workspace" value={activeWorkspace?.name ?? "Personal"} text />
         </div>

@@ -8,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const reportOnly = process.argv.includes("--report-only");
+const deletionWorkerEnabled = process.env.DOCUMENT_DELETION_WORKER_ENABLED === "1";
 if (!url || !key) {
   console.error("[upload-cleanup] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.");
   process.exit(1);
@@ -56,13 +57,16 @@ for (const upload of uploads ?? []) {
   }
   removed++;
 }
-const deletionClaim = reportOnly
-  ? await supabase
-      .from("document_deletion_requests")
-      .select("id, document_id, storage_path")
-      .in("status", ["pending", "failed"])
-      .limit(100)
-  : await supabase.rpc("claim_document_deletions", { p_limit: 100 });
+const deletionClaim =
+  !reportOnly && !deletionWorkerEnabled
+    ? { data: [], error: null }
+    : reportOnly
+      ? await supabase
+          .from("document_deletion_requests")
+          .select("id, document_id, storage_path")
+          .in("status", ["pending", "retryable", "terminal_failed"])
+          .limit(100)
+      : await supabase.rpc("claim_document_deletions", { p_limit: 100 });
 if (deletionClaim.error)
   throw new Error(`Unable to claim document deletions: ${deletionClaim.error.message}`);
 let documentDeletions = 0;
@@ -74,10 +78,15 @@ for (const request of deletionClaim.data ?? []) {
   }
   const storageDeletion = await supabase.storage.from("documents").remove([request.storage_path]);
   if (storageDeletion.error) {
-    await supabase.rpc("fail_document_deletion", {
+    const transition = await supabase.rpc("fail_document_deletion", {
       p_request_id: requestId,
       p_error: storageDeletion.error.message,
     });
+    if (transition.error || transition.data !== true) {
+      console.error(
+        `[upload-cleanup] failed to record document deletion failure ${requestId}: ${transition.error?.message ?? "request was not claimed"}`,
+      );
+    }
     console.error(
       `[upload-cleanup] storage deletion failed for document request ${requestId}: ${storageDeletion.error.message}`,
     );
@@ -104,6 +113,7 @@ console.log(
     inspected: uploads?.length ?? 0,
     removed,
     document_deletions: documentDeletions,
+    document_deletion_worker: deletionWorkerEnabled ? "enabled" : "paused",
     failed,
     deferred,
     bounded: true,

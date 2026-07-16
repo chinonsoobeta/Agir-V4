@@ -560,19 +560,18 @@ describe("workspace RLS policies", () => {
         )
       ).rowCount,
     ).toBe(0);
-    for (let index = 0; index < 5; index += 1) {
-      await asUser(
+    await expectDenied(
+      asUser(
         ids.member,
         "SELECT * FROM public.create_property_search_session($1,'deep catalogue pagination',NULL,NULL,NULL,NULL,false)",
         [ids.workspace],
-      );
-    }
-    const boundedSessions = await asUser<{ count: number }>(
-      ids.member,
-      "SELECT count(*)::int AS count FROM public.property_search_sessions WHERE owner_id=$1",
-      [ids.member],
+      ),
     );
-    expect(boundedSessions.rows[0].count).toBe(5);
+    await expectDenied(
+      asUser(ids.member, "SELECT count(*) FROM public.property_search_sessions WHERE owner_id=$1", [
+        ids.member,
+      ]),
+    );
   });
 
   test("property search preserves old fragments and activity uses stable keyset pages", async () => {
@@ -630,6 +629,39 @@ describe("workspace RLS policies", () => {
     expect(second.rows.map((row) => row.id)).not.toContain(cursor.id);
   });
 
+  test("authenticated tenants cannot read internal pilot evidence tables", async () => {
+    for (const table of [
+      "municipal_source_snapshots",
+      "permit_review_assignments",
+      "pilot_external_signoffs",
+    ]) {
+      await expectDenied(asUser(ids.owner, `SELECT count(*) FROM public.${table}`));
+    }
+    await expectDenied(asUser(ids.owner, "SELECT * FROM public.municipal_catalogue_release_gate"));
+    await expectDenied(asUser(ids.owner, "SELECT * FROM public.pilot_external_release_gate"));
+  });
+
+  test("municipal snapshots allow equal transaction timestamps with explicit identity", async () => {
+    const source = await client.query<{ id: string }>(
+      "SELECT id FROM public.municipal_research_sources ORDER BY id LIMIT 1",
+    );
+    expect(source.rowCount).toBe(1);
+    const observedAt = new Date().toISOString();
+    const inserted = await client.query<{ id: string }>(
+      `INSERT INTO public.municipal_source_snapshots(
+         source_id,observed_at,observation_status,observation_key
+       ) VALUES
+         ($1,$2,'current',$3),
+         ($1,$2,'current',$4)
+       RETURNING id`,
+      [source.rows[0].id, observedAt, `rls-a-${observedAt}`, `rls-b-${observedAt}`],
+    );
+    expect(inserted.rowCount).toBe(2);
+    await client.query("DELETE FROM public.municipal_source_snapshots WHERE id=ANY($1::uuid[])", [
+      inserted.rows.map((row) => row.id),
+    ]);
+  });
+
   test("property search keyset pages traverse beyond the former 200-record window", async () => {
     await client.query(
       `INSERT INTO public.properties(owner_id,workspace_id,address_line_1,municipality,notes)
@@ -663,51 +695,16 @@ describe("workspace RLS policies", () => {
       new Set([...firstVisible, ...secondVisible, ...third.rows].map((row) => row.id)).size,
     ).toBe(205);
 
-    const session = await asUser<{ session_id: string; total_count: number }>(
-      ids.member,
-      "SELECT * FROM public.create_property_search_session($1,'deep catalogue pagination',NULL,NULL,NULL,NULL,false)",
-      [ids.workspace],
+    await client.query(
+      "DELETE FROM public.workspace_members WHERE workspace_id=$1 AND user_id=$2",
+      [ids.workspace, ids.member],
     );
-    expect(Number(session.rows[0].total_count)).toBe(205);
-    const snapshotFirst = await asUser<{ property_snapshot: { id: string; notes: string } }>(
+    const revokedPage = await asUser(
       ids.member,
-      "SELECT property_snapshot FROM public.get_property_search_session_page($1,0,100)",
-      [session.rows[0].session_id],
+      "SELECT id FROM public.search_properties_page($1,'deep catalogue pagination',NULL,NULL,NULL,NULL,false,$2,$3,100)",
+      [ids.workspace, cursor.updated_at, cursor.id],
     );
-    const snapshotSecond = await asUser<{ property_snapshot: { id: string; notes: string } }>(
-      ids.member,
-      "SELECT property_snapshot FROM public.get_property_search_session_page($1,100,100)",
-      [session.rows[0].session_id],
-    );
-    const snapshotThird = await asUser<{ property_snapshot: { id: string; notes: string } }>(
-      ids.member,
-      "SELECT property_snapshot FROM public.get_property_search_session_page($1,200,100)",
-      [session.rows[0].session_id],
-    );
-    const snapshotRows = [...snapshotFirst.rows, ...snapshotSecond.rows, ...snapshotThird.rows];
-    expect(snapshotRows).toHaveLength(205);
-    expect(new Set(snapshotRows.map((row) => row.property_snapshot.id)).size).toBe(205);
-    const notYetViewed = snapshotThird.rows[0].property_snapshot;
-    await asUser(
-      ids.member,
-      "UPDATE public.properties SET notes='changed after snapshot' WHERE id=$1",
-      [notYetViewed.id],
-    );
-    const stable = await asUser<{ property_snapshot: { notes: string } }>(
-      ids.member,
-      "SELECT property_snapshot FROM public.get_property_search_session_page($1,200,1)",
-      [session.rows[0].session_id],
-    );
-    expect(stable.rows[0].property_snapshot.notes).toBe("deep catalogue pagination");
-    expect(
-      (
-        await asUser(
-          ids.outsider,
-          "SELECT property_snapshot FROM public.get_property_search_session_page($1,0,10)",
-          [session.rows[0].session_id],
-        )
-      ).rowCount,
-    ).toBe(0);
+    expect(revokedPage.rowCount).toBe(0);
   });
 
   test("property tasks and record links enforce roles, scope, and canonical link history", async () => {
@@ -2286,6 +2283,13 @@ describe("workspace RLS policies", () => {
     );
     expect(Number(version.rows[0].version_number)).toBe(2);
     expect(version.rows[0].replaces_document_id).toBe(finalized.rows[0].document_id);
+    await expect(
+      asUser(
+        ids.member,
+        "SELECT * FROM public.prepare_property_document_version_upload($1,$2,'Fork.pdf','application/pdf',2048,'property_file')",
+        [ids.property, finalized.rows[0].document_id],
+      ),
+    ).rejects.toThrow(/only the latest document version/i);
 
     const failedUpload = await asUser<{ upload_id: string }>(
       ids.member,
@@ -2304,12 +2308,14 @@ describe("workspace RLS policies", () => {
     await client.query("UPDATE public.extraction_jobs SET status='failed' WHERE id=$1", [
       failedJob.rows[0].job_id,
     ]);
-    const retry = await asUser<{ status: string }>(
-      ids.member,
-      "SELECT status FROM public.retry_property_document_upload($1)",
-      [failedUpload.rows[0].upload_id],
-    );
+    const retry = await asUser<{
+      status: string;
+      retry_allowed: boolean;
+    }>(ids.member, "SELECT status, retry_allowed FROM public.retry_property_document_upload($1)", [
+      failedUpload.rows[0].upload_id,
+    ]);
     expect(retry.rows[0].status).toBe("verification_queued");
+    expect(retry.rows[0].retry_allowed).toBe(false);
 
     await expect(
       asUser(ids.member, "SELECT public.request_document_deletion($1)", [
@@ -2337,9 +2343,49 @@ describe("workspace RLS policies", () => {
     expect(claimedDeletion.rowCount).toBe(1);
     expect(
       (
+        await client.query<{ failed: boolean }>(
+          "SELECT public.fail_document_deletion($1,'injected storage failure') AS failed",
+          [deletionRequest.rows[0].request_id],
+        )
+      ).rows[0].failed,
+    ).toBe(true);
+    const retainedIntent = await asUser<{ deletion_requested_at: string | null }>(
+      ids.viewer,
+      "SELECT deletion_requested_at FROM public.documents WHERE id=$1",
+      [versioned.rows[0].document_id],
+    );
+    expect(retainedIntent.rows[0].deletion_requested_at).not.toBeNull();
+    expect(
+      (
+        await asUser<{ cancelled: boolean }>(
+          ids.member,
+          "SELECT public.cancel_document_deletion($1) AS cancelled",
+          [versioned.rows[0].document_id],
+        )
+      ).rows[0].cancelled,
+    ).toBe(true);
+    const cancelledIntent = await asUser<{ deletion_requested_at: string | null }>(
+      ids.viewer,
+      "SELECT deletion_requested_at FROM public.documents WHERE id=$1",
+      [versioned.rows[0].document_id],
+    );
+    expect(cancelledIntent.rows[0].deletion_requested_at).toBeNull();
+
+    const retriedDeletion = await asUser<{ request_id: string }>(
+      ids.member,
+      "SELECT public.request_document_deletion($1) AS request_id",
+      [versioned.rows[0].document_id],
+    );
+    const reclaimedDeletion = await client.query<{ request_id: string }>(
+      "SELECT request_id FROM public.claim_document_deletions(10) WHERE request_id=$1",
+      [retriedDeletion.rows[0].request_id],
+    );
+    expect(reclaimedDeletion.rowCount).toBe(1);
+    expect(
+      (
         await client.query<{ completed: boolean }>(
           "SELECT public.complete_document_deletion($1) AS completed",
-          [deletionRequest.rows[0].request_id],
+          [retriedDeletion.rows[0].request_id],
         )
       ).rows[0].completed,
     ).toBe(true);

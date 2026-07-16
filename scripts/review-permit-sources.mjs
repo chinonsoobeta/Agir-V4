@@ -32,6 +32,8 @@ if (!url || !key) throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY ar
 const write = process.argv.includes("--write");
 const supabase = createClient(url, key, { auth: { persistSession: false } });
 const now = new Date();
+const observationRunKey =
+  process.env.MUNICIPAL_OBSERVATION_KEY?.trim() || `source-monitor:${now.toISOString()}`;
 function canonicalSourceText(input) {
   return input
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
@@ -171,6 +173,7 @@ for (const source of municipalResult.data ?? []) {
   if (!write) continue;
   const snapshot = await supabase.from("municipal_source_snapshots").insert({
     source_id: source.id,
+    observation_key: observationRunKey,
     observation_status: status,
     http_status: observed?.httpStatus ?? null,
     content_hash: observed?.hash ?? null,

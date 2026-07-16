@@ -27,11 +27,11 @@ and signature timestamp.
    and future check date. A source change or outage blocks catalogue release.
 2. Every active permit category has an approved qualified-review assignment and
    a current verified rule record before its municipality can be `reviewed`.
-3. Property searches use an immutable, permission-filtered 30-minute result
-   session, expose an exact total, and page beyond 200 records without drift.
+3. Property searches use read-only keyset pagination, re-evaluate current access
+   on every page, and traverse beyond 200 records without an artificial cap.
 4. Property uploads persist status across refreshes. Collaborators can observe
-   their authorized property's worker state. Failed verification is bounded to
-   three reviewed retries.
+   their authorized property's worker state. Database-generated eligibility
+   bounds failed verification to three reviewed retries.
 5. File deletion fails closed if bytes cannot be removed. Replacement uploads
    retain the previous document and increment the explicit version edge.
 6. Property deletion marks unfinished objects for bounded cleanup. Cleanup is
@@ -65,11 +65,16 @@ npm run typecheck
 npm run build
 npm run bundle:audit
 npm run audit:migrations
+npm run pilot:remediation:audit
+npm run pilot:remediation:regression
 npm run load:tenant-db
 npm run load:property-search-db
 npm run restore:drill
+npm run pilot:gate
 npm run pilot:gate -- --full
 ```
 
-The full gate must fail when its database, browser, production recovery, or
-external evidence is unavailable. `--quick` is only a developer preflight.
+The default gate always enforces external approval evidence and fails when its
+database is unavailable. The full gate additionally requires browser and
+production-like evidence. `--quick` is only a developer preflight and is not
+release evidence.

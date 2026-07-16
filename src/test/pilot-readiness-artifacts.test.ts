@@ -11,6 +11,9 @@ describe("pilot readiness artifacts", () => {
     expect(pkg.scripts["smoke:fresh-env"]).toBe("node scripts/fresh-environment-smoke.mjs");
     expect(pkg.scripts["pilot:audit"]).toBe("node scripts/audit-pilot-readiness.mjs");
     expect(pkg.scripts["pilot:gate"]).toBe("node scripts/pilot-confidence-gate.mjs");
+    expect(pkg.scripts["pilot:remediation:regression"]).toContain(
+      "pilot-remediation-program.test.ts",
+    );
     expect(pkg.scripts["worker:extraction"]).toBe("node scripts/extraction-worker.mjs");
   });
 
@@ -66,6 +69,9 @@ describe("pilot readiness artifacts", () => {
     expect(gate).toContain("audit:migrations");
     expect(gate).toContain("backend:audit");
     expect(gate).toContain("pilot:audit");
+    expect(gate).toContain("pilot:remediation:audit");
+    expect(gate).toContain("pilot:remediation:regression");
+    expect(gate).toContain("pilot-blocking search scale and read-only evidence");
     expect(gate).toContain("test:rls");
     expect(gate).toContain("PILOT_GATE_E2E");
     expect(gate).toContain("[pilot-gate] summary");

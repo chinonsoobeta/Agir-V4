@@ -48,45 +48,69 @@ try {
      FROM generate_series(1,$2::integer) g`,
     [userId, count],
   );
+  const sessionItemsBefore = Number(
+    (
+      await client.query(
+        "SELECT count(*)::integer AS count FROM public.property_search_session_items",
+      )
+    ).rows[0]?.count ?? 0,
+  );
   await client.query("SET LOCAL ROLE authenticated");
   await client.query("SELECT set_config('request.jwt.claims',$1,true)", [
     JSON.stringify({ sub: userId, role: "authenticated" }),
   ]);
   const started = performance.now();
-  const created = await client.query(
-    "SELECT * FROM public.create_property_search_session(NULL,'property search load marker',NULL,NULL,NULL,NULL,false)",
-  );
+  let beforeUpdatedAt = null;
+  let beforeId = null;
+  let traversed = 0;
+  let pages = 0;
+  let firstPage = 0;
+  while (true) {
+    const page = await client.query(
+      `SELECT id,updated_at::text AS updated_at
+       FROM public.search_properties_page(
+         NULL,'property search load marker',NULL,NULL,NULL,NULL,false,$1,$2,200
+       )`,
+      [beforeUpdatedAt, beforeId],
+    );
+    pages += 1;
+    const visible = page.rows.slice(0, 200);
+    if (pages === 1) firstPage = visible.length;
+    traversed += visible.length;
+    if (page.rows.length <= 200) break;
+    const cursor = visible.at(-1);
+    beforeUpdatedAt = cursor.updated_at;
+    beforeId = cursor.id;
+  }
   const elapsedMs = performance.now() - started;
-  const sessionId = created.rows[0]?.session_id;
-  const total = Number(created.rows[0]?.total_count ?? 0);
-  const first = await client.query(
-    "SELECT property_snapshot->>'id' AS id FROM public.get_property_search_session_page($1,0,200)",
-    [sessionId],
+  await client.query("RESET ROLE");
+  const sessionItemsAfter = Number(
+    (
+      await client.query(
+        "SELECT count(*)::integer AS count FROM public.property_search_session_items",
+      )
+    ).rows[0]?.count ?? 0,
   );
-  const last = await client.query(
-    "SELECT property_snapshot->>'id' AS id FROM public.get_property_search_session_page($1,$2,200)",
-    [sessionId, Math.max(count - 200, 0)],
-  );
-  if (
-    total !== count ||
-    first.rowCount !== Math.min(200, count) ||
-    last.rowCount !== Math.min(200, count)
-  ) {
+  if (traversed !== count || firstPage !== Math.min(200, count)) {
+    throw new Error(`pagination mismatch traversed=${traversed} first=${firstPage}`);
+  }
+  if (sessionItemsAfter !== sessionItemsBefore) {
     throw new Error(
-      `pagination mismatch total=${total} first=${first.rowCount} last=${last.rowCount}`,
+      `read-only search wrote session items before=${sessionItemsBefore} after=${sessionItemsAfter}`,
     );
   }
   if (elapsedMs > budgetMs)
-    throw new Error(`session creation ${elapsedMs.toFixed(1)}ms exceeded ${budgetMs}ms`);
+    throw new Error(`keyset traversal ${elapsedMs.toFixed(1)}ms exceeded ${budgetMs}ms`);
   console.log(
     JSON.stringify({
       component: "property-search-load",
       status: "passed",
       properties: count,
-      session_creation_ms: Number(elapsedMs.toFixed(1)),
+      keyset_traversal_ms: Number(elapsedMs.toFixed(1)),
       budget_ms: budgetMs,
-      first_page: first.rowCount,
-      last_page: last.rowCount,
+      pages,
+      first_page: firstPage,
+      session_items_written: sessionItemsAfter - sessionItemsBefore,
       transaction: "rolled_back",
     }),
   );

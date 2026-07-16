@@ -12,6 +12,8 @@ const requiredFiles = [
   "docs/pilot/pilot-observation-scorecard.md",
   "docs/pilot/remediation-release-gate.md",
   "docs/pilot/remediation-implementation-report.md",
+  "docs/pilot/phases-3-5-rollout-runbook.md",
+  "docs/architecture/property-search-pagination.md",
   "docs/security/sso-scim.md",
   "docs/security/penetration-test-readiness.md",
   "docs/compliance/soc2/evidence-binder.md",
@@ -53,9 +55,20 @@ const requiredPhrases = {
   ],
   "docs/pilot/remediation-release-gate.md": [
     "pilot_external_signoffs",
-    "immutable, permission-filtered 30-minute result",
+    "read-only keyset pagination",
     "An unfilled template is not approval evidence",
+    "npm run pilot:gate",
     "npm run pilot:gate -- --full",
+  ],
+  "docs/architecture/property-search-pagination.md": [
+    "read-only keyset pagination",
+    "Current authorization wins",
+    "does not present",
+  ],
+  "docs/pilot/phases-3-5-rollout-runbook.md": [
+    "DOCUMENT_DELETION_WORKER_ENABLED",
+    "Stop conditions",
+    "forward-only",
   ],
 };
 

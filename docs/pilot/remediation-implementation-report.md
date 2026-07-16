@@ -4,16 +4,33 @@ Date: 2026-07-14
 
 ## Outcome
 
-All seven remediation phases now have implemented product, database, monitoring,
-testing, and release-gate infrastructure. Automated engineering gates pass. The
-strict pilot release remains blocked, as designed, because qualified external
-approvals and a production-like restored backup target have not been supplied.
+The original implementation result is superseded by the Phase 0–2 corrective
+program. The pilot remains blocked until the containment inventory is clear,
+the forward-only security and lifecycle migrations pass staging, and qualified
+external approvals are supplied.
+
+## Phase 3–5 completion
+
+- Municipal snapshots use an explicit optional observation key; multiple
+  observations in one transaction no longer collide on `now()`.
+- Upload retry eligibility is a generated database field with a canonical
+  three-retry constraint. Clients display the database decision.
+- Property document queries are scoped by property/workspace cache identity,
+  extraction jobs are indexed once per render, and duplicate filenames produce
+  a pre-upload warning while server hashes remain authoritative.
+- The property and document remediation paths use generated database types
+  without `as any` or `as never` RPC escapes.
+- The accepted search ADR records live, read-only keyset semantics, access
+  revocation behavior, count semantics, and the threshold for reconsidering
+  snapshots.
+- The pilot gate requires remediation-state audit, focused regression coverage,
+  RLS, and the large read-only property-search traversal before release.
 
 ## Implemented evidence
 
 - A clean local database applied all 65 migrations from zero.
 - Generated Supabase types match the clean schema.
-- The live RLS suite passes 35 tests, including immutable 205-record traversal,
+- The live RLS suite covers access-safe 205-record keyset traversal,
   tenant isolation, property-job visibility, cross-collaborator deduplication,
   retained document versions, bounded retry, and two-phase deletion.
 - The unit/integration suite passes 96 files and 784 tests.
@@ -21,13 +38,12 @@ approvals and a production-like restored backup target have not been supplied.
   passes WCAG, keyboard, reduced-motion, and horizontal-overflow checks.
 - Desktop and mobile route smoke coverage passes for Properties and the existing
   product routes.
-- A transactional 10,000-property search exercise created the immutable result
-  session in 421.2 ms, returned exact first and last pages, and rolled back all
-  fixtures.
+- The property-search load exercise now traverses the complete fixture with
+  read-only keyset pages and rolls back all fixtures.
 - Production client and SSR builds, typecheck, lint, formatting, bundle limits,
   migration safety, backend audits, and the quick pilot preflight pass.
-- Upload cleanup, document-deletion cleanup, property-search cleanup, and
-  document-lifecycle recovery operators complete successfully against local.
+- Finalized-document deletion is paused by default until the Phase 0 inventory
+  and Phase 2 failure-injection checks pass.
 
 ## Source-monitor observation
 

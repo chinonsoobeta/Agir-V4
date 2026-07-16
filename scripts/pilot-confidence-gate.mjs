@@ -26,6 +26,16 @@ const hasDatabaseUrl = hasAny([
   "POSTGRES_PRISMA_URL",
   "POSTGRES_URL_NON_POOLING",
 ]);
+const hasRemediationDatabase = hasAny([
+  "PILOT_REMEDIATION_DATABASE_URL",
+  "POSTGRES_URL",
+  "DATABASE_URL",
+  "SUPABASE_DB_URL",
+  "SUPABASE_DATABASE_URL",
+  "SUPABASE_POSTGRES_URL",
+  "POSTGRES_PRISMA_URL",
+  "POSTGRES_URL_NON_POOLING",
+]);
 const hasRlsDatabase = hasAny(["EPHEMERAL_DATABASE_URL", "SUPABASE_TEST_DATABASE_URL"]);
 const hasAuditChainDatabase = hasAny(["AUDIT_CHAIN_DATABASE_URL"]);
 const hasGovernanceDatabase = hasAny(["DATA_GOVERNANCE_DATABASE_URL"]);
@@ -80,6 +90,24 @@ const checks = [
     scope: "pilot-blocking",
   },
   {
+    name: "pilot remediation state",
+    command: "npm",
+    args: ["run", "pilot:remediation:audit"],
+    required: true,
+    scope: "pilot-blocking data integrity",
+    armedEnv: [
+      "PILOT_REMEDIATION_DATABASE_URL",
+      "POSTGRES_URL",
+      "DATABASE_URL",
+      "SUPABASE_DB_URL",
+      "SUPABASE_DATABASE_URL",
+      "SUPABASE_POSTGRES_URL",
+      "POSTGRES_PRISMA_URL",
+      "POSTGRES_URL_NON_POOLING",
+    ],
+    skip: hasRemediationDatabase ? null : "no database URL configured for remediation audit",
+  },
+  {
     name: "qualified external and municipal approvals",
     command: "npm",
     args: ["run", "pilot:external-gates"],
@@ -94,12 +122,18 @@ const checks = [
       "POSTGRES_PRISMA_URL",
       "POSTGRES_URL_NON_POOLING",
     ],
-    skip: full ? null : "external approval evidence is enforced by --full",
   },
   {
     name: "typecheck",
     command: "npm",
     args: ["run", "typecheck"],
+    required: true,
+    scope: "pilot-blocking",
+  },
+  {
+    name: "pilot remediation regressions",
+    command: "npm",
+    args: ["run", "pilot:remediation:regression"],
     required: true,
     scope: "pilot-blocking",
   },
@@ -197,8 +231,8 @@ const checks = [
     name: "property search database load",
     command: "npm",
     args: ["run", "load:property-search-db"],
-    required: false,
-    scope: "scale evidence",
+    required: true,
+    scope: "pilot-blocking search scale and read-only evidence",
     armedEnv: ["PROPERTY_SEARCH_LOAD_DATABASE_URL", "TENANT_DB_LOAD_DATABASE_URL"],
     skip:
       hasPropertySearchLoadDatabase || full

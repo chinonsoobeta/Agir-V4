@@ -10,12 +10,10 @@ export type PropertyTaskRow = Database["public"]["Tables"]["property_tasks"]["Ro
 export type PropertyActivityRow = Database["public"]["Tables"]["property_activity_events"]["Row"];
 export type PropertyMatchScope = "current" | "historical" | "current_and_historical";
 export type PropertySearchRow = PropertyRow & { match_scope?: PropertyMatchScope };
-export type PropertySearchCursor = { session_id: string; offset: number };
+export type PropertySearchCursor = { updated_at: string; id: string };
 export type PropertySearchPage = {
   items: PropertySearchRow[];
   next_cursor: PropertySearchCursor | null;
-  total_count: number;
-  session_id: string;
 };
 export type PropertyContactRow = Database["public"]["Tables"]["property_contacts"]["Row"] & {
   contact: Database["public"]["Tables"]["relationship_contacts"]["Row"];
@@ -41,26 +39,36 @@ export type PropertyActivityPage = {
   next_cursor: PropertyActivityCursor | null;
 };
 
-const listPropertiesSchema = z.object({
-  workspace_id: z.string().uuid().nullable().optional(),
-  query: z
-    .string()
-    .trim()
-    .max(300)
-    .refine(
-      (query) => query.split(/\s+/).filter(Boolean).length <= 20,
-      "Search supports up to 20 fragments at a time.",
-    )
-    .optional(),
-  municipality: z.string().trim().max(200).optional(),
-  project_type: z.string().trim().max(100).optional(),
-  min_price: z.number().nonnegative().optional(),
-  max_price: z.number().nonnegative().optional(),
-  include_archived: z.boolean().default(false),
-  session_id: z.string().uuid().nullable().optional(),
-  offset: z.number().int().min(0).max(100_000).default(0),
-  limit: z.number().int().min(1).max(100).default(50),
-});
+const listPropertiesSchema = z
+  .object({
+    workspace_id: z.string().uuid().nullable().optional(),
+    query: z
+      .string()
+      .trim()
+      .max(300)
+      .refine(
+        (query) => query.split(/\s+/).filter(Boolean).length <= 20,
+        "Search supports up to 20 fragments at a time.",
+      )
+      .optional(),
+    municipality: z.string().trim().max(200).optional(),
+    project_type: z.string().trim().max(100).optional(),
+    min_price: z.number().nonnegative().optional(),
+    max_price: z.number().nonnegative().optional(),
+    include_archived: z.boolean().default(false),
+    before_updated_at: z.string().datetime().nullable().optional(),
+    before_id: z.string().uuid().nullable().optional(),
+    limit: z.number().int().min(1).max(100).default(50),
+  })
+  .superRefine((value, context) => {
+    if (Boolean(value.before_updated_at) !== Boolean(value.before_id)) {
+      context.addIssue({
+        code: "custom",
+        path: [value.before_updated_at ? "before_id" : "before_updated_at"],
+        message: "Property pagination requires both cursor fields.",
+      });
+    }
+  });
 
 export type ListPropertiesInput = z.input<typeof listPropertiesSchema>;
 
@@ -152,59 +160,51 @@ export const listProperties = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => listPropertiesSchema.parse(input ?? {}))
   .handler(async ({ data, context }): Promise<PropertySearchPage> => {
-    const db = context.supabase as any;
-    let sessionId = data.session_id ?? null;
-    let totalCount = 0;
-    if (!sessionId) {
-      const created = await db.rpc("create_property_search_session", {
-        p_workspace_id: data.workspace_id ?? null,
-        p_query: data.query || null,
-        p_municipality: data.municipality || null,
-        p_project_type: data.project_type || null,
-        p_min_price: data.min_price ?? null,
-        p_max_price: data.max_price ?? null,
-        p_include_archived: data.include_archived,
-      });
-      if (created.error) throw new Error(created.error.message);
-      sessionId = created.data?.[0]?.session_id ?? null;
-      totalCount = Number(created.data?.[0]?.total_count ?? 0);
-      if (!sessionId) throw new Error("Property search session was not created.");
-    } else {
-      const session = await db
-        .from("property_search_sessions")
-        .select("total_count")
-        .eq("id", sessionId)
-        .single();
-      if (session.error) throw new Error("This search expired. Refresh the results and try again.");
-      totalCount = Number(session.data.total_count ?? 0);
-    }
-    const page = await db.rpc("get_property_search_session_page", {
-      p_session_id: sessionId,
-      p_offset: data.offset,
+    const result = await context.supabase.rpc("search_properties_page", {
+      p_workspace_id: data.workspace_id ?? undefined,
+      p_query: data.query || undefined,
+      p_municipality: data.municipality || undefined,
+      p_project_type: data.project_type || undefined,
+      p_min_price: data.min_price ?? undefined,
+      p_max_price: data.max_price ?? undefined,
+      p_include_archived: data.include_archived,
+      p_before_updated_at: data.before_updated_at ?? undefined,
+      p_before_id: data.before_id ?? undefined,
       p_limit: data.limit,
     });
-    if (page.error) throw new Error(page.error.message);
-    const items = (page.data ?? []).map((row: any) => ({
-      ...(row.property_snapshot as PropertyRow),
-      ...(row.match_scope ? { match_scope: row.match_scope as PropertyMatchScope } : {}),
-    }));
-    const nextOffset = data.offset + items.length;
-    return {
-      items,
-      total_count: totalCount,
-      session_id: sessionId,
-      next_cursor: nextOffset < totalCount ? { session_id: sessionId, offset: nextOffset } : null,
-    };
+    if (result.error) throw new Error(result.error.message);
+    const rows = (result.data ?? []) as PropertyRow[];
+    const hasMore = rows.length > data.limit;
+    const properties = rows.slice(0, data.limit);
+    const last = properties.at(-1);
+    const next_cursor = hasMore && last ? { updated_at: last.updated_at, id: last.id } : null;
+    if (!data.query || !properties.length) return { items: properties, next_cursor };
+
+    const matches = await context.supabase.rpc("property_search_match_scopes", {
+      p_property_ids: properties.map((property) => property.id),
+      p_query: data.query,
+    });
+    if (matches.error) throw new Error(matches.error.message);
+
+    const scopes = new Map<string, PropertyMatchScope>();
+    for (const match of matches.data ?? []) {
+      scopes.set(match.property_id, match.match_scope as PropertyMatchScope);
+    }
+    const items = properties.map((property) => {
+      const match_scope = scopes.get(property.id);
+      return match_scope ? { ...property, match_scope } : property;
+    });
+    return { items, next_cursor };
   });
 
 export const listPropertyActivity = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => propertyActivityPageSchema.parse(input))
   .handler(async ({ data, context }): Promise<PropertyActivityPage> => {
-    const result = await (context.supabase as any).rpc("list_property_activity", {
+    const result = await context.supabase.rpc("list_property_activity", {
       p_property_id: data.property_id,
-      p_before_created_at: data.before_created_at ?? null,
-      p_before_id: data.before_id ?? null,
+      p_before_created_at: data.before_created_at ?? undefined,
+      p_before_id: data.before_id ?? undefined,
       p_limit: data.limit,
     });
     if (result.error) throw new Error(result.error.message);
@@ -226,7 +226,7 @@ export const getProperty = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => propertyIdSchema.parse(input))
   .handler(async ({ data, context }): Promise<PropertyDetail> => {
-    const db = context.supabase as any;
+    const db = context.supabase;
     const propertyResult = await db.from("properties").select("*").eq("id", data.id).single();
     if (propertyResult.error) throw new Error(propertyResult.error.message);
 
@@ -260,8 +260,8 @@ export const getProperty = createServerFn({ method: "GET" })
           .order("created_at", { ascending: false }),
         db.rpc("list_property_activity", {
           p_property_id: data.id,
-          p_before_created_at: null,
-          p_before_id: null,
+          p_before_created_at: undefined,
+          p_before_id: undefined,
           p_limit: 50,
         }),
       ]);
@@ -297,8 +297,8 @@ export const saveProperty = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => savePropertySchema.parse(input))
   .handler(async ({ data, context }): Promise<PropertyRow> => {
-    const db = context.supabase as any;
-    const { id, ...values } = data;
+    const db = context.supabase;
+    const { id, zoning_evidence, ...values } = data;
     const payload = {
       ...values,
       country_code: values.country_code.toUpperCase(),
@@ -306,9 +306,7 @@ export const saveProperty = createServerFn({ method: "POST" })
       ...(values.municipality !== undefined
         ? { municipality: canonicalPermitMunicipality(values.municipality) }
         : {}),
-      ...(values.zoning_evidence !== undefined
-        ? { zoning_evidence: values.zoning_evidence as Json }
-        : {}),
+      ...(zoning_evidence !== undefined ? { zoning_evidence: zoning_evidence as Json } : {}),
     };
 
     const result = id
@@ -329,7 +327,7 @@ export const archiveProperty = createServerFn({ method: "POST" })
     z.object({ id: z.string().uuid(), reason: z.string().trim().min(1).max(1000) }).parse(input),
   )
   .handler(async ({ data, context }): Promise<PropertyRow> => {
-    const result = await (context.supabase as any)
+    const result = await context.supabase
       .from("properties")
       .update({
         status: "archived",
@@ -348,7 +346,7 @@ export const savePropertyTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => savePropertyTaskSchema.parse(input))
   .handler(async ({ data, context }): Promise<PropertyTaskRow> => {
-    const db = context.supabase as any;
+    const db = context.supabase;
     const { id, is_next_action, ...values } = data;
     const result = id
       ? await db.from("property_tasks").update(values).eq("id", id).select().single()
@@ -388,7 +386,7 @@ export const transferPersonalProperty = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }): Promise<{ property_id: string }> => {
-    const result = await (context.supabase as any).rpc("transfer_personal_property_to_workspace", {
+    const result = await context.supabase.rpc("transfer_personal_property_to_workspace", {
       p_property_id: data.property_id,
       p_workspace_id: data.workspace_id,
       p_reason: data.reason,
@@ -401,7 +399,7 @@ export const listPropertyTasks = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => z.object({ property_id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }): Promise<PropertyTaskRow[]> => {
-    const result = await (context.supabase as any)
+    const result = await context.supabase
       .from("property_tasks")
       .select("*")
       .eq("property_id", data.property_id)
@@ -424,7 +422,7 @@ export const addPropertyLink = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }): Promise<PropertyUrlRow> => {
-    const result = await (context.supabase as any)
+    const result = await context.supabase
       .from("property_urls")
       .insert({ ...data, created_by: context.userId })
       .select()
@@ -448,7 +446,7 @@ export const linkPropertyContact = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const result = await (context.supabase as any)
+    const result = await context.supabase
       .from("property_contacts")
       .insert({ ...data, created_by: context.userId })
       .select("*, contact:relationship_contacts(*)")
@@ -463,7 +461,7 @@ export const linkPropertyProject = createServerFn({ method: "POST" })
     z.object({ property_id: z.string().uuid(), project_id: z.string().uuid() }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    const result = await (context.supabase as any)
+    const result = await context.supabase
       .from("projects")
       .update({ property_id: data.property_id })
       .eq("id", data.project_id)
@@ -485,7 +483,7 @@ export const linkPropertyPermitCase = createServerFn({ method: "POST" })
     z.object({ property_id: z.string().uuid(), permit_case_id: z.string().uuid() }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    const result = await (context.supabase as any)
+    const result = await context.supabase
       .from("permit_cases")
       .update({ property_id: data.property_id })
       .eq("id", data.permit_case_id)
@@ -507,7 +505,7 @@ export const linkPropertyDocument = createServerFn({ method: "POST" })
     z.object({ property_id: z.string().uuid(), document_id: z.string().uuid() }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    const result = await (context.supabase as any)
+    const result = await context.supabase
       .from("documents")
       .update({ property_id: data.property_id })
       .eq("id", data.document_id)

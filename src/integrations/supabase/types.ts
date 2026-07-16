@@ -920,40 +920,67 @@ export type Database = {
       };
       document_deletion_requests: {
         Row: {
+          attempt_count: number;
+          cancelled_at: string | null;
           claimed_at: string | null;
           completed_at: string | null;
           document_id: string | null;
           error_detail: string | null;
           id: string;
+          last_attempt_at: string | null;
+          max_attempts: number;
+          next_attempt_at: string;
+          permit_case_id: string | null;
+          project_id: string | null;
           property_id: string | null;
           requested_at: string;
           requested_by: string | null;
           status: string;
+          storage_deleted_at: string | null;
           storage_path: string;
+          workspace_id: string | null;
         };
         Insert: {
+          attempt_count?: number;
+          cancelled_at?: string | null;
           claimed_at?: string | null;
           completed_at?: string | null;
           document_id?: string | null;
           error_detail?: string | null;
           id?: string;
+          last_attempt_at?: string | null;
+          max_attempts?: number;
+          next_attempt_at?: string;
+          permit_case_id?: string | null;
+          project_id?: string | null;
           property_id?: string | null;
           requested_at?: string;
           requested_by?: string | null;
           status?: string;
+          storage_deleted_at?: string | null;
           storage_path: string;
+          workspace_id?: string | null;
         };
         Update: {
+          attempt_count?: number;
+          cancelled_at?: string | null;
           claimed_at?: string | null;
           completed_at?: string | null;
           document_id?: string | null;
           error_detail?: string | null;
           id?: string;
+          last_attempt_at?: string | null;
+          max_attempts?: number;
+          next_attempt_at?: string;
+          permit_case_id?: string | null;
+          project_id?: string | null;
           property_id?: string | null;
           requested_at?: string;
           requested_by?: string | null;
           status?: string;
+          storage_deleted_at?: string | null;
           storage_path?: string;
+          workspace_id?: string | null;
         };
         Relationships: [
           {
@@ -964,10 +991,31 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "document_deletion_requests_permit_case_id_fkey";
+            columns: ["permit_case_id"];
+            isOneToOne: false;
+            referencedRelation: "permit_cases";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "document_deletion_requests_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "document_deletion_requests_property_id_fkey";
             columns: ["property_id"];
             isOneToOne: false;
             referencedRelation: "properties";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "document_deletion_requests_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },
         ];
@@ -1941,6 +1989,7 @@ export type Database = {
           http_status: number | null;
           id: string;
           last_modified: string | null;
+          observation_key: string | null;
           observation_status: string;
           observed_at: string;
           source_id: string;
@@ -1953,6 +2002,7 @@ export type Database = {
           http_status?: number | null;
           id?: string;
           last_modified?: string | null;
+          observation_key?: string | null;
           observation_status: string;
           observed_at?: string;
           source_id: string;
@@ -1965,6 +2015,7 @@ export type Database = {
           http_status?: number | null;
           id?: string;
           last_modified?: string | null;
+          observation_key?: string | null;
           observation_status?: string;
           observed_at?: string;
           source_id?: string;
@@ -2081,6 +2132,7 @@ export type Database = {
           project_id: string | null;
           property_id: string | null;
           replaces_document_id: string | null;
+          retry_allowed: boolean | null;
           retry_count: number;
           status: string;
           updated_at: string;
@@ -2105,6 +2157,7 @@ export type Database = {
           project_id?: string | null;
           property_id?: string | null;
           replaces_document_id?: string | null;
+          retry_allowed?: boolean | null;
           retry_count?: number;
           status?: string;
           updated_at?: string;
@@ -2129,6 +2182,7 @@ export type Database = {
           project_id?: string | null;
           property_id?: string | null;
           replaces_document_id?: string | null;
+          retry_allowed?: boolean | null;
           retry_count?: number;
           status?: string;
           updated_at?: string;
@@ -3710,7 +3764,7 @@ export type Database = {
           latitude?: number | null;
           longitude?: number | null;
           municipality?: string | null;
-          normalized_address: string;
+          normalized_address?: string;
           notes?: string | null;
           owner_id?: string | null;
           owner_name?: string | null;
@@ -5172,6 +5226,26 @@ export type Database = {
           release_ready: boolean | null;
           sources_current: boolean | null;
         };
+        Insert: {
+          active_category_count?: never;
+          approved_category_count?: never;
+          coverage_status?: string | null;
+          current_evidence_category_count?: never;
+          jurisdiction_id?: string | null;
+          jurisdiction_name?: string | null;
+          release_ready?: never;
+          sources_current?: never;
+        };
+        Update: {
+          active_category_count?: never;
+          approved_category_count?: never;
+          coverage_status?: string | null;
+          current_evidence_category_count?: never;
+          jurisdiction_id?: string | null;
+          jurisdiction_name?: string | null;
+          release_ready?: never;
+          sources_current?: never;
+        };
         Relationships: [];
       };
       permit_professional_review_queue: {
@@ -5320,6 +5394,10 @@ export type Database = {
           p_target_workspace_id: string;
         };
         Returns: undefined;
+      };
+      cancel_document_deletion: {
+        Args: { p_document_id: string };
+        Returns: boolean;
       };
       canonical_property_municipality: {
         Args: { p_value: string };
@@ -5829,6 +5907,7 @@ export type Database = {
         Args: { p_upload_id: string };
         Returns: {
           job_id: string;
+          retry_allowed: boolean;
           status: string;
         }[];
       };

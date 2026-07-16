@@ -18,6 +18,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Trash2,
+  Undo2,
   Workflow,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -48,6 +49,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  cancelDocumentDeletion,
   deleteDocument,
   getDocumentUrl,
   listDocuments,
@@ -69,6 +71,7 @@ import {
   listPropertyActivity,
   savePropertyTask,
   type PropertyActivityCursor,
+  type PropertyDetail,
 } from "@/lib/properties.functions";
 import {
   activityLabel,
@@ -96,7 +99,7 @@ function PropertyDetailPage() {
     queryKey: ["property", propertyId],
     queryFn: () => getProperty({ data: { id: propertyId } }),
   });
-  const detail = detailQ.data as any;
+  const detail = detailQ.data;
   const property = detail?.property;
 
   if (detailQ.isLoading) {
@@ -321,7 +324,14 @@ function PropertyDetailPage() {
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
           {editOpen && (
             <PropertyEditor
-              property={property}
+              property={{
+                ...property,
+                place_provider: property.place_provider as
+                  | "google_places"
+                  | "openstreetmap"
+                  | "manual"
+                  | "other",
+              }}
               workspaceId={property.workspace_id}
               onCancel={() => setEditOpen(false)}
               onSaved={() => {
@@ -671,18 +681,21 @@ function PropertyRecords({
   contacts,
   canEdit,
 }: {
-  property: any;
-  documents: any[];
-  contacts: any[];
+  property: PropertyDetail["property"];
+  documents: PropertyDetail["documents"];
+  contacts: PropertyDetail["contacts"];
   canEdit: boolean;
 }) {
   const workspaceId = property.workspace_id ?? null;
   const [documentId, setDocumentId] = useState("");
   const [contactId, setContactId] = useState("");
-  const [replacement, setReplacement] = useState<any | null>(null);
+  const [replacement, setReplacement] = useState<PropertyDetail["documents"][number] | null>(null);
+  const [deletionTarget, setDeletionTarget] = useState<PropertyDetail["documents"][number] | null>(
+    null,
+  );
   const qc = useQueryClient();
   const docsQ = useQuery({
-    queryKey: ["documents"],
+    queryKey: ["documents", "property-records", property.id, workspaceId],
     queryFn: () => listDocuments({ data: {} }),
     enabled: canEdit,
   });
@@ -690,7 +703,7 @@ function PropertyRecords({
     queryKey: ["property-upload-status", property.id],
     queryFn: () => listPendingDocumentUploads({ data: { property_id: property.id } }),
     refetchInterval: (query) =>
-      (query.state.data ?? []).some((item: any) =>
+      (query.state.data ?? []).some((item) =>
         ["pending", "verification_queued", "verification_running"].includes(item.status),
       )
         ? 3000
@@ -700,7 +713,7 @@ function PropertyRecords({
     queryKey: ["property-extraction-jobs", property.id],
     queryFn: () => listExtractionJobs({ data: { property_id: property.id } }),
     refetchInterval: (query) =>
-      (query.state.data ?? []).some((item: any) => ["queued", "running"].includes(item.status))
+      (query.state.data ?? []).some((item) => ["queued", "running"].includes(item.status))
         ? 3000
         : false,
   });
@@ -723,10 +736,13 @@ function PropertyRecords({
   const contactFn = useServerFn(linkPropertyContact);
   const urlFn = useServerFn(getDocumentUrl);
   const deleteFn = useServerFn(deleteDocument);
+  const cancelDeleteFn = useServerFn(cancelDocumentDeletion);
   const retryFn = useServerFn(retryPendingDocumentUpload);
   const refreshFiles = () => {
     qc.invalidateQueries({ queryKey: ["property", property.id] });
-    qc.invalidateQueries({ queryKey: ["documents"] });
+    qc.invalidateQueries({
+      queryKey: ["documents", "property-records", property.id, workspaceId],
+    });
     qc.invalidateQueries({ queryKey: ["property-upload-status", property.id] });
     qc.invalidateQueries({ queryKey: ["property-extraction-jobs", property.id] });
   };
@@ -741,8 +757,17 @@ function PropertyRecords({
   const removeDocument = useMutation({
     mutationFn: (id: string) => deleteFn({ data: { id } }),
     onSuccess: () => {
+      setDeletionTarget(null);
       refreshFiles();
       toast.success("Document removal queued");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const cancelRemoval = useMutation({
+    mutationFn: (id: string) => cancelDeleteFn({ data: { id } }),
+    onSuccess: () => {
+      refreshFiles();
+      toast.success("Document removal cancelled");
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -777,19 +802,31 @@ function PropertyRecords({
   });
   const projectIds = new Set(
     (projectsQ.data ?? [])
-      .filter((item: any) => (item.workspace_id ?? null) === workspaceId)
-      .map((item: any) => item.id),
+      .filter((item) => (item.workspace_id ?? null) === workspaceId)
+      .map((item) => item.id),
   );
-  const permitCaseIds = new Set((permitCasesQ.data ?? []).map((item: any) => item.id));
+  const permitCaseIds = new Set((permitCasesQ.data ?? []).map((item: { id: string }) => item.id));
   const availableDocs = (docsQ.data ?? []).filter(
-    (item: any) =>
+    (item) =>
       !item.property_id &&
       ((item.project_id && projectIds.has(item.project_id)) ||
         (item.permit_case_id && permitCaseIds.has(item.permit_case_id))) &&
       !documents.some((linked) => linked.id === item.id),
   );
   const availableContacts = (contactsQ.data ?? []).filter(
-    (item: any) => !contacts.some((linked) => linked.contact_id === item.id),
+    (item: { id: string }) => !contacts.some((linked) => linked.contact_id === item.id),
+  );
+  const supersededDocumentIds = new Set(
+    documents.map((document) => document.replaces_document_id).filter(Boolean),
+  );
+  const jobsByDocumentId = useMemo(
+    () =>
+      new Map(
+        (jobsQ.data ?? [])
+          .filter((item) => item.document_id)
+          .map((item) => [item.document_id as string, item]),
+      ),
+    [jobsQ.data],
   );
   return (
     <div className="grid gap-5 lg:grid-cols-2">
@@ -801,7 +838,8 @@ function PropertyRecords({
         {documents.length ? (
           <div className="mt-4 space-y-2">
             {documents.map((document) => {
-              const job = (jobsQ.data ?? []).find((item: any) => item.document_id === document.id);
+              const job = jobsByDocumentId.get(document.id);
+              const isLatestVersion = !supersededDocumentIds.has(document.id);
               return (
                 <div key={document.id} className="rounded-lg border border-border px-4 py-3">
                   <div className="flex items-start justify-between gap-3">
@@ -827,7 +865,7 @@ function PropertyRecords({
                       >
                         <Download className="size-4" />
                       </Button>
-                      {canEdit && !document.deletion_requested_at && (
+                      {canEdit && isLatestVersion && !document.deletion_requested_at && (
                         <Button
                           size="icon"
                           variant="ghost"
@@ -837,14 +875,28 @@ function PropertyRecords({
                           <RefreshCw className="size-4" />
                         </Button>
                       )}
-                      {canEdit && !document.deletion_requested_at && (
+                      {canEdit && isLatestVersion && !document.deletion_requested_at && (
                         <Button
                           size="icon"
                           variant="ghost"
                           aria-label={`Remove ${document.name}`}
-                          onClick={() => removeDocument.mutate(document.id)}
+                          onClick={() => {
+                            if (replacement?.id === document.id) setReplacement(null);
+                            setDeletionTarget(document);
+                          }}
                         >
                           <Trash2 className="size-4" />
+                        </Button>
+                      )}
+                      {canEdit && isLatestVersion && document.deletion_requested_at && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          aria-label={`Cancel removal of ${document.name}`}
+                          disabled={cancelRemoval.isPending}
+                          onClick={() => cancelRemoval.mutate(document.id)}
+                        >
+                          <Undo2 className="size-4" />
                         </Button>
                       )}
                     </div>
@@ -857,15 +909,15 @@ function PropertyRecords({
           <p className="mt-4 text-sm text-muted-foreground">No documents linked.</p>
         )}
         {(pendingQ.data ?? []).some(
-          (item: any) => !["finalized", "duplicate"].includes(item.status),
+          (item) => !["finalized", "duplicate"].includes(item.status),
         ) && (
           <div className="mt-4 space-y-2" aria-live="polite">
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Upload activity
             </p>
             {(pendingQ.data ?? [])
-              .filter((item: any) => !["finalized", "duplicate"].includes(item.status))
-              .map((item: any) => (
+              .filter((item) => !["finalized", "duplicate"].includes(item.status))
+              .map((item) => (
                 <div key={item.id} className="rounded-lg border border-border px-4 py-3 text-sm">
                   <div className="flex items-center justify-between gap-3">
                     <span className="truncate font-medium">{item.file_name}</span>
@@ -882,18 +934,16 @@ function PropertyRecords({
                   {item.failure_reason && (
                     <p className="mt-1 text-xs text-muted-foreground">{item.failure_reason}</p>
                   )}
-                  {canEdit &&
-                    ["failed", "rejected"].includes(item.status) &&
-                    item.retry_count < 3 && (
-                      <Button
-                        className="mt-2"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => retryUpload.mutate(item.id)}
-                      >
-                        Retry verification
-                      </Button>
-                    )}
+                  {canEdit && item.retry_allowed && (
+                    <Button
+                      className="mt-2"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => retryUpload.mutate(item.id)}
+                    >
+                      Retry verification
+                    </Button>
+                  )}
                 </div>
               ))}
           </div>
@@ -942,6 +992,38 @@ function PropertyRecords({
             />
           </div>
         )}
+        <Dialog
+          open={Boolean(deletionTarget)}
+          onOpenChange={(open) => {
+            if (!open && !removeDocument.isPending) setDeletionTarget(null);
+          }}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Remove {deletionTarget?.name ?? "document"}?</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              The document will be locked immediately and its stored file will be removed by the
+              cleanup worker. You can cancel while the request is still waiting or retryable.
+            </p>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                disabled={removeDocument.isPending}
+                onClick={() => setDeletionTarget(null)}
+              >
+                Keep document
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={!deletionTarget || removeDocument.isPending}
+                onClick={() => deletionTarget && removeDocument.mutate(deletionTarget.id)}
+              >
+                {removeDocument.isPending ? "Queueing…" : "Remove document"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         {canEdit && availableDocs.length > 0 && (
           <div className="mt-5 border-t border-border pt-4">
             <AttachSelect
@@ -1007,13 +1089,13 @@ function PropertyTasks({
 }: {
   propertyId: string;
   workspaceId: string | null;
-  tasks: any[];
+  tasks: PropertyDetail["tasks"];
   canEdit: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
-  const [priority, setPriority] = useState("normal");
+  const [priority, setPriority] = useState<"low" | "normal" | "high" | "urgent">("normal");
   const [dueAt, setDueAt] = useState("");
   const [nextAction, setNextAction] = useState(false);
   const [assignedTo, setAssignedTo] = useState("");
@@ -1038,7 +1120,7 @@ function PropertyTasks({
           title,
           notes: notes.trim() || null,
           status: "todo",
-          priority: priority as any,
+          priority,
           due_at: dueAt ? `${dueAt}T17:00:00.000Z` : null,
           is_next_action: nextAction,
           assigned_to: assignedTo || null,
@@ -1159,7 +1241,12 @@ function PropertyTasks({
             </Field>
             <Field label="Priority">
               {(props) => (
-                <Select value={priority} onValueChange={setPriority}>
+                <Select
+                  value={priority}
+                  onValueChange={(value) =>
+                    setPriority(value as "low" | "normal" | "high" | "urgent")
+                  }
+                >
                   <SelectTrigger {...props}>
                     <SelectValue />
                   </SelectTrigger>

@@ -49,7 +49,7 @@ export const listPendingDocumentUploads = createServerFn({ method: "GET" })
     let q = context.supabase
       .from("pending_document_uploads")
       .select(
-        "id, project_id, property_id, file_name, category, status, failure_reason, created_at, expires_at, document_id, retry_count, last_retry_at, replaces_document_id",
+        "id, project_id, property_id, file_name, category, status, failure_reason, created_at, expires_at, document_id, retry_count, retry_allowed, last_retry_at, replaces_document_id",
       )
       .order("created_at", { ascending: false })
       .limit(100);
@@ -218,32 +218,32 @@ export const requestDocumentUpload = createServerFn({ method: "POST" })
             p_property_id: data.property_id,
             p_replaces_document_id: data.replaces_document_id,
             p_file_name: data.name,
-            p_expected_content_type: data.file_type ?? null,
+            p_expected_content_type: data.file_type ?? "",
             p_expected_size_bytes: data.size_bytes,
-            p_category: data.category ?? null,
-          } as never)
+            p_category: data.category ?? undefined,
+          })
         : await context.supabase.rpc("prepare_property_document_upload", {
             p_property_id: data.property_id,
             p_file_name: data.name,
-            p_expected_content_type: data.file_type ?? null,
+            p_expected_content_type: data.file_type ?? "",
             p_expected_size_bytes: data.size_bytes,
-            p_category: data.category ?? null,
-          } as never)
+            p_category: data.category ?? undefined,
+          })
       : data.permit_case_id
         ? await context.supabase.rpc("prepare_permit_document_upload", {
             p_permit_case_id: data.permit_case_id,
             p_file_name: data.name,
-            p_expected_content_type: data.file_type ?? null,
+            p_expected_content_type: data.file_type ?? "",
             p_expected_size_bytes: data.size_bytes,
-            p_category: data.category ?? null,
-          } as never)
+            p_category: data.category ?? undefined,
+          })
         : await context.supabase.rpc("prepare_document_upload", {
-            p_project_id: data.project_id ?? null,
+            p_project_id: data.project_id!,
             p_file_name: data.name,
-            p_expected_content_type: data.file_type ?? null,
+            p_expected_content_type: data.file_type ?? "",
             p_expected_size_bytes: data.size_bytes,
-            p_category: data.category ?? null,
-          } as never);
+            p_category: data.category ?? undefined,
+          });
     if (isMissingFunction(prepared.error) || isMissingRelation(prepared.error)) {
       // The direct browser path is a deliberately narrow demo/test bridge for
       // an unmigrated local fixture. Strict environments fail closed below.
@@ -315,7 +315,7 @@ export const finalizeDocumentUpload = createServerFn({ method: "POST" })
     }
     const queued = await context.supabase.rpc("enqueue_document_verification", {
       p_upload_id: data.upload_id,
-    } as never);
+    });
     if (queued.error)
       throw new Error(`Unable to queue upload verification: ${queued.error.message}`);
     const result = queued.data?.[0];
@@ -406,9 +406,21 @@ export const deleteDocument = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const requested = await context.supabase.rpc("request_document_deletion", {
       p_document_id: data.id,
-    } as never);
+    });
     if (requested.error) throw new Error(requested.error.message);
     return { ok: true, request_id: requested.data as string };
+  });
+
+export const cancelDocumentDeletion = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const cancelled = await context.supabase.rpc("cancel_document_deletion", {
+      p_document_id: data.id,
+    });
+    if (cancelled.error) throw new Error(cancelled.error.message);
+    if (cancelled.data !== true) throw new Error("Document removal could not be cancelled.");
+    return { ok: true };
   });
 
 export const retryPendingDocumentUpload = createServerFn({ method: "POST" })
@@ -417,7 +429,7 @@ export const retryPendingDocumentUpload = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const retried = await context.supabase.rpc("retry_property_document_upload", {
       p_upload_id: data.id,
-    } as never);
+    });
     if (retried.error) throw new Error(retried.error.message);
     return retried.data?.[0] ?? { status: "verification_queued", job_id: null };
   });
