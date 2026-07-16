@@ -27,6 +27,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { ExplainableNumber, type ExplainableRow } from "@/components/provenance-popover";
 import {
   AlertTriangle,
@@ -1641,16 +1642,22 @@ export function MemoSection({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const generateMemoFn = useServerFn(generateMemo);
   const [error, setError] = useState<string | null>(null);
+  const [generationMode, setGenerationMode] = useState<"deterministic" | "ai">("deterministic");
 
   const gen = useMutation({
-    mutationFn: () => generateMemoFn({ data: { project_id: projectId } }),
+    mutationFn: (generation_mode: "deterministic" | "ai") =>
+      generateMemoFn({ data: { project_id: projectId, generation_mode } }),
     onMutate: () => setError(null),
-    onSuccess: () => {
+    onSuccess: (_row, generation_mode) => {
       qc.invalidateQueries({ queryKey: ["memos", projectId] });
       qc.invalidateQueries({ queryKey: ["audit", projectId] });
       qc.invalidateQueries({ queryKey: ["memo-debug", projectId] });
       qc.invalidateQueries({ queryKey: ["uw-run-state", projectId] });
-      toast.success("Deterministic investment memo generated.");
+      toast.success(
+        generation_mode === "ai"
+          ? "AI-narrative investment memo generated and verified."
+          : "Deterministic investment memo generated.",
+      );
     },
     onError: (e: Error) => {
       // Never swallow the error behind a generic toast: surface it in the UI.
@@ -1681,6 +1688,7 @@ export function MemoSection({ projectId }: { projectId: string }) {
     debug.can_generate &&
     runState.freshness !== "stale" &&
     runState.freshness !== "blocked";
+  const canGenerateAiMemo = canGenerateMemo && debug.env.has_ai_provider;
   const needsReview = Boolean(
     latest &&
     (content.needs_review ||
@@ -1746,25 +1754,46 @@ export function MemoSection({ projectId }: { projectId: string }) {
             )}
           </div>
         </div>
-        <Button
-          size="sm"
-          onClick={() => gen.mutate()}
-          disabled={!canGenerateMemo || gen.isPending}
-          title={
-            runState.freshness === "stale"
-              ? "Outputs stale. Re-run deterministic underwriting before generating a memo."
-              : runState.freshness === "blocked"
-                ? "Underwriting blocked. Resolve inputs before generating a memo."
-                : !workflowPermissions.canGenerateMemo
-                  ? "Read-only role: cannot generate memos."
-                  : debug.can_generate
-                    ? "Generate the memo from deterministic outputs and approved assumptions."
-                    : debug.blocking_reasons.join(" ")
-          }
-        >
-          <FileText className="size-4 mr-1" />
-          {gen.isPending ? "Generating…" : "Generate Memo"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-md border border-border px-2 py-1.5">
+            <span className="text-[11px] text-muted-foreground">AI narrative</span>
+            <Switch
+              checked={generationMode === "ai"}
+              onCheckedChange={(enabled) => setGenerationMode(enabled ? "ai" : "deterministic")}
+              disabled={!debug.env.has_ai_provider || gen.isPending}
+              aria-label="Use AI-generated memo narrative"
+            />
+          </div>
+          <Button
+            size="sm"
+            onClick={() => gen.mutate(generationMode)}
+            disabled={
+              !(generationMode === "ai" ? canGenerateAiMemo : canGenerateMemo) || gen.isPending
+            }
+            title={
+              generationMode === "ai" && !debug.env.has_ai_provider
+                ? "Configure an AI provider to generate an AI narrative."
+                : runState.freshness === "stale"
+                  ? "Outputs stale. Re-run deterministic underwriting before generating a memo."
+                  : runState.freshness === "blocked"
+                    ? "Underwriting blocked. Resolve inputs before generating a memo."
+                    : !workflowPermissions.canGenerateMemo
+                      ? "Read-only role: cannot generate memos."
+                      : debug.can_generate
+                        ? generationMode === "ai"
+                          ? "Generate an AI narrative grounded in deterministic outputs and approved assumptions."
+                          : "Generate the memo from deterministic outputs and approved assumptions."
+                        : debug.blocking_reasons.join(" ")
+            }
+          >
+            <FileText className="size-4 mr-1" />
+            {gen.isPending
+              ? "Generating…"
+              : generationMode === "ai"
+                ? "Generate AI Memo"
+                : "Generate Memo"}
+          </Button>
+        </div>
       </div>
 
       {/* Preconditions */}
@@ -1795,8 +1824,17 @@ export function MemoSection({ projectId }: { projectId: string }) {
         <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/20 border border-border rounded p-3">
           <Info className="size-4 shrink-0 mt-0.5" />
           <span>
-            The pilot memo uses the <strong>deterministic template</strong>: engine outputs and
-            approved assumptions only.
+            {generationMode === "ai" ? (
+              <>
+                AI narrative is enabled. It may rewrite the memo, but every number must pass
+                provenance verification and the engine verdict is mandatory.
+              </>
+            ) : (
+              <>
+                The memo uses the <strong>deterministic template</strong>: engine outputs and
+                approved assumptions only.
+              </>
+            )}
           </span>
         </div>
       )}

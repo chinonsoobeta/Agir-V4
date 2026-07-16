@@ -710,9 +710,10 @@ function AiSection() {
     },
     {
       label: "Memo generation",
-      detail: "Uses the governed deterministic memo and provenance gate for the pilot.",
+      detail:
+        "Offers a deterministic template or an AI narrative that must pass the same provenance gate.",
       ready: readiness?.features.memoGeneration,
-      status: "Deterministic",
+      status: readiness?.features.memoGeneration ? "AI option ready" : "Deterministic",
     },
     {
       label: "Copilot",
@@ -726,12 +727,12 @@ function AiSection() {
     <>
       <SectionCard
         title="AI workflows"
-        description="Configure assisted extraction and Copilot. Underwriting inputs and pilot memo artifacts remain deterministic."
+        description="Configure assisted extraction, Copilot, and optional AI memo narrative. Underwriting inputs remain deterministic."
       >
         <div className="space-y-5">
           <Field
             label="AI-assisted workflows"
-            description="Show assisted extraction and Copilot controls. AI cannot approve underwriting inputs or author the pilot memo artifact."
+            description="Show assisted extraction and Copilot controls. AI cannot approve underwriting inputs; AI memo narratives remain constrained by deterministic evidence."
             orientation="horizontal"
             className="rounded-lg border p-3"
           >
@@ -761,7 +762,7 @@ function AiSection() {
             <StatusTile
               icon={ServerCog}
               title="Deterministic core available"
-              detail="Underwriting and pilot memos do not require AI. Configured-provider extraction failures stay visible and retryable."
+              detail="Underwriting and deterministic memos do not require AI. AI memo narratives must pass verdict and numeric-provenance checks."
               ok
             />
           </div>

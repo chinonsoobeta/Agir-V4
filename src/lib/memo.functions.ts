@@ -5,17 +5,24 @@ import { computeInvestmentVerdict } from "./verdict";
 import { buildAllowedValues, verifyNumericProvenance, type AllowedValue } from "./engine";
 import type { MemoReportContext } from "./memo-report";
 import { AI_AUTHORITY_NOTE } from "./ai-authority";
+import type { AiGenerationProvenance } from "./ai-gateway.server";
 import { isMissingColumn } from "./db-compat";
 import { EFFECTIVE_ASSUMPTION_STATUSES, effectiveAssumptions } from "./assumption-authority";
 
-// The pilot memo is deliberately deterministic. AI prose is not labelled or
-// exported until it can pass a strict schema, semantic-verdict, and provenance
-// gate as the actual rendered artifact. This keeps every visible sentence and
-// number aligned with the deterministic run.
+// AI memo prose is opt-in and is never exported until it passes a strict JSON,
+// deterministic-verdict, and numeric-provenance gate. The deterministic engine
+// remains the authority for every number and recommendation.
 
 export const generateMemo = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((d: { project_id: string }) => z.object({ project_id: z.string().uuid() }).parse(d))
+  .validator((d: { project_id: string; generation_mode?: "deterministic" | "ai" }) =>
+    z
+      .object({
+        project_id: z.string().uuid(),
+        generation_mode: z.enum(["deterministic", "ai"]).default("deterministic"),
+      })
+      .parse(d),
+  )
   .handler(async ({ data, context }) => {
     const { assertWorkflowPermission } = await import("./workflow-permissions.server");
     await assertWorkflowPermission(context, data.project_id, "canGenerateMemo");
@@ -151,9 +158,11 @@ export const generateMemo = createServerFn({ method: "POST" })
       error_flag_count: errorFlags.length,
     });
 
-    const generation_mode = "deterministic" as const;
+    const generation_mode = data.generation_mode;
     const ai_note =
-      "Investment memos use the governed deterministic template; AI prose is not enabled for the pilot artifact.";
+      generation_mode === "ai"
+        ? "AI-generated narrative is constrained to deterministic underwriting evidence and requires provenance verification."
+        : "Investment memo generated from the governed deterministic template.";
 
     // The same deterministic report drives the on-screen view and PDF/DOCX.
     const { buildMemoReport, memoReportText } = await import("./memo-report");
@@ -168,7 +177,7 @@ export const generateMemo = createServerFn({ method: "POST" })
       risks: risks as unknown as MemoReportContext["risks"],
       documents: documents as unknown as MemoReportContext["documents"],
       verdict,
-      generationMode: "deterministic",
+      generationMode: generation_mode,
       generatedLabel: new Date().toLocaleString("en-US", { month: "long", year: "numeric" }),
     });
 
@@ -223,7 +232,7 @@ export const generateMemo = createServerFn({ method: "POST" })
 
     const { buildDeterministicMemo } = await import("./memo-template");
     type DetCtx = Parameters<typeof buildDeterministicMemo>[0];
-    const memo: Record<string, unknown> = buildDeterministicMemo({
+    const deterministicMemo = buildDeterministicMemo({
       project,
       assumptions: assumptions as unknown as DetCtx["assumptions"],
       engineInputs: engineInputs as unknown as DetCtx["engineInputs"],
@@ -234,8 +243,26 @@ export const generateMemo = createServerFn({ method: "POST" })
       errorFlags: errorFlags as unknown as DetCtx["errorFlags"],
       verdict,
     });
+    let memo: Record<string, unknown> = deterministicMemo;
     const parse_warning = null;
-    const ai_generation = null;
+    let ai_generation: AiGenerationProvenance | null = null;
+    if (generation_mode === "ai") {
+      const { hasAiProvider, generateAgirText } = await import("./ai-gateway.server");
+      if (!hasAiProvider()) {
+        throw new Error("AI memo generation requires a configured server-side AI provider.");
+      }
+      const { aiMemoPrompt, assertAiMemoVerdict, parseAiMemo } = await import("./ai-memo");
+      const generation = await generateAgirText({
+        endUserId: context.userId,
+        temperature: 0,
+        maxOutputTokens: 6_000,
+        prompt: aiMemoPrompt({ deterministicMemo, verdictCode: verdict.code }),
+      });
+      const aiMemo = parseAiMemo(generation.text);
+      assertAiMemoVerdict(aiMemo, verdict.code);
+      memo = aiMemo;
+      ai_generation = generation.ai;
+    }
 
     // ---- Output provenance verifier ----
     // Verify the prose sections AND every numeric-bearing string the formatted
@@ -258,7 +285,11 @@ export const generateMemo = createServerFn({ method: "POST" })
     };
 
     // A deterministic artifact that fails the same gate remains review-only.
-    const status = provenance.pass ? "generated_deterministic" : "needs_review";
+    const status = provenance.pass
+      ? generation_mode === "ai"
+        ? "generated_ai"
+        : "generated_deterministic"
+      : "needs_review";
 
     const memoInsert = {
       project_id: project.id,
@@ -327,7 +358,7 @@ export const generateMemo = createServerFn({ method: "POST" })
       project_id: project.id,
       user_id: context.userId,
       activity_type: "memo_generated",
-      description: `Generated deterministic-template investment memo${provenance.pass ? " (provenance verified)" : `: NEEDS REVIEW: ${provenance.orphans.length} token(s) lack provenance`}`,
+      description: `Generated ${generation_mode === "ai" ? "AI-narrative" : "deterministic-template"} investment memo${provenance.pass ? " (provenance verified)" : `: NEEDS REVIEW: ${provenance.orphans.length} token(s) lack provenance`}`,
     });
     return row;
   });

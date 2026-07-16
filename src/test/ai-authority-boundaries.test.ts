@@ -30,11 +30,13 @@ describe("AI authority and privacy boundaries", () => {
     expect(underwritingBridge).toContain('.default("deterministic")');
   });
 
-  test("pilot memos are truthfully deterministic", () => {
+  test("AI memo narratives remain grounded in deterministic authority", () => {
     const memo = read("src/lib/memo.functions.ts");
-    expect(memo).not.toContain("generateAgirText");
-    expect(memo).toContain('const generation_mode = "deterministic"');
-    expect(memo).toContain("AI prose is not enabled for the pilot artifact");
+    expect(memo).toContain("generation_mode: z.enum");
+    expect(memo).toContain("generateAgirText");
+    expect(memo).toContain("assertAiMemoVerdict");
+    expect(memo).toContain("verifyNumericProvenance");
+    expect(memo).toContain("generated_ai");
   });
 
   test("AI extraction cache identity changes with runtime configuration", () => {

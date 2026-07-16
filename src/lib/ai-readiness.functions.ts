@@ -36,10 +36,10 @@ export const getAiReadiness = createServerFn({ method: "GET" })
       providers: readiness.providers,
       features: {
         extraction: readiness.configured,
-        // AI is deliberately not an approval authority or a memo-artifact
-        // author in the pilot. Those workflows remain fully deterministic.
+        // AI never approves underwriting inputs. Memo narrative is optional
+        // and is gated against the deterministic verdict and numeric evidence.
         underwriting: false,
-        memoGeneration: false,
+        memoGeneration: readiness.configured,
         copilot: readiness.configured,
       },
     };
